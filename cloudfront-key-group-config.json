@@ -1,0 +1,5 @@
+{
+  "Name": "cinevision-key-group",
+  "Items": ["REPLACE_WITH_PUBLIC_KEY_ID"],
+  "Comment": "Key group for CineVision signed URLs"
+}

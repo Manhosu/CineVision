@@ -1,0 +1,19 @@
+export interface Movie {
+  id: string;
+  title: string;
+  description: string;
+  thumbnail_url: string;
+  poster_url?: string;
+  backdrop_url?: string;
+  trailer_url?: string;
+  price_cents: number;
+  imdb_rating?: number;
+  release_year?: number;
+  duration_minutes?: number;
+  genres?: string[];
+  featured?: boolean;
+  status?: string; // From database: 'ACTIVE' | 'INACTIVE' | 'PUBLISHED'
+  availability?: string; // From database: 'SITE' | 'TELEGRAM' | 'BOTH'
+  created_at?: string;
+  updated_at?: string;
+}

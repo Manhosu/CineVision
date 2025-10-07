@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cine Vision - Design System Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            200: '#fecaca',
+                            300: '#fca5a5',
+                            400: '#f87171',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                            700: '#b91c1c',
+                            800: '#991b1b',
+                            900: '#7f1d1d',
+                            950: '#450a0a'
+                        },
+                        dark: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            850: '#172033',
+                            900: '#0f172a',
+                            925: '#0a0f1a',
+                            950: '#020617'
+                        },
+                        accent: {
+                            purple: '#8b5cf6',
+                            'purple-dark': '#7c3aed'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'scale-in': 'scaleIn 0.2s ease-out',
+                        'shimmer': 'shimmer 2s linear infinite'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        scaleIn: {
+                            '0%': { transform: 'scale(0.95)', opacity: '0' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        },
+                        shimmer: {
+                            '0%': { transform: 'translateX(-100%)' },
+                            '100%': { transform: 'translateX(100%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* Custom CSS for components not easily achievable with Tailwind */
+        .glass-effect {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .shimmer-loading {
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        
+        .movie-card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .movie-card-hover:hover {
+            transform: scale(1.05);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%);
+        }
+        
+        .tv-focus:focus {
+            outline: 3px solid #dc2626;
+            outline-offset: 4px;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+
+<body class="bg-dark-950 text-white font-sans">
+    <!-- Header -->
+    <header class="bg-dark-900/95 backdrop-blur-sm border-b border-dark-800 sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-2xl font-bold text-primary-500">
+                        <i class="fas fa-film mr-2"></i>
+                        Cine Vision
+                    </h1>
+                    <nav class="hidden md:flex space-x-6">
+                        <a href="#" class="text-gray-300 hover:text-white transition-colors">Início</a>
+                        <a href="#" class="text-gray-300 hover:text-white transition-colors">Catálogo</a>
+                        <a href="#" class="text-gray-300 hover:text-white transition-colors">Meus Filmes</a>
+                    </nav>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative hidden md:block">
+                        <input type="text" placeholder="Buscar filmes..." 
+                               class="bg-dark-800 border border-dark-700 rounded-lg px-4 py-2 pl-10 text-sm focus:outline-none focus:border-primary-500 transition-colors">
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <button class="bg-primary-600 hover:bg-primary-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Entrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8 space-y-12">
+        
+        <!-- Design System Title -->
+        <section class="text-center py-8">
+            <h1 class="text-4xl md:text-6xl font-bold mb-4">
+                <span class="bg-gradient-to-r from-primary-500 to-accent-purple bg-clip-text text-transparent">
+                    Cine Vision
+                </span>
+            </h1>
+            <p class="text-xl text-gray-400 mb-8">Design System Preview</p>
+            <div class="flex flex-wrap justify-center gap-4 text-sm text-gray-500">
+                <span>Netflix-inspired</span>
+                <span>•</span>
+                <span>Mobile-first</span>
+                <span>•</span>
+                <span>Performance-focused</span>
+                <span>•</span>
+                <span>Accessible</span>
+            </div>
+        </section>
+
+        <!-- Color Palette -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">🎨 Paleta de Cores</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Primary Colors -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-primary-400">Primary (Netflix Red)</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-primary-500 rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Primary 500</div>
+                                <div class="text-sm text-gray-400">#ef4444</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-primary-600 rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Primary 600</div>
+                                <div class="text-sm text-gray-400">#dc2626</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-primary-700 rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Primary 700</div>
+                                <div class="text-sm text-gray-400">#b91c1c</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dark Colors -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-gray-400">Dark (Grays)</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-dark-800 rounded-lg border border-dark-700"></div>
+                            <div>
+                                <div class="font-medium">Dark 800</div>
+                                <div class="text-sm text-gray-400">#1e293b</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-dark-900 rounded-lg border border-dark-700"></div>
+                            <div>
+                                <div class="font-medium">Dark 900</div>
+                                <div class="text-sm text-gray-400">#0f172a</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-dark-950 rounded-lg border border-dark-700"></div>
+                            <div>
+                                <div class="font-medium">Dark 950</div>
+                                <div class="text-sm text-gray-400">#020617</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accent Colors -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-4 text-accent-purple">Accent</h3>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-accent-purple rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Purple</div>
+                                <div class="text-sm text-gray-400">#8b5cf6</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-green-500 rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Success</div>
+                                <div class="text-sm text-gray-400">#10b981</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-yellow-500 rounded-lg"></div>
+                            <div>
+                                <div class="font-medium">Warning</div>
+                                <div class="text-sm text-gray-400">#f59e0b</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Typography -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">📝 Tipografia</h2>
+            <div class="space-y-6">
+                <div class="text-5xl font-bold">Heading 1 - Inter Bold</div>
+                <div class="text-4xl font-semibold">Heading 2 - Inter Semibold</div>
+                <div class="text-3xl font-medium">Heading 3 - Inter Medium</div>
+                <div class="text-xl font-normal">Body Large - Inter Regular</div>
+                <div class="text-base font-normal">Body Regular - Inter Regular</div>
+                <div class="text-sm font-normal text-gray-400">Body Small - Inter Regular</div>
+                <div class="text-xs font-normal text-gray-500">Caption - Inter Regular</div>
+            </div>
+        </section>
+
+        <!-- Buttons -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">🔘 Botões</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold">Primary</h3>
+                    <button class="w-full bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        Assistir Agora
+                    </button>
+                    <button class="w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Comprar - R$ 9,90
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold">Secondary</h3>
+                    <button class="w-full bg-dark-800 hover:bg-dark-700 text-white border border-dark-600 px-6 py-3 rounded-lg font-medium transition-colors">
+                        Mais Informações
+                    </button>
+                    <button class="w-full bg-dark-800 hover:bg-dark-700 text-white border border-dark-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Adicionar à Lista
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold">Ghost</h3>
+                    <button class="w-full text-white hover:bg-dark-800 px-6 py-3 rounded-lg font-medium transition-colors">
+                        Cancelar
+                    </button>
+                    <button class="w-full text-gray-400 hover:text-white hover:bg-dark-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                        Voltar
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold">Icon</h3>
+                    <button class="w-12 h-12 bg-dark-800 hover:bg-dark-700 text-white rounded-lg flex items-center justify-center transition-colors">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button class="w-10 h-10 bg-dark-800 hover:bg-dark-700 text-white rounded-lg flex items-center justify-center transition-colors">
+                        <i class="fas fa-heart"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Form Elements -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">📝 Formulários</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Email</label>
+                        <input type="email" placeholder="seu@email.com" 
+                               class="w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Senha</label>
+                        <input type="password" placeholder="••••••••" 
+                               class="w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Gênero Favorito</label>
+                        <select class="w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary-500 transition-colors">
+                            <option>Ação</option>
+                            <option>Drama</option>
+                            <option>Comédia</option>
+                            <option>Terror</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Comentário</label>
+                        <textarea placeholder="Deixe seu comentário..." rows="4"
+                                  class="w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 transition-colors resize-none"></textarea>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <input type="checkbox" id="newsletter" class="w-4 h-4 text-primary-600 bg-dark-800 border-dark-700 rounded focus:ring-primary-500">
+                        <label for="newsletter" class="text-sm">Receber newsletter</label>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3">
+                        <input type="radio" id="pix" name="payment" class="w-4 h-4 text-primary-600 bg-dark-800 border-dark-700 focus:ring-primary-500">
+                        <label for="pix" class="text-sm">PIX</label>
+                        <input type="radio" id="card" name="payment" class="w-4 h-4 text-primary-600 bg-dark-800 border-dark-700 focus:ring-primary-500">
+                        <label for="card" class="text-sm">Cartão</label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Movie Cards -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">🎬 Cards de Filmes</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <!-- Movie Card 1 -->
+                <div class="movie-card-hover bg-dark-900 rounded-lg overflow-hidden">
+                    <div class="aspect-[2/3] bg-gradient-to-br from-primary-600 to-primary-800 relative">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fas fa-film text-4xl text-white/50"></i>
+                        </div>
+                        <div class="absolute top-2 right-2">
+                            <span class="bg-primary-600 text-white text-xs px-2 py-1 rounded">HD</span>
+                        </div>
+                        <div class="absolute bottom-2 left-2">
+                            <span class="bg-black/70 text-white text-xs px-2 py-1 rounded">R$ 9,90</span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-semibold text-sm mb-1 truncate">Filme de Ação</h3>
+                        <p class="text-xs text-gray-400 mb-2">2024 • Ação</p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1">
+                                <i class="fas fa-star text-yellow-500 text-xs"></i>
+                                <span class="text-xs">4.8</span>
+                            </div>
+                            <button class="text-primary-500 hover:text-primary-400 text-xs">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Movie Card 2 -->
+                <div class="movie-card-hover bg-dark-900 rounded-lg overflow-hidden">
+                    <div class="aspect-[2/3] bg-gradient-to-br from-purple-600 to-purple-800 relative">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fas fa-film text-4xl text-white/50"></i>
+                        </div>
+                        <div class="absolute top-2 right-2">
+                            <span class="bg-accent-purple text-white text-xs px-2 py-1 rounded">4K</span>
+                        </div>
+                        <div class="absolute bottom-2 left-2">
+                            <span class="bg-black/70 text-white text-xs px-2 py-1 rounded">R$ 12,90</span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-semibold text-sm mb-1 truncate">Drama Épico</h3>
+                        <p class="text-xs text-gray-400 mb-2">2024 • Drama</p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1">
+                                <i class="fas fa-star text-yellow-500 text-xs"></i>
+                                <span class="text-xs">4.9</span>
+                            </div>
+                            <button class="text-primary-500 hover:text-primary-400 text-xs">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Movie Card 3 -->
+                <div class="movie-card-hover bg-dark-900 rounded-lg overflow-hidden">
+                    <div class="aspect-[2/3] bg-gradient-to-br from-green-600 to-green-800 relative">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i class="fas fa-film text-4xl text-white/50"></i>
+                        </div>
+                        <div class="absolute top-2 right-2">
+                            <span class="bg-green-600 text-white text-xs px-2 py-1 rounded">HD</span>
+                        </div>
+                        <div class="absolute bottom-2 left-2">
+                            <span class="bg-black/70 text-white text-xs px-2 py-1 rounded">R$ 8,90</span>
+                        </div>
+                    </div>
+                    <div class="p-3">
+                        <h3 class="font-semibold text-sm mb-1 truncate">Comédia</h3>
+                        <p class="text-xs text-gray-400 mb-2">2024 • Comédia</p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1">
+                                <i class="fas fa-star text-yellow-500 text-xs"></i>
+                                <span class="text-xs">4.6</span>
+                            </div>
+                            <button class="text-primary-500 hover:text-primary-400 text-xs">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Card -->
+                <div class="bg-dark-900 rounded-lg overflow-hidden">
+                    <div class="aspect-[2/3] bg-dark-800 relative overflow-hidden">
+                        <div class="shimmer-loading absolute inset-0"></div>
+                    </div>
+                    <div class="p-3 space-y-2">
+                        <div class="h-4 bg-dark-800 rounded shimmer-loading"></div>
+                        <div class="h-3 bg-dark-800 rounded w-2/3 shimmer-loading"></div>
+                        <div class="flex justify-between">
+                            <div class="h-3 bg-dark-800 rounded w-1/3 shimmer-loading"></div>
+                            <div class="h-3 bg-dark-800 rounded w-4 shimmer-loading"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Video Player -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">📺 Player de Vídeo</h2>
+            <div class="bg-black rounded-lg overflow-hidden max-w-4xl mx-auto">
+                <div class="aspect-video bg-gradient-to-br from-dark-800 to-dark-900 relative">
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <button class="w-20 h-20 bg-primary-600 hover:bg-primary-700 rounded-full flex items-center justify-center text-white text-2xl transition-colors">
+                            <i class="fas fa-play ml-1"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- Player Controls -->
+                    <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                        <!-- Progress Bar -->
+                        <div class="mb-4">
+                            <div class="w-full h-1 bg-gray-600 rounded-full">
+                                <div class="progress-bar h-full w-1/3 rounded-full"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Controls -->
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <button class="text-white hover:text-primary-400 transition-colors">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <button class="text-white hover:text-primary-400 transition-colors">
+                                    <i class="fas fa-volume-up"></i>
+                                </button>
+                                <span class="text-sm text-gray-300">1:23:45 / 2:15:30</span>
+                            </div>
+                            
+                            <div class="flex items-center space-x-4">
+                                <button class="text-white hover:text-primary-400 transition-colors">
+                                    <i class="fas fa-closed-captioning"></i>
+                                </button>
+                                <button class="text-white hover:text-primary-400 transition-colors">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                                <button class="text-white hover:text-primary-400 transition-colors">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Telegram Integration -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">💬 Integração Telegram</h2>
+            <div class="bg-dark-900 rounded-lg p-6 max-w-2xl mx-auto">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fab fa-telegram-plane text-2xl text-white"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Assista no Telegram</h3>
+                    <p class="text-gray-400">Acesse seus filmes diretamente no nosso bot do Telegram</p>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-dark-800 rounded-lg p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">1</span>
+                        </div>
+                        <div>
+                            <div class="font-medium">Adicione o Bot</div>
+                            <div class="text-sm text-gray-400">@CineVisionBot</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-dark-800 rounded-lg p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">2</span>
+                        </div>
+                        <div>
+                            <div class="font-medium">Faça Login</div>
+                            <div class="text-sm text-gray-400">Use seu email cadastrado</div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-dark-800 rounded-lg p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white font-bold">3</span>
+                        </div>
+                        <div>
+                            <div class="font-medium">Acesse seus Filmes</div>
+                            <div class="text-sm text-gray-400">Download ou streaming direto</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 text-center">
+                    <button class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                        <i class="fab fa-telegram-plane mr-2"></i>
+                        Abrir no Telegram
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Admin Panel Preview -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">⚙️ Painel Administrativo</h2>
+            <div class="bg-dark-900 rounded-lg overflow-hidden">
+                <!-- Admin Header -->
+                <div class="bg-dark-800 border-b border-dark-700 p-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold">Dashboard Admin</h3>
+                        <div class="flex items-center space-x-4">
+                            <span class="text-sm text-gray-400">Admin User</span>
+                            <div class="w-8 h-8 bg-primary-600 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Admin Content -->
+                <div class="flex">
+                    <!-- Sidebar -->
+                    <div class="w-64 bg-dark-850 border-r border-dark-700 p-4">
+                        <nav class="space-y-2">
+                            <a href="#" class="flex items-center space-x-3 text-white bg-primary-600 px-3 py-2 rounded-lg">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>Dashboard</span>
+                            </a>
+                            <a href="#" class="flex items-center space-x-3 text-gray-400 hover:text-white hover:bg-dark-800 px-3 py-2 rounded-lg transition-colors">
+                                <i class="fas fa-film"></i>
+                                <span>Conteúdo</span>
+                            </a>
+                            <a href="#" class="flex items-center space-x-3 text-gray-400 hover:text-white hover:bg-dark-800 px-3 py-2 rounded-lg transition-colors">
+                                <i class="fas fa-users"></i>
+                                <span>Usuários</span>
+                            </a>
+                            <a href="#" class="flex items-center space-x-3 text-gray-400 hover:text-white hover:bg-dark-800 px-3 py-2 rounded-lg transition-colors">
+                                <i class="fas fa-credit-card"></i>
+                                <span>Pagamentos</span>
+                            </a>
+                            <a href="#" class="flex items-center space-x-3 text-gray-400 hover:text-white hover:bg-dark-800 px-3 py-2 rounded-lg transition-colors">
+                                <i class="fas fa-cog"></i>
+                                <span>Configurações</span>
+                            </a>
+                        </nav>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="flex-1 p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <!-- Metric Cards -->
+                            <div class="bg-dark-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-2xl font-bold">1,234</div>
+                                        <div class="text-sm text-gray-400">Usuários Ativos</div>
+                                    </div>
+                                    <div class="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-users text-white"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-dark-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-2xl font-bold">R$ 45,678</div>
+                                        <div class="text-sm text-gray-400">Receita Mensal</div>
+                                    </div>
+                                    <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-dollar-sign text-white"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-dark-800 rounded-lg p-4">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="text-2xl font-bold">567</div>
+                                        <div class="text-sm text-gray-400">Filmes Vendidos</div>
+                                    </div>
+                                    <div class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-film text-white"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Table -->
+                        <div class="bg-dark-800 rounded-lg overflow-hidden">
+                            <div class="p-4 border-b border-dark-700">
+                                <h4 class="font-semibold">Vendas Recentes</h4>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead class="bg-dark-700">
+                                        <tr>
+                                            <th class="text-left p-4 text-sm font-medium text-gray-400">Filme</th>
+                                            <th class="text-left p-4 text-sm font-medium text-gray-400">Usuário</th>
+                                            <th class="text-left p-4 text-sm font-medium text-gray-400">Valor</th>
+                                            <th class="text-left p-4 text-sm font-medium text-gray-400">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="border-b border-dark-700">
+                                            <td class="p-4">Filme de Ação</td>
+                                            <td class="p-4">user@email.com</td>
+                                            <td class="p-4">R$ 9,90</td>
+                                            <td class="p-4">
+                                                <span class="bg-green-500 text-white text-xs px-2 py-1 rounded">Pago</span>
+                                            </td>
+                                        </tr>
+                                        <tr class="border-b border-dark-700">
+                                            <td class="p-4">Drama Épico</td>
+                                            <td class="p-4">outro@email.com</td>
+                                            <td class="p-4">R$ 12,90</td>
+                                            <td class="p-4">
+                                                <span class="bg-yellow-500 text-white text-xs px-2 py-1 rounded">Pendente</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Responsive Breakpoints -->
+        <section>
+            <h2 class="text-2xl font-bold mb-6">📱 Responsividade</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-dark-900 rounded-lg p-4 text-center">
+                    <i class="fas fa-mobile-alt text-2xl text-primary-500 mb-2"></i>
+                    <div class="font-semibold">Mobile</div>
+                    <div class="text-sm text-gray-400">320px - 767px</div>
+                </div>
+                <div class="bg-dark-900 rounded-lg p-4 text-center">
+                    <i class="fas fa-tablet-alt text-2xl text-accent-purple mb-2"></i>
+                    <div class="font-semibold">Tablet</div>
+                    <div class="text-sm text-gray-400">768px - 1023px</div>
+                </div>
+                <div class="bg-dark-900 rounded-lg p-4 text-center">
+                    <i class="fas fa-laptop text-2xl text-blue-500 mb-2"></i>
+                    <div class="font-semibold">Desktop</div>
+                    <div class="text-sm text-gray-400">1024px - 1439px</div>
+                </div>
+                <div class="bg-dark-900 rounded-lg p-4 text-center">
+                    <i class="fas fa-tv text-2xl text-green-500 mb-2"></i>
+                    <div class="font-semibold">TV</div>
+                    <div class="text-sm text-gray-400">1440px+</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-dark-900 border-t border-dark-800 mt-16">
+        <div class="container mx-auto px-4 py-8">
+            <div class="text-center">
+                <div class="text-2xl font-bold text-primary-500 mb-4">
+                    <i class="fas fa-film mr-2"></i>
+                    Cine Vision
+                </div>
+                <p class="text-gray-400 mb-4">Design System Preview - Netflix-inspired, Mobile-first, Performance-focused</p>
+                <div class="flex justify-center space-x-6 text-sm text-gray-500">
+                    <span>v1.0</span>
+                    <span>•</span>
+                    <span>Janeiro 2025</span>
+                    <span>•</span>
+                    <span>Tailwind CSS</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple interactions for demo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Animate cards on scroll
+            const cards = document.querySelectorAll('.movie-card-hover');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animation = 'fadeIn 0.5s ease-in-out';
+                    }
+                });
+            });
+            
+            cards.forEach(card => observer.observe(card));
+            
+            // Focus states for TV navigation
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Tab') {
+                    document.body.classList.add('keyboard-navigation');
+                }
+            });
+            
+            document.addEventListener('mousedown', function() {
+                document.body.classList.remove('keyboard-navigation');
+            });
+        });
+    </script>
+</body>
+</html>

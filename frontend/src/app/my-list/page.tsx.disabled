@@ -1,0 +1,249 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Movie } from '@/types/movie';
+import { Header } from '@/components/Header/Header';
+import { Footer } from '@/components/Footer/Footer';
+import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
+
+interface PurchasedMovie extends Movie {
+  purchased_at: string;
+  access_token?: string;
+  access_expires_at?: string;
+  poster_url?: string;
+}
+
+export default function MyListPage() {
+  const [movies, setMovies] = useState<PurchasedMovie[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const fetchMyList = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/my-list`, {
+          credentials: 'include', // Use cookies instead of localStorage
+        });
+
+        if (response.status === 401) {
+          router.push('/login');
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch your movie list');
+        }
+
+        const data = await response.json();
+        setMovies(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMyList();
+  }, [router]);
+
+  const handleWatchMovie = async (movie: PurchasedMovie) => {
+    // Simply redirect to watch page, authentication will be handled by cookies
+    router.push(`/watch/${movie.id}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-dark-950">
+        <Header />
+        <main className="relative pt-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <LoadingSkeleton type="section" />
+            <div className="mt-8">
+              <LoadingSkeleton type="section" />
+            </div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-dark-950">
+        <Header />
+        <main className="relative pt-20 flex items-center justify-center min-h-[calc(100vh-80px)]">
+          <div className="text-center max-w-md mx-auto p-6">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-semibold text-white mb-2">Erro ao carregar</h2>
+            <p className="text-gray-400 mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-dark-950">
+      {/* Header fixo */}
+      <Header />
+
+      {/* Conteúdo principal */}
+      <main className="relative pt-20">
+        {/* Hero section */}
+        <div className="relative bg-gradient-to-b from-dark-900 to-dark-950 py-20">
+          <div className="absolute inset-0 bg-gradient-to-r from-red-600/10 to-transparent"></div>
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="max-w-4xl">
+              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+                Minha Lista
+              </h1>
+              <p className="text-xl lg:text-2xl text-gray-300 mb-8 leading-relaxed">
+                Seus filmes comprados e prontos para assistir
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Content section */}
+        <div className="relative z-10 -mt-16">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+
+            {/* Movies Grid */}
+            {movies.length > 0 ? (
+              <div className="bg-dark-900/30 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+                <h2 className="text-2xl font-bold text-white mb-6">Seus Filmes</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                  {movies.map((movie) => (
+                    <div
+                      key={movie.id}
+                      className="group relative cursor-pointer transition-all duration-300 hover:scale-105"
+                      onClick={() => handleWatchMovie(movie)}
+                    >
+                      <div className="aspect-[2/3] relative overflow-hidden rounded-xl">
+                        <Image
+                          src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
+                          alt={movie.title}
+                          fill
+                          className="object-cover transition-transform duration-300 group-hover:scale-110"
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, (max-width: 1280px) 20vw, 16vw"
+                        />
+
+                        {/* Gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                        {/* Play button overlay */}
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                            <svg className="w-6 h-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                            </svg>
+                          </div>
+                        </div>
+
+                        {/* Status badge */}
+                        <div className="absolute top-2 right-2">
+                          <span className="px-2 py-1 bg-green-600/90 text-white text-xs font-medium rounded-full backdrop-blur-sm">
+                            ✓ Comprado
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Movie title */}
+                      <div className="mt-3">
+                        <h3 className="text-sm font-medium text-white line-clamp-2 group-hover:text-red-400 transition-colors">
+                          {movie.title}
+                        </h3>
+                        {movie.release_year && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {movie.release_year}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-dark-900/30 backdrop-blur-sm border border-white/10 rounded-2xl p-12 text-center">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-dark-800/50 flex items-center justify-center">
+                      <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h4a1 1 0 011 1v2M7 4h10l1 15H6L7 4z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m10 11 2 2 4-4" />
+                      </svg>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-4">
+                      Sua lista está vazia
+                    </h3>
+                    <p className="text-gray-400 mb-8 text-lg">
+                      Você ainda não comprou nenhum filme. Explore nosso catálogo e encontre algo interessante!
+                    </p>
+                    <Link
+                      href="/movies"
+                      className="inline-flex items-center px-8 py-4 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-all duration-300 hover:scale-105"
+                    >
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      Explorar Filmes
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Statistics */}
+              {movies.length > 0 && (
+                <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="bg-dark-800/30 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+                    <div className="text-3xl font-bold text-red-400 mb-2">
+                      {movies.length}
+                    </div>
+                    <div className="text-gray-400">
+                      {movies.length === 1 ? 'Filme comprado' : 'Filmes comprados'}
+                    </div>
+                  </div>
+
+                  <div className="bg-dark-800/30 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+                    <div className="text-3xl font-bold text-green-400 mb-2">
+                      {movies.filter(m => m.access_token && new Date(m.access_expires_at || '') > new Date()).length}
+                    </div>
+                    <div className="text-gray-400">
+                      Disponíveis para assistir
+                    </div>
+                  </div>
+
+                  <div className="bg-dark-800/30 backdrop-blur-sm border border-white/10 rounded-xl p-6 text-center">
+                    <div className="text-3xl font-bold text-blue-400 mb-2">
+                      {Math.round(movies.reduce((total, movie) => total + (movie.duration_minutes || 0), 0) / 60)}h
+                    </div>
+                    <div className="text-gray-400">
+                      Total de conteúdo
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Rodapé */}
+      <Footer />
+    </div>
+  );
+}

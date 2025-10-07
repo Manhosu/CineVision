@@ -1,0 +1,29 @@
+{
+  "name": "cine-vision",
+  "version": "1.0.0",
+  "description": "Cine Vision - Netflix-like streaming platform with Telegram integration",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix admin\" \"npm run dev --prefix bot\"",
+    "build": "npm run build --prefix backend && npm run build --prefix admin && npm run build --prefix bot",
+    "start": "concurrently \"npm run start:prod --prefix backend\" \"npm run start --prefix admin\" \"npm run start --prefix bot\"",
+    "lint": "npm run lint --prefix backend && npm run lint --prefix admin && npm run lint --prefix bot",
+    "test": "npm run test --prefix backend && npm run test --prefix bot",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix admin && npm install --prefix bot",
+    "clean": "npm run clean --prefix backend && npm run clean --prefix admin && npm run clean --prefix bot",
+    "docker:dev": "docker-compose up --build",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up --build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "streaming",
+    "telegram",
+    "movies",
+    "netflix",
+    "payments"
+  ],
+  "author": "Cine Vision Team",
+  "license": "UNLICENSED"
+}

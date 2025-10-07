@@ -1,0 +1,15 @@
+{
+  "Rules": [
+    {
+      "ID": "MoveToGlacierAfter180Days",
+      "Status": "Enabled",
+      "Filter": {},
+      "Transitions": [
+        {
+          "Days": 180,
+          "StorageClass": "GLACIER"
+        }
+      ]
+    }
+  ]
+}

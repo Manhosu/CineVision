@@ -1,0 +1,665 @@
+/* Video Overlay Styles */
+.videoOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  cursor: default;
+}
+
+.videoOverlay:hover {
+  cursor: default;
+}
+
+/* Top Overlay */
+.topOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    transparent 100%
+  );
+  transition: opacity 0.3s ease;
+}
+
+.topOverlayContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+}
+
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.backButton:hover {
+  color: #3b82f6;
+}
+
+.backButton:hover .backIcon {
+  transform: translateX(-0.25rem);
+}
+
+.backIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  transition: transform 0.2s ease;
+}
+
+.titleContainer {
+  text-align: right;
+  max-width: 20rem;
+}
+
+.title {
+  color: white;
+  font-size: 1.125rem;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  color: #d1d5db;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Center Play Button */
+.centerPlayButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4rem;
+  height: 4rem;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.centerPlayButton:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.centerPlayButton.hidden {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.75);
+}
+
+.playIcon {
+  width: 2rem;
+  height: 2rem;
+  color: white;
+  margin-left: 0.125rem;
+}
+
+.pauseIcon {
+  width: 2rem;
+  height: 2rem;
+  color: white;
+}
+
+/* Bottom Controls */
+.bottomOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.8) 0%,
+    rgba(0, 0, 0, 0.4) 50%,
+    transparent 100%
+  );
+  transition: opacity 0.3s ease;
+}
+
+.progressContainer {
+  padding: 0 1.5rem 0.5rem;
+}
+
+.progressBar {
+  position: relative;
+  height: 0.25rem;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: height 0.2s ease;
+}
+
+.progressBar:hover {
+  height: 0.375rem;
+}
+
+.bufferedProgress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 9999px;
+  transition: width 0.1s ease;
+}
+
+.currentProgress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 9999px;
+  transition: width 0.1s ease;
+}
+
+.progressHandle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.75rem;
+  height: 0.75rem;
+  background: #3b82f6;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  margin-left: -0.375rem;
+}
+
+.progressBar:hover .progressHandle {
+  opacity: 1;
+}
+
+.controlsContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem 1.5rem;
+}
+
+.leftControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.rightControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.controlButton {
+  color: white;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.controlButton:hover {
+  color: #3b82f6;
+}
+
+.controlIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.controlIconLarge {
+  width: 2rem;
+  height: 2rem;
+}
+
+.timeDisplay {
+  color: white;
+  font-size: 0.75rem;
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+/* Volume Slider */
+.volumeContainer {
+  position: relative;
+}
+
+.volumeSlider {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 0.5rem;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+}
+
+.volumeContainer:hover .volumeSlider {
+  opacity: 1;
+  visibility: visible;
+}
+
+.volumeTrack {
+  width: 0.25rem;
+  height: 5rem;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 9999px;
+  cursor: pointer;
+  position: relative;
+}
+
+.volumeProgress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #3b82f6;
+  border-radius: 9999px;
+  transition: height 0.1s ease;
+}
+
+.volumeHandle {
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  background: #3b82f6;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  left: 50%;
+  margin-bottom: -0.375rem;
+}
+
+/* TV and Ultra-Wide Screen Optimizations */
+@media (min-width: 1920px) {
+  .topOverlayContent {
+    padding: 2rem 3rem;
+  }
+  
+  .backIcon {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .title {
+    font-size: 2rem;
+  }
+  
+  .subtitle {
+    font-size: 1rem;
+  }
+  
+  .centerPlayButton {
+    width: 6rem;
+    height: 6rem;
+  }
+  
+  .playIcon,
+  .pauseIcon {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  .progressContainer {
+    padding: 0 3rem 0.75rem;
+  }
+  
+  .progressBar {
+    height: 0.375rem;
+  }
+  
+  .progressBar:hover {
+    height: 0.5rem;
+  }
+  
+  .controlsContainer {
+    padding: 0 3rem 2.5rem;
+  }
+  
+  .leftControls {
+    gap: 2rem;
+  }
+  
+  .rightControls {
+    gap: 1.5rem;
+  }
+  
+  .controlIconLarge {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .controlIcon {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .timeDisplay {
+    font-size: 1rem;
+  }
+  
+  .titleContainer {
+    max-width: 30rem;
+  }
+}
+
+/* Large Desktop/TV */
+@media (min-width: 1024px) and (max-width: 1919px) {
+  .topOverlayContent {
+    padding: 1.5rem 2rem;
+  }
+  
+  .title {
+    font-size: 1.5rem;
+  }
+  
+  .subtitle {
+    font-size: 0.875rem;
+  }
+  
+  .centerPlayButton {
+    width: 5rem;
+    height: 5rem;
+  }
+  
+  .playIcon,
+  .pauseIcon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  
+  .progressContainer {
+    padding: 0 2rem 0.75rem;
+  }
+  
+  .controlsContainer {
+    padding: 0 2rem 2rem;
+  }
+  
+  .leftControls {
+    gap: 1.5rem;
+  }
+  
+  .rightControls {
+    gap: 1rem;
+  }
+  
+  .controlIconLarge {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  
+  .controlIcon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  
+  .timeDisplay {
+    font-size: 0.875rem;
+  }
+  
+  .titleContainer {
+    max-width: 25rem;
+  }
+}
+
+/* Tablet Landscape */
+@media (max-width: 1023px) and (min-width: 769px) and (orientation: landscape) {
+  .topOverlayContent {
+    padding: 1rem 1.5rem;
+  }
+  
+  .centerPlayButton {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+  
+  .playIcon,
+  .pauseIcon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+  
+  .controlsContainer {
+    padding: 0 1.5rem 1.5rem;
+  }
+  
+  .leftControls {
+    gap: 1.25rem;
+  }
+  
+  .rightControls {
+    gap: 1rem;
+  }
+}
+
+/* Tablet Portrait and Mobile Landscape */
+@media (max-width: 768px) {
+  .topOverlayContent {
+    padding: 1rem;
+  }
+  
+  .backIcon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  
+  .title {
+    font-size: 1.25rem;
+  }
+  
+  .subtitle {
+    font-size: 0.875rem;
+  }
+  
+  .centerPlayButton {
+    width: 4rem;
+    height: 4rem;
+  }
+  
+  .playIcon,
+  .pauseIcon {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .controlsContainer {
+    padding: 0 1rem 1.5rem;
+  }
+  
+  .leftControls {
+    gap: 1rem;
+  }
+  
+  .rightControls {
+    gap: 0.75rem;
+  }
+  
+  .controlIconLarge {
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .controlIcon {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  
+  .timeDisplay {
+    font-size: 0.75rem;
+  }
+}
+
+/* Mobile Portrait */
+@media (max-width: 480px) {
+  .topOverlayContent {
+    padding: 0.75rem;
+  }
+  
+  .leftControls {
+    gap: 0.75rem;
+  }
+  
+  .rightControls {
+    gap: 0.5rem;
+  }
+  
+  .titleContainer {
+    max-width: 12rem;
+  }
+  
+  .centerPlayButton {
+    width: 3.5rem;
+    height: 3.5rem;
+  }
+  
+  .playIcon,
+  .pauseIcon {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+  
+  .controlsContainer {
+    padding: 0 0.75rem 1rem;
+  }
+  
+  .progressContainer {
+    padding: 0 0.75rem 0.5rem;
+  }
+  
+  .timeDisplay {
+    font-size: 0.625rem;
+  }
+}
+
+/* Very Small Mobile */
+@media (max-width: 360px) {
+  .titleContainer {
+    max-width: 8rem;
+  }
+  
+  .rightControls {
+    gap: 0.25rem;
+  }
+  
+  .volumeContainer {
+    display: none;
+  }
+}
+
+/* Focus states for accessibility and TV navigation */
+.controlButton:focus,
+.backButton:focus,
+.progressBar:focus,
+.volumeTrack:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Enhanced focus for TV/remote control navigation */
+@media (hover: none) and (pointer: coarse) {
+  .controlButton:focus,
+  .backButton:focus,
+  .centerPlayButton:focus {
+    outline: 3px solid #3b82f6;
+    outline-offset: 3px;
+    background: rgba(59, 130, 246, 0.2);
+  }
+  
+  .progressBar:focus {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+    height: 0.5rem;
+  }
+  
+  .volumeTrack:focus {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .topOverlay,
+  .bottomOverlay {
+    background: rgba(0, 0, 0, 0.95);
+  }
+  
+  .centerPlayButton {
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid white;
+  }
+  
+  .progressBar {
+    background: rgba(255, 255, 255, 0.8);
+  }
+  
+  .controlButton:hover,
+  .backButton:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .videoOverlay *,
+  .centerPlayButton,
+  .controlButton,
+  .backButton {
+    transition: none;
+  }
+  
+  .centerPlayButton:hover {
+    transform: translate(-50%, -50%);
+  }
+  
+  .backButton:hover .backIcon {
+    transform: none;
+  }
+}
+
+/* Animation for smooth transitions */
+.videoOverlay * {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hide controls animation */
+.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.visible {
+  opacity: 1;
+  pointer-events: auto;
+}

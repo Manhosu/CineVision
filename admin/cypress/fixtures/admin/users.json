@@ -1,0 +1,46 @@
+{
+  "users": [
+    {
+      "id": "user-1",
+      "name": "João Silva",
+      "email": "joao.silva@email.com",
+      "telegram_username": "joaosilva",
+      "telegram_user_id": "123456789",
+      "status": "ACTIVE",
+      "balance": 50.0,
+      "purchase_count": 23,
+      "total_spent": 459.70,
+      "last_active_at": "2024-01-19T14:30:00Z",
+      "created_at": "2024-01-01T10:00:00Z"
+    },
+    {
+      "id": "user-2",
+      "name": "Maria Santos",
+      "email": "maria.santos@email.com",
+      "telegram_username": "mariasantos",
+      "telegram_user_id": "987654321",
+      "status": "BLOCKED",
+      "balance": 0.0,
+      "purchase_count": 8,
+      "total_spent": 159.20,
+      "last_active_at": "2024-01-10T09:15:00Z",
+      "created_at": "2023-12-15T16:45:00Z"
+    },
+    {
+      "id": "user-3",
+      "name": "Carlos Oliveira",
+      "email": "carlos.oliveira@email.com",
+      "telegram_username": "carlosoliveira",
+      "telegram_user_id": "456789123",
+      "status": "ACTIVE",
+      "balance": 25.50,
+      "purchase_count": 12,
+      "total_spent": 238.80,
+      "last_active_at": "2024-01-18T20:10:00Z",
+      "created_at": "2023-11-20T12:30:00Z"
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "limit": 10
+}

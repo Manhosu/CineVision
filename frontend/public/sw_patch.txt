@@ -1,0 +1,13 @@
+  // Skip Chrome extensions
+  if (url.protocol === 'chrome-extension:') {
+    return;
+  }
+
+  // Skip API requests to avoid CSP violations
+  // Don't intercept calls to backend API (localhost:3001) or external APIs
+  if (url.pathname.startsWith('/api/') ||
+      url.port === '3001' ||
+      (url.hostname !== self.location.hostname && url.hostname !== 'localhost')) {
+    // Let browser handle API requests directly (no Service Worker interception)
+    return;
+  }

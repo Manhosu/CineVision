@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Cine Vision</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .offline-container {
+            max-width: 500px;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+            color: #dc2626;
+        }
+
+        .logo::before {
+            content: "🎬";
+            margin-right: 0.5rem;
+        }
+
+        .offline-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            opacity: 0.7;
+        }
+
+        .offline-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+            color: #dc2626;
+        }
+
+        .offline-message {
+            font-size: 1.1rem;
+            color: #cccccc;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .offline-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 2rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .btn-primary {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(220, 38, 38, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #cccccc;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .network-status {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+            color: #999999;
+        }
+
+        .network-status.online {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+
+        .cached-content {
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .cached-content h3 {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: #dc2626;
+        }
+
+        .cached-list {
+            list-style: none;
+        }
+
+        .cached-list li {
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 0.5rem;
+            border-radius: 0.25rem;
+            color: #cccccc;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 2s infinite;
+        }
+
+        @media (max-width: 768px) {
+            .offline-container {
+                padding: 1rem;
+            }
+
+            .offline-title {
+                font-size: 1.5rem;
+            }
+
+            .offline-message {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <!-- Logo -->
+        <div class="logo">CineVision</div>
+
+        <!-- Offline Icon -->
+        <div class="offline-icon">📶</div>
+
+        <!-- Title -->
+        <h1 class="offline-title">Você está offline</h1>
+
+        <!-- Message -->
+        <p class="offline-message">
+            Parece que você perdeu a conexão com a internet.
+            Algumas funcionalidades podem estar limitadas até que você se reconecte.
+        </p>
+
+        <!-- Actions -->
+        <div class="offline-actions">
+            <button class="btn btn-primary" onclick="checkConnection()">
+                <span id="retry-text">Tentar Novamente</span>
+            </button>
+
+            <button class="btn btn-secondary" onclick="showCachedContent()">
+                Ver Conteúdo Offline
+            </button>
+        </div>
+
+        <!-- Network Status -->
+        <div id="network-status" class="network-status">
+            Status: Verificando conexão...
+        </div>
+
+        <!-- Cached Content (hidden by default) -->
+        <div id="cached-content" class="cached-content" style="display: none;">
+            <h3>📁 Conteúdo Disponível Offline</h3>
+            <ul class="cached-list" id="cached-list">
+                <li>🏠 Página inicial</li>
+                <li>⭐ Seus filmes favoritos</li>
+                <li>📋 Sua lista de filmes</li>
+                <li>🔍 Histórico de pesquisa</li>
+            </ul>
+            <p style="font-size: 0.8rem; color: #999; margin-top: 1rem;">
+                * Alguns recursos podem estar limitados no modo offline
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let isOnline = navigator.onLine;
+        let retryCount = 0;
+
+        // Check initial network status
+        updateNetworkStatus();
+
+        // Listen for network changes
+        window.addEventListener('online', () => {
+            isOnline = true;
+            updateNetworkStatus();
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        });
+
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            updateNetworkStatus();
+        });
+
+        function updateNetworkStatus() {
+            const statusElement = document.getElementById('network-status');
+
+            if (isOnline) {
+                statusElement.textContent = 'Status: Online - Redirecionando...';
+                statusElement.classList.add('online');
+            } else {
+                statusElement.textContent = 'Status: Offline - Verifique sua conexão';
+                statusElement.classList.remove('online');
+            }
+        }
+
+        async function checkConnection() {
+            const retryButton = document.getElementById('retry-text');
+            const originalText = retryButton.textContent;
+
+            retryButton.textContent = 'Verificando...';
+            retryButton.parentElement.classList.add('loading');
+
+            try {
+                // Try to fetch a lightweight endpoint
+                const response = await fetch('/', {
+                    method: 'HEAD',
+                    cache: 'no-cache'
+                });
+
+                if (response.ok) {
+                    retryButton.textContent = 'Conectado! Redirecionando...';
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                    return;
+                }
+            } catch (error) {
+                console.log('Still offline:', error);
+            }
+
+            retryCount++;
+            retryButton.textContent = `Tentar Novamente (${retryCount})`;
+            retryButton.parentElement.classList.remove('loading');
+
+            // Show cached content after 3 failed attempts
+            if (retryCount >= 3) {
+                showCachedContent();
+            }
+        }
+
+        function showCachedContent() {
+            const cachedContent = document.getElementById('cached-content');
+            const isVisible = cachedContent.style.display !== 'none';
+
+            cachedContent.style.display = isVisible ? 'none' : 'block';
+
+            // Add some dynamic cached content based on localStorage
+            if (!isVisible) {
+                const cachedList = document.getElementById('cached-list');
+
+                // Check for cached movie data
+                try {
+                    const favorites = localStorage.getItem('favorites');
+                    const watchlist = localStorage.getItem('watchlist');
+                    const searchHistory = localStorage.getItem('searchHistory');
+
+                    if (favorites) {
+                        const favCount = JSON.parse(favorites).length;
+                        const li = document.createElement('li');
+                        li.textContent = `❤️ ${favCount} filmes favoritos`;
+                        cachedList.appendChild(li);
+                    }
+
+                    if (watchlist) {
+                        const watchCount = JSON.parse(watchlist).length;
+                        const li = document.createElement('li');
+                        li.textContent = `📝 ${watchCount} filmes na lista`;
+                        cachedList.appendChild(li);
+                    }
+
+                    if (searchHistory) {
+                        const searches = JSON.parse(searchHistory);
+                        const li = document.createElement('li');
+                        li.textContent = `🔍 ${searches.length} pesquisas recentes`;
+                        cachedList.appendChild(li);
+                    }
+                } catch (error) {
+                    console.log('Error loading cached data:', error);
+                }
+            }
+        }
+
+        // Auto-retry connection every 30 seconds
+        setInterval(() => {
+            if (!isOnline) {
+                fetch('/', { method: 'HEAD', cache: 'no-cache' })
+                    .then(response => {
+                        if (response.ok && !isOnline) {
+                            window.location.href = '/';
+                        }
+                    })
+                    .catch(() => {
+                        // Still offline
+                    });
+            }
+        }, 30000);
+
+        // Show a tip after 10 seconds
+        setTimeout(() => {
+            if (!isOnline) {
+                const tip = document.createElement('p');
+                tip.style.cssText = `
+                    position: fixed;
+                    bottom: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(220, 38, 38, 0.9);
+                    color: white;
+                    padding: 10px 20px;
+                    border-radius: 25px;
+                    font-size: 14px;
+                    animation: fadeIn 0.5s ease-in-out;
+                `;
+                tip.textContent = '💡 Dica: Verifique se o Wi-Fi está conectado';
+                document.body.appendChild(tip);
+
+                setTimeout(() => {
+                    tip.style.opacity = '0';
+                    setTimeout(() => tip.remove(), 500);
+                }, 5000);
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

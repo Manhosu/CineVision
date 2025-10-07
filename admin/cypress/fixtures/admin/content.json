@@ -1,0 +1,52 @@
+{
+  "content": [
+    {
+      "id": "content-1",
+      "title": "Vingadores: Ultimato",
+      "description": "A batalha final dos Vingadores contra Thanos",
+      "price_cents": 1990,
+      "status": "PUBLISHED",
+      "availability": "both",
+      "created_at": "2024-01-15T10:00:00Z",
+      "purchase_count": 156,
+      "total_revenue": 31.12,
+      "categories": [
+        { "name": "Ação" },
+        { "name": "Aventura" }
+      ]
+    },
+    {
+      "id": "content-2",
+      "title": "Spider-Man: No Way Home",
+      "description": "Peter Parker enfrenta villões de diferentes universos",
+      "price_cents": 2490,
+      "status": "PUBLISHED",
+      "availability": "site",
+      "created_at": "2024-01-14T15:30:00Z",
+      "purchase_count": 134,
+      "total_revenue": 26.8,
+      "categories": [
+        { "name": "Ação" },
+        { "name": "Ficção Científica" }
+      ]
+    },
+    {
+      "id": "content-3",
+      "title": "Duna",
+      "description": "A jornada épica de Paul Atreides no planeta deserto Arrakis",
+      "price_cents": 1990,
+      "status": "DRAFT",
+      "availability": "telegram",
+      "created_at": "2024-01-13T09:15:00Z",
+      "purchase_count": 98,
+      "total_revenue": 19.6,
+      "categories": [
+        { "name": "Ficção Científica" },
+        { "name": "Aventura" }
+      ]
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "limit": 10
+}
