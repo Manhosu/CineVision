@@ -16,4 +16,8 @@ export interface Movie {
   availability?: string; // From database: 'SITE' | 'TELEGRAM' | 'BOTH'
   created_at?: string;
   updated_at?: string;
+  // Purchase related fields (when movie is purchased)
+  purchased_at?: string;
+  access_token?: string;
+  access_expires_at?: string;
 }

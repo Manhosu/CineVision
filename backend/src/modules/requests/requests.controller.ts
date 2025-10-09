@@ -149,6 +149,22 @@ export class RequestsController {
     return this.requestsService.findRequestsByUser(user.sub);
   }
 
+  @Get('user/:userId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get user requests by ID',
+    description: 'Retrieve all content requests made by a specific user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'User requests retrieved successfully',
+    type: [ContentRequestResponseDto],
+  })
+  async getUserRequests(@Param('userId') userId: string): Promise<ContentRequestResponseDto[]> {
+    return this.requestsService.findRequestsByUser(userId);
+  }
+
   @Get('telegram/:telegramId')
   @ApiOperation({
     summary: 'Get requests by Telegram ID',

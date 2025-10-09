@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 import {
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -21,6 +22,7 @@ export function Header({ transparent = false }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -124,13 +126,13 @@ export function Header({ transparent = false }: HeaderProps) {
                 <MagnifyingGlassIcon className="w-5 h-5" />
               </button>
 
-              {/* Botão Entrar */}
+              {/* Botão Entrar/Meu Perfil */}
               <Link
-                href="/login"
+                href={isAuthenticated ? "/dashboard" : "/login"}
                 className="btn-primary text-sm hidden sm:inline-flex"
               >
                 <UserIcon className="w-4 h-4 mr-2" />
-                Entrar
+                {isAuthenticated ? 'Meu Perfil' : 'Entrar'}
               </Link>
 
               {/* Menu Mobile Toggle */}
@@ -191,12 +193,12 @@ export function Header({ transparent = false }: HeaderProps) {
                     Conta
                   </div>
                   <Link
-                    href="/login"
+                    href={isAuthenticated ? "/dashboard" : "/login"}
                     className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
-                    <span className="flex-1">Entrar</span>
+                    <span className="flex-1">{isAuthenticated ? 'Meu Perfil' : 'Entrar'}</span>
                   </Link>
                 </div>
 

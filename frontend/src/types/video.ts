@@ -19,6 +19,9 @@ export interface VideoContent {
   price_cents: number;
   status: 'processing' | 'ready' | 'error' | 'deleted';
   processing_status?: ProcessingStatus;
+  video_url?: string; // Direct video URL (MP4, WebM)
+  hls_master_url?: string; // HLS master playlist URL
+  hls_base_path?: string; // Base path for HLS files
   created_at: string;
   updated_at: string;
 }

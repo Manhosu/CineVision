@@ -390,4 +390,16 @@ export class PurchasesService {
       throw new BadRequestException('Failed to update watch progress');
     }
   }
+
+  async checkUserOwnership(userId: string, contentId: string): Promise<boolean> {
+    const purchase = await this.purchaseRepository.findOne({
+      where: {
+        user_id: userId,
+        content_id: contentId,
+        status: PurchaseStatus.PAID,
+      },
+    });
+
+    return !!purchase;
+  }
 }

@@ -79,6 +79,9 @@ export class ChromecastService {
   }
 
   private initializeCastSDK(): void {
+    // Only initialize in browser environment
+    if (typeof window === 'undefined') return;
+
     // Set up the Cast API initialization callback
     window.__onGCastApiAvailable = (isAvailable: boolean) => {
       if (isAvailable) {
@@ -472,5 +475,7 @@ export class ChromecastService {
   }
 }
 
-// Export singleton instance
-export const chromecastService = ChromecastService.getInstance();
+// Export singleton instance - only initialize in browser
+export const chromecastService = typeof window !== 'undefined'
+  ? ChromecastService.getInstance()
+  : null as any;

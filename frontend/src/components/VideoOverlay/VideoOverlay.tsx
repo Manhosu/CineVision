@@ -82,19 +82,24 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
     };
   }, [isPlaying, isDragging]);
 
-  // Show controls on mouse movement
+  // Show controls on mouse movement or touch
   const handleMouseMove = () => {
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
     }
-    
+
     setShowControls(true);
-    
+
     if (isPlaying && !isDragging) {
       hideTimeoutRef.current = setTimeout(() => {
         setShowControls(false);
       }, 3000);
     }
+  };
+
+  // Handle touch events for mobile
+  const handleTouchStart = () => {
+    handleMouseMove(); // Reuse the same logic
   };
 
   // Format time display
@@ -138,27 +143,28 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
   const bufferedPercentage = duration > 0 ? (buffered / duration) * 100 : 0;
 
   return (
-    <div 
+    <div
       className={`absolute inset-0 z-40 ${className}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setShowControls(false)}
+      onTouchStart={handleTouchStart}
     >
       {/* Top Overlay - Title and Back Button */}
-      <div 
-        className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0'
+      <div
+        className={`absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 via-black/60 to-transparent transition-all duration-500 ease-out ${
+          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
         }`}
       >
         <div className="flex items-center justify-between p-4 sm:p-6">
           <button
             onClick={onBackToCatalog}
-            className="flex items-center space-x-2 text-white hover:text-primary-400 transition-colors group"
+            className="flex items-center space-x-2 text-white hover:text-primary-400 transition-all duration-200 group cursor-pointer"
             aria-label="Back to catalog"
           >
-            <svg 
-              className="w-6 h-6 sm:w-7 sm:h-7 transform group-hover:-translate-x-1 transition-transform" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-6 h-6 sm:w-7 sm:h-7 transform group-hover:-translate-x-1 transition-transform duration-200"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -180,20 +186,20 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
       </div>
 
       {/* Center Play/Pause Button */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <button
           onClick={isPlaying ? onPause : onPlay}
-          className={`w-16 h-16 sm:w-20 sm:h-20 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center transition-all duration-300 ${
-            showControls || !isPlaying ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-          }`}
+          className={`w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-br from-primary-600/90 to-primary-700/90 hover:from-primary-500 hover:to-primary-600 rounded-full flex items-center justify-center transition-all duration-300 shadow-2xl backdrop-blur-sm cursor-pointer pointer-events-auto ${
+            showControls || !isPlaying ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+          } hover:scale-110 active:scale-95`}
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
-            <svg className="w-8 h-8 sm:w-10 sm:h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-10 h-10 sm:w-12 sm:h-12 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
               <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
             </svg>
           ) : (
-            <svg className="w-8 h-8 sm:w-10 sm:h-10 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-10 h-10 sm:w-12 sm:h-12 text-white ml-1 drop-shadow-lg" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z"/>
             </svg>
           )}
@@ -201,34 +207,34 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
       </div>
 
       {/* Bottom Controls */}
-      <div 
-        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 ${
-          showControls ? 'opacity-100' : 'opacity-0'
+      <div
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent transition-all duration-500 ease-out ${
+          showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
         }`}
       >
         {/* Progress Bar */}
         <div className="px-4 sm:px-6 pb-2">
-          <div 
+          <div
             ref={progressBarRef}
-            className="relative h-1 sm:h-1.5 bg-white/30 rounded-full cursor-pointer group"
+            className="relative h-1.5 sm:h-2 bg-white/20 rounded-full cursor-pointer group hover:h-2 sm:hover:h-2.5 transition-all duration-200"
             onClick={handleProgressClick}
           >
             {/* Buffered Progress */}
-            <div 
-              className="absolute top-0 left-0 h-full bg-white/50 rounded-full"
+            <div
+              className="absolute top-0 left-0 h-full bg-white/40 rounded-full transition-all"
               style={{ width: `${bufferedPercentage}%` }}
             />
-            
+
             {/* Current Progress */}
-            <div 
-              className="absolute top-0 left-0 h-full bg-primary-600 rounded-full"
+            <div
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full shadow-lg transition-all"
               style={{ width: `${progressPercentage}%` }}
             />
-            
+
             {/* Progress Handle */}
-            <div 
-              className="absolute top-1/2 transform -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 bg-primary-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-              style={{ left: `${progressPercentage}%`, marginLeft: '-6px' }}
+            <div
+              className="absolute top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 bg-white rounded-full shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-200 scale-0 group-hover:scale-100"
+              style={{ left: `${progressPercentage}%`, marginLeft: '-8px' }}
             />
           </div>
         </div>
@@ -240,7 +246,7 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
             {/* Play/Pause */}
             <button
               onClick={isPlaying ? onPause : onPlay}
-              className="text-white hover:text-primary-400 transition-colors"
+              className="text-white hover:text-primary-400 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (
@@ -255,14 +261,14 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
             </button>
 
             {/* Volume Control */}
-            <div 
+            <div
               className="relative"
               onMouseEnter={() => setShowVolumeSlider(true)}
               onMouseLeave={() => setShowVolumeSlider(false)}
             >
               <button
                 onClick={onMuteToggle}
-                className="text-white hover:text-primary-400 transition-colors"
+                className="text-white hover:text-primary-400 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95"
                 aria-label={muted ? 'Unmute' : 'Mute'}
               >
                 {muted || volume === 0 ? (
@@ -338,7 +344,7 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
             {/* Fullscreen */}
             <button
               onClick={onFullscreenToggle}
-              className="text-white hover:text-primary-400 transition-colors"
+              className="text-white hover:text-primary-400 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95"
               aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
             >
               {fullscreen ? (

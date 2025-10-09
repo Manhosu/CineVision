@@ -92,3 +92,6 @@ temp/
 
 # Claude settings
 .claude/settings.local.json
+
+# Claude MCP configuration (contains secrets)
+.claude/

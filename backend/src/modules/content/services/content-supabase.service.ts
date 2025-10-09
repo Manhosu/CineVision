@@ -73,7 +73,7 @@ export class ContentSupabaseService {
           category:categories(*)
         ),
         video_variants(*),
-        streaming_analytics(*)
+        content_languages(*)
       `)
       .eq('id', id)
       .eq('content_type', ContentType.MOVIE)

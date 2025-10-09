@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { AuthController } from './auth.controller';
 import { WebhooksController } from './webhooks.controller';
@@ -15,7 +16,6 @@ import { PaymentsModule } from '../payments/payments.module';
 // import { LogsModule } from '../logs/logs.module'; // Temporarily commented
 import { RefreshToken } from './entities/refresh-token.entity';
 import { TelegramLinkToken } from './entities/telegram-link-token.entity';
-import { jwtConfig } from '../../config/jwt.config';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksController] : [AuthController];
@@ -27,7 +27,16 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
     PaymentsModule,
     // LogsModule, // Temporarily commented
     PassportModule,
-    JwtModule.register(jwtConfig),
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET') || 'cine-vision-secret-key',
+        signOptions: {
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '15m',
+        },
+      }),
+      inject: [ConfigService],
+    }),
     ...optionalTypeOrmFeature([RefreshToken, TelegramLinkToken]),
   ],
   controllers: conditionalControllers,
@@ -39,8 +48,8 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
     SupabaseJwtStrategy
   ],
   exports: [
-    AuthService, 
-    ...(isTypeOrmEnabled() ? [TelegramAuthService] : []), 
+    AuthService,
+    ...(isTypeOrmEnabled() ? [TelegramAuthService] : []),
     JwtModule
   ],
 })

@@ -21,7 +21,7 @@ import { FavoritesService } from '../services/favorites.service';
 import { AddFavoriteDto, FavoriteResponseDto } from '../dto/favorite.dto';
 
 @ApiTags('User Favorites')
-@Controller('api/v1/favorites')
+@Controller('favorites')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class FavoritesController {

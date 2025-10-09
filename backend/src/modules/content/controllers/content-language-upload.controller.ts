@@ -12,6 +12,7 @@ import {
   HttpCode,
   NotFoundException,
   BadRequestException,
+  SetMetadata,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -88,9 +89,17 @@ export class ContentLanguageUploadController {
 
   @Get('languages/:contentId')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Listar idiomas de um conteúdo' })
+  @ApiOperation({ summary: 'Listar idiomas de um conteúdo (Admin)' })
   @ApiResponse({ status: 200, description: 'Lista de idiomas' })
   async getLanguages(@Param('contentId') contentId: string) {
+    return await this.contentLanguageService.findByContentId(contentId);
+  }
+
+  @Get('public/languages/:contentId')
+  @SetMetadata('isPublic', true)
+  @ApiOperation({ summary: 'Listar idiomas disponíveis de um conteúdo (Público)' })
+  @ApiResponse({ status: 200, description: 'Lista de idiomas ativos' })
+  async getPublicLanguages(@Param('contentId') contentId: string) {
     return await this.contentLanguageService.findByContentId(contentId);
   }
 

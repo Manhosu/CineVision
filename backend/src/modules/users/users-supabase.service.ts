@@ -144,13 +144,9 @@ export class UsersSupabaseService {
   }
 
   async updateRefreshToken(id: string, refreshToken: string | null): Promise<void> {
-    this.logger.log(`Updating refresh token for user: ${id}`);
-    
-    try {
-      await this.supabaseClient.update('users', { refresh_token: refreshToken }, { id });
-    } catch (error) {
-      this.logger.error('Failed to update refresh token:', error.message);
-      throw new Error(`Failed to update refresh token: ${error.message}`);
-    }
+    this.logger.log(`Refresh token update skipped for user: ${id} (using JWT-only auth)`);
+    // Refresh token storage is not needed since we're using stateless JWT authentication
+    // The refresh token is returned to the client and stored there
+    return Promise.resolve();
   }
 }

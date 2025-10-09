@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer';
 import { VideoContent } from '@/types/video';
 
@@ -12,11 +12,15 @@ interface WatchPageProps {
 export default function WatchPage({ params }: WatchPageProps) {
   const router = useRouter();
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const selectedLanguageId = searchParams.get('lang');
+
   const [content, setContent] = useState<VideoContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [resumePosition, setResumePosition] = useState<number>(0);
+  const [showResumeModal, setShowResumeModal] = useState<boolean>(true);
 
   // Fetch content details and access token
   useEffect(() => {
@@ -29,7 +33,7 @@ export default function WatchPage({ params }: WatchPageProps) {
 
         // Get content details
         const contentResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/content/movies/${id}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies/${id}`,
           {
             credentials: 'include',
           }
@@ -39,7 +43,35 @@ export default function WatchPage({ params }: WatchPageProps) {
           throw new Error(`Failed to load content: ${contentResponse.statusText}`);
         }
 
-        const contentData = await contentResponse.json();
+        let contentData = await contentResponse.json();
+
+        // If a language ID was selected, fetch the specific language video
+        if (selectedLanguageId) {
+          try {
+            const languagesResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/languages/${id}`
+            );
+
+            if (languagesResponse.ok) {
+              const languages = await languagesResponse.json();
+              const selectedLang = languages.find((lang: any) => lang.id === selectedLanguageId);
+
+              if (selectedLang && selectedLang.video_url) {
+                // Override the video URL with the selected language version
+                contentData = {
+                  ...contentData,
+                  video_url: selectedLang.video_url,
+                  hls_master_url: selectedLang.hls_master_url,
+                  hls_base_path: selectedLang.hls_base_path,
+                };
+              }
+            }
+          } catch (langError) {
+            console.error('Error fetching language details:', langError);
+            // Continue with default content
+          }
+        }
+
         setContent(contentData);
 
         // Get access token if authenticated
@@ -50,7 +82,7 @@ export default function WatchPage({ params }: WatchPageProps) {
           // Get resume position from backend if user is authenticated
           try {
             const progressResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`,
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`,
               {
                 headers: {
                   'Authorization': `Bearer ${token}`,
@@ -90,7 +122,7 @@ export default function WatchPage({ params }: WatchPageProps) {
     };
 
     fetchContent();
-  }, [id]);
+  }, [id, selectedLanguageId]);
 
   // Save resume position
   const handleTimeUpdate = (currentTime: number) => {
@@ -100,7 +132,7 @@ export default function WatchPage({ params }: WatchPageProps) {
     if (token && content) {
       // Save to backend if authenticated
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -134,7 +166,7 @@ export default function WatchPage({ params }: WatchPageProps) {
     if (token && content) {
       // Mark as completed in backend
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -239,10 +271,11 @@ export default function WatchPage({ params }: WatchPageProps) {
           autoplay={true}
           poster={content.poster}
           startTime={resumePosition}
+          videoUrl={content.video_url}
           onTimeUpdate={handleTimeUpdate}
           onEnded={handleVideoEnded}
           onError={handleVideoError}
-          onBackToCatalog={() => router.push('/')}
+          onBackToCatalog={() => router.push('/dashboard')}
           className="w-full aspect-video max-h-screen"
         />
       </div>
@@ -309,7 +342,7 @@ export default function WatchPage({ params }: WatchPageProps) {
       </div>
 
       {/* Resume Position Prompt */}
-      {resumePosition > 30 && (
+      {resumePosition > 30 && showResumeModal && (
         <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
           <div className="bg-dark-800 border border-white/20 rounded-lg p-4 shadow-lg">
             <p className="text-white text-sm mb-3">
@@ -318,14 +351,18 @@ export default function WatchPage({ params }: WatchPageProps) {
             </p>
             <div className="flex space-x-2">
               <button
-                onClick={() => setResumePosition(0)}
+                onClick={() => {
+                  setResumePosition(0);
+                  setShowResumeModal(false);
+                }}
                 className="btn-secondary text-xs px-3 py-1"
               >
                 Start Over
               </button>
               <button
                 onClick={() => {
-                  // The video player will automatically start from resumePosition
+                  // Close the modal - video will resume from resumePosition automatically
+                  setShowResumeModal(false);
                 }}
                 className="btn-primary text-xs px-3 py-1"
               >

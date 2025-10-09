@@ -649,4 +649,37 @@ export class SupabaseAuthController {
       };
     }
   }
+
+  @Post('fix-purchase-status')
+  @ApiOperation({ summary: 'Fix purchase status from PAID to paid' })
+  async fixPurchaseStatus() {
+    try {
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+
+      const { data, error } = await supabase
+        .from('purchases')
+        .update({ status: 'paid' })
+        .eq('status', 'PAID')
+        .select();
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      return {
+        status: 'success',
+        message: `Updated ${data?.length || 0} purchases from PAID to paid`,
+        data,
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: 'Failed to fix purchase status',
+        error: error.message,
+      };
+    }
+  }
 }

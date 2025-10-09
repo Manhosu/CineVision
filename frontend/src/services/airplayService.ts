@@ -57,6 +57,9 @@ export class AirPlayService {
   }
 
   private checkAirPlaySupport(): boolean {
+    // Only check in browser environment
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
     // Check for Safari and AirPlay APIs
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     const hasAirPlayAPI = !!(window as any).WebKitPlaybackTargetAvailabilityEvent;
@@ -341,5 +344,7 @@ export class AirPlayService {
   }
 }
 
-// Export singleton instance
-export const airplayService = AirPlayService.getInstance();
+// Export singleton instance - only initialize in browser
+export const airplayService = typeof window !== 'undefined'
+  ? AirPlayService.getInstance()
+  : null as any;

@@ -1,0 +1,112 @@
+============================================================
+BATCH MOVIE UPLOAD
+============================================================
+Found 8 movie folders to upload (excluding: Superman, Lilo & Stitch)
+
+=== Starting upload for: FILME_ A Hora do Mal (2025) ===
+Title: A Hora do Mal, Year: 2025
+Poster: POSTER.png
+Videos: A Hora do Mal (2025) - DUBLADO-014.mkv, A Hora do Mal (2025) - LEGENDADO.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ A Hora do Mal (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ A Longa Marcha - Caminhe ou Morra (2025) ===
+Title: A Longa Marcha - Caminhe ou Morra, Year: 2025
+Poster: POSTER.png
+Videos: A Longa Marcha_ Caminhe ou Morra (2025) - DUBLADO -008.mp4, A Longa Marcha_ Caminhe ou Morra (2025) - DUBLADO -013.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ A Longa Marcha - Caminhe ou Morra (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ Como Treinar o Seu Dragão (2025) ===
+Title: Como Treinar o Seu Dragão, Year: 2025
+Poster: POSTER.png
+Videos: Como Treinar o Seu Dragão (2025) - DUBLADO-007.mkv
+Uploading poster...
+
+❌ Error uploading FILME_ Como Treinar o Seu Dragão (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ Demon Slayer - Castelo Infinito (2025) ===
+Title: Demon Slayer - Castelo Infinito, Year: 2025
+Poster: POSTER.png
+Videos: Demon Slayer - Castelo Infinito (2025) - DUBLADO-001.mp4, DEMON SLAYER LEGENDADO-002.mp4, DEMON SLAYER LEGENDADO-016.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ Demon Slayer - Castelo Infinito (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ F1 - O Filme (2025) ===
+Title: F1 - O Filme, Year: 2025
+Poster: POSTER.png
+Videos: F1_ O Filme (2025) - DUBLADO-011.mkv, F1_ O Filme (2025) - DUBLADO-014.mkv, F1_ O Filme (2025) - LEGENDADO-005.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ F1 - O Filme (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ Invocação do Mal 4_ O Último Ritual (2025) ===
+Title: Invocação do Mal 4_ O Último Ritual, Year: 2025
+Poster: POSTER.png
+Videos: Invocação do Mal 4_ O Último Ritual (2025) - DUBLADO-015.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ Invocação do Mal 4_ O Último Ritual (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ Jurassic World_ Recomeço (2025) ===
+Title: Jurassic World_ Recomeço, Year: 2025
+Poster: POSTER.png
+Videos: Jurassic World_ Recomeço (2025) - DUBLADO-013.mkv, Jurassic World_ Recomeço (2025) - DUBLADO-015.mkv, Jurassic World_ Recomeço (2025) - LEGENDADO.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ Jurassic World_ Recomeço (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+=== Starting upload for: FILME_ Quarteto Fantástico 4 - Primeiros Passos (2025) ===
+Title: Quarteto Fantástico 4 - Primeiros Passos, Year: 2025
+Poster: POSTER.png
+Videos: Quarteto Fantástico_ Primeiros Passos (2025) - DUBLADO-003.mp4
+Uploading poster...
+
+❌ Error uploading FILME_ Quarteto Fantástico 4 - Primeiros Passos (2025): Request failed with status code 401
+Response data: {
+  message: 'Authentication failed',
+  error: 'Unauthorized',
+  statusCode: 401
+}
+
+============================================================
+UPLOAD COMPLETE
+============================================================

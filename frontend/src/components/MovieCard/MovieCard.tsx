@@ -2,6 +2,7 @@
 
 import { useState, memo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
 import {
   PlayIcon,
@@ -15,6 +16,7 @@ import {
 import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
+import { LanguageSelector } from '@/components/LanguageSelector/LanguageSelector';
 
 interface MovieCardProps {
   movie: Movie;
@@ -22,6 +24,7 @@ interface MovieCardProps {
   lazyLoad?: boolean;
   onClick?: (movie: Movie) => void;
   showFullInfo?: boolean;
+  isPurchased?: boolean;
 }
 
 const MovieCard = memo(function MovieCard({
@@ -29,14 +32,17 @@ const MovieCard = memo(function MovieCard({
   priority = false,
   lazyLoad = true,
   onClick,
-  showFullInfo = false
+  showFullInfo = false,
+  isPurchased = false
 }: MovieCardProps) {
+  const router = useRouter();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false); // TODO: Integrar com estado global
   const [isInWatchlist, setIsInWatchlist] = useState(false); // TODO: Integrar com estado global
   const [isPurchasing, setIsPurchasing] = useState(false);
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
 
   const formatPrice = (priceInCents: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -50,6 +56,39 @@ const MovieCard = memo(function MovieCard({
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
     return `${hours}h ${remainingMinutes}m`;
+  };
+
+  const handleWatch = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    // Buscar idiomas disponíveis
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/languages/${movie.id}`
+      );
+
+      if (response.ok) {
+        const languages = await response.json();
+
+        if (languages.length === 0) {
+          // Sem idiomas cadastrados, tentar ir direto para o player
+          router.push(`/watch/${movie.id}`);
+        } else if (languages.length === 1) {
+          // Apenas um idioma, ir direto para o player com esse idioma
+          router.push(`/watch/${movie.id}?lang=${languages[0].id}`);
+        } else {
+          // Múltiplos idiomas, abrir seletor
+          setShowLanguageSelector(true);
+        }
+      } else {
+        // Erro ao buscar idiomas, tentar ir direto
+        router.push(`/watch/${movie.id}`);
+      }
+    } catch (error) {
+      console.error('Error fetching languages:', error);
+      router.push(`/watch/${movie.id}`);
+    }
   };
 
   const handlePurchase = async (e: React.MouseEvent) => {
@@ -186,10 +225,10 @@ const MovieCard = memo(function MovieCard({
             isHovered ? 'opacity-100' : 'opacity-0'
           }`}>
 
-            {/* Play button */}
+            {/* Play/Purchase button */}
             <div className="absolute inset-0 flex items-center justify-center">
               <button
-                onClick={handlePurchase}
+                onClick={isPurchased ? handleWatch : handlePurchase}
                 disabled={isPurchasing}
                 className={`btn-primary text-sm px-4 py-2 transform transition-all duration-300 ${
                   isHovered ? 'scale-100 opacity-100' : 'scale-75 opacity-0'
@@ -200,6 +239,11 @@ const MovieCard = memo(function MovieCard({
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     <span>Comprando...</span>
                   </div>
+                ) : isPurchased ? (
+                  <>
+                    <PlayIcon className="w-4 h-4 mr-2" />
+                    Assistir
+                  </>
                 ) : (
                   <>
                     <ShoppingCartIcon className="w-4 h-4 mr-2" />
@@ -248,10 +292,17 @@ const MovieCard = memo(function MovieCard({
             {movie.title}
           </h3>
 
-          {/* Price */}
-          <div className="text-primary-500 font-bold text-lg">
-            {formatPrice(movie.price_cents)}
-          </div>
+          {/* Price or Purchased Badge */}
+          {isPurchased ? (
+            <div className="flex items-center space-x-2">
+              <CheckIcon className="w-4 h-4 text-green-500" />
+              <span className="text-green-500 font-medium text-sm">Adquirido</span>
+            </div>
+          ) : (
+            <div className="text-primary-500 font-bold text-lg">
+              {formatPrice(movie.price_cents)}
+            </div>
+          )}
 
           {/* Additional Info */}
           {showFullInfo && (
@@ -314,6 +365,16 @@ const MovieCard = memo(function MovieCard({
       <div className={`absolute inset-0 -z-10 bg-primary-600/20 rounded-xl blur-xl transition-opacity duration-300 ${
         isHovered ? 'opacity-100' : 'opacity-0'
       }`} />
+
+      {/* Language Selector Modal */}
+      {isPurchased && (
+        <LanguageSelector
+          isOpen={showLanguageSelector}
+          onClose={() => setShowLanguageSelector(false)}
+          contentId={movie.id}
+          movieTitle={movie.title}
+        />
+      )}
     </div>
   );
 });

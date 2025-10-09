@@ -1,3 +1,5 @@
+import { supabase } from '@/lib/supabase';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface Favorite {
@@ -21,11 +23,34 @@ class FavoritesService {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
 
+    // Get Supabase session to extract JWT token
+    const { data: { session } } = await supabase.auth.getSession();
+
+    // Debug logging
+    console.log('🔍 Favorites Debug:', {
+      endpoint,
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      hasAccessToken: !!session?.access_token,
+      tokenPreview: session?.access_token?.substring(0, 30) + '...',
+      userId: session?.user?.id,
+    });
+
+    // Build headers with Authorization if session exists
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+      console.log('✅ Authorization header added');
+    } else {
+      console.warn('⚠️ No access token available - user may not be logged in');
+    }
+
     const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       credentials: 'include', // Include cookies for auth
       ...options,
     };

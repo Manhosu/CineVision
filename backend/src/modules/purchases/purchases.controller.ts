@@ -8,6 +8,7 @@ import {
   ValidationPipe,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -16,7 +17,6 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
-import { PurchasesService } from './purchases.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import {
@@ -29,7 +29,7 @@ import {
 @ApiTags('purchases')
 @Controller('purchases')
 export class PurchasesController {
-  constructor(private readonly purchasesService: PurchasesService) {}
+  constructor(@Inject('PurchasesService') private readonly purchasesService: any) {}
 
   @Post('initiate')
   @HttpCode(HttpStatus.CREATED)
@@ -142,7 +142,41 @@ export class PurchasesController {
     );
   }
 
-  @Get('user/:telegramId')
+  @Get('user/:userId/content')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user purchased content list' })
+  @ApiResponse({ status: 200, description: 'User content list retrieved successfully' })
+  async getUserContent(@Param('userId') userId: string) {
+    return this.purchasesService.findUserContentList(userId);
+  }
+
+  @Get('user/:userId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get user purchase history' })
+  @ApiResponse({ status: 200, description: 'User purchases retrieved successfully' })
+  async getUserPurchaseHistory(@Param('userId') userId: string) {
+    return this.purchasesService.findByUserId(userId);
+  }
+
+  @Get('check/:contentId')
+  @ApiOperation({ summary: 'Check if user owns content' })
+  @ApiResponse({ status: 200, description: 'Ownership check completed' })
+  async checkOwnership(
+    @Param('contentId') contentId: string,
+    @GetUser() user?: any
+  ) {
+    // Return false if user is not authenticated
+    if (!user || !user.sub) {
+      return { isOwned: false };
+    }
+
+    const isOwned = await this.purchasesService.checkUserOwnership(user.sub, contentId);
+    return { isOwned };
+  }
+
+  @Get('telegram/:telegramId')
   @ApiOperation({
     summary: 'Get purchases by Telegram ID',
     description: 'Retrieve all purchases made by a specific Telegram user. For bot use.',

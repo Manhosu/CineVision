@@ -7,17 +7,27 @@ import { UserFavorite } from './entities/user-favorite.entity';
 import { Content } from '../content/entities/content.entity';
 import { FavoritesController } from './controllers/favorites.controller';
 import { FavoritesService } from './services/favorites.service';
+import { FavoritesSupabaseService } from './services/favorites-supabase.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { optionalTypeOrmFeature, optionalTypeOrmProviders, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
-const conditionalControllers = isTypeOrmEnabled() ? [UsersController, FavoritesController] : [UsersController];
-const conditionalProviders = isTypeOrmEnabled() 
+// Always include FavoritesController since we now support it with Supabase
+const conditionalControllers = isTypeOrmEnabled()
+  ? [UsersController, FavoritesController]
+  : [UsersController, FavoritesController];
+
+const conditionalProviders = isTypeOrmEnabled()
   ? [UsersService, FavoritesService]
   : [
       UsersSupabaseService,
+      FavoritesSupabaseService,
       {
         provide: UsersService,
         useExisting: UsersSupabaseService,
+      },
+      {
+        provide: FavoritesService,
+        useExisting: FavoritesSupabaseService,
       },
     ];
 
@@ -28,6 +38,6 @@ const conditionalProviders = isTypeOrmEnabled()
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,
-  exports: [UsersService],
+  exports: [UsersService, FavoritesService],
 })
 export class UsersModule {}
