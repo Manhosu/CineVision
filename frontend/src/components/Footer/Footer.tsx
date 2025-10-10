@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import {
-  FilmIcon,
   EnvelopeIcon,
   PhoneIcon,
   MapPinIcon,
@@ -48,12 +48,15 @@ export function Footer() {
 
           {/* Brand Section */}
           <div className="space-y-6">
-            <Link href="/" className="flex items-center space-x-3 text-2xl font-bold">
-              <FilmIcon className="w-8 h-8 text-primary-600" />
-              <span>
-                <span className="text-primary-600">Cine</span>
-                <span className="text-white">Vision</span>
-              </span>
+            <Link href="/" className="inline-block hover:opacity-80 transition-opacity">
+              <Image
+                src="/CINEVT.png"
+                alt="Cine Vision"
+                width={130}
+                height={40}
+                className="h-9"
+                style={{ width: 'auto', height: 'auto' }}
+              />
             </Link>
 
             <p className="text-gray-400 text-sm leading-relaxed max-w-xs">

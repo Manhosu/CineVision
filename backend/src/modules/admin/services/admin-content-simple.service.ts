@@ -80,7 +80,49 @@ export class AdminContentSimpleService {
     }
 
     this.logger.log('Content created successfully:', insertedContent.id);
+
+    // Associar categorias se fornecidas
+    if (data.genres && Array.isArray(data.genres) && data.genres.length > 0) {
+      await this.associateCategories(insertedContent.id, data.genres);
+    }
+
     return insertedContent;
+  }
+
+  private async associateCategories(contentId: string, categoryNames: string[]) {
+    this.logger.log(`Associating categories for content ${contentId}:`, categoryNames);
+
+    // Buscar IDs das categorias pelos nomes
+    const { data: categories, error: categoriesError } = await this.supabaseService.client
+      .from('categories')
+      .select('id, name')
+      .in('name', categoryNames);
+
+    if (categoriesError) {
+      this.logger.error('Error fetching categories:', categoriesError);
+      return;
+    }
+
+    if (!categories || categories.length === 0) {
+      this.logger.warn('No matching categories found for:', categoryNames);
+      return;
+    }
+
+    // Criar associações
+    const associations = categories.map(category => ({
+      content_id: contentId,
+      category_id: category.id
+    }));
+
+    const { error: insertError } = await this.supabaseService.client
+      .from('content_categories')
+      .insert(associations);
+
+    if (insertError) {
+      this.logger.error('Error creating category associations:', insertError);
+    } else {
+      this.logger.log(`Successfully associated ${categories.length} categories`);
+    }
   }
 
   async initiateUpload(data: any, userId?: string) {

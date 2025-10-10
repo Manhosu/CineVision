@@ -16,7 +16,8 @@ export class ContentService {
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at') {
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
-      .leftJoinAndSelect('content.categories', 'categories');
+      .leftJoinAndSelect('content.categories', 'categories')
+      .leftJoinAndSelect('content.languages', 'languages');
 
     if (genre) {
       queryBuilder.andWhere('categories.name = :genre', { genre });
@@ -63,7 +64,7 @@ export class ContentService {
   async findMovieById(id: string) {
     const movie = await this.contentRepository.findOne({
       where: { id, status: ContentStatus.PUBLISHED },
-      relations: ['categories'],
+      relations: ['categories', 'languages'],
     });
 
     if (!movie) {

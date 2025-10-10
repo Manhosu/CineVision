@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { Content } from '@/services/adminApi';
+import Badge from '@/components/ui/Badge';
+
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+}
 
 interface ContentModalProps {
   isOpen: boolean;
@@ -28,8 +36,33 @@ export default function ContentModal({ isOpen, onClose, content, onSave, loading
     trailer_url: '',
   });
 
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  // Buscar categorias disponíveis
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/content/categories`);
+        if (response.ok) {
+          const categories = await response.json();
+          setAvailableCategories(categories);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar categorias:', error);
+      }
+    };
+
+    if (isOpen) {
+      fetchCategories();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (content) {
+      const categories = content.categories?.map(c => c.name) || [];
+      setSelectedCategories(categories);
+
       setFormData({
         title: content.title || '',
         description: content.description || '',
@@ -47,6 +80,8 @@ export default function ContentModal({ isOpen, onClose, content, onSave, loading
       });
     } else {
       // Reset form for new content
+      setSelectedCategories([]);
+
       setFormData({
         title: '',
         description: '',
@@ -72,6 +107,7 @@ export default function ContentModal({ isOpen, onClose, content, onSave, loading
       await onSave({
         ...formData,
         price: formData.price_cents / 100, // Convert to reais for display
+        genres: selectedCategories, // Enviar categorias selecionadas
       });
       onClose();
     } catch (error) {
@@ -89,6 +125,20 @@ export default function ContentModal({ isOpen, onClose, content, onSave, loading
               name === 'imdb_rating' ? parseFloat(value) || 0 :
               value
     }));
+  };
+
+  const toggleCategory = (categoryName: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(categoryName)) {
+        return prev.filter((c) => c !== categoryName);
+      } else {
+        return [...prev, categoryName];
+      }
+    });
+  };
+
+  const removeCategory = (categoryName: string) => {
+    setSelectedCategories((prev) => prev.filter((c) => c !== categoryName));
   };
 
   if (!isOpen) return null;
@@ -242,16 +292,45 @@ export default function ContentModal({ isOpen, onClose, content, onSave, loading
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Gêneros
+                Categorias *
               </label>
-              <input
-                type="text"
-                name="genre"
-                value={formData.genre}
-                onChange={handleInputChange}
-                placeholder="Ação, Aventura, Ficção"
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    toggleCategory(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
                 className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
+                disabled={availableCategories.length === 0}
+              >
+                <option value="">
+                  {availableCategories.length === 0
+                    ? 'Carregando...'
+                    : 'Selecione uma categoria'}
+                </option>
+                {availableCategories
+                  .filter((cat) => !selectedCategories.includes(cat.name))
+                  .map((category) => (
+                    <option key={category.id} value={category.name}>
+                      {category.name}
+                    </option>
+                  ))}
+              </select>
+              {selectedCategories.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedCategories.map((categoryName) => (
+                    <Badge
+                      key={categoryName}
+                      variant="outline"
+                      removable
+                      onRemove={() => removeCategory(categoryName)}
+                    >
+                      {categoryName}
+                    </Badge>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { EyeIcon, EyeSlashIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import AuthService from '@/services/authService';
 
@@ -62,12 +63,20 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-white">
-            Cine Vision Admin
+        <div className="text-center">
+          <Image
+            src="/CINEVT.png"
+            alt="Cine Vision Admin"
+            width={150}
+            height={45}
+            className="h-11 mx-auto mb-4"
+            style={{ width: 'auto', height: 'auto' }}
+          />
+          <h2 className="text-center text-2xl font-bold text-white">
+            Admin
           </h2>
           <p className="mt-2 text-center text-sm text-gray-400">
-            {requires2FA 
+            {requires2FA
               ? 'Digite o código de autenticação de dois fatores'
               : 'Entre na sua conta'
             }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import AdminLayout from '@/components/layout/AdminLayout';
 import FileUpload from '@/components/ui/FileUpload';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -31,6 +31,13 @@ interface ContentMetadata {
   availability: 'site' | 'telegram' | 'both';
 }
 
+interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+}
+
 export default function VideoUploadPage() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [thumbnails, setThumbnails] = useState<File[]>([]);
@@ -48,7 +55,25 @@ export default function VideoUploadPage() {
   });
   const [isUploading, setIsUploading] = useState(false);
   const [castInput, setCastInput] = useState('');
-  const [genreInput, setGenreInput] = useState('');
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+  // Buscar categorias disponíveis
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/content/categories`);
+        if (response.ok) {
+          const categories = await response.json();
+          setAvailableCategories(categories);
+        }
+      } catch (error) {
+        console.error('Erro ao buscar categorias:', error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const handleVideoFiles = useCallback((files: File[]) => {
     const newVideos = files.map((file) => ({
@@ -192,20 +217,28 @@ export default function VideoUploadPage() {
     }));
   };
 
-  const addGenre = () => {
-    if (genreInput.trim() && !metadata.genres.includes(genreInput.trim())) {
-      setMetadata((prev) => ({
-        ...prev,
-        genres: [...prev.genres, genreInput.trim()],
-      }));
-      setGenreInput('');
-    }
-  };
+  const toggleCategory = (categoryName: string) => {
+    setSelectedCategories((prev) => {
+      if (prev.includes(categoryName)) {
+        return prev.filter((c) => c !== categoryName);
+      } else {
+        return [...prev, categoryName];
+      }
+    });
 
-  const removeGenre = (genre: string) => {
     setMetadata((prev) => ({
       ...prev,
-      genres: prev.genres.filter((g) => g !== genre),
+      genres: selectedCategories.includes(categoryName)
+        ? prev.genres.filter((g) => g !== categoryName)
+        : [...prev.genres, categoryName],
+    }));
+  };
+
+  const removeCategory = (categoryName: string) => {
+    setSelectedCategories((prev) => prev.filter((c) => c !== categoryName));
+    setMetadata((prev) => ({
+      ...prev,
+      genres: prev.genres.filter((g) => g !== categoryName),
     }));
   };
 
@@ -461,37 +494,51 @@ export default function VideoUploadPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Gêneros
+                  Categorias *
                 </label>
-                <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={genreInput}
-                    onChange={(e) => setGenreInput(e.target.value)}
-                    placeholder="Nome do gênero"
-                    className="input-field flex-1"
-                    onKeyPress={(e) => e.key === 'Enter' && addGenre()}
-                  />
-                  <button
-                    type="button"
-                    onClick={addGenre}
-                    className="btn-secondary"
+                <div className="relative mb-2">
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        toggleCategory(e.target.value);
+                        e.target.value = '';
+                      }
+                    }}
+                    className="input-field w-full"
+                    disabled={availableCategories.length === 0}
                   >
-                    Adicionar
-                  </button>
+                    <option value="">
+                      {availableCategories.length === 0
+                        ? 'Carregando categorias...'
+                        : 'Selecione uma categoria'}
+                    </option>
+                    {availableCategories
+                      .filter((cat) => !selectedCategories.includes(cat.name))
+                      .map((category) => (
+                        <option key={category.id} value={category.name}>
+                          {category.name}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {metadata.genres.map((genre) => (
-                    <Badge
-                      key={genre}
-                      variant="outline"
-                      removable
-                      onRemove={() => removeGenre(genre)}
-                    >
-                      {genre}
-                    </Badge>
-                  ))}
-                </div>
+                {selectedCategories.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCategories.map((categoryName) => (
+                      <Badge
+                        key={categoryName}
+                        variant="outline"
+                        removable
+                        onRemove={() => removeCategory(categoryName)}
+                      >
+                        {categoryName}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    Nenhuma categoria selecionada
+                  </p>
+                )}
               </div>
             </div>
           </div>

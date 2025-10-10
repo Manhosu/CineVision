@@ -41,7 +41,7 @@ const fetchCategoryMovieCount = async (categoryName: string): Promise<number> =>
     }
 
     const data = await response.json();
-    return data.pagination?.total || 0;
+    return data.total || 0;
   } catch (error) {
     return 0;
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import {
@@ -64,7 +65,15 @@ export default function Sidebar({ onClose }: SidebarProps) {
       <div className="flex flex-col h-full">
         {/* Logo */}
         <div className="flex items-center justify-center h-16 px-4 border-b border-dark-700">
-          <h1 className="text-xl font-bold text-white">Cine Vision</h1>
+          <Image
+            src="/CINEVT.png"
+            alt="Cine Vision Admin"
+            width={120}
+            height={36}
+            priority
+            className="h-8"
+            style={{ width: 'auto', height: 'auto' }}
+          />
         </div>
 
         {/* Navigation */}

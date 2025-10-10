@@ -11,7 +11,12 @@ import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
+import { DriveImportController } from './controllers/drive-import.controller';
+import { DriveToS3Service } from './services/drive-to-s3.service';
 import { SupabaseModule } from '../../config/supabase.module';
+import { ContentLanguageService } from '../content/services/content-language.service';
+import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
+import { ContentLanguage } from '../content/entities/content-language.entity';
 import { AdminSettings } from './entities/admin-settings.entity';
 import { Content } from '../content/entities/content.entity';
 import { Series } from '../content/entities/series.entity';
@@ -41,11 +46,13 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminImageUploadController,
   AdminPurchasesController,
   UploadPresignedController, // Always include presigned URL controller
+  DriveImportController, // Google Drive → S3 import
 ] : [
   AdminContentController, // Always include AdminContentController
   AdminImageUploadController, // Always include image upload
   AdminPurchasesController, // Always include purchases controller
   UploadPresignedController, // Always include presigned URL controller
+  DriveImportController, // Google Drive → S3 import
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -63,11 +70,16 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   QueueService,
   TranscodeService,
   ImageUploadService,
+  DriveToS3Service,
+  ContentLanguageService,
 ] : [
   AdminContentSimpleService, // Use simplified service for testing
   ImageUploadService, // Always include image upload service
   AdminPurchasesSimpleService, // Always include purchases service
   StripeService, // Include StripeService for payments even without TypeORM
+  DriveToS3Service,
+  ContentLanguageSupabaseService,
+  { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
 ];
 
 const conditionalExports = isTypeOrmEnabled() ? [
@@ -84,6 +96,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
       Series,
       Episode,
       Category,
+      ContentLanguage,
       User,
       Purchase,
       Payment,

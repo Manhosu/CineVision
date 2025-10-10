@@ -1,15 +1,17 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import {
   MagnifyingGlassIcon,
   Bars3Icon,
   XMarkIcon,
-  FilmIcon,
-  UserIcon
+  UserIcon,
+  ArrowRightOnRectangleIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 
 interface HeaderProps {
@@ -21,8 +23,11 @@ export function Header({ transparent = false }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+  const { isAuthenticated, user, logout } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,6 +37,22 @@ export function Header({ transparent = false }: HeaderProps) {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
 
   const isActiveLink = (href: string) => {
     if (href === '/') {
@@ -47,6 +68,16 @@ export function Header({ transparent = false }: HeaderProps) {
       console.log('Buscar por:', searchQuery);
       setIsSearchOpen(false);
       setSearchQuery('');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setIsUserMenuOpen(false);
+      router.push('/');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
     }
   };
 
@@ -72,13 +103,17 @@ export function Header({ transparent = false }: HeaderProps) {
             {/* Logo */}
             <Link
               href="/"
-              className="flex items-center space-x-3 text-2xl font-bold text-white hover:text-primary-500 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-950 rounded px-2 py-1"
+              className="flex items-center space-x-2 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-950 rounded px-2 py-1"
             >
-              <FilmIcon className="w-8 h-8 text-primary-600" />
-              <span className="hidden sm:block">
-                <span className="text-primary-600">Cine</span>
-                <span className="text-white">Vision</span>
-              </span>
+              <Image
+                src="/CINEVT.png"
+                alt="Cine Vision"
+                width={120}
+                height={36}
+                priority
+                className="h-7 w-auto sm:h-8"
+                style={{ width: 'auto', height: 'auto' }}
+              />
             </Link>
 
             {/* Navegação Desktop */}
@@ -126,14 +161,53 @@ export function Header({ transparent = false }: HeaderProps) {
                 <MagnifyingGlassIcon className="w-5 h-5" />
               </button>
 
-              {/* Botão Entrar/Meu Perfil */}
-              <Link
-                href={isAuthenticated ? "/dashboard" : "/login"}
-                className="btn-primary text-sm hidden sm:inline-flex"
-              >
-                <UserIcon className="w-4 h-4 mr-2" />
-                {isAuthenticated ? 'Meu Perfil' : 'Entrar'}
-              </Link>
+              {/* Botão Entrar/Menu de Usuário */}
+              {isAuthenticated ? (
+                <div ref={userMenuRef} className="relative hidden sm:block">
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="btn-primary text-sm inline-flex items-center"
+                  >
+                    <UserIcon className="w-4 h-4 mr-2" />
+                    <span>{user?.name || 'Meu Perfil'}</span>
+                    <ChevronDownIcon className="w-4 h-4 ml-1" />
+                  </button>
+
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-dark-800 border border-white/10 rounded-lg shadow-lg overflow-hidden z-50">
+                      <div className="px-4 py-3 border-b border-white/10">
+                        <p className="text-sm font-medium text-white">{user?.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{user?.email}</p>
+                      </div>
+
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <UserIcon className="w-4 h-4 mr-3" />
+                        Meu Perfil
+                      </Link>
+
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center w-full px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                      >
+                        <ArrowRightOnRectangleIcon className="w-4 h-4 mr-3" />
+                        Sair
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  href="/login"
+                  className="btn-primary text-sm hidden sm:inline-flex"
+                >
+                  <UserIcon className="w-4 h-4 mr-2" />
+                  Entrar
+                </Link>
+              )}
 
               {/* Menu Mobile Toggle */}
               <button
@@ -192,14 +266,43 @@ export function Header({ transparent = false }: HeaderProps) {
                   <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
                     Conta
                   </div>
-                  <Link
-                    href={isAuthenticated ? "/dashboard" : "/login"}
-                    className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
-                    <span className="flex-1">{isAuthenticated ? 'Meu Perfil' : 'Entrar'}</span>
-                  </Link>
+                  {isAuthenticated ? (
+                    <>
+                      {user && (
+                        <div className="px-3 py-2 mb-2">
+                          <p className="text-sm font-medium text-white">{user.name}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
+                        </div>
+                      )}
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
+                        <span className="flex-1">Meu Perfil</span>
+                      </Link>
+                      <button
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          handleLogout();
+                        }}
+                        className="flex items-center w-full px-3 py-3 rounded-lg text-base font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+                      >
+                        <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
+                        <span className="flex-1 text-left">Sair</span>
+                      </button>
+                    </>
+                  ) : (
+                    <Link
+                      href="/login"
+                      className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
+                      <span className="flex-1">Entrar</span>
+                    </Link>
+                  )}
                 </div>
 
                 {/* Seção de Busca Mobile */}
@@ -222,10 +325,14 @@ export function Header({ transparent = false }: HeaderProps) {
                 {/* Footer do Menu */}
                 <div className="border-t border-white/10 pt-6 mt-6">
                   <div className="text-center">
-                    <p className="text-sm text-gray-400">
-                      <span className="text-primary-500 font-medium">Cine</span>
-                      <span className="text-white">Vision</span>
-                    </p>
+                    <Image
+                      src="/CINEVT.png"
+                      alt="Cine Vision"
+                      width={120}
+                      height={36}
+                      className="h-8 mx-auto mb-2"
+                      style={{ width: 'auto', height: 'auto' }}
+                    />
                     <p className="text-xs text-gray-500 mt-1">
                       A melhor experiência em streaming
                     </p>
