@@ -1,14 +1,28 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
+import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AdminContentSimpleService {
   private readonly logger = new Logger(AdminContentSimpleService.name);
+  private readonly s3Client: S3Client;
+  private readonly bucketName: string;
 
   constructor(
     private readonly supabaseService: SupabaseService,
+    private readonly configService: ConfigService,
   ) {
     console.log('AdminContentSimpleService instantiated successfully');
+
+    this.s3Client = new S3Client({
+      region: this.configService.get('AWS_REGION') || 'us-east-1',
+      credentials: {
+        accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
+        secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
+      },
+    });
+    this.bucketName = this.configService.get('AWS_S3_BUCKET') || 'cinevision-filmes';
   }
 
   async getAllContent() {
@@ -120,6 +134,101 @@ export class AdminContentSimpleService {
       success: true,
       data: { id: 'test-episode-id', ...data },
       message: 'Episode created successfully'
+    };
+  }
+
+  async deleteContent(contentId: string, userId?: string) {
+    this.logger.log(`Deleting content with ID: ${contentId}`);
+
+    // 1. Buscar o conteúdo para obter informações antes de deletar
+    const { data: content, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !content) {
+      this.logger.error(`Content not found: ${contentId}`);
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    this.logger.log(`Found content: ${content.title}`);
+
+    // 2. Deletar arquivos de vídeo do S3 (content_languages table)
+    const { data: languages } = await this.supabaseService.client
+      .from('content_languages')
+      .select('video_storage_key')
+      .eq('content_id', contentId);
+
+    if (languages && languages.length > 0) {
+      for (const lang of languages) {
+        if (lang.video_storage_key) {
+          try {
+            await this.s3Client.send(new DeleteObjectCommand({
+              Bucket: this.bucketName,
+              Key: lang.video_storage_key,
+            }));
+            this.logger.log(`Deleted S3 object: ${lang.video_storage_key}`);
+          } catch (s3Error) {
+            this.logger.warn(`Failed to delete S3 object ${lang.video_storage_key}:`, s3Error);
+          }
+        }
+      }
+    }
+
+    // 3. Deletar imagens (poster e backdrop) do S3
+    const imagesToDelete = [content.poster_url, content.backdrop_url].filter(Boolean);
+    for (const imageUrl of imagesToDelete) {
+      try {
+        // Extrair a key da URL
+        const url = new URL(imageUrl);
+        const key = url.pathname.substring(1); // Remove leading /
+        await this.s3Client.send(new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: key,
+        }));
+        this.logger.log(`Deleted image from S3: ${key}`);
+      } catch (error) {
+        this.logger.warn(`Failed to delete image from S3:`, error);
+      }
+    }
+
+    // 4. Deletar registros relacionados (cascade deve funcionar, mas garantimos)
+    await this.supabaseService.client
+      .from('content_languages')
+      .delete()
+      .eq('content_id', contentId);
+
+    await this.supabaseService.client
+      .from('purchases')
+      .delete()
+      .eq('content_id', contentId);
+
+    await this.supabaseService.client
+      .from('favorites')
+      .delete()
+      .eq('content_id', contentId);
+
+    // 5. Deletar o conteúdo do banco
+    const { error: deleteError } = await this.supabaseService.client
+      .from('content')
+      .delete()
+      .eq('id', contentId);
+
+    if (deleteError) {
+      this.logger.error('Error deleting content from database:', deleteError);
+      throw new Error(`Failed to delete content: ${deleteError.message}`);
+    }
+
+    this.logger.log(`Content ${contentId} deleted successfully`);
+
+    return {
+      success: true,
+      message: `Content "${content.title}" deleted successfully`,
+      deletedContent: {
+        id: content.id,
+        title: content.title,
+      },
     };
   }
 }

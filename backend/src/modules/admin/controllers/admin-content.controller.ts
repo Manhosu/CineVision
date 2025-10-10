@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Put,
+  Delete,
   Body,
   Param,
   UseGuards,
@@ -165,5 +166,26 @@ export class AdminContentController {
       { series_id: seriesId, ...dto },
       'test-user-id',
     );
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Delete content',
+    description: 'Deletes content from database, S3, and Stripe. This action cannot be undone.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Content deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Content not found',
+  })
+  @HttpCode(HttpStatus.OK)
+  async deleteContent(
+    @Param('id') contentId: string,
+    // @GetUser() user: User, // Temporarily disabled
+  ) {
+    return this.adminContentService.deleteContent(contentId, 'test-user-id');
   }
 }

@@ -10,6 +10,7 @@ import { AdminImageUploadController } from './controllers/admin-image-upload.con
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
+import { UploadPresignedController } from './controllers/upload-presigned.controller';
 import { SupabaseModule } from '../../config/supabase.module';
 import { AdminSettings } from './entities/admin-settings.entity';
 import { Content } from '../content/entities/content.entity';
@@ -39,10 +40,12 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
+  UploadPresignedController, // Always include presigned URL controller
 ] : [
   AdminContentController, // Always include AdminContentController
   AdminImageUploadController, // Always include image upload
   AdminPurchasesController, // Always include purchases controller
+  UploadPresignedController, // Always include presigned URL controller
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());

@@ -188,17 +188,39 @@ export const useVideoUpload = () => {
       const chunkSize = options.chunkSize || CHUNK_SIZE;
       const totalChunks = Math.ceil(file.size / chunkSize);
 
-      // For small files, use direct upload
-      if (file.size < chunkSize) {
-        const response = await api.post('/api/video-upload/presigned-url', {
-          fileName: file.name,
+      // For small files OR when presignedUrl endpoint is provided, use direct upload
+      const useDirectUpload = file.size < chunkSize || options.customEndpoints?.presignedUrl;
+
+      if (useDirectUpload) {
+        const endpoint = options.customEndpoints?.presignedUrl || '/api/video-upload/presigned-url';
+        const token = typeof window !== 'undefined'
+          ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+          : null;
+
+        const payload = {
+          filename: file.name,
           contentType: file.type,
+          ...options.customPayload,
+        };
+
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` }),
+          },
+          body: JSON.stringify(payload),
         });
 
-        const { presignedUrl } = response.data;
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.message || `HTTP error! status: ${response.status}`);
+        }
 
-        // Upload directly
-        const uploadResponse = await fetch(presignedUrl, {
+        const { uploadUrl, fileUrl, key } = await response.json();
+
+        // Upload directly to S3 using presigned URL
+        const uploadResponse = await fetch(uploadUrl, {
           method: 'PUT',
           body: file,
           headers: {
@@ -218,11 +240,12 @@ export const useVideoUpload = () => {
         });
 
         return {
-          videoKey: file.name,
+          videoKey: key || file.name,
           metadata: {
             size: file.size,
             type: file.type,
             uploadMethod: 'direct',
+            fileUrl,
           },
         };
       }

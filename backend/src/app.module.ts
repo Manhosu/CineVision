@@ -16,7 +16,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { TelegramsModule } from './modules/telegrams/telegrams.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { RequestsModule } from './modules/requests/requests.module';
-import { VideoUploadModule } from './modules/video/video-upload.module';
+// import { VideoUploadModule } from './modules/video/video-upload.module';
 import { ApiModule } from './api/api.module';
 import { HealthModule } from './health/health.module';
 import { SupabaseModule } from './config/supabase.module';
@@ -127,7 +127,7 @@ import { AdminSettings } from './modules/admin/entities/admin-settings.entity';
     PaymentsModule,
     AdminModule,
     RequestsModule,
-    VideoUploadModule,
+    // VideoUploadModule,
     ApiModule,
     HealthModule,
   ],

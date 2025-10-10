@@ -132,7 +132,7 @@ module.exports = {
   plugins: [
     require('@tailwindcss/forms'),
     require('@tailwindcss/aspect-ratio'),
-    require('@tailwindcss/line-clamp'),
+    // @tailwindcss/line-clamp is now included by default in Tailwind CSS v3.3+
     // Custom plugin for Netflix-style utilities
     function({ addUtilities }) {
       const newUtilities = {

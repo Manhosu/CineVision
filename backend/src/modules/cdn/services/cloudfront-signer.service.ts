@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand
-} from '@aws-sdk/client-secrets-manager';
+// import {
+//   SecretsManagerClient,
+//   GetSecretValueCommand
+// } from '@aws-sdk/client-secrets-manager';
 import * as crypto from 'crypto';
 
 export interface SignedUrlOptions {
@@ -19,7 +19,7 @@ export interface SignedCookieOptions {
 @Injectable()
 export class CloudFrontSignerService {
   private readonly logger = new Logger(CloudFrontSignerService.name);
-  private readonly secretsClient: SecretsManagerClient;
+  // private readonly secretsClient: SecretsManagerClient;
   private readonly cloudfrontDomain: string;
   private readonly keyPairId: string;
   private readonly privateKeySecretArn: string;
@@ -27,13 +27,13 @@ export class CloudFrontSignerService {
   private privateKey: string | null = null;
 
   constructor(private configService: ConfigService) {
-    this.secretsClient = new SecretsManagerClient({
-      region: this.configService.get('AWS_REGION', 'us-east-1'),
-      credentials: {
-        accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID')!,
-        secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY')!,
-      },
-    });
+    // this.secretsClient = new SecretsManagerClient({
+    //   region: this.configService.get('AWS_REGION', 'us-east-1'),
+    //   credentials: {
+    //     accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID')!,
+    //     secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY')!,
+    //   },
+    // });
 
     this.cloudfrontDomain = this.configService.get('CLOUDFRONT_DOMAIN')!;
     this.keyPairId = this.configService.get('CLOUDFRONT_PUBLIC_KEY_ID')!;
@@ -56,11 +56,12 @@ export class CloudFrontSignerService {
     }
 
     try {
-      const command = new GetSecretValueCommand({
-        SecretId: this.privateKeySecretArn,
-      });
+      // const command = new GetSecretValueCommand({
+      //   SecretId: this.privateKeySecretArn,
+      // });
 
-      const response = await this.secretsClient.send(command);
+      // const response = await this.secretsClient.send(command);
+      const response: any = {};
 
       if (!response.SecretString) {
         throw new Error('Private key not found in secret');

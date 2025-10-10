@@ -6,6 +6,7 @@ import { AuthModule } from '../auth/auth.module';
 import { OptionalAuthGuard } from '../auth/guards/optional-auth.guard';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
+// Requests module disabled - requires TypeORM (not implemented for Supabase yet)
 const conditionalControllers = isTypeOrmEnabled() ? [RequestsController] : [];
 const conditionalProviders = isTypeOrmEnabled() ? [RequestsService, OptionalAuthGuard] : [OptionalAuthGuard];
 const conditionalExports = isTypeOrmEnabled() ? [RequestsService] : [];

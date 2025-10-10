@@ -93,13 +93,7 @@ const nextConfig = {
         pathname: '/images/**',
       },
     ],
-    domains: [
-      'localhost',
-      'image.tmdb.org',
-      // CDN domains will be added here
-      process.env.CDN_DOMAIN,
-      process.env.S3_BUCKET_DOMAIN,
-    ].filter(Boolean),
+    // Deprecated: domains has been replaced by remotePatterns above
   },
 
   // Environment variables available to client

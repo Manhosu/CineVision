@@ -515,7 +515,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                       customEndpoints={{
                         initiate: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/initiate-multipart`,
                         complete: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/complete-multipart`,
-                        presignedUrl: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/presigned-url`,
+                        presignedUrl: `/api/v1/admin/upload/presigned-url`,
                       }}
                       customPayload={{
                         content_language_id: language.id,
