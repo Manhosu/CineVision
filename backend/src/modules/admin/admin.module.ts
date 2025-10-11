@@ -10,6 +10,7 @@ import { AdminImageUploadController } from './controllers/admin-image-upload.con
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
+import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
 // Removed DriveImportController - replaced with VideoUploadController
 import { VideoUploadController } from './controllers/video-upload.controller';
@@ -38,6 +39,7 @@ import { QueueService } from '../queue/services/queue.service';
 import { TranscodeService } from '../content/services/transcode.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
+import { RequestsModule } from '../requests/requests.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [
@@ -46,12 +48,14 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
+  // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
 ] : [
   AdminContentController,
   AdminImageUploadController,
   AdminPurchasesController,
+  // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
 ];
@@ -109,6 +113,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     JwtModule.register({}),
     ConfigModule,
     SupabaseModule,
+    // RequestsModule, // Temporarily disabled - causing startup issues
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

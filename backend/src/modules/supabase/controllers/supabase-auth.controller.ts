@@ -49,7 +49,12 @@ export class SupabaseAuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
-@Get('table-info')
+  async loginOld(@Body() loginDto: { email: string; password: string }) {
+    // This endpoint is deprecated - redirecting to new login implementation below
+    return this.login(loginDto);
+  }
+
+  @Get('table-info')
   @ApiOperation({ summary: 'Get users table information' })
   async getTableInfo() {
     try {

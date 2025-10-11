@@ -55,7 +55,11 @@ export class VideoUploadService {
     chunkSize: number = 10 * 1024 * 1024, // 10MB chunks
   ): Promise<MultipartUploadResponse> {
     try {
-      const key = `videos/${Date.now()}-${fileName}`;
+      // If fileName already starts with 'videos/', use it as-is (it's actually a full storage key)
+      // Otherwise, treat it as a simple filename and add the videos prefix
+      const key = fileName.startsWith('videos/')
+        ? fileName
+        : `videos/${Date.now()}-${fileName}`;
       
       // Create multipart upload
       const createCommand = new CreateMultipartUploadCommand({

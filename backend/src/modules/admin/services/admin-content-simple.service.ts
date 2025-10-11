@@ -41,6 +41,23 @@ export class AdminContentSimpleService {
     return data || [];
   }
 
+  async getContentById(id: string) {
+    console.log(`AdminContentSimpleService.getContentById called with id: ${id}`);
+
+    const { data, error } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      this.logger.error(`Error fetching content by id ${id}:`, error);
+      throw new NotFoundException(`Content with ID ${id} not found`);
+    }
+
+    return data;
+  }
+
   async createContent(data: any, userId?: string) {
     this.logger.log('Creating content with data:', JSON.stringify(data));
 

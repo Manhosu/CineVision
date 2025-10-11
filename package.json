@@ -25,5 +25,11 @@
     "payments"
   ],
   "author": "Cine Vision Team",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.75.0",
+    "axios": "^1.12.2",
+    "bcrypt": "^6.0.0",
+    "form-data": "^4.0.4"
+  }
 }

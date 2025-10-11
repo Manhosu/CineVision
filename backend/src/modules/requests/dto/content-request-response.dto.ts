@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { RequestStatus } from '../entities/content-request.entity';
+import { RequestStatus, RequestPriority } from '../entities/content-request.entity';
 
 export class ContentRequestResponseDto {
   @ApiProperty({
@@ -26,6 +26,13 @@ export class ContentRequestResponseDto {
     example: RequestStatus.PENDING,
   })
   status: RequestStatus;
+
+  @ApiPropertyOptional({
+    description: 'Priority of the content request',
+    enum: RequestPriority,
+    example: RequestPriority.MEDIUM,
+  })
+  priority?: RequestPriority;
 
   @ApiPropertyOptional({
     description: 'Admin notes about the request',
@@ -80,4 +87,10 @@ export class ContentRequestResponseDto {
     example: '2024-01-15T10:30:00Z',
   })
   processed_at?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Date when the request was completed',
+    example: '2024-01-15T10:30:00Z',
+  })
+  completed_at?: Date;
 }

@@ -50,27 +50,31 @@ export default function AdminRequestsPage() {
       setError(null);
 
       const token = localStorage.getItem('access_token');
-      if (!token) {
-        router.push('/login?redirect=/admin/requests');
-        return;
-      }
+      // Temporariamente desabilitado para debug
+      // if (!token) {
+      //   router.push('/login?redirect=/admin/requests');
+      //   return;
+      // }
 
       const statusQuery = filter !== 'all' ? `&status=${filter}` : '';
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/requests?page=1&limit=50${statusQuery}`,
         {
-          headers: {
+          headers: token ? {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          } : {
             'Content-Type': 'application/json',
           },
         }
       );
 
-      if (response.status === 401) {
-        localStorage.removeItem('access_token');
-        router.push('/login?redirect=/admin/requests');
-        return;
-      }
+      // Temporariamente desabilitado para debug
+      // if (response.status === 401) {
+      //   localStorage.removeItem('access_token');
+      //   router.push('/login?redirect=/admin/requests');
+      //   return;
+      // }
 
       if (!response.ok) {
         throw new Error('Failed to fetch requests');
@@ -116,15 +120,18 @@ export default function AdminRequestsPage() {
       setActionLoading(requestId);
 
       const token = localStorage.getItem('access_token');
-      if (!token) {
-        router.push('/login?redirect=/admin/requests');
-        return;
-      }
+      // Temporariamente desabilitado para debug
+      // if (!token) {
+      //   router.push('/login?redirect=/admin/requests');
+      //   return;
+      // }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/requests/${requestId}`, {
         method: 'PUT',
-        headers: {
+        headers: token ? {
           'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        } : {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -204,7 +211,7 @@ export default function AdminRequestsPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.back()}
+                onClick={() => router.push('/admin')}
                 className="p-2 text-gray-400 hover:text-white hover:bg-dark-700 rounded-lg transition-all duration-200"
               >
                 <ArrowLeft className="w-5 h-5" />

@@ -19,6 +19,7 @@ import { RequestsModule } from './modules/requests/requests.module';
 // import { VideoUploadModule } from './modules/video/video-upload.module';
 import { ApiModule } from './api/api.module';
 import { HealthModule } from './health/health.module';
+// import { UploadProgressModule } from './modules/upload-progress/upload-progress.module';
 import { SupabaseModule } from './config/supabase.module';
 import { SupabaseTestModule } from './modules/supabase/supabase-test.module';
 import { SystemLog } from './modules/logs/entities/system-log.entity';
@@ -130,6 +131,7 @@ import { AdminSettings } from './modules/admin/entities/admin-settings.entity';
     // VideoUploadModule,
     ApiModule,
     HealthModule,
+    // UploadProgressModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -2,16 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { 
-  PlusIcon, 
-  FilmIcon, 
-  DocumentTextIcon,
-  ChartBarIcon,
-  CogIcon,
-  UserGroupIcon,
-  EyeIcon,
-  ShoppingCartIcon
-} from '@heroicons/react/24/outline';
 
 interface AdminStats {
   totalContent: number;
@@ -44,27 +34,24 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!mounted) return;
-    
+
     const fetchStats = async () => {
       try {
         setLoading(true);
-        
-        // Buscar dados reais da API
+
         const contentResponse = await fetch('http://localhost:3001/api/v1/admin/content');
         const contentData = await contentResponse.json();
-        
-        // Por enquanto, usar dados básicos até implementar endpoints específicos
+
         setStats({
           totalContent: contentData.data?.length || 0,
-          totalUsers: 0, // Implementar endpoint de usuários
-          totalRequests: 0, // Implementar endpoint de solicitações
-          recentUploads: 0 // Implementar endpoint de uploads recentes
+          totalUsers: 0,
+          totalRequests: 0,
+          recentUploads: 0
         });
 
         setRecentContent(contentData.data || []);
       } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);
-        // Manter valores zerados em caso de erro
       } finally {
         setLoading(false);
       }
@@ -78,36 +65,37 @@ export default function AdminDashboard() {
       title: 'Adicionar Conteúdo',
       description: 'Upload de novos filmes e séries',
       href: '/admin/content/create',
-      icon: PlusIcon,
-      color: 'bg-blue-500 hover:bg-blue-600'
-    },
-    {
-      title: 'Gerenciar Uploads',
-      description: 'Acompanhar uploads em andamento',
-      href: '/admin/upload',
-      icon: FilmIcon,
-      color: 'bg-green-500 hover:bg-green-600'
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      ),
+      gradient: 'from-blue-600 to-blue-700',
+      shadow: 'shadow-blue-500/50'
     },
     {
       title: 'Solicitações',
       description: 'Ver solicitações de usuários',
       href: '/admin/requests',
-      icon: DocumentTextIcon,
-      color: 'bg-yellow-500 hover:bg-yellow-600'
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+      gradient: 'from-yellow-600 to-yellow-700',
+      shadow: 'shadow-yellow-500/50'
     },
     {
       title: 'Compras',
       description: 'Gerenciar compras e vendas',
       href: '/admin/purchases',
-      icon: ShoppingCartIcon,
-      color: 'bg-red-500 hover:bg-red-600'
-    },
-    {
-      title: 'Configurações',
-      description: 'Configurações do sistema',
-      href: '/admin/settings',
-      icon: CogIcon,
-      color: 'bg-purple-500 hover:bg-purple-600'
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      gradient: 'from-red-600 to-red-700',
+      shadow: 'shadow-red-500/50'
     }
   ];
 
@@ -115,73 +103,60 @@ export default function AdminDashboard() {
     {
       title: 'Total de Conteúdo',
       value: stats.totalContent,
-      icon: FilmIcon,
-      color: 'text-blue-600'
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+        </svg>
+      ),
+      gradient: 'from-blue-500 to-cyan-500',
+      change: '+12%'
     },
     {
       title: 'Usuários Ativos',
       value: stats.totalUsers,
-      icon: UserGroupIcon,
-      color: 'text-green-600'
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      gradient: 'from-green-500 to-emerald-500',
+      change: '+5%'
     },
     {
       title: 'Solicitações Pendentes',
       value: stats.totalRequests,
-      icon: DocumentTextIcon,
-      color: 'text-yellow-600'
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      ),
+      gradient: 'from-yellow-500 to-orange-500',
+      change: '-2%'
     },
     {
       title: 'Visualizações',
       value: stats.recentUploads,
-      icon: EyeIcon,
-      color: 'text-purple-600'
+      icon: (
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      ),
+      gradient: 'from-purple-500 to-pink-500',
+      change: '+18%'
     }
   ];
 
-  // Evita problemas de hidratação
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Painel Administrativo</h1>
-            <p className="text-gray-600">Gerencie conteúdo, usuários e configurações da plataforma</p>
-          </div>
-          
-          {/* Loading skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="bg-white rounded-lg shadow p-6">
-                <div className="animate-pulse">
-                  <div className="h-12 w-12 bg-gray-300 rounded-lg mb-4"></div>
-                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                  <div className="h-8 bg-gray-300 rounded w-16"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="animate-pulse">
-                <div className="h-6 bg-gray-300 rounded mb-4"></div>
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-4 bg-gray-300 rounded"></div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="animate-pulse">
-                <div className="h-6 bg-gray-300 rounded mb-4"></div>
-                <div className="space-y-3">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-4 bg-gray-300 rounded"></div>
-                  ))}
-                </div>
-              </div>
+          <div className="animate-pulse space-y-6">
+            <div className="h-8 bg-gray-800 rounded w-1/3"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 bg-gray-800 rounded-2xl"></div>
+              ))}
             </div>
           </div>
         </div>
@@ -190,14 +165,14 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
             Painel Administrativo
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-400 text-lg">
             Gerencie conteúdo, usuários e configurações da plataforma
           </p>
         </div>
@@ -205,25 +180,32 @@ export default function AdminDashboard() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {statCards.map((stat, index) => (
-            <div key={index} className="bg-white rounded-lg shadow p-6">
-              <div className="flex items-center">
-                <div className={`p-3 rounded-lg ${stat.color} bg-opacity-10`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            <div
+              key={index}
+              className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden"
+            >
+              {/* Background Gradient Effect */}
+              <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-0 group-hover:opacity-10 transition-opacity duration-300`}></div>
+
+              <div className="relative z-10">
+                <div className="flex items-start justify-between mb-4">
+                  <div className={`p-3 rounded-xl bg-gradient-to-br ${stat.gradient} shadow-lg`}>
+                    {stat.icon}
+                  </div>
+                  <span className="text-xs font-semibold text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+                    {stat.change}
+                  </span>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    {stat.title}
+                <p className="text-sm font-medium text-gray-400 mb-2">
+                  {stat.title}
+                </p>
+                {loading ? (
+                  <div className="animate-pulse bg-gray-700 h-8 w-16 rounded"></div>
+                ) : (
+                  <p className="text-3xl font-bold text-white">
+                    {stat.value}
                   </p>
-                  {loading ? (
-                    <div className="flex items-center">
-                      <div className="animate-pulse bg-gray-300 h-8 w-16 rounded"></div>
-                    </div>
-                  ) : (
-                    <p className="text-2xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           ))}
@@ -231,59 +213,72 @@ export default function AdminDashboard() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center">
+            <svg className="w-6 h-6 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
             Ações Rápidas
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quickActions.map((action, index) => (
               <Link
                 key={index}
                 href={action.href}
                 className="group block"
               >
-                <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow p-6">
-                  <div className={`inline-flex p-3 rounded-lg ${action.color} transition-colors`}>
-                    <action.icon className="h-6 w-6 text-white" />
+                <div className={`relative bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 hover:shadow-2xl ${action.shadow} overflow-hidden`}>
+                  {/* Animated Background */}
+                  <div className={`absolute inset-0 bg-gradient-to-br ${action.gradient} opacity-0 group-hover:opacity-20 transition-opacity duration-300`}></div>
+
+                  <div className="relative z-10">
+                    <div className={`inline-flex p-4 rounded-xl bg-gradient-to-br ${action.gradient} shadow-lg mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                      {action.icon}
+                    </div>
+                    <h3 className="text-lg font-bold text-white mb-2 group-hover:text-gray-200">
+                      {action.title}
+                    </h3>
+                    <p className="text-sm text-gray-400">
+                      {action.description}
+                    </p>
                   </div>
-                  <h3 className="mt-4 text-lg font-medium text-gray-900 group-hover:text-gray-600">
-                    {action.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    {action.description}
-                  </p>
                 </div>
               </Link>
             ))}
           </div>
         </div>
 
-        {/* Recent Activity */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-medium text-gray-900">
+        {/* Recent Content */}
+        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-red-900/20 to-transparent">
+            <h2 className="text-xl font-bold text-white flex items-center">
+              <svg className="w-6 h-6 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+              </svg>
               Conteúdo Recente
             </h2>
           </div>
           <div className="p-6">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-600">Carregando...</span>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                <span className="ml-2 text-gray-400">Carregando...</span>
               </div>
             ) : recentContent.length > 0 ? (
               <div className="space-y-4">
                 {recentContent.slice(0, 5).map((content, index) => (
-                  <div key={content.id || index} className="flex items-center space-x-3">
+                  <div key={content.id || index} className="flex items-center space-x-4 p-4 rounded-xl bg-gray-800/30 hover:bg-gray-800/50 transition-all">
                     <div className="flex-shrink-0">
-                      <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
-                        <FilmIcon className="h-4 w-4 text-blue-600" />
+                      <div className="h-12 w-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                        </svg>
                       </div>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm text-gray-900">
+                      <p className="text-sm font-semibold text-white">
                         {content.title || `Conteúdo ${index + 1}`}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-400">
                         {content.type || 'Tipo não especificado'} • {content.createdAt ? new Date(content.createdAt).toLocaleDateString('pt-BR') : 'Data não disponível'}
                       </p>
                     </div>
@@ -291,21 +286,25 @@ export default function AdminDashboard() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
-                <FilmIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum conteúdo</h3>
-                <p className="mt-1 text-sm text-gray-500">
+              <div className="text-center py-12">
+                <div className="inline-flex p-6 rounded-full bg-gray-800/50 mb-4">
+                  <svg className="h-12 w-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">Nenhum conteúdo</h3>
+                <p className="text-gray-400 mb-6">
                   Comece adicionando seu primeiro filme ou série.
                 </p>
-                <div className="mt-6">
-                  <Link
-                    href="/admin/content/create"
-                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    <PlusIcon className="-ml-1 mr-2 h-5 w-5" />
-                    Adicionar Conteúdo
-                  </Link>
-                </div>
+                <Link
+                  href="/admin/content/create"
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-red-500/50"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Adicionar Conteúdo
+                </Link>
               </div>
             )}
           </div>

@@ -46,6 +46,23 @@ export class AdminContentController {
     return this.adminContentService.getAllContent();
   }
 
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Get content by ID',
+    description: 'Retrieves a single content item by its ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Content retrieved successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Content not found',
+  })
+  async getContentById(@Param('id') id: string) {
+    return this.adminContentService.getContentById(id);
+  }
+
   @Post('create')
   @ApiOperation({
     summary: 'Create new content (movie/series/documentary)',
