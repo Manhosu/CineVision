@@ -36,8 +36,7 @@ async function bootstrap() {
     origin: [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002'
+      'http://localhost:3001'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -48,8 +47,8 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
+      whitelist: false, // Temporarily disabled to debug DTO issue
+      forbidNonWhitelisted: false,
     }),
   );
 

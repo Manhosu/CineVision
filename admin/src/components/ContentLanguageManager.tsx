@@ -57,7 +57,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
   const loadLanguages = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
+      const token = getAuthToken();
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/v1/content-language-upload/languages/${contentId}`, {
         headers: {
@@ -77,6 +77,22 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getAuthToken = (): string => {
+    let token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token');
+    if (!token) {
+      const supabaseToken = localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
+      if (supabaseToken) {
+        try {
+          const parsed = JSON.parse(supabaseToken);
+          token = parsed.access_token;
+        } catch (e) {
+          token = supabaseToken;
+        }
+      }
+    }
+    return token || '';
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +192,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
     }
 
     try {
-      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
+      const token = getAuthToken();
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/v1/content-language-upload/language/${languageId}`, {
         method: 'DELETE',
@@ -197,25 +213,25 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
   };
 
   return (
-    <div className="space-y-6">
-      <h3 className="text-xl font-bold text-white">Idiomas do Conteúdo</h3>
-
-      {/* Botão Adicionar Idioma */}
-      {!showAddForm && !isUploading && (
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Adicionar Idioma
-        </button>
-      )}
+    <div className="bg-dark-800/30 border border-dark-600 rounded-xl p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xl font-bold text-white">Idiomas do Conteúdo</h3>
+        {!showAddForm && !isUploading && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Adicionar Idioma</span>
+          </button>
+        )}
+      </div>
 
       {/* Formulário de Adicionar Idioma */}
       {showAddForm && !isUploading && (
-        <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
+        <div className="bg-dark-700/50 border border-dark-600 rounded-lg p-6">
           <h3 className="text-lg font-bold text-white mb-4">Adicionar Novo Idioma</h3>
 
           <div className="space-y-4">
@@ -230,7 +246,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                   ...prev,
                   language_type: e.target.value as 'dubbed' | 'subtitled'
                 }))}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
+                className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="dubbed">Dublado</option>
                 <option value="subtitled">Legendado</option>
@@ -246,7 +262,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                 type="file"
                 accept=".mkv,.mp4,video/x-matroska,video/mp4"
                 onChange={handleFileChange}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
               />
               {newLanguage.videoFile && (
                 <p className="text-sm text-gray-400 mt-2">
@@ -263,7 +279,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
               <button
                 onClick={handleAddLanguage}
                 disabled={!newLanguage.videoFile}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
               >
                 Adicionar
               </button>
@@ -272,7 +288,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                   setShowAddForm(false);
                   setNewLanguage({ language_type: 'dubbed', videoFile: undefined });
                 }}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
+                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
               >
                 Cancelar
               </button>
@@ -283,19 +299,19 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
 
       {/* Barra de Progresso do Upload */}
       {isUploading && uploadProgress && (
-        <div className="p-6 bg-gray-800 rounded-lg border border-blue-500">
+        <div className="bg-gradient-to-r from-blue-900/20 to-blue-800/20 border border-blue-500/30 rounded-lg p-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-white">
                 Enviando arquivo...
               </h3>
-              <span className="text-2xl font-bold text-blue-400">
+              <span className="text-3xl font-bold text-blue-400">
                 {uploadProgress.percentage.toFixed(1)}%
               </span>
             </div>
 
             {/* Barra de progresso */}
-            <div className="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
+            <div className="w-full bg-dark-700 rounded-full h-4 overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-300"
                 style={{ width: `${uploadProgress.percentage}%` }}
@@ -306,25 +322,25 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-400">Progresso:</span>
-                <span className="text-white ml-2">
+                <span className="text-white ml-2 font-medium">
                   {MultipartUploadService.formatBytes(uploadProgress.uploadedBytes)} / {MultipartUploadService.formatBytes(uploadProgress.totalBytes)}
                 </span>
               </div>
               <div>
                 <span className="text-gray-400">Velocidade:</span>
-                <span className="text-white ml-2">
+                <span className="text-white ml-2 font-medium">
                   {uploadProgress.uploadSpeed ? `${MultipartUploadService.formatBytes(uploadProgress.uploadSpeed)}/s` : '--'}
                 </span>
               </div>
               <div>
                 <span className="text-gray-400">Tempo restante:</span>
-                <span className="text-white ml-2">
+                <span className="text-white ml-2 font-medium">
                   {uploadProgress.timeRemaining ? MultipartUploadService.formatTime(uploadProgress.timeRemaining) : '--'}
                 </span>
               </div>
               <div>
                 <span className="text-gray-400">Partes:</span>
-                <span className="text-white ml-2">
+                <span className="text-white ml-2 font-medium">
                   {uploadProgress.currentPart} / {uploadProgress.totalParts}
                 </span>
               </div>
@@ -333,9 +349,12 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
             {/* Botão cancelar */}
             <button
               onClick={handleCancelUpload}
-              className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center space-x-2"
             >
-              Cancelar Upload
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              <span>Cancelar Upload</span>
             </button>
           </div>
         </div>
@@ -343,37 +362,49 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
 
       {/* Erro de Upload */}
       {uploadError && (
-        <div className="p-4 bg-red-900/20 border border-red-500 rounded-lg">
-          <p className="text-red-400">{uploadError}</p>
-          <button
-            onClick={() => setUploadError(null)}
-            className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
-          >
-            Fechar
-          </button>
+        <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+          <div className="flex items-start space-x-3">
+            <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="flex-1">
+              <p className="text-red-300 font-medium">Erro no Upload</p>
+              <p className="text-red-400 text-sm mt-1">{uploadError}</p>
+            </div>
+            <button
+              onClick={() => setUploadError(null)}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
         </div>
       )}
 
       {/* Lista de Idiomas */}
       <div className="space-y-3">
         {languages.length === 0 && !isLoading && (
-          <p className="text-gray-400 text-center py-8">
-            Nenhum idioma adicionado ainda
-          </p>
+          <div className="text-center py-12 bg-dark-700/30 rounded-lg border border-dashed border-dark-600">
+            <svg className="w-12 h-12 mx-auto text-gray-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+            </svg>
+            <p className="text-gray-400">Nenhum idioma adicionado ainda</p>
+            <p className="text-gray-500 text-sm mt-1">Clique em "Adicionar Idioma" para começar</p>
+          </div>
         )}
 
         {languages.map((language) => (
           <div
             key={language.id}
-            className="p-4 bg-gray-800 rounded-lg border border-gray-700 flex items-center justify-between"
+            className="bg-dark-700/50 border border-dark-600 rounded-lg p-4 flex items-center justify-between hover:bg-dark-700/70 transition-colors"
           >
             <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1 bg-blue-600 rounded-full text-sm font-medium">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="px-3 py-1 bg-blue-600 rounded-full text-sm font-medium text-white">
                   {LANGUAGE_TYPE_LABELS[language.language_type]}
                 </span>
                 {language.is_default && (
-                  <span className="px-3 py-1 bg-green-600 rounded-full text-sm font-medium">
+                  <span className="px-3 py-1 bg-green-600 rounded-full text-sm font-medium text-white">
                     Padrão
                   </span>
                 )}
@@ -384,7 +415,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                 )}
               </div>
               {language.video_storage_key && (
-                <p className="text-gray-500 text-xs mt-2">
+                <p className="text-gray-500 text-xs font-mono">
                   {language.video_storage_key}
                 </p>
               )}
@@ -392,7 +423,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
 
             <button
               onClick={() => handleDeleteLanguage(language.id)}
-              className="ml-4 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              className="ml-4 p-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-lg transition-colors"
               title="Deletar idioma"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

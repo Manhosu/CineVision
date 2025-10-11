@@ -104,7 +104,7 @@ export default function AdminContentCreatePage() {
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined, // rating → imdb_rating
       };
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/create`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/content/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

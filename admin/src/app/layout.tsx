@@ -1,9 +1,10 @@
+import type { Metadata } from 'next'
 import './globals.css'
 import { Inter } from 'next/font/google'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Cine Vision Admin',
   description: 'Administrative panel for Cine Vision platform',
 }
@@ -16,9 +17,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <div className="min-h-screen bg-dark-900">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   )

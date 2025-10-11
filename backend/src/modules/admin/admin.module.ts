@@ -11,8 +11,9 @@ import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
-import { DriveImportController } from './controllers/drive-import.controller';
-import { DriveToS3Service } from './services/drive-to-s3.service';
+// Removed DriveImportController - replaced with VideoUploadController
+import { VideoUploadController } from './controllers/video-upload.controller';
+import { MultipartUploadService } from './services/multipart-upload.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -45,14 +46,14 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
-  UploadPresignedController, // Always include presigned URL controller
-  DriveImportController, // Google Drive → S3 import
+  UploadPresignedController,
+  VideoUploadController, // Direct S3 multipart upload
 ] : [
-  AdminContentController, // Always include AdminContentController
-  AdminImageUploadController, // Always include image upload
-  AdminPurchasesController, // Always include purchases controller
-  UploadPresignedController, // Always include presigned URL controller
-  DriveImportController, // Google Drive → S3 import
+  AdminContentController,
+  AdminImageUploadController,
+  AdminPurchasesController,
+  UploadPresignedController,
+  VideoUploadController, // Direct S3 multipart upload
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -70,14 +71,14 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   QueueService,
   TranscodeService,
   ImageUploadService,
-  DriveToS3Service,
+  MultipartUploadService,
   ContentLanguageService,
 ] : [
-  AdminContentSimpleService, // Use simplified service for testing
-  ImageUploadService, // Always include image upload service
-  AdminPurchasesSimpleService, // Always include purchases service
-  StripeService, // Include StripeService for payments even without TypeORM
-  DriveToS3Service,
+  AdminContentSimpleService,
+  ImageUploadService,
+  AdminPurchasesSimpleService,
+  StripeService,
+  MultipartUploadService,
   ContentLanguageSupabaseService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
 ];
@@ -87,7 +88,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
   AdminContentService,
   AdminSettingsService,
   StripeService,
-] : [AdminContentSimpleService]; // Export simplified service for testing
+] : [AdminContentSimpleService];
 
 @Module({
   imports: [

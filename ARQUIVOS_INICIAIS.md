@@ -268,25 +268,6 @@ shared/
 ### `/infra` - Infraestrutura
 ```
 infra/
-├── docker/
-│   ├── Dockerfile.backend
-│   ├── Dockerfile.frontend
-│   ├── Dockerfile.admin
-│   ├── Dockerfile.bot
-│   └── docker-compose.yml
-├── k8s/
-│   ├── namespace.yaml
-│   ├── configmap.yaml
-│   ├── secrets.yaml
-│   ├── backend-deployment.yaml
-│   ├── frontend-deployment.yaml
-│   └── services.yaml
-├── terraform/
-│   ├── main.tf
-│   ├── variables.tf
-│   ├── outputs.tf
-│   ├── provider.tf
-│   └── modules/
 ├── scripts/
 │   ├── deploy.sh
 │   ├── backup.sh
@@ -309,8 +290,7 @@ docs/
 │   └── authentication.md
 ├── deployment/
 │   ├── setup-guide.md
-│   ├── environment-variables.md
-│   └── docker-guide.md
+│   └── environment-variables.md
 ├── development/
 │   ├── getting-started.md
 │   ├── coding-standards.md
@@ -360,7 +340,6 @@ database/
 ├── CHECKLIST_GLOBAL.md           ✅ Global project checklist
 ├── DESIGN_BRIEF.md               ✅ Design system and guidelines
 ├── ARQUIVOS_INICIAIS.md          ✅ This file
-├── docker-compose.yml            ⏳ Multi-service Docker setup
 ├── package.json                  ✅ Root package.json (workspaces)
 ├── turbo.json                    ⏳ Turbo repo configuration
 ├── .github/                      ⏳ GitHub Actions workflows

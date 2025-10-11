@@ -1,0 +1,332 @@
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  S3Client,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
+  CompleteMultipartUploadCommand,
+  AbortMultipartUploadCommand,
+  ListPartsCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+export interface InitMultipartUploadDto {
+  filename: string;
+  contentType: string;
+  size: number;
+  contentId?: string;
+  audioType?: 'dublado' | 'legendado' | 'original';
+}
+
+export interface CompleteMultipartUploadDto {
+  uploadId: string;
+  key: string;
+  parts: Array<{ PartNumber: number; ETag: string }>;
+  contentId: string;
+}
+
+export interface UploadRecord {
+  id: string;
+  key: string;
+  upload_id: string;
+  content_id?: string;
+  filename: string;
+  size: number;
+  status: 'draft' | 'uploading' | 'processing' | 'ready' | 'failed';
+  parts_count: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+@Injectable()
+export class MultipartUploadService {
+  private readonly logger = new Logger(MultipartUploadService.name);
+  private readonly s3Client: S3Client;
+  private readonly supabase: SupabaseClient;
+  private readonly videoBucket: string;
+  private readonly region: string;
+  private readonly partSize = 50 * 1024 * 1024; // 50MB per part
+  private readonly maxFileSize = 10 * 1024 * 1024 * 1024; // 10GB max
+
+  constructor(private readonly configService: ConfigService) {
+    this.region = this.configService.get<string>('AWS_REGION', 'us-east-2');
+    this.videoBucket = this.configService.get<string>(
+      'S3_VIDEO_BUCKET',
+      'cinevision-video',
+    );
+
+    this.s3Client = new S3Client({
+      region: this.region,
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
+      },
+    });
+
+    this.supabase = createClient(
+      this.configService.get<string>('SUPABASE_URL'),
+      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY'),
+    );
+
+    this.logger.log(`Multipart Upload Service initialized`);
+    this.logger.log(`S3 Bucket: ${this.videoBucket}`);
+    this.logger.log(`Region: ${this.region}`);
+  }
+
+  /**
+   * Initialize multipart upload and return presigned URLs for each part
+   */
+  async initMultipartUpload(dto: InitMultipartUploadDto) {
+    const { filename, contentType, size, contentId, audioType } = dto;
+
+    // Validate file size
+    if (size > this.maxFileSize) {
+      throw new BadRequestException(
+        `File size exceeds maximum allowed size of ${this.maxFileSize / 1024 / 1024 / 1024}GB`,
+      );
+    }
+
+    // Validate content type
+    const allowedTypes = ['video/mp4', 'video/x-matroska', 'video/quicktime'];
+    if (!allowedTypes.includes(contentType)) {
+      throw new BadRequestException(
+        `Invalid content type. Allowed types: ${allowedTypes.join(', ')}`,
+      );
+    }
+
+    // Generate unique key
+    const timestamp = Date.now();
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const key = contentId
+      ? `raw/${contentId}/${audioType || 'original'}/${timestamp}-${sanitizedFilename}`
+      : `raw/temp/${timestamp}-${sanitizedFilename}`;
+
+    this.logger.log(`Initiating multipart upload: ${key}`);
+
+    // Create multipart upload in S3
+    const createCommand = new CreateMultipartUploadCommand({
+      Bucket: this.videoBucket,
+      Key: key,
+      ContentType: contentType,
+      Metadata: {
+        originalFilename: filename,
+        contentId: contentId || '',
+        audioType: audioType || 'original',
+      },
+    });
+
+    const { UploadId } = await this.s3Client.send(createCommand);
+
+    if (!UploadId) {
+      throw new BadRequestException('Failed to create multipart upload');
+    }
+
+    // Calculate number of parts
+    const partsCount = Math.ceil(size / this.partSize);
+
+    this.logger.log(`Upload ID: ${UploadId}, Parts: ${partsCount}`);
+
+    // Generate presigned URLs for each part
+    const presignedUrls = [];
+    for (let partNumber = 1; partNumber <= partsCount; partNumber++) {
+      const uploadPartCommand = new UploadPartCommand({
+        Bucket: this.videoBucket,
+        Key: key,
+        UploadId,
+        PartNumber: partNumber,
+      });
+
+      const url = await getSignedUrl(this.s3Client, uploadPartCommand, {
+        expiresIn: 3600, // 1 hour
+      });
+
+      presignedUrls.push({
+        partNumber,
+        url,
+      });
+    }
+
+    // Create record in database
+    const { data: uploadRecord, error } = await this.supabase
+      .from('video_uploads')
+      .insert({
+        key,
+        upload_id: UploadId,
+        content_id: contentId,
+        filename,
+        size,
+        status: 'uploading',
+        parts_count: partsCount,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      this.logger.error(`Failed to create upload record: ${error.message}`);
+      // Try to abort the S3 upload
+      await this.abortMultipartUpload(UploadId, key);
+      throw new BadRequestException('Failed to create upload record');
+    }
+
+    return {
+      uploadId: UploadId,
+      key,
+      partSize: this.partSize,
+      partsCount,
+      presignedUrls,
+      recordId: uploadRecord.id,
+    };
+  }
+
+  /**
+   * Complete multipart upload
+   */
+  async completeMultipartUpload(dto: CompleteMultipartUploadDto) {
+    const { uploadId, key, parts, contentId } = dto;
+
+    this.logger.log(`Completing multipart upload: ${key}`);
+
+    // Validate all parts are provided
+    const { data: uploadRecord } = await this.supabase
+      .from('video_uploads')
+      .select('*')
+      .eq('upload_id', uploadId)
+      .single();
+
+    if (!uploadRecord) {
+      throw new BadRequestException('Upload record not found');
+    }
+
+    if (parts.length !== uploadRecord.parts_count) {
+      throw new BadRequestException(
+        `Expected ${uploadRecord.parts_count} parts, received ${parts.length}`,
+      );
+    }
+
+    // Complete S3 multipart upload
+    const completeCommand = new CompleteMultipartUploadCommand({
+      Bucket: this.videoBucket,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: {
+        Parts: parts.map((part) => ({
+          PartNumber: part.PartNumber,
+          ETag: part.ETag,
+        })),
+      },
+    });
+
+    try {
+      const result = await this.s3Client.send(completeCommand);
+      this.logger.log(`Upload completed: ${result.Location}`);
+
+      // Update database record
+      await this.supabase
+        .from('video_uploads')
+        .update({
+          status: 'processing',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('upload_id', uploadId);
+
+      // Update content record if contentId provided
+      if (contentId) {
+        await this.supabase
+          .from('content')
+          .update({
+            file_key: key,
+            status: 'PROCESSING',
+          })
+          .eq('id', contentId);
+      }
+
+      // TODO: Enqueue transcode job here
+      // await this.queueService.addTranscodeJob({ key, contentId });
+
+      return {
+        success: true,
+        location: result.Location,
+        key,
+        status: 'processing',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to complete upload: ${error.message}`);
+      await this.supabase
+        .from('video_uploads')
+        .update({ status: 'failed' })
+        .eq('upload_id', uploadId);
+      throw new BadRequestException('Failed to complete upload');
+    }
+  }
+
+  /**
+   * Abort multipart upload
+   */
+  async abortMultipartUpload(uploadId: string, key: string) {
+    this.logger.log(`Aborting multipart upload: ${key}`);
+
+    const abortCommand = new AbortMultipartUploadCommand({
+      Bucket: this.videoBucket,
+      Key: key,
+      UploadId: uploadId,
+    });
+
+    try {
+      await this.s3Client.send(abortCommand);
+
+      // Update database record
+      await this.supabase
+        .from('video_uploads')
+        .update({ status: 'failed' })
+        .eq('upload_id', uploadId);
+
+      return { success: true };
+    } catch (error) {
+      this.logger.error(`Failed to abort upload: ${error.message}`);
+      throw new BadRequestException('Failed to abort upload');
+    }
+  }
+
+  /**
+   * Get upload status
+   */
+  async getUploadStatus(uploadId: string) {
+    const { data: uploadRecord, error } = await this.supabase
+      .from('video_uploads')
+      .select('*')
+      .eq('upload_id', uploadId)
+      .single();
+
+    if (error || !uploadRecord) {
+      throw new BadRequestException('Upload record not found');
+    }
+
+    // Get uploaded parts from S3
+    const listPartsCommand = new ListPartsCommand({
+      Bucket: this.videoBucket,
+      Key: uploadRecord.key,
+      UploadId: uploadId,
+    });
+
+    try {
+      const { Parts } = await this.s3Client.send(listPartsCommand);
+      const uploadedParts = Parts ? Parts.length : 0;
+
+      return {
+        ...uploadRecord,
+        uploadedParts,
+        totalParts: uploadRecord.parts_count,
+        progress: (uploadedParts / uploadRecord.parts_count) * 100,
+      };
+    } catch (error) {
+      // If listing parts fails, just return DB record
+      return {
+        ...uploadRecord,
+        uploadedParts: 0,
+        totalParts: uploadRecord.parts_count,
+        progress: 0,
+      };
+    }
+  }
+}

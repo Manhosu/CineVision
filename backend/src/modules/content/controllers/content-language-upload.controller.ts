@@ -194,11 +194,15 @@ export class ContentLanguageUploadController {
       throw new Error('Chave de armazenamento não encontrada para este idioma');
     }
 
-    // Gerar URL pré-assinada usando o serviço existente
-    return await this.videoUploadService.generateSignedUrl(
+    // Gerar URL pré-assinada para upload da parte específica
+    const url = await this.videoUploadService.generatePresignedPartUploadUrl(
       contentLanguage.video_storage_key,
-      60 // 60 minutes expiration
+      presignedDto.upload_id,
+      presignedDto.part_number,
+      3600, // 1 hora
     );
+
+    return { url };
   }
 
   @Put('language/:id')

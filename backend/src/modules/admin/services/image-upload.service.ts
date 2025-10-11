@@ -35,15 +35,15 @@ export class ImageUploadService {
   constructor(private configService: ConfigService) {
     // Initialize S3 client
     this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION', 'us-east-1'),
+      region: this.configService.get('AWS_REGION', 'us-east-2'),
       credentials: {
         accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
       },
     });
 
-    this.bucketName = this.configService.get('S3_COVERS_BUCKET') || 'cinevision-capas';
-    this.region = this.configService.get('AWS_REGION', 'us-east-1');
+    this.bucketName = this.configService.get('S3_COVER_BUCKET') || 'cinevision-cover';
+    this.region = this.configService.get('AWS_REGION', 'us-east-2');
 
     if (!this.bucketName) {
       throw new Error('S3_COVERS_BUCKET environment variable is required');

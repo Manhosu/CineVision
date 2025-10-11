@@ -22,13 +22,13 @@ export class UploadPresignedController {
 
   constructor(private configService: ConfigService) {
     this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION') || 'us-east-1',
+      region: this.configService.get('AWS_REGION') || 'us-east-2',
       credentials: {
         accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
       },
     });
-    this.bucketName = this.configService.get('AWS_S3_BUCKET') || 'cinevision-filmes';
+    this.bucketName = this.configService.get('S3_VIDEO_BUCKET') || 'cinevision-video';
   }
 
   @Post('presigned-url')

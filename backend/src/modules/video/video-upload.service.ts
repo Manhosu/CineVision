@@ -188,7 +188,7 @@ export class VideoUploadService {
   async generatePresignedUploadUrl(fileName: string, contentType: string): Promise<string> {
     try {
       const key = `videos/${Date.now()}-${fileName}`;
-      
+
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
@@ -204,6 +204,36 @@ export class VideoUploadService {
       return presignedUrl;
     } catch (error) {
       this.logger.error(`Failed to generate presigned upload URL: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate presigned URL for uploading a specific part of a multipart upload
+   */
+  async generatePresignedPartUploadUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    try {
+      const uploadPartCommand = new UploadPartCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+      });
+
+      const presignedUrl = await getSignedUrl(this.s3Client, uploadPartCommand, {
+        expiresIn,
+      });
+
+      this.logger.log(`Generated presigned URL for part ${partNumber} of upload ${uploadId}`);
+
+      return presignedUrl;
+    } catch (error) {
+      this.logger.error(`Failed to generate presigned part upload URL: ${error.message}`);
       throw error;
     }
   }

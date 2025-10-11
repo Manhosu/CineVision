@@ -18,13 +18,13 @@ import { SupabaseModule } from '../../config/supabase.module';
 import { AuthModule } from '../auth/auth.module';
 import { CDNModule } from '../cdn/cdn.module';
 // import { VideoModule } from '../video/video.module';
-// import { VideoUploadModule } from '../video/video-upload.module';
+import { VideoUploadModule } from '../video/video-upload.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
 console.log('ENABLE_TYPEORM env var:', process.env.ENABLE_TYPEORM);
 
-const conditionalControllers = [ContentController]; // ContentLanguageUploadController removed temporarily (needs VideoUploadService)
+const conditionalControllers = [ContentController, ContentLanguageUploadController];
 const conditionalProviders = isTypeOrmEnabled() 
   ? [ContentService, TranscodeService, ContentLanguageService]
   : [
@@ -54,11 +54,10 @@ console.log('Content exports:', conditionalExports);
     SupabaseModule,
     AuthModule,
     CDNModule,
-    // VideoModule,
-    // VideoUploadModule,
+    VideoUploadModule,
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,
   exports: conditionalExports,
 })
-export class ContentModule {}
+export class ContentModule {}//

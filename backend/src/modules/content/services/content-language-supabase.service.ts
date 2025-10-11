@@ -37,7 +37,7 @@ export class ContentLanguageSupabaseService {
   async create(createDto: CreateContentLanguageDto): Promise<any> {
     // Verificar se o conteúdo existe
     const { data: content, error: contentError } = await this.supabaseService.client
-      .from('contents')
+      .from('content')
       .select('id')
       .eq('id', createDto.content_id)
       .single();
@@ -175,5 +175,36 @@ export class ContentLanguageSupabaseService {
 
     // Definir este como padrão
     return this.update(id, { is_default: true });
+  }
+
+  // Alias para findOne (usado pelo controller)
+  async findById(id: string): Promise<any> {
+    return this.findOne(id);
+  }
+
+  // Alias para remove (usado pelo controller)
+  async delete(id: string): Promise<void> {
+    return this.remove(id);
+  }
+
+  // Retornar opções de idiomas disponíveis
+  async getLanguageOptions(): Promise<any> {
+    return {
+      languageTypes: [
+        { value: LanguageType.DUBBED, label: 'Dublado', description: 'Áudio em português' },
+        { value: LanguageType.SUBTITLED, label: 'Legendado', description: 'Áudio original + legendas' },
+      ],
+      languageCodes: [
+        { value: LanguageCode.PT_BR, label: 'Português (Brasil)' },
+        { value: LanguageCode.EN_US, label: 'English (US)' },
+        { value: LanguageCode.ES_ES, label: 'Español (España)' },
+        { value: LanguageCode.FR_FR, label: 'Français (France)' },
+        { value: LanguageCode.DE_DE, label: 'Deutsch (Deutschland)' },
+        { value: LanguageCode.IT_IT, label: 'Italiano (Italia)' },
+        { value: LanguageCode.JA_JP, label: '日本語 (Japan)' },
+        { value: LanguageCode.KO_KR, label: '한국어 (Korea)' },
+        { value: LanguageCode.ZH_CN, label: '中文 (China)' },
+      ],
+    };
   }
 }

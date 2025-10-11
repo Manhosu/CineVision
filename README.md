@@ -34,13 +34,59 @@ dispositivos de baixa performance.
 - Suporte de 50 a 120 usuários simultâneos no streaming.
 - CDN com adaptive bitrate para streaming suave.
 ---
-## **Tecnologias Sugeridas**
-- **Front-end:** Next.js (React) ou equivalente.
-- **Back-end:** Node.js (Nest.js ou Fastify).
-- **Banco de Dados:** SUPABASE.
-- **Bot:** Telegram Bot API com webhooks.
-- **Player:** Video.js ou Shaka Player.
-- **Infra:** Cloudflare + AWS.
+## **Tecnologias Utilizadas**
+- **Front-end:** Next.js 14 (React)
+- **Back-end:** NestJS (Node.js)
+- **Banco de Dados:** Supabase (PostgreSQL)
+- **Storage:** AWS S3 + CloudFront CDN
+- **Bot:** Telegram Bot API com webhooks
+- **Player:** Video.js
+- **Pagamentos:** Stripe
+
+---
+## **🛠️ Ambiente de Desenvolvimento**
+
+### **Pré-requisitos**
+- Node.js 18+
+- npm ou yarn
+- Conta Supabase (gratuita)
+- Conta AWS (S3 + CloudFront)
+
+### **Instalação**
+```bash
+# 1. Clonar repositório
+git clone <repo-url>
+
+# 2. Instalar dependências (na raiz)
+npm install
+
+# 3. Configurar variáveis de ambiente
+# Backend: backend/.env
+# Frontend: frontend/.env.local
+
+# 4. Rodar backend (porta 3001)
+cd backend
+npm run start:dev
+
+# 5. Rodar frontend (porta 3000) - em outro terminal
+cd frontend
+npm run dev
+
+# 6. Rodar bot (opcional, porta 3003) - em outro terminal
+cd bot
+npm run dev
+```
+
+### **Estrutura do Projeto**
+```
+/backend   - API NestJS (porta 3001)
+/frontend  - Site Next.js (porta 3000) - inclui rotas /admin
+/bot       - Bot Telegram (porta 3003)
+/infra     - Scripts e configurações
+```
+
+**Nota**: Docker foi removido do projeto. O desenvolvimento é feito localmente com npm scripts.
+
 ---
 ## **🚀 Deploy para Produção**
 
