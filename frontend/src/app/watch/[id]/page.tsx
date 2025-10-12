@@ -33,7 +33,7 @@ export default function WatchPage({ params }: WatchPageProps) {
 
         // Get content details
         const contentResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/content/movies/${id}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies/${id}`,
           {
             credentials: 'include',
           }
@@ -49,7 +49,7 @@ export default function WatchPage({ params }: WatchPageProps) {
         if (selectedLanguageId) {
           try {
             const languagesResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/content-language-upload/public/languages/${id}`
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/languages/${id}`
             );
 
             if (languagesResponse.ok) {
@@ -82,7 +82,7 @@ export default function WatchPage({ params }: WatchPageProps) {
           // Get resume position from backend if user is authenticated
           try {
             const progressResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`,
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`,
               {
                 headers: {
                   'Authorization': `Bearer ${token}`,
@@ -132,7 +132,7 @@ export default function WatchPage({ params }: WatchPageProps) {
     if (token && content) {
       // Save to backend if authenticated
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -166,7 +166,7 @@ export default function WatchPage({ params }: WatchPageProps) {
     if (token && content) {
       // Mark as completed in backend
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

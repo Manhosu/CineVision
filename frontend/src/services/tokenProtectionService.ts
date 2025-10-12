@@ -329,7 +329,7 @@ export class TokenProtectionService {
    * Validate with backend
    */
   private async validateWithBackend(contentId: string, token: StreamingToken): Promise<TokenValidationResult> {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/content/${contentId}/validate`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/${contentId}/validate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

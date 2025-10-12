@@ -50,10 +50,10 @@ export default function HomePage() {
 
         // Fetch real data from API
         const [featuredRes, top10Res, latestRes, popularRes] = await Promise.all([
-          fetch(`${API_URL}/content/movies?limit=5&sort=newest`, { cache: 'no-store' }),
-          fetch(`${API_URL}/content/top10/films`, { cache: 'no-store' }),
-          fetch(`${API_URL}/content/movies?limit=10&sort=newest`, { cache: 'no-store' }),
-          fetch(`${API_URL}/content/movies?limit=10&sort=popular`, { cache: 'no-store' })
+          fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/v1/content/top10/films`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=newest`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=popular`, { cache: 'no-store' })
         ]);
 
         if (!featuredRes.ok || !top10Res.ok || !latestRes.ok || !popularRes.ok) {

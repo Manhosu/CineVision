@@ -64,7 +64,7 @@ export default function DashboardPage() {
         const token = localStorage.getItem('auth_token');
 
         // Buscar conteúdo adquirido
-        const contentRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/user/${user.id}/content`, {
+        const contentRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}/content`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -76,7 +76,7 @@ export default function DashboardPage() {
         }
 
         // Buscar histórico de compras
-        const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/purchases/user/${user.id}`, {
+        const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -88,7 +88,7 @@ export default function DashboardPage() {
         }
 
         // Buscar solicitações do usuário
-        const requestsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/requests/user/${user.id}`, {
+        const requestsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests/user/${user.id}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

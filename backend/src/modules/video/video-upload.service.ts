@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutObjectCommand, ListMultipartUploadsCommand } from '@aws-sdk/client-s3';
+import { S3Client, CreateMultipartUploadCommand, UploadPartCommand, CompleteMultipartUploadCommand, AbortMultipartUploadCommand, PutObjectCommand, ListMultipartUploadsCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getSignedUrl as getCloudFrontSignedUrl } from 'aws-cloudfront-sign';
 import * as fs from 'fs';
@@ -160,7 +160,8 @@ export class VideoUploadService {
   async generateSignedUrl(videoKey: string, expiresInMinutes: number = 60): Promise<string> {
     try {
       if (!this.cloudFrontDomain || !this.cloudFrontKeyPairId || !this.privateKeyPath) {
-        throw new Error('CloudFront configuration is incomplete');
+        this.logger.warn('CloudFront not configured, falling back to S3 presigned URL');
+        return this.generateS3PresignedUrl(videoKey, expiresInMinutes);
       }
 
       // Read private key
@@ -182,6 +183,29 @@ export class VideoUploadService {
       return signedUrl;
     } catch (error) {
       this.logger.error(`Failed to generate signed URL: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate S3 presigned URL for video playback
+   */
+  async generateS3PresignedUrl(videoKey: string, expiresInMinutes: number = 60): Promise<string> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: videoKey,
+      });
+
+      const presignedUrl = await getSignedUrl(this.s3Client, command, {
+        expiresIn: expiresInMinutes * 60, // Convert minutes to seconds
+      });
+
+      this.logger.log(`Generated S3 presigned URL for ${videoKey}, expires in ${expiresInMinutes} minutes`);
+
+      return presignedUrl;
+    } catch (error) {
+      this.logger.error(`Failed to generate S3 presigned URL: ${error.message}`);
       throw error;
     }
   }

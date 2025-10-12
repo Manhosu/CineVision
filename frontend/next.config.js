@@ -77,6 +77,11 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'cinevision-cover.s3.us-east-1.amazonaws.com',
+        pathname: '/posters/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'cinevision-filmes.s3.us-east-1.amazonaws.com',
         pathname: '/videos/**',
       },

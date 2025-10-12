@@ -88,7 +88,7 @@ export class VideoService {
    * Get content details
    */
   async getContent(contentId: string): Promise<VideoContent> {
-    const response = await fetch(`${this.baseUrl}/content/movies/${contentId}`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/content/movies/${contentId}`, {
       method: 'GET',
       headers: this.getHeaders(),
       credentials: 'include',
@@ -101,7 +101,7 @@ export class VideoService {
    * Get processing status for content
    */
   async getProcessingStatus(contentId: string): Promise<ProcessingStatusResponse> {
-    const response = await fetch(`${this.baseUrl}/content/${contentId}/processing-status`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/content/${contentId}/processing-status`, {
       method: 'GET',
       headers: this.getHeaders(),
       credentials: 'include',
@@ -114,7 +114,7 @@ export class VideoService {
    * Get signed URL for specific HLS segment
    */
   async getSegmentUrl(contentId: string, segmentPath: string): Promise<{ segmentUrl: string }> {
-    const response = await fetch(`${this.baseUrl}/content/${contentId}/stream/segment/${encodeURIComponent(segmentPath)}`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/content/${contentId}/stream/segment/${encodeURIComponent(segmentPath)}`, {
       method: 'GET',
       headers: this.getHeaders(),
       credentials: 'include',
@@ -127,7 +127,7 @@ export class VideoService {
    * Verify content access with token (legacy endpoint)
    */
   async verifyContentAccess(contentId: string, token: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/content/stream/${contentId}?token=${encodeURIComponent(token)}`, {
+    const response = await fetch(`${this.baseUrl}/api/v1/content/stream/${contentId}?token=${encodeURIComponent(token)}`, {
       method: 'GET',
       headers: this.getHeaders(),
       credentials: 'include',
@@ -221,7 +221,7 @@ export class VideoService {
    */
   async getRecommendations(contentId: string, limit: number = 10): Promise<VideoContent[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/content/${contentId}/recommendations?limit=${limit}`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/content/${contentId}/recommendations?limit=${limit}`, {
         method: 'GET',
         headers: this.getHeaders(),
         credentials: 'include',

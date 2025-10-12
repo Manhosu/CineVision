@@ -229,4 +229,28 @@ export class ContentLanguageUploadController {
   async deleteLanguage(@Param('id') id: string) {
     await this.contentLanguageService.delete(id);
   }
+
+  @Get('public/video-url/:languageId')
+  @ApiOperation({ summary: 'Get signed video URL for playback' })
+  @ApiResponse({ status: 200, description: 'Signed video URL generated' })
+  async getPublicVideoUrl(@Param('languageId') languageId: string) {
+    const contentLanguage = await this.contentLanguageService.findById(languageId);
+
+    if (!contentLanguage.video_storage_key) {
+      throw new NotFoundException('Video not found for this language');
+    }
+
+    // Generate a signed URL valid for 240 minutes (4 hours)
+    const signedUrl = await this.videoUploadService.generateSignedUrl(
+      contentLanguage.video_storage_key,
+      240,
+    );
+
+    return {
+      url: signedUrl,
+      expires_in: 14400,
+      language_type: contentLanguage.language_type,
+      language_code: contentLanguage.language_code,
+    };
+  }
 }
