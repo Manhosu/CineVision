@@ -390,7 +390,7 @@ export class PerformanceOptimizer {
     entries.forEach(entry => {
       if (entry.entryType === 'navigation') {
         const navEntry = entry as PerformanceNavigationTiming;
-        metrics.loadTime = navEntry.loadEventEnd - navEntry.navigationStart;
+        metrics.loadTime = navEntry.loadEventEnd - navEntry.startTime;
       }
 
       if (entry.entryType === 'largest-contentful-paint') {

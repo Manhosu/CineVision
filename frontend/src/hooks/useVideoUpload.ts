@@ -366,16 +366,13 @@ export const useVideoUpload = () => {
     videoKey: string,
     expiresInMinutes: number = 60
   ): Promise<string> => {
-    const response = await api.get(`/api/video-upload/signed-url/${videoKey}`, {
-      params: { expiresInMinutes },
-    });
-
-    return response.data.streamingUrl;
+    const response: any = await api.generateSignedStreamingUrl(videoKey, expiresInMinutes);
+    return response.streamingUrl;
   }, []);
 
   const getVideoStreamingInfo = useCallback(async (videoKey: string) => {
-    const response = await api.get(`/api/video-upload/streaming-info/${videoKey}`);
-    return response.data;
+    const response = await api.get(`/api/v1/video/upload/streaming-info/${videoKey}`);
+    return response;
   }, []);
 
   return {
