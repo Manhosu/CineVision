@@ -3,6 +3,8 @@ import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -29,6 +31,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly botApiUrl: string;
   private readonly supabase: SupabaseClient;
   private readonly apiUrl: string;
+  private readonly s3Client: S3Client;
   private catalogSyncService: any; // Will be injected by setter to avoid circular dependency
 
   // Cache temporário de compras pendentes (em produção, usar Redis)
@@ -58,9 +61,19 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     this.supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Initialize S3 client for presigned URLs
+    this.s3Client = new S3Client({
+      region: 'us-east-2',
+      credentials: {
+        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
+        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
+      },
+    });
+
     this.logger.log('TelegramsEnhancedService initialized');
     this.logger.log(`Bot token configured: ${!!this.botToken}`);
     this.logger.log(`Supabase configured: ${!!supabaseUrl}`);
+    this.logger.log(`S3 client initialized for region: us-east-2`);
   }
 
   /**
@@ -404,12 +417,21 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
    */
   private async generateSignedVideoUrl(storageKey: string): Promise<string> {
     try {
-      // Usar AWS SDK para gerar signed URL
-      // Por enquanto, retorna URL direto (em produção, usar signed URLs)
-      return `https://cinevision-filmes.s3.us-east-1.amazonaws.com/${storageKey}`;
+      const command = new GetObjectCommand({
+        Bucket: 'cinevision-video',
+        Key: storageKey,
+      });
+
+      // Gerar presigned URL válida por 4 horas (14400 segundos)
+      const presignedUrl = await getSignedUrl(this.s3Client, command, {
+        expiresIn: 14400,
+      });
+
+      this.logger.log(`Generated presigned URL for key: ${storageKey}`);
+      return presignedUrl;
     } catch (error) {
       this.logger.error('Error generating signed URL:', error);
-      return `https://cinevision-filmes.s3.us-east-1.amazonaws.com/${storageKey}`;
+      throw new Error('Failed to generate video access URL');
     }
   }
 
@@ -541,6 +563,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.showCatalog(chatId);
     } else if (data?.startsWith('buy_')) {
       await this.handleBuyCallback(chatId, telegramUserId, data);
+    } else if (data?.startsWith('watch_')) {
+      await this.handleWatchVideoCallback(chatId, telegramUserId, data);
     } else if (data === 'my_purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
@@ -798,6 +822,155 @@ Use /catalogo para ver os filmes disponíveis!`;
     } catch (error) {
       this.logger.error('Error setting up webhook:', error);
       return { status: 'error', error: error.message };
+    }
+  }
+
+  // ==================== VIDEO DELIVERY AFTER PAYMENT ====================
+
+  /**
+   * Entrega o conteúdo ao usuário via Telegram após pagamento confirmado
+   * Chamado pelo PaymentsService quando purchase status = 'paid'
+   */
+  async deliverContentAfterPayment(purchase: any): Promise<void> {
+    try {
+      const chatId = purchase.provider_meta?.telegram_chat_id;
+      if (!chatId) {
+        this.logger.warn(`No telegram chat_id found in purchase ${purchase.id} provider_meta`);
+        return;
+      }
+
+      this.logger.log(`Delivering content to Telegram chat ${chatId} for purchase ${purchase.id}`);
+
+      // Buscar content e languages
+      const { data: content, error: contentError } = await this.supabase
+        .from('content')
+        .select('*, content_languages(*)')
+        .eq('id', purchase.content_id)
+        .single();
+
+      if (contentError || !content) {
+        this.logger.error('Content not found:', contentError);
+        await this.sendMessage(parseInt(chatId), '❌ Erro ao buscar conteúdo. Entre em contato com suporte.');
+        return;
+      }
+
+      if (!content.content_languages || content.content_languages.length === 0) {
+        this.logger.error('No languages found for content:', purchase.content_id);
+        await this.sendMessage(parseInt(chatId), '❌ Vídeo não disponível. Entre em contato com suporte.');
+        return;
+      }
+
+      // Enviar mensagem de sucesso
+      const priceText = (purchase.amount_cents / 100).toFixed(2);
+      await this.sendMessage(parseInt(chatId),
+        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📺 Escolha o idioma para assistir:`,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Criar botões para cada idioma disponível
+      const buttons = [];
+      for (const lang of content.content_languages) {
+        if (lang.is_active && lang.video_storage_key) {
+          const langLabel = lang.language_type === 'dubbed' ? '🎙️ Dublado' : '📝 Legendado';
+          buttons.push([{
+            text: `${langLabel} - ${lang.language_code}`,
+            callback_data: `watch_${purchase.id}_${lang.id}`
+          }]);
+        }
+      }
+
+      if (buttons.length === 0) {
+        this.logger.error('No active languages with video_storage_key found');
+        await this.sendMessage(parseInt(chatId), '❌ Nenhum vídeo disponível no momento. Entre em contato com suporte.');
+        return;
+      }
+
+      await this.sendMessage(parseInt(chatId), '🎬 Clique para assistir:', {
+        reply_markup: {
+          inline_keyboard: buttons,
+        },
+      });
+
+      this.logger.log(`Content delivery completed for purchase ${purchase.id}`);
+    } catch (error) {
+      this.logger.error('Error delivering content to Telegram:', error);
+      // Não fazer throw para não quebrar o webhook do Stripe
+    }
+  }
+
+  /**
+   * Handler para callback de assistir vídeo (watch_<purchase_id>_<language_id>)
+   */
+  private async handleWatchVideoCallback(chatId: number, telegramUserId: number, data: string) {
+    try {
+      // Extrair IDs: watch_<purchase_id>_<language_id>
+      const parts = data.split('_');
+      if (parts.length < 3) {
+        await this.sendMessage(chatId, '❌ Link inválido.');
+        return;
+      }
+
+      const purchaseId = parts[1];
+      const languageId = parts[2];
+
+      this.logger.log(`Watch request from chat ${chatId}: purchase=${purchaseId}, language=${languageId}`);
+
+      // Verificar se a compra existe e está paga
+      const { data: purchase, error: purchaseError } = await this.supabase
+        .from('purchases')
+        .select('*, content(*)')
+        .eq('id', purchaseId)
+        .eq('status', 'paid')
+        .single();
+
+      if (purchaseError || !purchase) {
+        this.logger.warn(`Purchase ${purchaseId} not found or not paid`);
+        await this.sendMessage(chatId, '❌ Compra não encontrada ou pagamento não confirmado.');
+        return;
+      }
+
+      // Buscar language específico
+      const { data: language, error: langError } = await this.supabase
+        .from('content_languages')
+        .select('*')
+        .eq('id', languageId)
+        .eq('content_id', purchase.content_id)
+        .single();
+
+      if (langError || !language || !language.video_storage_key) {
+        this.logger.error(`Language ${languageId} not found or no video_storage_key`);
+        await this.sendMessage(chatId, '❌ Vídeo não encontrado.');
+        return;
+      }
+
+      // Gerar presigned URL do S3
+      await this.sendMessage(chatId, '⏳ Gerando link de acesso...');
+
+      const videoUrl = await this.generateSignedVideoUrl(language.video_storage_key);
+
+      // Calcular tamanho do arquivo em GB
+      const sizeGB = language.file_size_bytes
+        ? (language.file_size_bytes / (1024 * 1024 * 1024)).toFixed(2)
+        : 'Desconhecido';
+
+      // Enviar link do vídeo
+      const message = `🎬 **${purchase.content.title}**\n\n${language.language_name}\n\n📊 Tamanho: ${sizeGB} GB\n⏱️  Link válido por: 4 horas\n\n💡 **Como assistir:**\n• Clique no botão abaixo\n• O vídeo abrirá no navegador\n• Você pode assistir online ou baixar\n\n⚠️ **Importante:**\n• Link expira em 4 horas\n• Você pode solicitar novo link a qualquer momento`;
+
+      await this.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '▶️ Assistir Agora', url: videoUrl }],
+            [{ text: '🔄 Gerar Novo Link', callback_data: data }],
+            [{ text: '🔙 Minhas Compras', callback_data: 'my_purchases' }],
+          ],
+        },
+      });
+
+      this.logger.log(`Video URL sent to chat ${chatId} for language ${languageId}`);
+    } catch (error) {
+      this.logger.error('Error handling watch video callback:', error);
+      await this.sendMessage(chatId, '❌ Erro ao gerar link do vídeo. Tente novamente em alguns segundos.');
     }
   }
 

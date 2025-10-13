@@ -124,6 +124,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     canPlay: false,
   });
 
+  // Clear error and set loading state when videoUrl changes
+  useEffect(() => {
+    if (videoUrl) {
+      setPlayerState(prev => ({
+        ...prev,
+        error: isUnsupportedFormat(videoUrl)
+          ? `Formato de vídeo não suportado (.${videoUrl.split('.').pop()}). Por favor, contate o suporte ou tente outro idioma.`
+          : null,
+        isLoading: true,
+      }));
+    } else {
+      setPlayerState(prev => ({
+        ...prev,
+        error: 'No video URL provided',
+        isLoading: false,
+      }));
+    }
+  }, [videoUrl]);
+
   // AirPlay setup
   useEffect(() => {
     if (videoRef.current && airplayAvailable) {
@@ -354,20 +373,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     console.log('[VideoPlayer] AirPlay click - handled by browser');
   }, []);
 
-  // Render loading state
-  if (playerState.isLoading && videoUrl) {
-    return (
-      <div className={`video-container ${className}`}>
-        <div className="flex items-center justify-center h-full bg-dark-900 min-h-[400px]">
-          <div className="flex items-center space-x-3">
-            <div className="animate-spin w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full"></div>
-            <span className="text-white">Carregando vídeo...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Render error state
   if (playerState.error) {
     return (
@@ -457,6 +462,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onChromecastClick={handleChromecastClick}
         onAirPlayClick={handleAirPlayClick}
       />
+
+      {/* Loading Overlay */}
+      {playerState.isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-dark-900/80 backdrop-blur-sm z-50">
+          <div className="flex items-center space-x-3">
+            <div className="animate-spin w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full"></div>
+            <span className="text-white text-lg">Carregando vídeo...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

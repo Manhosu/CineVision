@@ -299,7 +299,7 @@ const MovieCard = memo(function MovieCard({
               <span className="text-green-500 font-medium text-sm">Adquirido</span>
             </div>
           ) : (
-            <div className="text-primary-500 font-bold text-lg">
+            <div className="text-primary-500 font-extrabold text-2xl">
               {formatPrice(movie.price_cents)}
             </div>
           )}

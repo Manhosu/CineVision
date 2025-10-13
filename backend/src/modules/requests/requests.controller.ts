@@ -11,6 +11,7 @@ import {
   ValidationPipe,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -34,7 +35,7 @@ import { RequestStatus } from './entities/content-request.entity';
 @ApiTags('requests')
 @Controller('requests')
 export class RequestsController {
-  constructor(private readonly requestsService: RequestsService) {}
+  constructor(@Inject('RequestsService') private readonly requestsService: RequestsService) {}
 
   @Post()
   @UseGuards(OptionalAuthGuard)

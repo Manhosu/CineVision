@@ -323,26 +323,38 @@ export class PurchasesSupabaseService {
     console.log('[findUserContentList] Found purchases:', data.length);
     console.log('[findUserContentList] First purchase:', JSON.stringify(data[0], null, 2));
 
-    return (data || []).map(purchase => ({
-      id: purchase.content.id,
-      title: purchase.content.title,
-      description: purchase.content.description,
-      poster_url: purchase.content.poster_url,
-      thumbnail_url: purchase.content.poster_url, // Use poster_url as thumbnail
-      backdrop_url: purchase.content.banner_url, // Use banner_url as backdrop
-      duration_minutes: purchase.content.duration_minutes,
-      release_year: purchase.content.release_year,
-      imdb_rating: purchase.content.imdb_rating,
-      price_cents: purchase.content.price_cents,
-      genres: Array.isArray(purchase.content.genres)
-        ? purchase.content.genres
-        : (typeof purchase.content.genres === 'string' && purchase.content.genres)
-          ? purchase.content.genres.split(',')
-          : [],
-      purchased_at: purchase.created_at,
-      access_token: purchase.access_token,
-      access_expires_at: purchase.access_expires_at,
-    }));
+    // Deduplicate content by content_id (keep most recent purchase)
+    const uniqueContentMap = new Map<string, any>();
+
+    for (const purchase of data) {
+      if (!uniqueContentMap.has(purchase.content.id)) {
+        uniqueContentMap.set(purchase.content.id, {
+          id: purchase.content.id,
+          title: purchase.content.title,
+          description: purchase.content.description,
+          poster_url: purchase.content.poster_url,
+          thumbnail_url: purchase.content.poster_url, // Use poster_url as thumbnail
+          backdrop_url: purchase.content.banner_url, // Use banner_url as backdrop
+          duration_minutes: purchase.content.duration_minutes,
+          release_year: purchase.content.release_year,
+          imdb_rating: purchase.content.imdb_rating,
+          price_cents: purchase.content.price_cents,
+          genres: Array.isArray(purchase.content.genres)
+            ? purchase.content.genres
+            : (typeof purchase.content.genres === 'string' && purchase.content.genres)
+              ? purchase.content.genres.split(',')
+              : [],
+          purchased_at: purchase.created_at,
+          access_token: purchase.access_token,
+          access_expires_at: purchase.access_expires_at,
+        });
+      }
+    }
+
+    const uniqueContent = Array.from(uniqueContentMap.values());
+    console.log('[findUserContentList] Unique content after deduplication:', uniqueContent.length);
+
+    return uniqueContent;
   }
 
   async findById(id: string): Promise<any | null> {

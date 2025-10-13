@@ -14,7 +14,7 @@ interface CategoryWithCount extends Category {
 const fetchCategories = async (): Promise<Category[]> => {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/content/categories`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/categories`,
       { cache: 'no-store' }
     );
 
@@ -32,7 +32,7 @@ const fetchCategories = async (): Promise<Category[]> => {
 const fetchCategoryMovieCount = async (categoryName: string): Promise<number> => {
   try {
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/content/movies?genre=${categoryName}&limit=1`,
+      `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies?genre=${categoryName}&limit=1`,
       { cache: 'no-store' }
     );
 

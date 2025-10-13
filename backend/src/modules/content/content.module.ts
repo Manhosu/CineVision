@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
 import { ContentSupabaseService } from './services/content-supabase.service';
@@ -52,9 +52,9 @@ console.log('Content exports:', conditionalExports);
   imports: [
     ...optionalTypeOrmFeature([Content, ContentLanguage, Category, Series, Episode, VideoVariant, StreamingAnalytics, SystemLog]),
     SupabaseModule,
-    AuthModule,
-    CDNModule,
-    VideoUploadModule,
+    forwardRef(() => AuthModule),
+    forwardRef(() => CDNModule),
+    forwardRef(() => VideoUploadModule),
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

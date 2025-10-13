@@ -287,7 +287,92 @@ export default function DashboardPage() {
 
         {activeTab === 'requests' && (
           <div>
-            <h2 className="text-2xl font-bold text-white mb-6">Solicitações de Filmes</h2>
+            <h2 className="text-2xl font-bold text-white mb-6">Minhas Solicitações de Conteúdo</h2>
+
+            {/* Formulário de Nova Solicitação */}
+            <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
+              <h3 className="text-lg font-semibold text-white mb-4">Solicitar Novo Filme ou Série</h3>
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target as HTMLFormElement;
+                const title = (form.elements.namedItem('title') as HTMLInputElement).value;
+                const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
+
+                try {
+                  const token = localStorage.getItem('auth_token');
+                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      title,
+                      description,
+                      user_id: user?.id
+                    })
+                  });
+
+                  if (response.ok) {
+                    toast.success('Solicitação enviada com sucesso!');
+                    form.reset();
+                    // Reload requests
+                    const requestsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests/user/${user?.id}`, {
+                      headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (requestsRes.ok) {
+                      const requestsData = await requestsRes.json();
+                      setRequests(requestsData);
+                    }
+                  } else {
+                    const errorData = await response.json();
+                    toast.error(errorData.message || 'Erro ao enviar solicitação');
+                  }
+                } catch (error) {
+                  console.error('Error submitting request:', error);
+                  toast.error('Erro ao enviar solicitação');
+                }
+              }}>
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">
+                      Título do Filme ou Série *
+                    </label>
+                    <input
+                      type="text"
+                      id="title"
+                      name="title"
+                      required
+                      placeholder="Ex: Vingadores: Ultimato"
+                      className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
+                      Descrição ou Comentário (opcional)
+                    </label>
+                    <textarea
+                      id="description"
+                      name="description"
+                      rows={3}
+                      placeholder="Adicione mais informações sobre o conteúdo que deseja..."
+                      className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition-colors"
+                  >
+                    Enviar Solicitação
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Lista de Solicitações */}
+            <h3 className="text-xl font-semibold text-white mb-4">Histórico de Solicitações</h3>
             {requests.length > 0 ? (
               <div className="space-y-4">
                 {requests.map((request) => (
@@ -314,14 +399,9 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-20">
-                <p className="text-gray-400 mb-4">Você ainda não fez nenhuma solicitação</p>
-                <button
-                  onClick={() => router.push('/requests')}
-                  className="btn-primary"
-                >
-                  Solicitar Filme
-                </button>
+              <div className="text-center py-12 bg-gray-800/30 rounded-lg">
+                <p className="text-gray-400">Você ainda não fez nenhuma solicitação</p>
+                <p className="text-sm text-gray-500 mt-1">Use o formulário acima para solicitar um filme ou série</p>
               </div>
             )}
           </div>

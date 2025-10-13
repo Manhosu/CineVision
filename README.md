@@ -179,6 +179,57 @@ diretamente.
 
 ---
 
+## 💰 **Tabela de Preços dos Filmes**
+
+### **⚠️ ATENÇÃO - PREÇOS OFICIAIS**
+**Os preços abaixo são OFICIAIS e foram definidos pelo proprietário do sistema.**
+**NÃO alterar sem autorização expressa.**
+
+| Filme | Preço (R$) | Centavos |
+|-------|-----------|----------|
+| 🎬 Quarteto Fantástico: Primeiros Passos (2025) | R$ 6,90 | 690 |
+| 🎬 Invocação do Mal 4: O Último Ritual (2025) | R$ 7,20 | 720 |
+| 🎬 Demon Slayer: Castelo Infinito (2025) | R$ 7,50 | 750 |
+| 🎬 A Longa Marcha: Caminhe ou Morra (2025) | R$ 7,00 | 700 |
+| 🎬 Superman (2025) | R$ 7,10 | 710 |
+| 🎬 Como Treinar o Seu Dragão (2025) | R$ 6,98 | 698 |
+| 🎬 Jurassic World: Recomeço (2025) | R$ 6,85 | 685 |
+| 🎬 F1: O Filme (2025) | R$ 7,05 | 705 |
+| 🎬 Lilo & Stitch (2025) | R$ 6,98 | 698 |
+| 🎬 A Hora do Mal (2025) | R$ 6,95 | 695 |
+
+### **Como Atualizar Preços**
+
+**Script Automático:**
+```bash
+cd backend
+node set-movie-prices.js
+```
+
+Este script:
+- ✅ Aplica os preços oficiais definidos acima
+- ✅ Atualiza apenas filmes que correspondem à lista
+- ✅ Mantém integridade dos dados
+- ✅ Gera relatório detalhado
+
+**⚠️ IMPORTANTE:**
+- Os preços são armazenados em **centavos** no banco de dados
+- Exemplo: R$ 6,90 = 690 centavos
+- Nunca edite os preços diretamente no banco sem usar o script
+- Sempre documente alterações de preços neste README
+
+### **Estrutura de Preços no Sistema**
+
+```typescript
+// Backend - Database (Supabase)
+price_cents: number  // Valor em centavos (ex: 690)
+
+// Frontend - Exibição
+formatPrice(690) → "R$ 6,90"  // Conversão automática
+```
+
+---
+
 ## 🚀 **Como Rodar Localmente**
 
 ### **Pré-requisitos**

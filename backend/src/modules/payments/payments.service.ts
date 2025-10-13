@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +6,7 @@ import { Purchase, PurchaseStatus } from '../purchases/entities/purchase.entity'
 import { Payment, PaymentStatus, PaymentProvider as PaymentProviderEnum } from './entities/payment.entity';
 import { StripePaymentProvider } from './providers/stripe';
 import { PaymentProvider, PaymentMethod } from './providers/interfaces';
+import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 import {
   CreatePaymentDto,
   CreatePaymentResponseDto,
@@ -24,6 +25,8 @@ export class PaymentsService {
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
     private configService: ConfigService,
+    @Optional() @Inject(forwardRef(() => TelegramsEnhancedService))
+    private telegramsService?: TelegramsEnhancedService,
   ) {
     // Initialize payment provider (currently only Stripe)
     this.paymentProvider = new StripePaymentProvider(configService);
@@ -230,6 +233,18 @@ export class PaymentsService {
 
     this.logger.log(`Payment succeeded: ${payment_id} for purchase ${purchase.id}`);
 
+    // Entregar conteúdo via Telegram se for compra Telegram
+    const telegramChatId = purchase.provider_meta?.telegram_chat_id;
+    if (this.telegramsService && telegramChatId) {
+      this.logger.log(`Triggering content delivery for purchase ${purchase.id} to chat ${telegramChatId}`);
+      try {
+        await this.telegramsService.deliverContentAfterPayment(purchase);
+      } catch (error) {
+        this.logger.error('Error delivering content to Telegram:', error);
+        // Não fazer throw para não quebrar o webhook do Stripe
+      }
+    }
+
     return {
       status: 'processed',
       purchase_id: purchase.id,
@@ -344,6 +359,17 @@ export class PaymentsService {
         purchase.status = PurchaseStatus.PAID;
         purchase.access_expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
         await this.purchaseRepository.save(purchase);
+
+        // Entregar conteúdo via Telegram se for compra Telegram
+        const telegramChatId = purchase.provider_meta?.telegram_chat_id;
+        if (this.telegramsService && telegramChatId) {
+          this.logger.log(`Triggering content delivery for purchase ${purchase.id} to chat ${telegramChatId} (legacy webhook)`);
+          try {
+            await this.telegramsService.deliverContentAfterPayment(purchase);
+          } catch (error) {
+            this.logger.error('Error delivering content to Telegram:', error);
+          }
+        }
       }
 
       return {

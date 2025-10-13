@@ -120,10 +120,31 @@ export interface Order {
   completed_at?: string;
   created_at: string;
   updated_at: string;
-  user?: { 
+  user?: {
     id: string;
-    email: string; 
+    email: string;
     name?: string;
+  };
+}
+
+export interface ContentRequest {
+  id: string;
+  content_title: string;
+  description?: string;
+  status: 'PENDING' | 'PROCESSED' | 'REJECTED';
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  admin_notes?: string;
+  user_id?: string;
+  telegram_chat_id?: string;
+  category?: string;
+  imdb_url?: string;
+  created_at: string;
+  updated_at: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+    telegram_username?: string;
   };
 }
 
@@ -142,6 +163,7 @@ export interface PaginatedResponse<T> {
   content?: T[];
   payments?: T[];
   orders?: T[];
+  requests?: T[];
   logs?: T[];
   total: number;
   page: number;
@@ -245,8 +267,56 @@ export class AdminApiService {
     return response.data;
   }
 
-  static async notifyUser(userId: string, contentId: string, message: string) {
-    const response = await adminApi.post(`/users/${userId}/notify`, { content_id: contentId, message });
+  static async notifyUser(requestId: string, message?: string) {
+    const response = await axios.post(
+      `${API_BASE_URL}/requests/${requestId}/notify`,
+      { message },
+      {
+        headers: {
+          Authorization: `Bearer ${await AuthService.ensureValidToken()}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  // Content Requests
+  static async getContentRequests(params: {
+    page?: number;
+    limit?: number;
+    status?: string
+  } = {}): Promise<{ requests: ContentRequest[]; total: number }> {
+    const queryParams = new URLSearchParams({
+      page: (params.page || 1).toString(),
+      limit: (params.limit || 20).toString(),
+    });
+    if (params.status) queryParams.append('status', params.status);
+
+    const response = await axios.get(
+      `${API_BASE_URL}/requests?${queryParams.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await AuthService.ensureValidToken()}`,
+        },
+      }
+    );
+    return response.data;
+  }
+
+  static async updateContentRequest(requestId: string, data: {
+    status?: string;
+    admin_notes?: string;
+    priority?: string;
+  }) {
+    const response = await axios.put(
+      `${API_BASE_URL}/requests/${requestId}`,
+      data,
+      {
+        headers: {
+          Authorization: `Bearer ${await AuthService.ensureValidToken()}`,
+        },
+      }
+    );
     return response.data;
   }
 

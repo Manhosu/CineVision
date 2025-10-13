@@ -45,29 +45,28 @@ export default function WatchPage({ params }: WatchPageProps) {
 
         let contentData = await contentResponse.json();
 
-        // If a language ID was selected, fetch the specific language video
+        // If a language ID was selected, fetch the presigned URL for that language
         if (selectedLanguageId) {
           try {
-            const languagesResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/languages/${id}`
+            const presignedResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/video-url/${selectedLanguageId}`
             );
 
-            if (languagesResponse.ok) {
-              const languages = await languagesResponse.json();
-              const selectedLang = languages.find((lang: any) => lang.id === selectedLanguageId);
+            if (presignedResponse.ok) {
+              const presignedData = await presignedResponse.json();
 
-              if (selectedLang && selectedLang.video_url) {
-                // Override the video URL with the selected language version
+              if (presignedData.url) {
+                // Override the video URL with the presigned URL
                 contentData = {
                   ...contentData,
-                  video_url: selectedLang.video_url,
-                  hls_master_url: selectedLang.hls_master_url,
-                  hls_base_path: selectedLang.hls_base_path,
+                  video_url: presignedData.url,
+                  language_type: presignedData.language_type,
+                  language_code: presignedData.language_code,
                 };
               }
             }
           } catch (langError) {
-            console.error('Error fetching language details:', langError);
+            console.error('Error fetching presigned URL:', langError);
             // Continue with default content
           }
         }
