@@ -2,15 +2,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "env": {
-    "NEXT_PUBLIC_API_URL": "@next_public_api_url",
-    "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@next_public_supabase_anon_key",
-    "NEXT_PUBLIC_CDN_URL": "@next_public_cdn_url",
-    "NEXT_PUBLIC_CAST_APP_ID": "CC1AD845",
-    "NEXT_PUBLIC_CHROMECAST_APP_ID": "CC1AD845",
-    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@next_public_stripe_publishable_key"
-  },
   "headers": [
     {
       "source": "/api/(.*)",
