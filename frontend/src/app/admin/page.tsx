@@ -57,12 +57,13 @@ export default function AdminDashboard() {
         setLoading(true);
 
         const token = localStorage.getItem('token');
-        const headers = token ? {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } : {
+        const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
         // Buscar conteúdos
         const contentResponse = await fetch('http://localhost:3001/api/v1/admin/content', { headers });

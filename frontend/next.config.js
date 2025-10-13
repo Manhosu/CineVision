@@ -43,7 +43,7 @@ const nextConfig = {
               "img-src 'self' data: https: blob: https://cinevision-capas.s3.us-east-1.amazonaws.com https://cinevision-filmes.s3.us-east-1.amazonaws.com https://img.youtube.com",
               "media-src 'self' https: blob:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https: wss: http://localhost:3000 http://localhost:3001 https://clients3.google.com https://ssl.gstatic.com",
+              `connect-src 'self' https: wss: http://localhost:3000 http://localhost:3001 ${process.env.NEXT_PUBLIC_API_URL || ''} https://clients3.google.com https://ssl.gstatic.com`,
               "frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com https://cast.googleapis.com",
               "worker-src 'self' blob:",
             ].join('; '),
@@ -81,8 +81,13 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'cinevision-cover.s3.us-east-1.amazonaws.com',
-        pathname: '/posters/**',
+        hostname: 'cinevision-cover.s3.us-east-2.amazonaws.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cinevision-video.s3.us-east-2.amazonaws.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
