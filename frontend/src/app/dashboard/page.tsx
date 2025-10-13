@@ -441,11 +441,17 @@ export default function DashboardPage() {
                 {favorites.map((favorite) => (
                   <MovieCard
                     key={favorite.content_id}
-                    id={favorite.content_id}
-                    title={favorite.content?.title || 'Título não disponível'}
-                    poster_url={favorite.content?.poster_url}
-                    year={favorite.content?.release_year}
-                    rating={favorite.content?.imdb_rating}
+                    movie={{
+                      id: favorite.content_id,
+                      title: favorite.content?.title || 'Título não disponível',
+                      description: favorite.content?.description || '',
+                      thumbnail_url: favorite.content?.poster_url || favorite.content?.thumbnail_url || '',
+                      poster_url: favorite.content?.poster_url,
+                      backdrop_url: favorite.content?.backdrop_url,
+                      release_year: favorite.content?.release_year,
+                      imdb_rating: favorite.content?.imdb_rating,
+                      price_cents: favorite.content?.price_cents || 0
+                    }}
                   />
                 ))}
               </div>

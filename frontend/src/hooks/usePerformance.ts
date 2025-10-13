@@ -141,9 +141,9 @@ export function useIntersectionObserver(
  */
 export function createMemoComponent<T extends React.ComponentType<any>>(
   Component: T,
-  areEqual?: (prevProps: React.ComponentProps<T>, nextProps: React.ComponentProps<T>) => boolean
+  areEqual?: (prevProps: Readonly<React.ComponentProps<T>>, nextProps: Readonly<React.ComponentProps<T>>) => boolean
 ): T {
-  return React.memo(Component, areEqual) as T;
+  return React.memo(Component, areEqual) as any as T;
 }
 
 /**

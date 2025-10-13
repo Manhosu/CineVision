@@ -36,7 +36,7 @@ export function useHLS(options: UseHLSOptions) {
     const video = videoRef.current;
 
     // Determinar se usa HLS ou vídeo nativo
-    const useHLS = hlsMasterUrl && hlsMasterUrl.includes('.m3u8');
+    const useHLS = !!(hlsMasterUrl && hlsMasterUrl.includes('.m3u8'));
     setIsHLS(useHLS);
 
     if (useHLS) {
