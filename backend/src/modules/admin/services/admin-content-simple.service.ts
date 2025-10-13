@@ -62,14 +62,14 @@ export class AdminContentSimpleService {
     this.logger.log('Creating content with data:', JSON.stringify(data));
 
     // Mapear campos do frontend para o formato do banco
-    const contentData = {
+    const contentData: any = {
       title: data.title,
       description: data.description || null,
       synopsis: data.synopsis || null,
       poster_url: data.poster_url || null,
       backdrop_url: data.backdrop_url || null,
       trailer_url: data.trailer_url || null,
-      content_type: data.type || 'movie', // Mapeia para coluna content_type
+      content_type: data.content_type || data.type || 'movie', // Mapeia para coluna content_type
       status: 'DRAFT', // Sempre começa como draft
       availability: 'site', // Padrão
       price_cents: data.price_cents || 0,
@@ -82,6 +82,12 @@ export class AdminContentSimpleService {
       duration_minutes: data.duration_minutes || null,
       imdb_rating: data.imdb_rating || null,
     };
+
+    // Adicionar campos específicos de série se aplicável
+    if (contentData.content_type === 'series') {
+      contentData.total_seasons = data.total_seasons || null;
+      contentData.total_episodes = data.total_episodes || null;
+    }
 
     this.logger.log('Mapped content data:', JSON.stringify(contentData));
 

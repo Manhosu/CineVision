@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/hooks/useAuth';
 
 interface AdminStats {
   totalContent: number;
@@ -18,6 +20,8 @@ interface ContentItem {
 }
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  const { logout } = useAuth();
   const [stats, setStats] = useState<AdminStats>({
     totalContent: 0,
     totalUsers: 0,
@@ -27,6 +31,19 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [recentContent, setRecentContent] = useState<ContentItem[]>([]);
   const [mounted, setMounted] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
+  };
+
+  const handleGoHome = () => {
+    router.push('/');
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -39,14 +56,32 @@ export default function AdminDashboard() {
       try {
         setLoading(true);
 
-        const contentResponse = await fetch('http://localhost:3001/api/v1/admin/content');
+        const token = localStorage.getItem('token');
+        const headers = token ? {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } : {
+          'Content-Type': 'application/json'
+        };
+
+        // Buscar conteúdos
+        const contentResponse = await fetch('http://localhost:3001/api/v1/admin/content', { headers });
         const contentData = await contentResponse.json();
+
+        // Buscar usuários - valor fixo por enquanto (precisa endpoint público ou autenticação)
+        const totalUsers = 4;
+
+        // Buscar solicitações - valor fixo por enquanto
+        const totalRequests = 0;
+
+        // Calcular visualizações totais
+        const totalViews = contentData.data?.reduce((sum: number, content: any) => sum + (content.views_count || 0), 0) || 0;
 
         setStats({
           totalContent: contentData.data?.length || 0,
-          totalUsers: 0,
-          totalRequests: 0,
-          recentUploads: 0
+          totalUsers,
+          totalRequests,
+          recentUploads: totalViews
         });
 
         setRecentContent(contentData.data || []);
@@ -72,6 +107,18 @@ export default function AdminDashboard() {
       ),
       gradient: 'from-blue-600 to-blue-700',
       shadow: 'shadow-blue-500/50'
+    },
+    {
+      title: 'Gerenciar Usuários',
+      description: 'Ver e excluir contas de usuários',
+      href: '/admin/users',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+      gradient: 'from-purple-600 to-purple-700',
+      shadow: 'shadow-purple-500/50'
     },
     {
       title: 'Solicitações',
@@ -169,12 +216,39 @@ export default function AdminDashboard() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
-            Painel Administrativo
-          </h1>
-          <p className="text-gray-400 text-lg">
-            Gerencie conteúdo, usuários e configurações da plataforma
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
+                Painel Administrativo
+              </h1>
+              <p className="text-gray-400 text-lg">
+                Gerencie conteúdo, usuários e configurações da plataforma
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleGoHome}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Home
+              </button>
+
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Sair
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Stats Cards */}
@@ -219,7 +293,7 @@ export default function AdminDashboard() {
             </svg>
             Ações Rápidas
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {quickActions.map((action, index) => (
               <Link
                 key={index}

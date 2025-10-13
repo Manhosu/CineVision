@@ -11,6 +11,7 @@ import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
+import { AdminUsersController } from './controllers/admin-users.controller';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
 // Removed DriveImportController - replaced with VideoUploadController
 import { VideoUploadController } from './controllers/video-upload.controller';
@@ -48,6 +49,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
+  AdminUsersController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
@@ -55,6 +57,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminContentController,
   AdminImageUploadController,
   AdminPurchasesController,
+  AdminUsersController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload

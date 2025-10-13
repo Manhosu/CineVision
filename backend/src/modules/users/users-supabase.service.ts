@@ -149,4 +149,38 @@ export class UsersSupabaseService {
     // The refresh token is returned to the client and stored there
     return Promise.resolve();
   }
+
+  async getUserStats(): Promise<{ total: number; active: number; banned: number; inactive: number }> {
+    this.logger.log('Getting user statistics');
+
+    try {
+      const users = await this.supabaseClient.select('users', {
+        select: 'id, role, created_at'
+      });
+
+      const total = users.length;
+      const active = users.length; // All users are considered active (no banned status in current schema)
+      const banned = 0;
+      const inactive = 0;
+
+      return { total, active, banned, inactive };
+    } catch (error) {
+      this.logger.error('Failed to get user stats:', error.message);
+      throw new Error(`Failed to get user stats: ${error.message}`);
+    }
+  }
+
+  async banUser(id: string): Promise<any> {
+    this.logger.log(`Banning user: ${id}`);
+    // Note: Current schema doesn't have a 'banned' status
+    // This is a placeholder for future implementation
+    throw new Error('Ban functionality not implemented - database schema update required');
+  }
+
+  async unbanUser(id: string): Promise<any> {
+    this.logger.log(`Unbanning user: ${id}`);
+    // Note: Current schema doesn't have a 'banned' status
+    // This is a placeholder for future implementation
+    throw new Error('Unban functionality not implemented - database schema update required');
+  }
 }

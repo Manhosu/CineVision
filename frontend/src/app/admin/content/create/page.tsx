@@ -65,6 +65,12 @@ export default function AdminContentCreatePage() {
     backdropUrl: '',
   });
 
+  // Informações de série
+  const [seriesInfo, setSeriesInfo] = useState({
+    totalSeasons: 1,
+    totalEpisodes: 1
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -84,14 +90,15 @@ export default function AdminContentCreatePage() {
 
     try {
       // Transformar dados para o formato esperado pelo backend
-      const backendData = {
+      const backendData: any = {
         title: formData.title,
         description: formData.description || undefined,
         synopsis: formData.synopsis || undefined,
         poster_url: formData.poster_url,
         backdrop_url: formData.backdrop_url || undefined,
         trailer_url: formData.trailer_url || undefined,
-        type: formData.content_type, // content_type → type
+        content_type: formData.content_type, // Manter content_type
+        type: formData.content_type, // Também enviar type para compatibilidade
         availability: 'site', // Padrão
         price_cents: formData.price_cents,
         currency: 'BRL',
@@ -103,6 +110,12 @@ export default function AdminContentCreatePage() {
         duration_minutes: formData.duration_minutes || undefined,
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined, // rating → imdb_rating
       };
+
+      // Adicionar informações de série se aplicável
+      if (formData.content_type === 'series') {
+        backendData.total_seasons = seriesInfo.totalSeasons;
+        backendData.total_episodes = seriesInfo.totalEpisodes;
+      }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/content/create`, {
         method: 'POST',
@@ -274,6 +287,55 @@ export default function AdminContentCreatePage() {
                     <option value="series">📺 Série</option>
                   </select>
                 </div>
+
+                {/* Informações de Série - Condicional */}
+                {formData.content_type === 'series' && (
+                  <div className="md:col-span-2 p-4 bg-blue-900/10 border border-blue-500/20 rounded-lg">
+                    <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+                      <span className="mr-2">📺</span>
+                      Informações da Série
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Número de Temporadas *
+                        </label>
+                        <input
+                          type="number"
+                          value={seriesInfo.totalSeasons}
+                          onChange={(e) => setSeriesInfo({...seriesInfo, totalSeasons: parseInt(e.target.value) || 1})}
+                          min="1"
+                          max="50"
+                          className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required={formData.content_type === 'series'}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Episódios por Temporada *
+                        </label>
+                        <input
+                          type="number"
+                          value={seriesInfo.totalEpisodes}
+                          onChange={(e) => setSeriesInfo({...seriesInfo, totalEpisodes: parseInt(e.target.value) || 1})}
+                          min="1"
+                          max="100"
+                          className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required={formData.content_type === 'series'}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-start space-x-2 text-sm text-gray-400">
+                      <svg className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p>
+                        Após criar a série, você poderá fazer upload dos episódios individualmente através do gerenciador de vídeos.
+                        Cada episódio será vinculado à temporada correspondente.
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-300 mb-2">Título *</label>
@@ -540,9 +602,6 @@ export default function AdminContentCreatePage() {
                       required
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    💰 Valor em centavos: {formData.price_cents}
-                  </p>
                 </div>
 
                 <div className="flex items-center justify-center">
