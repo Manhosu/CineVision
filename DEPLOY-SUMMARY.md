@@ -4,9 +4,9 @@
 
 ### 1. Arquivos de Configuração Criados
 
-#### Backend (Railway)
+#### Backend (Render)
 - ✅ [backend/.env.production](backend/.env.production) - Variáveis de ambiente de produção
-- ✅ [backend/railway.json](backend/railway.json) - Configuração do Railway
+- ✅ [backend/render.yaml](backend/render.yaml) - Configuração do Render
 - ✅ [backend/Procfile](backend/Procfile) - Comando de inicialização
 - ✅ [backend/src/main.ts](backend/src/main.ts) - CORS atualizado para aceitar Vercel
 
@@ -57,7 +57,7 @@ cd frontend && npm run build
 | Componente | Serviço | Justificativa |
 |------------|---------|---------------|
 | **Frontend** | Vercel | - Otimizado para Next.js<br>- Deploy automático<br>- Edge functions<br>- Free tier generoso |
-| **Backend** | Railway | - Fácil configuração<br>- Deploy automático via Git<br>- Logs em tempo real<br>- $5 free credit/mês |
+| **Backend** | Render | - Fácil configuração<br>- Deploy automático via Git<br>- Logs em tempo real<br>- $5 free credit/mês |
 | **Database** | Supabase | - Já configurado ✅<br>- PostgreSQL gerenciado<br>- Realtime<br>- Auth integrado |
 | **Storage** | AWS S3 + CloudFront | - Já configurado ✅<br>- Alta performance<br>- CDN global<br>- Custos baixos |
 
@@ -70,11 +70,11 @@ cd frontend && npm run build
 - [x] Builds locais testados e funcionando
 - [x] Arquivos de configuração criados
 - [x] Variáveis de ambiente documentadas
-- [ ] Conta Railway criada
+- [ ] Conta Render criada
 - [ ] Conta Vercel criada
 
-### Deploy Backend (Railway)
-- [ ] Projeto criado no Railway
+### Deploy Backend (Render)
+- [ ] Projeto criado no Render
 - [ ] Repositório conectado
 - [ ] Variáveis de ambiente configuradas
 - [ ] Build realizado com sucesso
@@ -90,7 +90,7 @@ cd frontend && npm run build
 - [ ] URL anotada
 
 ### Integração
-- [ ] CORS_ORIGIN atualizado no Railway
+- [ ] CORS_ORIGIN atualizado no Render
 - [ ] NEXT_PUBLIC_API_URL atualizado no Vercel
 - [ ] Webhook do Telegram configurado
 - [ ] Testes end-to-end realizados
@@ -105,18 +105,18 @@ cd frontend && npm run build
 
 ## 🔧 Variáveis que Precisam Ser Atualizadas Após Deploy
 
-### No Railway (Backend)
+### No Render (Backend)
 Após obter a URL do Vercel, atualizar:
 ```env
 CORS_ORIGIN=https://SEU-FRONTEND.vercel.app
 FRONTEND_URL=https://SEU-FRONTEND.vercel.app
-TELEGRAM_WEBHOOK_URL=https://SEU-BACKEND.railway.app/api/v1/telegrams/webhook
+TELEGRAM_WEBHOOK_URL=https://SEU-BACKEND.onrender.com/api/v1/telegrams/webhook
 ```
 
 ### No Vercel (Frontend)
-Após obter a URL do Railway, atualizar:
+Após obter a URL do Render, atualizar:
 ```env
-NEXT_PUBLIC_API_URL=https://SEU-BACKEND.railway.app
+NEXT_PUBLIC_API_URL=https://SEU-BACKEND.onrender.com
 BASE_URL=https://SEU-FRONTEND.vercel.app
 ```
 
@@ -126,12 +126,12 @@ BASE_URL=https://SEU-FRONTEND.vercel.app
 
 ### 1. Backend Health Check
 ```bash
-curl https://SEU-BACKEND.railway.app/api/v1/status
+curl https://SEU-BACKEND.onrender.com/api/v1/status
 # Deve retornar: {"status":"healthy",...}
 ```
 
 ### 2. API Documentation
-Acessar: `https://SEU-BACKEND.railway.app/api/docs`
+Acessar: `https://SEU-BACKEND.onrender.com/api/docs`
 
 ### 3. Frontend
 Acessar: `https://SEU-FRONTEND.vercel.app`
@@ -153,7 +153,7 @@ curl https://api.telegram.org/bot8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM/
 | Serviço | Plano | Custo |
 |---------|-------|-------|
 | Vercel | Hobby | $0 |
-| Railway | Starter | $5 (créditos) |
+| Render | Starter | $5 (créditos) |
 | Supabase | Free | $0 |
 | AWS S3 | Pay-as-you-go | ~$1-5 |
 | CloudFront | Pay-as-you-go | ~$1-3 |
@@ -172,7 +172,7 @@ curl https://api.telegram.org/bot8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM/
 
 ### Curto Prazo (1 semana)
 1. Configurar domínio personalizado
-2. Configurar SSL (automático Vercel/Railway)
+2. Configurar SSL (automático Vercel/Render)
 3. Configurar alertas de erro
 
 ### Médio Prazo (1 mês)
@@ -185,7 +185,7 @@ curl https://api.telegram.org/bot8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM/
 
 ## 📞 Recursos Úteis
 
-- **Documentação Railway**: https://docs.railway.app
+- **Documentação Render**: https://docs.onrender.com
 - **Documentação Vercel**: https://vercel.com/docs
 - **Supabase Dashboard**: https://supabase.com/dashboard
 - **AWS Console**: https://console.aws.amazon.com
@@ -224,7 +224,7 @@ cd frontend && npm run dev
 
 ### Logs
 ```bash
-# Railway: Dashboard > Deployments > View Logs
+# Render: Dashboard > Deployments > View Logs
 # Vercel: Dashboard > Deployments > Function Logs
 ```
 

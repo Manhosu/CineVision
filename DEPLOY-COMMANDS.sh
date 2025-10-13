@@ -46,14 +46,14 @@ echo ""
 echo "TELEGRAM_WEBHOOK_SECRET:"
 openssl rand -hex 16
 echo ""
-echo "⚠️  Copie estes valores e atualize no Railway!"
+echo "⚠️  Copie estes valores e atualize no Render!"
 
 # ============================================
 # CONFIGURAR WEBHOOK DO TELEGRAM
 # ============================================
 
 # Substitua com suas URLs após deploy
-BACKEND_URL="https://SEU-BACKEND.railway.app"
+BACKEND_URL="https://SEU-BACKEND.onrender.com"
 WEBHOOK_SECRET="production-webhook-secret"
 BOT_TOKEN="8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM"
 
@@ -90,7 +90,7 @@ echo ""
 
 echo "📝 Arquivos criados para deploy:"
 echo "  - backend/.env.production"
-echo "  - backend/railway.json"
+echo "  - backend/render.yaml"
 echo "  - backend/Procfile"
 echo "  - frontend/.env.production"
 echo "  - frontend/vercel.json"
@@ -102,7 +102,7 @@ echo ""
 echo "🎉 Sistema pronto para deploy!"
 echo ""
 echo "Próximos passos:"
-echo "1. Criar projeto no Railway (backend)"
+echo "1. Criar projeto no Render (backend)"
 echo "2. Criar projeto no Vercel (frontend)"
 echo "3. Configurar variáveis de ambiente"
 echo "4. Atualizar URLs cruzadas"

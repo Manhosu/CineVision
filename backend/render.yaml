@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: cinevision-backend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_TYPE
+        value: postgres
+      - key: ENABLE_TYPEORM
+        value: false
+      # Adicione as outras variáveis de ambiente manualmente no Render Dashboard
+      # ou use um arquivo .env sincronizado
+    healthCheckPath: /api/v1/status
+    autoDeploy: true

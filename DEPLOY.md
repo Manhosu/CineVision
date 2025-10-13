@@ -5,7 +5,7 @@ Este guia fornece instruções passo a passo para fazer deploy do Cine Vision em
 ## 📋 Arquitetura de Deploy
 
 - **Frontend**: Vercel (Next.js 14)
-- **Backend**: Railway (NestJS)
+- **Backend**: Render (NestJS)
 - **Database**: Supabase (PostgreSQL)
 - **Storage**: AWS S3 + CloudFront
 - **Bot**: Telegram
@@ -14,7 +14,7 @@ Este guia fornece instruções passo a passo para fazer deploy do Cine Vision em
 
 ## 🔧 Pré-requisitos
 
-1. Conta no [Railway](https://railway.app)
+1. Conta no [Render](https://onrender.com)
 2. Conta no [Vercel](https://vercel.com)
 3. Conta no [Supabase](https://supabase.com) (já configurada)
 4. Conta AWS com S3 e CloudFront configurados
@@ -22,11 +22,11 @@ Este guia fornece instruções passo a passo para fazer deploy do Cine Vision em
 
 ---
 
-## 📦 PARTE 1: Deploy do Backend (Railway)
+## 📦 PARTE 1: Deploy do Backend (Render)
 
-### 1.1. Criar Projeto no Railway
+### 1.1. Criar Projeto no Render
 
-1. Acesse https://railway.app
+1. Acesse https://onrender.com
 2. Clique em "New Project"
 3. Selecione "Deploy from GitHub repo"
 4. Conecte seu repositório GitHub
@@ -34,7 +34,7 @@ Este guia fornece instruções passo a passo para fazer deploy do Cine Vision em
 
 ### 1.2. Configurar Variáveis de Ambiente
 
-No Railway, vá em **Variables** e adicione:
+No Render, vá em **Variables** e adicione:
 
 ```env
 # ENVIRONMENT
@@ -61,7 +61,7 @@ JWT_REFRESH_EXPIRES_IN=7d
 # TELEGRAM
 TELEGRAM_BOT_TOKEN=8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM
 TELEGRAM_BOT_USERNAME=cinevisionv2bot
-TELEGRAM_WEBHOOK_URL=https://<SEU-BACKEND>.railway.app/api/v1/telegrams/webhook
+TELEGRAM_WEBHOOK_URL=https://<SEU-BACKEND>.onrender.com/api/v1/telegrams/webhook
 TELEGRAM_WEBHOOK_SECRET=<GERAR_STRING_ALEATORIA>
 
 # AWS
@@ -92,9 +92,9 @@ RATE_LIMIT_LIMIT=100
 
 ### 1.3. Deploy
 
-1. Railway fará deploy automaticamente
-2. Anote a URL gerada: `https://<SEU-PROJETO>.railway.app`
-3. Acesse `https://<SEU-PROJETO>.railway.app/api/v1/status` para verificar
+1. Render fará deploy automaticamente
+2. Anote a URL gerada: `https://<SEU-PROJETO>.onrender.com`
+3. Acesse `https://<SEU-PROJETO>.onrender.com/api/v1/status` para verificar
 
 ---
 
@@ -114,7 +114,7 @@ No Vercel, vá em **Settings** → **Environment Variables** e adicione:
 
 ```env
 # API - ⚠️ USAR URL DO RAILWAY!
-NEXT_PUBLIC_API_URL=https://<SEU-BACKEND>.railway.app
+NEXT_PUBLIC_API_URL=https://<SEU-BACKEND>.onrender.com
 
 # SUPABASE
 NEXT_PUBLIC_SUPABASE_URL=https://szghyvnbmjlquznxhqum.supabase.co
@@ -147,22 +147,22 @@ BASE_URL=https://<SEU-FRONTEND>.vercel.app
 
 ### 3.1. Atualizar Backend com URL do Frontend
 
-No Railway, atualize as variáveis:
+No Render, atualize as variáveis:
 
 ```env
 CORS_ORIGIN=https://<SEU-FRONTEND>.vercel.app
 FRONTEND_URL=https://<SEU-FRONTEND>.vercel.app
-TELEGRAM_WEBHOOK_URL=https://<SEU-BACKEND>.railway.app/api/v1/telegrams/webhook
+TELEGRAM_WEBHOOK_URL=https://<SEU-BACKEND>.onrender.com/api/v1/telegrams/webhook
 ```
 
-Clique em "Redeploy" no Railway.
+Clique em "Redeploy" no Render.
 
 ### 3.2. Atualizar Frontend com URL do Backend
 
 No Vercel, atualize:
 
 ```env
-NEXT_PUBLIC_API_URL=https://<SEU-BACKEND>.railway.app
+NEXT_PUBLIC_API_URL=https://<SEU-BACKEND>.onrender.com
 BASE_URL=https://<SEU-FRONTEND>.vercel.app
 ```
 
@@ -180,7 +180,7 @@ Execute este comando (substitua as URLs):
 curl -X POST https://api.telegram.org/bot8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM/setWebhook \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://<SEU-BACKEND>.railway.app/api/v1/telegrams/webhook",
+    "url": "https://<SEU-BACKEND>.onrender.com/api/v1/telegrams/webhook",
     "secret_token": "<SEU_TELEGRAM_WEBHOOK_SECRET>"
   }'
 ```
@@ -199,10 +199,10 @@ curl https://api.telegram.org/bot8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM/
 
 ```bash
 # Health check
-curl https://<SEU-BACKEND>.railway.app/api/v1/status
+curl https://<SEU-BACKEND>.onrender.com/api/v1/status
 
 # Swagger docs
-# Acesse: https://<SEU-BACKEND>.railway.app/api/docs
+# Acesse: https://<SEU-BACKEND>.onrender.com/api/docs
 ```
 
 ### 5.2. Verificar Frontend
@@ -227,7 +227,7 @@ curl https://<SEU-BACKEND>.railway.app/api/v1/status
 **Problema**: Frontend não consegue se comunicar com backend
 
 **Solução**:
-1. Verifique `CORS_ORIGIN` no Railway inclui URL do Vercel
+1. Verifique `CORS_ORIGIN` no Render inclui URL do Vercel
 2. Certifique-se que `NEXT_PUBLIC_API_URL` no Vercel está correto
 3. Redeploy ambos após mudanças
 
@@ -236,7 +236,7 @@ curl https://<SEU-BACKEND>.railway.app/api/v1/status
 **Problema**: Backend retorna erro 500
 
 **Solução**:
-1. Verifique logs no Railway Dashboard
+1. Verifique logs no Render Dashboard
 2. Confirme todas as variáveis de ambiente estão configuradas
 3. Verifique conexão com Supabase
 
@@ -262,10 +262,10 @@ curl https://<SEU-BACKEND>.railway.app/api/v1/status
 
 ## 📊 PARTE 7: Monitoramento
 
-### Railway Logs
+### Render Logs
 
 ```bash
-# Acesse Railway Dashboard > Project > Deployments > View Logs
+# Acesse Render Dashboard > Project > Deployments > View Logs
 ```
 
 ### Vercel Logs
@@ -306,7 +306,7 @@ openssl rand -hex 16
 - [ ] Supabase RLS (Row Level Security) ativado
 - [ ] Telegram webhook secret configurado
 - [ ] Rate limiting ativado no backend
-- [ ] HTTPS habilitado (automático Vercel/Railway)
+- [ ] HTTPS habilitado (automático Vercel/Render)
 - [ ] Variáveis de ambiente não commitadas no Git
 
 ---
@@ -315,15 +315,15 @@ openssl rand -hex 16
 
 ### Configuração Automática
 
-Ambos Vercel e Railway fazem deploy automaticamente quando você faz push para o branch principal:
+Ambos Vercel e Render fazem deploy automaticamente quando você faz push para o branch principal:
 
 1. **Development**: Push para `dev` branch
    - Vercel: Preview deployment
-   - Railway: Staging environment
+   - Render: Staging environment
 
 2. **Production**: Push para `main` branch
    - Vercel: Production deployment
-   - Railway: Production environment
+   - Render: Production environment
 
 ---
 
@@ -331,9 +331,9 @@ Ambos Vercel e Railway fazem deploy automaticamente quando você faz push para o
 
 Em caso de problemas:
 
-1. Verifique os logs (Railway/Vercel/Supabase)
+1. Verifique os logs (Render/Vercel/Supabase)
 2. Consulte a documentação oficial:
-   - [Railway Docs](https://docs.railway.app)
+   - [Render Docs](https://docs.onrender.com)
    - [Vercel Docs](https://vercel.com/docs)
    - [Next.js Docs](https://nextjs.org/docs)
    - [NestJS Docs](https://docs.nestjs.com)
@@ -342,7 +342,7 @@ Em caso de problemas:
 
 ## 📝 Checklist Final
 
-- [ ] Backend deployado no Railway
+- [ ] Backend deployado no Render
 - [ ] Frontend deployado no Vercel
 - [ ] Variáveis de ambiente configuradas
 - [ ] URLs cruzadas atualizadas
