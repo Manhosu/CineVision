@@ -166,7 +166,7 @@ export const useVideoUpload = () => {
   };
 
   const abortMultipartUpload = async (uploadId: string, key: string): Promise<void> => {
-    await api.post('/api/video-upload/abort-multipart', {
+    await api.abortMultipartUpload({
       uploadId,
       key,
     });

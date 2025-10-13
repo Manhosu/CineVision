@@ -166,8 +166,8 @@ export function usePerformanceOptimization() {
       const vitals = { cls, fid, lcp };
 
       // Send to analytics (if needed)
-      if (typeof gtag !== 'undefined') {
-        gtag('event', 'web_vitals', {
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'web_vitals', {
           cls: Math.round(cls * 1000) / 1000,
           fid: Math.round(fid),
           lcp: Math.round(lcp)
