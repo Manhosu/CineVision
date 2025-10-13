@@ -37,7 +37,9 @@ export default function TrailerSection({ movie }: TrailerSectionProps) {
   }
 
   const embedUrl = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
-  const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+  // Use hqdefault.jpg (480x360) instead of maxresdefault.jpg for better compatibility
+  // maxresdefault.jpg may not exist for all videos, causing a broken image
+  const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
   return (
     <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 sm:p-8 tv:p-12">
