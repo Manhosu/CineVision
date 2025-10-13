@@ -58,8 +58,8 @@ const LazyImage = memo(function LazyImage({
         }
       },
       {
-        rootMargin: '50px', // Start loading 50px before the image enters the viewport
-        threshold: 0.1,
+        rootMargin: '200px', // Start loading 200px before the image enters the viewport
+        threshold: 0.01,
       }
     );
 
@@ -71,32 +71,27 @@ const LazyImage = memo(function LazyImage({
   }, [priority, isInView]);
 
   const handleLoad = useCallback(() => {
-    console.log('Image loaded successfully:', currentSrc);
     setIsLoading(false);
     setHasError(false);
     onLoad?.();
-  }, [onLoad, currentSrc]);
+  }, [onLoad]);
 
   const handleError = useCallback(() => {
-    console.log('Image failed to load:', currentSrc);
     setIsLoading(false);
     setHasError(true);
     onError?.();
-  }, [onError, currentSrc]);
+  }, [onError]);
 
   // Handle fallback when error occurs
   useEffect(() => {
-    console.log('LazyImage src changed:', { src, fallbackSrc, alt });
-    
     if (hasError && currentSrc !== fallbackSrc) {
-      console.log('Using fallback src:', fallbackSrc);
       // Use setTimeout to prevent setState during render
       setTimeout(() => {
         setCurrentSrc(fallbackSrc);
         setHasError(false); // Reset error state to try fallback
       }, 0);
     }
-  }, [hasError, currentSrc, fallbackSrc, src, alt]);
+  }, [hasError, currentSrc, fallbackSrc]);
 
   // Generate blur data URL if not provided
   const defaultBlurDataURL = blurDataURL ||

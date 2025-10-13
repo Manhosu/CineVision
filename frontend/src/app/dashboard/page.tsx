@@ -41,8 +41,9 @@ interface ContentRequest {
 export default function DashboardPage() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'content' | 'purchases' | 'requests'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'purchases' | 'requests' | 'favorites'>('content');
   const [myContent, setMyContent] = useState<any[]>([]);
+  const [favorites, setFavorites] = useState<any[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [requests, setRequests] = useState<ContentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,6 +98,18 @@ export default function DashboardPage() {
         if (requestsRes.ok) {
           const requestsData = await requestsRes.json();
           setRequests(requestsData);
+        }
+
+        // Buscar favoritos do usuário
+        const favoritesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/favorites`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (favoritesRes.ok) {
+          const favoritesData = await favoritesRes.json();
+          setFavorites(favoritesData);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -218,6 +231,16 @@ export default function DashboardPage() {
             }`}
           >
             Minhas Solicitações
+          </button>
+          <button
+            onClick={() => setActiveTab('favorites')}
+            className={`pb-4 px-2 font-medium transition-colors ${
+              activeTab === 'favorites'
+                ? 'text-red-500 border-b-2 border-red-500'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Favoritos
           </button>
         </div>
 
@@ -402,6 +425,36 @@ export default function DashboardPage() {
               <div className="text-center py-12 bg-gray-800/30 rounded-lg">
                 <p className="text-gray-400">Você ainda não fez nenhuma solicitação</p>
                 <p className="text-sm text-gray-500 mt-1">Use o formulário acima para solicitar um filme ou série</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Favoritos */}
+        {activeTab === 'favorites' && (
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-6">Meus Favoritos</h2>
+            {isLoading ? (
+              <LoadingSkeleton count={4} />
+            ) : favorites.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                {favorites.map((favorite) => (
+                  <MovieCard
+                    key={favorite.content_id}
+                    id={favorite.content_id}
+                    title={favorite.content?.title || 'Título não disponível'}
+                    poster_url={favorite.content?.poster_url}
+                    year={favorite.content?.release_year}
+                    rating={favorite.content?.imdb_rating}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-800/30 rounded-lg">
+                <p className="text-gray-400">Você ainda não tem favoritos</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Adicione filmes e séries aos favoritos clicando no ícone de coração
+                </p>
               </div>
             )}
           </div>

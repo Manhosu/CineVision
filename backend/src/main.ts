@@ -10,7 +10,13 @@ async function bootstrap() {
   // Configurar DNS para resolver problemas de conectividade IPv6
   configureDNS();
   configureSupabaseConnection();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false, // Disable default body parser to set custom limits
+  });
+
+  // Configure Express body parser with increased limits for video uploads
+  app.use(require('express').json({ limit: '50mb' }));
+  app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
 
   // Security - Configure helmet to allow frontend connections
   app.use(helmet({

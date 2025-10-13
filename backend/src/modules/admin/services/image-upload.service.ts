@@ -33,9 +33,9 @@ export class ImageUploadService {
   private readonly region: string;
 
   constructor(private configService: ConfigService) {
-    // Initialize S3 client
+    // Initialize S3 client - cinevision-cover bucket is in us-east-1
     this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION', 'us-east-2'),
+      region: 'us-east-1',
       credentials: {
         accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
@@ -43,7 +43,7 @@ export class ImageUploadService {
     });
 
     this.bucketName = this.configService.get('S3_COVER_BUCKET') || 'cinevision-cover';
-    this.region = this.configService.get('AWS_REGION', 'us-east-2');
+    this.region = 'us-east-1'; // cinevision-cover is in us-east-1
 
     if (!this.bucketName) {
       throw new Error('S3_COVERS_BUCKET environment variable is required');

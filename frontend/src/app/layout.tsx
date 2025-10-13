@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
+import { Providers } from '@/components/Providers';
 import './globals.css';
 
 const inter = Inter({
@@ -81,19 +82,20 @@ export default function RootLayout({ children }: RootLayoutProps) {
         className={`${inter.variable} font-sans antialiased bg-dark-950 text-white min-h-screen`}
         suppressHydrationWarning
       >
-        {/* Background gradient */}
-        <div
-          className="fixed inset-0 bg-gradient-to-br from-dark-900 via-dark-950 to-black -z-10"
-          aria-hidden="true"
-        />
+        <Providers>
+          {/* Background gradient */}
+          <div
+            className="fixed inset-0 bg-gradient-to-br from-dark-900 via-dark-950 to-black -z-10"
+            aria-hidden="true"
+          />
 
-        {/* Main content */}
-        <div className="relative min-h-screen">
-          {children}
-        </div>
+          {/* Main content */}
+          <div className="relative min-h-screen">
+            {children}
+          </div>
 
-        {/* Global toast notifications */}
-        <Toaster
+          {/* Global toast notifications */}
+          <Toaster
           position="top-right"
           toastOptions={{
             duration: 4000,
@@ -117,6 +119,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
             },
           }}
         />
+        </Providers>
 
         {/* Service Worker registration - TEMPORARILY DISABLED */}
         {/*

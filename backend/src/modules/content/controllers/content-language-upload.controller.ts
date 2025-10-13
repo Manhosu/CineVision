@@ -112,6 +112,7 @@ export class ContentLanguageUploadController {
   }
 
   @Post('initiate-multipart')
+  @HttpCode(HttpStatus.OK)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Iniciar upload multipart para idioma específico' })
   @ApiResponse({ status: 200, description: 'Upload iniciado com sucesso' })
@@ -189,7 +190,7 @@ export class ContentLanguageUploadController {
   async generatePresignedUrl(@Body() presignedDto: GenerateLanguagePresignedUrlDto) {
     // Buscar o idioma do conteúdo
     const contentLanguage = await this.contentLanguageService.findById(presignedDto.content_language_id);
-    
+
     if (!contentLanguage.video_storage_key) {
       throw new Error('Chave de armazenamento não encontrada para este idioma');
     }
@@ -203,6 +204,39 @@ export class ContentLanguageUploadController {
     );
 
     return { url };
+  }
+
+  @Post('upload-part')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Upload de parte do vídeo via proxy do backend (evita CORS)' })
+  @ApiResponse({ status: 200, description: 'Parte enviada com sucesso' })
+  async uploadPart(
+    @Body() body: {
+      content_language_id: string;
+      upload_id: string;
+      part_number: number;
+      chunk_data: string; // base64 encoded chunk
+    }
+  ) {
+    // Buscar o idioma do conteúdo
+    const contentLanguage = await this.contentLanguageService.findById(body.content_language_id);
+
+    if (!contentLanguage.video_storage_key) {
+      throw new Error('Chave de armazenamento não encontrada para este idioma');
+    }
+
+    // Decodificar o chunk de base64
+    const chunkBuffer = Buffer.from(body.chunk_data, 'base64');
+
+    // Fazer upload da parte usando o serviço
+    const etag = await this.videoUploadService.uploadPart(
+      contentLanguage.video_storage_key,
+      body.upload_id,
+      body.part_number,
+      chunkBuffer,
+    );
+
+    return { ETag: etag, PartNumber: body.part_number };
   }
 
   @Put('language/:id')
@@ -228,6 +262,28 @@ export class ContentLanguageUploadController {
   @ApiResponse({ status: 204, description: 'Idioma deletado com sucesso' })
   async deleteLanguage(@Param('id') id: string) {
     await this.contentLanguageService.delete(id);
+  }
+
+  @Post('abort-multipart')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Abortar upload multipart' })
+  @ApiResponse({ status: 200, description: 'Upload abortado com sucesso' })
+  async abortMultipartUpload(
+    @Body() body: { content_language_id: string; upload_id: string }
+  ) {
+    const contentLanguage = await this.contentLanguageService.findById(body.content_language_id);
+
+    if (!contentLanguage.video_storage_key) {
+      throw new BadRequestException('Chave de armazenamento não encontrada');
+    }
+
+    await this.videoUploadService.abortMultipartUpload(
+      body.upload_id,
+      contentLanguage.video_storage_key
+    );
+
+    return { message: 'Upload abortado com sucesso' };
   }
 
   @Get('public/video-url/:languageId')

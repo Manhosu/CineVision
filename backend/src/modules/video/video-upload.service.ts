@@ -31,8 +31,9 @@ export class VideoUploadService {
   private readonly privateKeyPath: string;
 
   constructor(private configService: ConfigService) {
+    // cinevision-video bucket is in us-east-2
     this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION', 'us-east-1'),
+      region: this.configService.get('AWS_REGION', 'us-east-2'),
       credentials: {
         accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
@@ -262,6 +263,35 @@ export class VideoUploadService {
       return presignedUrl;
     } catch (error) {
       this.logger.error(`Failed to generate presigned part upload URL: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload a part directly to S3 (used for proxy upload to avoid CORS)
+   */
+  async uploadPart(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    buffer: Buffer,
+  ): Promise<string> {
+    try {
+      const uploadPartCommand = new UploadPartCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        PartNumber: partNumber,
+        UploadId: uploadId,
+        Body: buffer,
+      });
+
+      const response = await this.s3Client.send(uploadPartCommand);
+
+      this.logger.log(`Uploaded part ${partNumber} of upload ${uploadId}, ETag: ${response.ETag}`);
+
+      return response.ETag;
+    } catch (error) {
+      this.logger.error(`Failed to upload part ${partNumber}: ${error.message}`);
       throw error;
     }
   }

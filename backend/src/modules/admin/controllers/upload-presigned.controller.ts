@@ -79,8 +79,8 @@ export class UploadPresignedController {
       expiresIn,
     });
 
-    // Construct the public URL
-    const fileUrl = `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION') || 'us-east-1'}.amazonaws.com/${key}`;
+    // Construct the public URL (cinevision-video is in us-east-2)
+    const fileUrl = `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION') || 'us-east-2'}.amazonaws.com/${key}`;
 
     return {
       uploadUrl,
@@ -127,7 +127,7 @@ export class UploadPresignedController {
       expiresIn,
     });
 
-    const fileUrl = `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION') || 'us-east-1'}.amazonaws.com/${key}`;
+    const fileUrl = `https://${this.bucketName}.s3.${this.configService.get('AWS_REGION') || 'us-east-2'}.amazonaws.com/${key}`;
 
     return {
       uploadUrl,

@@ -205,4 +205,69 @@ export class AdminContentController {
   ) {
     return this.adminContentService.deleteContent(contentId, 'test-user-id');
   }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Update content metadata',
+    description: 'Updates content information (title, description, etc.)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Content updated successfully',
+  })
+  @HttpCode(HttpStatus.OK)
+  async updateContent(
+    @Param('id') contentId: string,
+    @Body() updateData: any,
+  ) {
+    return this.adminContentService.updateContent(contentId, updateData);
+  }
+
+  // Audio/Language Management Endpoints
+
+  @Get(':id/audio-tracks')
+  @ApiOperation({
+    summary: 'Get all audio tracks for content',
+    description: 'Retrieves all audio/language versions for a movie or series',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Audio tracks retrieved successfully',
+  })
+  async getAudioTracks(@Param('id') contentId: string) {
+    return this.adminContentService.getAudioTracks(contentId);
+  }
+
+  @Post(':id/audio-tracks')
+  @ApiOperation({
+    summary: 'Add new audio track to content',
+    description: 'Adds a new dubbed or subtitled version',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Audio track added successfully',
+  })
+  async addAudioTrack(
+    @Param('id') contentId: string,
+    @Body() audioData: any,
+  ) {
+    return this.adminContentService.addAudioTrack(contentId, audioData);
+  }
+
+  @Delete(':id/audio-tracks/:audioId')
+  @ApiOperation({
+    summary: 'Delete audio track',
+    description: 'Removes audio track from content and deletes from S3',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Audio track deleted successfully',
+  })
+  @HttpCode(HttpStatus.OK)
+  async deleteAudioTrack(
+    @Param('id') contentId: string,
+    @Param('audioId') audioId: string,
+  ) {
+    return this.adminContentService.deleteAudioTrack(contentId, audioId);
+  }
 }

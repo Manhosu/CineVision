@@ -60,15 +60,6 @@ export class PurchasesController {
     return this.purchasesService.findByUserId(user.sub);
   }
 
-  @Get('my-list')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get user\'s purchased content (my list)' })
-  @ApiResponse({ status: 200, description: 'User\'s content list retrieved successfully' })
-  async getMyList(@GetUser() user: any) {
-    return this.purchasesService.findUserContentList(user.sub);
-  }
-
   @Get('token/:token')
   @ApiOperation({
     summary: 'Get purchase by token',

@@ -296,4 +296,208 @@ export class AdminContentSimpleService {
       },
     };
   }
+
+  async updateContent(contentId: string, updateData: any) {
+    this.logger.log(`Updating content ${contentId} with data:`, updateData);
+
+    // Validar que o conteúdo existe
+    const { data: existingContent, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !existingContent) {
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    // Preparar dados de atualização
+    const updatePayload: any = {
+      updated_at: new Date().toISOString(),
+    };
+
+    // Mapear campos permitidos
+    const allowedFields = [
+      'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
+      'trailer_url', 'release_year', 'duration_minutes', 'imdb_rating',
+      'director', 'cast', 'genres', 'price_cents', 'is_featured',
+      'total_seasons', 'total_episodes', 'status', 'availability'
+    ];
+
+    for (const field of allowedFields) {
+      if (updateData[field] !== undefined) {
+        updatePayload[field] = updateData[field];
+      }
+    }
+
+    // Atualizar no banco
+    const { data: updatedContent, error: updateError } = await this.supabaseService.client
+      .from('content')
+      .update(updatePayload)
+      .eq('id', contentId)
+      .select()
+      .single();
+
+    if (updateError) {
+      this.logger.error('Error updating content:', updateError);
+      throw new Error(`Failed to update content: ${updateError.message}`);
+    }
+
+    this.logger.log(`Content ${contentId} updated successfully`);
+
+    return {
+      success: true,
+      message: 'Content updated successfully',
+      data: updatedContent,
+    };
+  }
+
+  async getAudioTracks(contentId: string) {
+    this.logger.log(`Fetching audio tracks for content: ${contentId}`);
+
+    const { data, error } = await this.supabaseService.client
+      .from('content_languages')
+      .select('*')
+      .eq('content_id', contentId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      this.logger.error('Error fetching audio tracks:', error);
+      throw new Error(`Failed to fetch audio tracks: ${error.message}`);
+    }
+
+    return {
+      success: true,
+      data: data || [],
+      count: data?.length || 0,
+    };
+  }
+
+  async addAudioTrack(contentId: string, audioData: any) {
+    this.logger.log(`Adding audio track to content ${contentId}:`, audioData);
+
+    // Validar que o conteúdo existe
+    const { data: content, error: contentError } = await this.supabaseService.client
+      .from('content')
+      .select('id, title')
+      .eq('id', contentId)
+      .single();
+
+    if (contentError || !content) {
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    // Preparar dados do audio track
+    const audioTrackData = {
+      content_id: contentId,
+      language_type: audioData.language_type || 'dubbed',
+      language_code: audioData.language_code || 'pt-BR',
+      language_name: audioData.language_name,
+      audio_type: audioData.audio_type,
+      quality: audioData.quality || '1080p',
+      video_url: audioData.video_url || null,
+      video_storage_key: audioData.video_storage_key || null,
+      hls_master_url: audioData.hls_master_url || null,
+      hls_base_path: audioData.hls_base_path || null,
+      is_active: true,
+      is_primary: audioData.is_primary || false,
+      status: audioData.status || 'ready',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: insertedAudio, error: insertError } = await this.supabaseService.client
+      .from('content_languages')
+      .insert([audioTrackData])
+      .select()
+      .single();
+
+    if (insertError) {
+      this.logger.error('Error adding audio track:', insertError);
+      throw new Error(`Failed to add audio track: ${insertError.message}`);
+    }
+
+    this.logger.log(`Audio track added successfully: ${insertedAudio.id}`);
+
+    return {
+      success: true,
+      message: 'Audio track added successfully',
+      data: insertedAudio,
+    };
+  }
+
+  async deleteAudioTrack(contentId: string, audioId: string) {
+    this.logger.log(`Deleting audio track ${audioId} from content ${contentId}`);
+
+    // Buscar o audio track para obter informações do S3
+    const { data: audioTrack, error: fetchError } = await this.supabaseService.client
+      .from('content_languages')
+      .select('*')
+      .eq('id', audioId)
+      .eq('content_id', contentId)
+      .single();
+
+    if (fetchError || !audioTrack) {
+      throw new NotFoundException(`Audio track with ID ${audioId} not found for content ${contentId}`);
+    }
+
+    // Deletar arquivo do S3 se existir
+    if (audioTrack.video_storage_key) {
+      try {
+        await this.s3Client.send(new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: audioTrack.video_storage_key,
+        }));
+        this.logger.log(`Deleted S3 object: ${audioTrack.video_storage_key}`);
+      } catch (s3Error) {
+        this.logger.warn(`Failed to delete S3 object:`, s3Error);
+      }
+    }
+
+    // Deletar arquivos HLS se existirem
+    if (audioTrack.hls_base_path) {
+      try {
+        const listCommand = new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          Prefix: audioTrack.hls_base_path,
+        });
+        const listResult = await this.s3Client.send(listCommand);
+
+        if (listResult.Contents && listResult.Contents.length > 0) {
+          for (const object of listResult.Contents) {
+            await this.s3Client.send(new DeleteObjectCommand({
+              Bucket: this.bucketName,
+              Key: object.Key,
+            }));
+          }
+          this.logger.log(`Deleted HLS files from: ${audioTrack.hls_base_path}`);
+        }
+      } catch (s3Error) {
+        this.logger.warn(`Failed to delete HLS files:`, s3Error);
+      }
+    }
+
+    // Deletar do banco
+    const { error: deleteError } = await this.supabaseService.client
+      .from('content_languages')
+      .delete()
+      .eq('id', audioId);
+
+    if (deleteError) {
+      this.logger.error('Error deleting audio track:', deleteError);
+      throw new Error(`Failed to delete audio track: ${deleteError.message}`);
+    }
+
+    this.logger.log(`Audio track ${audioId} deleted successfully`);
+
+    return {
+      success: true,
+      message: 'Audio track deleted successfully',
+      deletedAudio: {
+        id: audioTrack.id,
+        language_name: audioTrack.language_name,
+      },
+    };
+  }
 }
