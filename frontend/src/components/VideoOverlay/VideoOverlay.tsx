@@ -262,7 +262,7 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
 
             {/* Volume Control */}
             <div
-              className="relative"
+              className="relative group"
               onMouseEnter={() => setShowVolumeSlider(true)}
               onMouseLeave={() => setShowVolumeSlider(false)}
             >
@@ -287,24 +287,31 @@ const VideoOverlay: React.FC<VideoOverlayProps> = ({
               </button>
 
               {/* Volume Slider */}
-              {showVolumeSlider && (
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-black/80 rounded-lg p-2">
-                  <div 
-                    ref={volumeSliderRef}
-                    className="w-1 h-20 bg-white/30 rounded-full cursor-pointer relative"
-                    onClick={handleVolumeClick}
-                  >
-                    <div 
-                      className="absolute bottom-0 left-0 w-full bg-primary-600 rounded-full"
-                      style={{ height: `${volume * 100}%` }}
-                    />
-                    <div 
-                      className="absolute w-3 h-3 bg-primary-600 rounded-full transform -translate-x-1/2"
-                      style={{ bottom: `${volume * 100}%`, left: '50%', marginBottom: '-6px' }}
-                    />
-                  </div>
+              <div
+                className={`absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-black/90 backdrop-blur-sm rounded-lg p-3 transition-all duration-200 ${
+                  showVolumeSlider ? 'opacity-100 visible' : 'opacity-0 invisible'
+                }`}
+                onMouseEnter={() => setShowVolumeSlider(true)}
+                onMouseLeave={() => setShowVolumeSlider(false)}
+              >
+                <div
+                  ref={volumeSliderRef}
+                  className="w-1.5 h-24 bg-white/30 rounded-full cursor-pointer relative hover:w-2 transition-all"
+                  onClick={handleVolumeClick}
+                >
+                  <div
+                    className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-primary-500 to-primary-600 rounded-full transition-all"
+                    style={{ height: `${volume * 100}%` }}
+                  />
+                  <div
+                    className="absolute w-3.5 h-3.5 bg-white shadow-lg rounded-full transform -translate-x-1/2 transition-all hover:scale-125"
+                    style={{ bottom: `${volume * 100}%`, left: '50%', marginBottom: '-7px' }}
+                  />
                 </div>
-              )}
+                <div className="mt-2 text-center text-xs text-white font-mono">
+                  {Math.round(volume * 100)}%
+                </div>
+              </div>
             </div>
 
             {/* Time Display */}

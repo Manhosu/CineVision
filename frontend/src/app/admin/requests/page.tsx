@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 
 interface AdminRequest {
   id: string;
-  title: string;
+  requested_title: string;
   description?: string;
-  status: 'pending' | 'completed' | 'rejected';
-  requester_telegram_first_name?: string;
-  requester_telegram_username?: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  user_id?: string;
   created_at: string;
   updated_at: string;
   admin_notes?: string;
@@ -58,7 +58,7 @@ export default function AdminRequestsPage() {
 
       const statusQuery = filter !== 'all' ? `&status=${filter}` : '';
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/requests?page=1&limit=50${statusQuery}`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/requests?page=1&limit=50${statusQuery}`,
         {
           headers: token ? {
             'Authorization': `Bearer ${token}`,
@@ -81,7 +81,7 @@ export default function AdminRequestsPage() {
       }
 
       const data = await response.json();
-      setRequests(data.requests || []);
+      setRequests(data.data || []);
     } catch (err) {
       console.error('Error fetching requests:', err);
       setError('Erro ao carregar pedidos');
@@ -95,7 +95,7 @@ export default function AdminRequestsPage() {
       const token = localStorage.getItem('access_token');
       if (!token) return;
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/requests/stats`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/requests/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -126,7 +126,7 @@ export default function AdminRequestsPage() {
       //   return;
       // }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/requests/${requestId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/requests/${requestId}?status=${status}&admin_notes=${encodeURIComponent(adminNotes || '')}`, {
         method: 'PUT',
         headers: token ? {
           'Authorization': `Bearer ${token}`,
@@ -134,10 +134,6 @@ export default function AdminRequestsPage() {
         } : {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          status,
-          admin_notes: adminNotes,
-        }),
       });
 
       if (!response.ok) {
@@ -157,10 +153,8 @@ export default function AdminRequestsPage() {
   };
 
   const filteredRequests = requests.filter(request =>
-    request.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (request.description && request.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (request.requester_telegram_first_name &&
-     request.requester_telegram_first_name.toLowerCase().includes(searchTerm.toLowerCase()))
+    request.requested_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (request.description && request.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const getStatusBadge = (status: string) => {
@@ -344,7 +338,7 @@ export default function AdminRequestsPage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-lg font-medium text-white">{request.title}</h3>
+                        <h3 className="text-lg font-medium text-white">{request.requested_title}</h3>
                         {getStatusBadge(request.status)}
                       </div>
 
@@ -357,9 +351,7 @@ export default function AdminRequestsPage() {
                       <div className="flex items-center gap-4 text-sm text-gray-400">
                         <div className="flex items-center gap-1">
                           <User className="w-4 h-4" />
-                          {request.requester_telegram_first_name ||
-                           request.requester_telegram_username ||
-                           'Usuário anônimo'}
+                          {request.user_id ? `Usuário ${request.user_id.substring(0, 8)}` : 'Usuário anônimo'}
                         </div>
                         <div>
                           Criado em {formatDate(request.created_at)}

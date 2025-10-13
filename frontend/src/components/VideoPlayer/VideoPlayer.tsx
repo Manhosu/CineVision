@@ -93,11 +93,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isAvailable: castAvailable,
     isConnected: castConnected,
     loadMedia: castLoadMedia,
+    requestSession: castRequestSession,
   } = useChromecastDynamic();
 
   const {
     isAvailable: airplayAvailable,
     setupVideoElement: setupAirPlayVideo,
+    showDevicePicker: showAirPlayPicker,
   } = useAirPlayDynamic();
 
   // Check if video format is supported
@@ -347,31 +349,64 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Chromecast and AirPlay handlers
   const handleChromecastClick = useCallback(async () => {
-    if (!castAvailable || !videoUrl) return;
+    if (!castAvailable || !videoUrl) {
+      console.warn('[VideoPlayer] Chromecast not available or no video URL');
+      return;
+    }
 
     try {
-      await castLoadMedia({
-        contentId: videoUrl,
-        contentType: 'video/mp4',
-        streamType: 'BUFFERED',
-        metadata: {
+      console.log('[VideoPlayer] Chromecast button clicked');
+
+      // Se não estiver conectado, solicita conexão primeiro
+      if (!castConnected) {
+        console.log('[VideoPlayer] Requesting Chromecast session...');
+        await castRequestSession();
+
+        // Aguarda um pouco para a sessão ser estabelecida
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
+      // Carrega o mídia no Chromecast
+      console.log('[VideoPlayer] Loading media on Chromecast...');
+      await castLoadMedia(
+        videoUrl,
+        'video/mp4',
+        {
           type: 0,
           metadataType: 0,
           title: title || 'Video',
-          subtitle: subtitle,
+          subtitle: subtitle || '',
+          images: poster ? [{ url: poster }] : [],
         },
-        currentTime: playerState.currentTime,
-      });
+        playerState.currentTime
+      );
+
+      console.log('[VideoPlayer] Media loaded successfully on Chromecast');
+
+      // Pausa o vídeo local
+      if (videoRef.current) {
+        videoRef.current.pause();
+      }
     } catch (error) {
       console.error('[VideoPlayer] Chromecast error:', error);
+      alert('Erro ao conectar ao Chromecast. Verifique se há dispositivos disponíveis na rede.');
     }
-  }, [castAvailable, castLoadMedia, videoUrl, title, subtitle, playerState.currentTime]);
+  }, [castAvailable, castConnected, castLoadMedia, castRequestSession, videoUrl, title, subtitle, poster, playerState.currentTime]);
 
   const handleAirPlayClick = useCallback(() => {
-    // AirPlay is handled by the browser/OS when the video element is clicked
-    // The setupAirPlayVideo function already configured the video element
-    console.log('[VideoPlayer] AirPlay click - handled by browser');
-  }, []);
+    if (!airplayAvailable) {
+      console.warn('[VideoPlayer] AirPlay not available');
+      return;
+    }
+
+    try {
+      console.log('[VideoPlayer] AirPlay button clicked - showing device picker');
+      showAirPlayPicker();
+    } catch (error) {
+      console.error('[VideoPlayer] AirPlay error:', error);
+      alert('Erro ao ativar AirPlay. Certifique-se de estar usando Safari ou um dispositivo Apple.');
+    }
+  }, [airplayAvailable, showAirPlayPicker]);
 
   // Render error state
   if (playerState.error) {
