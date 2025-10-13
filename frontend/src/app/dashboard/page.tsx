@@ -300,16 +300,16 @@ export default function DashboardPage() {
 
                 try {
                   const token = localStorage.getItem('auth_token');
-                  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests`, {
+                  const response = await fetch('http://localhost:3001/api/v1/admin/requests', {
                     method: 'POST',
                     headers: {
-                      'Authorization': `Bearer ${token}`,
                       'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                      title,
+                      requested_title: title,
                       description,
-                      user_id: user?.id
+                      user_id: user?.id,
+                      priority: 'medium'
                     })
                   });
 

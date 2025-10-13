@@ -28,7 +28,9 @@ export class SupabaseRestClient {
 
   constructor(private configService: ConfigService) {
     this.baseUrl = this.configService.get<string>('SUPABASE_URL');
-    this.apiKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+    // Use SERVICE_ROLE_KEY for admin operations to bypass RLS
+    this.apiKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
+                  this.configService.get<string>('SUPABASE_ANON_KEY');
 
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Supabase URL and API Key are required');

@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Delete, Param, Query } from '@nestjs/common';
+import { Controller, Get, Put, Delete, Post, Param, Query, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 
@@ -6,6 +6,28 @@ import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 @Controller('admin/requests')
 export class AdminRequestsPublicController {
   constructor(private readonly supabaseClient: SupabaseRestClient) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new content request' })
+  async createRequest(@Body() body: {
+    requested_title: string;
+    description?: string;
+    user_id?: string;
+    priority?: string;
+  }) {
+    const requestData: any = {
+      requested_title: body.requested_title,
+      description: body.description || null,
+      user_id: body.user_id || null,
+      priority: body.priority || 'medium',
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const result = await this.supabaseClient.insert('content_requests', requestData);
+    return result[0];
+  }
 
   @Get()
   @ApiOperation({ summary: 'Get all content requests (Admin endpoint - no auth required)' })
