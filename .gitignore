@@ -95,3 +95,4 @@ temp/
 
 # Claude MCP configuration (contains secrets)
 .claude/
+RENDER-ENV-VARIABLES.txt
