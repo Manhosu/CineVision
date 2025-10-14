@@ -62,7 +62,8 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    unoptimized: false,
+    // Disable optimization for S3 images due to timeout issues
+    unoptimized: process.env.NODE_ENV === 'development',
     remotePatterns: [
       {
         protocol: 'https',
@@ -78,6 +79,11 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'cinevision-capas.s3.us-east-1.amazonaws.com',
         pathname: '/posters/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cinevision-cover.s3.us-east-1.amazonaws.com',
+        pathname: '/**',
       },
       {
         protocol: 'https',
