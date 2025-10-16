@@ -150,6 +150,7 @@ export default function HomePage() {
                 key={section.type}
                 title={section.title}
                 movies={section.movies}
+                type={section.type}
                 priority={index === 0} // Primeira seção tem prioridade para otimização
               />
             ))

@@ -1,7 +1,20 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { MultipartUploadService, UploadProgress } from '@/services/multipartUpload.service';
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Trash2, Upload, Star, StarOff, Plus } from 'lucide-react';
+import { VideoUpload } from './VideoUpload/VideoUpload';
+import { UploadProgressBar } from './UploadProgress/UploadProgressBar';
+
+interface LanguageOption {
+  code: string;
+  name: string;
+}
 
 interface ContentLanguage {
   id: string;
@@ -30,34 +43,55 @@ const LANGUAGE_TYPE_LABELS = {
 
 export function ContentLanguageManager({ contentId, onLanguagesChange }: ContentLanguageManagerProps) {
   const [languages, setLanguages] = useState<ContentLanguage[]>([]);
+  const [languageOptions, setLanguageOptions] = useState<LanguageOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [uploadingLanguageId, setUploadingLanguageId] = useState<string | null>(null);
 
-  // Estado de upload
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Upload progress tracking
+  const [uploadProgress, setUploadProgress] = useState<{
+    progress: number;
+    uploadedBytes: number;
+    totalBytes: number;
+    uploadSpeed?: number;
+    timeRemaining?: number;
+    status: 'uploading' | 'paused' | 'completed' | 'error';
+    errorMessage?: string;
+    fileName?: string;
+  } | null>(null);
 
-  // Formulário de novo idioma
+  const [uploadStartTime, setUploadStartTime] = useState<number | null>(null);
+  const [lastUploadedBytes, setLastUploadedBytes] = useState<number>(0);
+  const [lastProgressTime, setLastProgressTime] = useState<number | null>(null);
+
+  // Form state for adding new language
   const [newLanguage, setNewLanguage] = useState<{
     language_type: 'dubbed' | 'subtitled';
+    language_code: string;
+    language_name: string;
+    is_default: boolean;
     videoFile?: File;
   }>({
     language_type: 'dubbed',
+    language_code: 'pt-BR',
+    language_name: 'Português (Brasil)',
+    is_default: false,
   });
-
-  const uploadServiceRef = useRef<MultipartUploadService | null>(null);
 
   useEffect(() => {
     if (contentId) {
       loadLanguages();
+      loadLanguageOptions();
     }
   }, [contentId]);
 
   const loadLanguages = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
+      // Tentar obter token de diferentes fontes
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+        : null;
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/v1/content-language-upload/languages/${contentId}`, {
         headers: {
@@ -68,9 +102,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
       if (response.ok) {
         const data = await response.json();
         setLanguages(data);
-        if (onLanguagesChange) {
-          onLanguagesChange(data);
-        }
+        onLanguagesChange?.(data);
       }
     } catch (error) {
       console.error('Erro ao carregar idiomas:', error);
@@ -79,33 +111,30 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validar tipo de arquivo
-      const validTypes = ['video/x-matroska', 'video/mp4', 'video/quicktime'];
-      const validExtensions = ['.mkv', '.mp4', '.mov'];
-      const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
+  const loadLanguageOptions = async () => {
+    try {
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+        : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_URL}/api/v1/content-language-upload/language-options`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
-      if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-        alert('Por favor, selecione um arquivo de vídeo válido (.mkv ou .mp4)');
-        return;
+      if (response.ok) {
+        const data = await response.json();
+        setLanguageOptions(data);
       }
-
-      // Validar tamanho (máx 5GB)
-      const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
-      if (file.size > maxSize) {
-        alert('O arquivo deve ter no máximo 5GB.');
-        return;
-      }
-
-      setNewLanguage(prev => ({ ...prev, videoFile: file }));
+    } catch (error) {
+      console.error('Erro ao carregar opções de idiomas:', error);
     }
   };
 
   const handleAddLanguage = async () => {
-    if (!newLanguage.videoFile) {
-      alert('Por favor, selecione um arquivo de vídeo');
+    if (!newLanguage.language_code || !newLanguage.language_name) {
+      alert('Por favor, selecione um idioma');
       return;
     }
 
@@ -117,56 +146,40 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
       return;
     }
 
-    setIsUploading(true);
-    setUploadError(null);
-    setUploadProgress(null);
-
     try {
-      // Criar serviço de upload
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+        : null;
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-      const uploadService = new MultipartUploadService(API_URL);
-      uploadServiceRef.current = uploadService;
-
-      // Iniciar upload com callbacks de progresso
-      await uploadService.uploadFile({
-        file: newLanguage.videoFile,
-        contentId: contentId,
-        languageType: newLanguage.language_type,
-        onProgress: (progress) => {
-          setUploadProgress(progress);
+      const response = await fetch(`${API_URL}/api/v1/content-language-upload/language`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
-        onError: (error) => {
-          setUploadError(error.message);
-        },
+        body: JSON.stringify({
+          content_id: contentId,
+          ...newLanguage,
+        }),
       });
 
-      // Upload concluído com sucesso
-      setIsUploading(false);
-      setUploadProgress(null);
-      setShowAddForm(false);
-      setNewLanguage({
-        language_type: 'dubbed',
-        videoFile: undefined,
-      });
-
-      // Recarregar lista de idiomas
-      await loadLanguages();
-
-      alert('Upload concluído com sucesso!');
-
-    } catch (error: any) {
-      console.error('Erro ao fazer upload:', error);
-      setUploadError(error.message || 'Erro ao fazer upload do vídeo');
-      setIsUploading(false);
-    }
-  };
-
-  const handleCancelUpload = () => {
-    if (uploadServiceRef.current) {
-      uploadServiceRef.current.abort();
-      setIsUploading(false);
-      setUploadProgress(null);
-      setUploadError(null);
+      if (response.ok) {
+        await loadLanguages();
+        setShowAddForm(false);
+        setNewLanguage({
+          language_type: 'dubbed',
+          language_code: 'pt-BR',
+          language_name: 'Português (Brasil)',
+          is_default: false,
+          videoFile: undefined,
+        });
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Erro ao adicionar idioma');
+      }
+    } catch (error) {
+      console.error('Erro ao adicionar idioma:', error);
+      alert('Erro ao adicionar idioma');
     }
   };
 
@@ -176,7 +189,9 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
     }
 
     try {
-      const token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+        : null;
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const response = await fetch(`${API_URL}/api/v1/content-language-upload/language/${languageId}`, {
         method: 'DELETE',
@@ -196,212 +211,344 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
     }
   };
 
+  const handleSetDefault = async (languageId: string) => {
+    try {
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
+        : null;
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_URL}/api/v1/content-language-upload/language/${languageId}/set-default`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        await loadLanguages();
+      } else {
+        alert('Erro ao definir idioma padrão');
+      }
+    } catch (error) {
+      console.error('Erro ao definir idioma padrão:', error);
+      alert('Erro ao definir idioma padrão');
+    }
+  };
+
+  const handleLanguageCodeChange = (code: string) => {
+    const option = languageOptions.find(opt => opt.code === code);
+    setNewLanguage(prev => ({
+      ...prev,
+      language_code: code,
+      language_name: option?.name || '',
+    }));
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'N/A';
+    const gb = bytes / (1024 * 1024 * 1024);
+    return `${gb.toFixed(2)} GB`;
+  };
+
+  const calculateUploadMetrics = (
+    uploadedBytes: number,
+    totalBytes: number,
+    fileName: string
+  ) => {
+    const currentTime = Date.now();
+    const progress = Math.round((uploadedBytes / totalBytes) * 100);
+
+    // Calculate upload speed (bytes per second)
+    let uploadSpeed: number | undefined;
+    let timeRemaining: number | undefined;
+
+    if (lastProgressTime && lastProgressTime !== currentTime) {
+      const timeDiff = (currentTime - lastProgressTime) / 1000; // seconds
+      const bytesDiff = uploadedBytes - lastUploadedBytes;
+      uploadSpeed = bytesDiff / timeDiff;
+
+      // Calculate time remaining
+      const remainingBytes = totalBytes - uploadedBytes;
+      if (uploadSpeed > 0) {
+        timeRemaining = remainingBytes / uploadSpeed;
+      }
+    }
+
+    // Update tracking state
+    setLastUploadedBytes(uploadedBytes);
+    setLastProgressTime(currentTime);
+
+    return {
+      progress,
+      uploadedBytes,
+      totalBytes,
+      uploadSpeed,
+      timeRemaining,
+      status: 'uploading' as const,
+      fileName,
+    };
+  };
+
+  const handleVideoUploadProgress = (
+    fileName: string,
+    loaded: number,
+    total: number
+  ) => {
+    const metrics = calculateUploadMetrics(loaded, total, fileName);
+    setUploadProgress(metrics);
+  };
+
+  const resetUploadProgress = () => {
+    setUploadProgress(null);
+    setUploadStartTime(null);
+    setLastUploadedBytes(0);
+    setLastProgressTime(null);
+  };
+
   return (
     <div className="space-y-6">
-      <h3 className="text-xl font-bold text-white">Idiomas do Conteúdo</h3>
-
-      {/* Botão Adicionar Idioma */}
-      {!showAddForm && !isUploading && (
-        <button
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-semibold">Idiomas do Conteúdo</h3>
+        <Button
           onClick={() => setShowAddForm(true)}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center"
+          className="flex items-center gap-2"
         >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="w-4 h-4" />
           Adicionar Idioma
-        </button>
-      )}
-
-      {/* Formulário de Adicionar Idioma */}
-      {showAddForm && !isUploading && (
-        <div className="p-6 bg-gray-800 rounded-lg border border-gray-700">
-          <h3 className="text-lg font-bold text-white mb-4">Adicionar Novo Idioma</h3>
-
-          <div className="space-y-4">
-            {/* Tipo de Áudio */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Tipo de Áudio
-              </label>
-              <select
-                value={newLanguage.language_type}
-                onChange={(e) => setNewLanguage(prev => ({
-                  ...prev,
-                  language_type: e.target.value as 'dubbed' | 'subtitled'
-                }))}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
-              >
-                <option value="dubbed">Dublado</option>
-                <option value="subtitled">Legendado</option>
-              </select>
-            </div>
-
-            {/* Arquivo de Vídeo */}
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Arquivo de Vídeo (.mkv ou .mp4)
-              </label>
-              <input
-                type="file"
-                accept=".mkv,.mp4,video/x-matroska,video/mp4"
-                onChange={handleFileChange}
-                className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-blue-600 file:text-white hover:file:bg-blue-700"
-              />
-              {newLanguage.videoFile && (
-                <p className="text-sm text-gray-400 mt-2">
-                  Arquivo selecionado: {newLanguage.videoFile.name} ({MultipartUploadService.formatBytes(newLanguage.videoFile.size)})
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                Arquivo com áudio {newLanguage.language_type === 'dubbed' ? 'dublado em português' : 'original com legendas'}
-              </p>
-            </div>
-
-            {/* Ações */}
-            <div className="flex gap-4 pt-4">
-              <button
-                onClick={handleAddLanguage}
-                disabled={!newLanguage.videoFile}
-                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-              >
-                Adicionar
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddForm(false);
-                  setNewLanguage({ language_type: 'dubbed', videoFile: undefined });
-                }}
-                className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Barra de Progresso do Upload */}
-      {isUploading && uploadProgress && (
-        <div className="p-6 bg-gray-800 rounded-lg border border-blue-500">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-white">
-                Enviando arquivo...
-              </h3>
-              <span className="text-2xl font-bold text-blue-400">
-                {uploadProgress.percentage.toFixed(1)}%
-              </span>
-            </div>
-
-            {/* Barra de progresso */}
-            <div className="w-full bg-gray-700 rounded-full h-4 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-300"
-                style={{ width: `${uploadProgress.percentage}%` }}
-              />
-            </div>
-
-            {/* Informações detalhadas */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-400">Progresso:</span>
-                <span className="text-white ml-2">
-                  {MultipartUploadService.formatBytes(uploadProgress.uploadedBytes)} / {MultipartUploadService.formatBytes(uploadProgress.totalBytes)}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Velocidade:</span>
-                <span className="text-white ml-2">
-                  {uploadProgress.uploadSpeed ? `${MultipartUploadService.formatBytes(uploadProgress.uploadSpeed)}/s` : '--'}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Tempo restante:</span>
-                <span className="text-white ml-2">
-                  {uploadProgress.timeRemaining ? MultipartUploadService.formatTime(uploadProgress.timeRemaining) : '--'}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-400">Partes:</span>
-                <span className="text-white ml-2">
-                  {uploadProgress.currentPart} / {uploadProgress.totalParts}
-                </span>
-              </div>
-            </div>
-
-            {/* Botão cancelar */}
-            <button
-              onClick={handleCancelUpload}
-              className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-            >
-              Cancelar Upload
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Erro de Upload */}
-      {uploadError && (
-        <div className="p-4 bg-red-900/20 border border-red-500 rounded-lg">
-          <p className="text-red-400">{uploadError}</p>
-          <button
-            onClick={() => setUploadError(null)}
-            className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm"
-          >
-            Fechar
-          </button>
-        </div>
-      )}
-
-      {/* Lista de Idiomas */}
-      <div className="space-y-3">
-        {languages.length === 0 && !isLoading && (
-          <p className="text-gray-400 text-center py-8">
-            Nenhum idioma adicionado ainda
-          </p>
-        )}
-
-        {languages.map((language) => (
-          <div
-            key={language.id}
-            className="p-4 bg-gray-800 rounded-lg border border-gray-700 flex items-center justify-between"
-          >
-            <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <span className="px-3 py-1 bg-blue-600 rounded-full text-sm font-medium">
-                  {LANGUAGE_TYPE_LABELS[language.language_type]}
-                </span>
-                {language.is_default && (
-                  <span className="px-3 py-1 bg-green-600 rounded-full text-sm font-medium">
-                    Padrão
-                  </span>
-                )}
-                {language.file_size_bytes && (
-                  <span className="text-gray-400 text-sm">
-                    {MultipartUploadService.formatBytes(language.file_size_bytes)}
-                  </span>
-                )}
-              </div>
-              {language.video_storage_key && (
-                <p className="text-gray-500 text-xs mt-2">
-                  {language.video_storage_key}
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={() => handleDeleteLanguage(language.id)}
-              className="ml-4 p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-              title="Deletar idioma"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          </div>
-        ))}
+        </Button>
       </div>
+
+      {showAddForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Adicionar Novo Idioma</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="language_type" className="text-sm font-medium text-gray-200">
+                Tipo de Áudio
+              </Label>
+              <Select
+                value={newLanguage.language_type}
+                onValueChange={(value: any) => setNewLanguage(prev => ({
+                  ...prev,
+                  language_type: value,
+                  language_code: 'pt-BR',
+                  language_name: 'Português (Brasil)'
+                }))}
+              >
+                <SelectTrigger className="w-full bg-gray-900/50 border border-gray-700 text-white rounded-lg px-4 py-3 hover:bg-gray-800/50 transition-colors">
+                  <span className="block truncate text-white text-sm">
+                    {newLanguage.language_type === 'dubbed' ? 'Dublado' : newLanguage.language_type === 'subtitled' ? 'Legendado' : 'Selecione o tipo de áudio'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl overflow-hidden">
+                  <SelectItem value="dubbed" className="text-white hover:bg-gray-800 data-[headlessui-state=active]:bg-gray-800 px-4 py-3 cursor-pointer transition-colors border-b border-gray-800 last:border-b-0">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-sm">Dublado</span>
+                      <span className="text-xs text-gray-400">Áudio em português brasileiro</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="subtitled" className="text-white hover:bg-gray-800 data-[headlessui-state=active]:bg-gray-800 px-4 py-3 cursor-pointer transition-colors border-b border-gray-800 last:border-b-0">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-semibold text-sm">Legendado</span>
+                      <span className="text-xs text-gray-400">Áudio original com legendas em português</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newLanguage.language_type && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-gray-200">
+                  Arquivo de Vídeo (.mkv ou .mp4)
+                </Label>
+                <Input
+                  type="file"
+                  accept=".mkv,.mp4"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewLanguage(prev => ({ ...prev, videoFile: file }));
+                    }
+                  }}
+                  className="bg-gray-800 border-gray-700 text-white file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                />
+                <p className="text-xs text-gray-400">
+                  {newLanguage.language_type === 'dubbed'
+                    ? 'Arquivo com áudio dublado em português'
+                    : 'Arquivo com áudio original e legendas'}
+                </p>
+              </div>
+            )}
+
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="is_default"
+                checked={newLanguage.is_default}
+                onChange={(e) => setNewLanguage(prev => ({ ...prev, is_default: e.target.checked }))}
+                className="rounded border-gray-700 bg-gray-800"
+              />
+              <Label htmlFor="is_default" className="text-sm text-gray-200">
+                Definir como idioma padrão
+              </Label>
+            </div>
+
+            <div className="flex gap-2">
+              <Button onClick={handleAddLanguage} className="bg-red-600 hover:bg-red-700">
+                Adicionar
+              </Button>
+              <Button variant="outline" onClick={() => setShowAddForm(false)} className="border-gray-700 text-gray-200 hover:bg-gray-800">
+                Cancelar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isLoading ? (
+        <div className="text-center py-8">Carregando idiomas...</div>
+      ) : languages.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          Nenhum idioma adicionado ainda
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {languages.map((language) => (
+            <Card key={language.id}>
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-medium">{language.language_name}</h4>
+                      <Badge variant="secondary">
+                        {LANGUAGE_TYPE_LABELS[language.language_type]}
+                      </Badge>
+                      {language.is_default && (
+                        <Badge variant="default">Padrão</Badge>
+                      )}
+                    </div>
+
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <p>Código: {language.language_code}</p>
+                      {language.video_url && (
+                        <p>Status: ✅ Vídeo carregado ({formatFileSize(language.file_size_bytes)})</p>
+                      )}
+                      {!language.video_url && (
+                        <p>Status: ⏳ Aguardando upload</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {!language.is_default && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSetDefault(language.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Star className="w-3 h-3" />
+                        Definir Padrão
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setUploadingLanguageId(language.id)}
+                      className="flex items-center gap-1"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Upload
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => handleDeleteLanguage(language.id)}
+                      className="flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+
+                {uploadingLanguageId === language.id && (
+                  <div className="mt-4 border-t pt-4 space-y-4">
+                    {/* Upload Progress Bar */}
+                    {uploadProgress && uploadProgress.status !== 'completed' && (
+                      <UploadProgressBar
+                        progress={uploadProgress.progress}
+                        fileName={uploadProgress.fileName || 'video.mp4'}
+                        uploadedBytes={uploadProgress.uploadedBytes}
+                        totalBytes={uploadProgress.totalBytes}
+                        uploadSpeed={uploadProgress.uploadSpeed}
+                        timeRemaining={uploadProgress.timeRemaining}
+                        status={uploadProgress.status}
+                        errorMessage={uploadProgress.errorMessage}
+                        showControls={false}
+                      />
+                    )}
+
+                    <VideoUpload
+                      maxFileSize={5120}
+                      onProgress={(fileName, loaded, total) => {
+                        handleVideoUploadProgress(fileName, loaded, total);
+                      }}
+                      onUploadComplete={(result) => {
+                        console.log('Upload completo:', result);
+                        setUploadProgress({
+                          ...uploadProgress!,
+                          status: 'completed',
+                          progress: 100,
+                        });
+                        setTimeout(() => {
+                          setUploadingLanguageId(null);
+                          resetUploadProgress();
+                          loadLanguages();
+                        }, 2000); // Show completed state for 2 seconds
+                      }}
+                      onUploadError={(error) => {
+                        console.error('Erro no upload:', error);
+                        setUploadProgress({
+                          progress: uploadProgress?.progress || 0,
+                          uploadedBytes: uploadProgress?.uploadedBytes || 0,
+                          totalBytes: uploadProgress?.totalBytes || 0,
+                          status: 'error',
+                          errorMessage: error,
+                          fileName: uploadProgress?.fileName,
+                        });
+                      }}
+                      customEndpoints={{
+                        initiate: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/initiate-multipart`,
+                        complete: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/complete-multipart`,
+                        presignedUrl: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/content-language-upload/presigned-url`,
+                      }}
+                      customPayload={{
+                        content_language_id: language.id,
+                      }}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUploadingLanguageId(null);
+                        resetUploadProgress();
+                      }}
+                      className="mt-2"
+                    >
+                      Cancelar Upload
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { RealtimeAnalytics } from '@/components/Admin/RealtimeAnalytics';
 
 interface AdminStats {
   totalContent: number;
@@ -56,7 +57,7 @@ export default function AdminDashboard() {
       try {
         setLoading(true);
 
-        const token = localStorage.getItem('token');
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         };
@@ -300,6 +301,11 @@ export default function AdminDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Real-time Analytics */}
+        <div className="mb-8">
+          <RealtimeAnalytics />
         </div>
 
         {/* Quick Actions */}

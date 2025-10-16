@@ -4,7 +4,7 @@ import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3
 import * as ffmpeg from 'fluent-ffmpeg';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { VideoTranscodingService } from './video-transcoding.service';
+// import { VideoTranscodingService } from './video-transcoding.service'; // Disabled - requires TypeORM
 
 export interface VideoProcessorOptions {
   contentId: string;
@@ -38,7 +38,7 @@ export class VideoProcessorService {
 
   constructor(
     private configService: ConfigService,
-    private transcodingService: VideoTranscodingService,
+    // private transcodingService: VideoTranscodingService, // Disabled - requires TypeORM
   ) {
     this.s3Client = new S3Client({
       region: this.configService.get('AWS_REGION', 'us-east-1'),
@@ -105,31 +105,24 @@ export class VideoProcessorService {
       const shouldConvertToHLS = autoConvertToHLS && fileSize > this.maxFileSizeForDirect;
 
       if (shouldConvertToHLS) {
-        this.logger.log(`File exceeds ${this.maxFileSizeForDirect / 1024 / 1024}MB - converting to HLS`);
+        this.logger.log(`File exceeds ${this.maxFileSizeForDirect / 1024 / 1024}MB - HLS conversion disabled (requires TypeORM)`);
 
-        // Upload processed file to S3 for transcoding service
-        const s3Path = await this.uploadToS3(processedPath, contentId);
-
-        // Start HLS transcoding
-        await this.transcodingService.startTranscodingJob({
-          contentId,
-          inputPath: s3Path,
-          outputBasePath: `videos/${contentId}/hls`,
-          qualities: undefined, // Use default qualities
-        });
-
+        // Upload processed file directly as MP4 (HLS conversion disabled)
+        const videoUrl = await this.uploadToS3(processedPath, contentId, true);
         const processingTime = Math.round((Date.now() - startTime) / 1000);
 
         // Cleanup
         await fs.rm(jobWorkDir, { recursive: true, force: true });
 
+        this.logger.warn('HLS transcoding service disabled - uploaded as direct MP4 instead');
+
         return {
           success: true,
           contentId,
           originalFormat: fileExtension.replace('.', ''),
-          finalFormat: 'hls',
-          hlsGenerated: true,
-          hlsMasterUrl: `s3://${this.hlsBucket}/videos/${contentId}/hls/master.m3u8`,
+          finalFormat: 'mp4',
+          hlsGenerated: false,
+          videoUrl,
           fileSize,
           processingTime,
         };

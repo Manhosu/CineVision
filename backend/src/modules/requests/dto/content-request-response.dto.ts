@@ -27,12 +27,12 @@ export class ContentRequestResponseDto {
   })
   status: RequestStatus;
 
-  @ApiPropertyOptional({
-    description: 'Priority of the content request',
+  @ApiProperty({
+    description: 'Priority level of the request',
     enum: RequestPriority,
     example: RequestPriority.MEDIUM,
   })
-  priority?: RequestPriority;
+  priority: RequestPriority;
 
   @ApiPropertyOptional({
     description: 'Admin notes about the request',

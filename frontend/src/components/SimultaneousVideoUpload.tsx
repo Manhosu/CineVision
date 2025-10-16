@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { io } from 'socket.io-client';
+import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useUpload } from '@/contexts/UploadContext';
 
 interface VideoFile {
   file: File | null;
@@ -19,7 +19,14 @@ interface Props {
   onUploadComplete?: () => void;
 }
 
-export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) {
+export interface SimultaneousVideoUploadRef {
+  startUpload: () => Promise<void>;
+  hasFiles: () => boolean;
+}
+
+export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Props>(
+  ({ contentId, onUploadComplete }, ref) => {
+  const { addTask, updateTask, tasks } = useUpload();
   const [videos, setVideos] = useState<{
     DUBLADO: VideoFile;
     LEGENDADO: VideoFile;
@@ -44,7 +51,7 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
     },
   });
 
-  const socketRef = useRef<any>(null);
+  const taskIdsRef = useRef<{ DUBLADO?: string; LEGENDADO?: string }>({});
 
   const handleFileSelect = (type: 'DUBLADO' | 'LEGENDADO', file: File) => {
     setVideos((prev) => ({
@@ -61,28 +68,16 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
   };
 
   const startSimultaneousUpload = async () => {
+    console.log('[SimultaneousVideoUpload] startSimultaneousUpload called');
+    console.log('[SimultaneousVideoUpload] Videos state:', {
+      dublado: videos.DUBLADO.file?.name,
+      legendado: videos.LEGENDADO.file?.name
+    });
+
     if (!videos.DUBLADO.file && !videos.LEGENDADO.file) {
+      console.error('[SimultaneousVideoUpload] Nenhum arquivo selecionado');
       alert('Selecione pelo menos um arquivo para upload');
       return;
-    }
-
-    // Connect to WebSocket
-    if (!socketRef.current) {
-      socketRef.current = io('http://localhost:3001/upload-progress');
-
-      socketRef.current.on('upload-progress', (progress: any) => {
-        setVideos((prev) => ({
-          ...prev,
-          [progress.languageType]: {
-            ...prev[progress.languageType as 'DUBLADO' | 'LEGENDADO'],
-            progress: progress.percentage,
-            status: progress.status,
-            uploadedSize: progress.uploadedSize,
-            speed: progress.speed,
-            error: progress.error,
-          },
-        }));
-      });
     }
 
     // Upload both files simultaneously
@@ -105,8 +100,293 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
   };
 
   const uploadFile = async (file: File, type: 'DUBLADO' | 'LEGENDADO') => {
-    // Implementation will call the backend multipart upload API
-    console.log(`Uploading ${type}:`, file.name);
+
+    // Create task ID and add to UploadContext
+    const taskId = `upload-${Date.now()}-${type}`;
+    taskIdsRef.current[type] = taskId;
+
+    // Variable to track abort controller
+    let abortController = new AbortController();
+
+    // Check if file needs conversion (MKV files)
+    const needsConversion = file.name.toLowerCase().endsWith('.mkv');
+
+    addTask({
+      id: taskId,
+      fileName: file.name,
+      contentTitle: `Vídeo ${type === 'DUBLADO' ? 'Dublado' : 'Legendado'}`,
+      progress: 0,
+      status: 'uploading',
+      cancelRequested: false,
+      needsConversion,
+      conversionProgress: 0,
+    });
+
+    try {
+      // Marcar como uploading
+      setVideos((prev) => ({
+        ...prev,
+        [type]: {
+          ...prev[type],
+          status: 'uploading',
+          progress: 0,
+        },
+      }));
+
+      // Get auth token - try both 'auth_token' and 'token' for compatibility
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('auth_token') || localStorage.getItem('token'))
+        : null;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        throw new Error('No authentication token found');
+      }
+
+      // Detect content type from file
+      const getContentType = (file: File): string => {
+        // Try to get from file.type first
+        if (file.type && file.type.startsWith('video/')) {
+          return file.type;
+        }
+
+        // Fallback based on file extension
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        switch (extension) {
+          case 'mp4':
+            return 'video/mp4';
+          case 'mkv':
+            return 'video/x-matroska';
+          case 'mov':
+            return 'video/quicktime';
+          default:
+            return 'video/mp4'; // Default fallback
+        }
+      };
+
+      const contentType = getContentType(file);
+
+      // 1. Iniciar upload multipart
+      const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contentId: contentId,
+          filename: file.name,
+          contentType: contentType,
+          size: file.size,
+          audioType: type.toLowerCase(), // 'dublado' or 'legendado'
+        }),
+      });
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json();
+        throw new Error(errorData.message || 'Erro ao iniciar upload');
+      }
+
+      const initData = await initResponse.json();
+      const { uploadId, key, partSize, partsCount, presignedUrls, languageId: initialLanguageId } = initData;
+      const uploadedParts: { ETag: string; PartNumber: number }[] = [];
+
+      // Store uploadId and languageId in task for cancellation
+      updateTask(taskId, {
+        uploadId,
+        languageId: initialLanguageId
+      });
+
+      // 2. Upload dos chunks usando presigned URLs
+      for (let i = 0; i < presignedUrls.length; i++) {
+        // Check if cancellation was requested
+        const currentTask = tasks.find(t => t.id === taskId);
+        if (currentTask?.cancelRequested) {
+          console.log(`[SimultaneousVideoUpload] Upload cancelado para ${type}`);
+          updateTask(taskId, { status: 'cancelled' });
+          throw new Error('Upload cancelado pelo usuário');
+        }
+
+        const { partNumber, url: presignedUrl } = presignedUrls[i];
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, file.size);
+        const chunk = file.slice(start, end);
+
+        // Upload diretamente para S3 usando presigned URL
+        // IMPORTANTE: Não adicionar headers customizados em presigned URLs
+        // pois eles precisam estar incluídos na assinatura da URL
+        const partResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: chunk,
+          signal: abortController.signal,
+        });
+
+        if (!partResponse.ok) {
+          throw new Error(`Erro ao fazer upload da parte ${partNumber + 1}`);
+        }
+
+        const etag = partResponse.headers.get('ETag');
+        if (!etag) {
+          throw new Error(`ETag não retornado para parte ${partNumber + 1}`);
+        }
+
+        uploadedParts.push({ ETag: etag.replace(/"/g, ''), PartNumber: partNumber });
+
+        // Atualizar progresso (arredondar para 2 casas decimais)
+        const progress = Math.round(((i + 1) / partsCount) * 100 * 100) / 100;
+
+        // Update local state
+        setVideos((prev) => ({
+          ...prev,
+          [type]: {
+            ...prev[type],
+            progress,
+            uploadedSize: end,
+            speed: 0,
+          },
+        }));
+
+        // Update UploadContext
+        updateTask(taskId, { progress });
+      }
+
+      // 3. Completar upload
+      const completeResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/complete`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            uploadId,
+            key,
+            parts: uploadedParts,
+            contentId: contentId,
+          }),
+        }
+      );
+
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json();
+        throw new Error(errorData.message || 'Erro ao finalizar upload');
+      }
+
+      // Marcar como completo
+      setVideos((prev) => ({
+        ...prev,
+        [type]: {
+          ...prev[type],
+          status: 'completed',
+          progress: 100,
+        },
+      }));
+
+      // Get languageId from complete response
+      const completeData = await completeResponse.json();
+      const languageId = completeData.languageId;
+
+      // Update UploadContext - marca como completed se não precisa conversão, ou converting se precisa
+      const finalStatus = needsConversion ? 'converting' : 'ready';
+      updateTask(taskId, {
+        status: finalStatus,
+        progress: 100,
+        languageId,
+        conversionProgress: needsConversion ? 0 : undefined,
+      });
+
+      // Se precisa de conversão, iniciar polling
+      if (needsConversion && languageId) {
+        startConversionPolling(taskId, languageId, token);
+      }
+    } catch (error: any) {
+      console.error(`Upload error for ${type}:`, error);
+
+      // Update local state
+      setVideos((prev) => ({
+        ...prev,
+        [type]: {
+          ...prev[type],
+          status: 'error',
+          error: error.message || 'Erro no upload',
+        },
+      }));
+
+      // Update UploadContext
+      updateTask(taskId, { status: 'error', error: error.message || 'Erro no upload' });
+      throw error;
+    }
+  };
+
+  // Função para fazer polling do status de conversão
+  const startConversionPolling = async (taskId: string, languageId: string, token: string | null) => {
+    const pollInterval = 3000; // 3 segundos
+    const maxAttempts = 600; // 30 minutos máximo (600 * 3s)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/processing-status/${languageId}`,
+          {
+            headers: {
+              'Authorization': token ? `Bearer ${token}` : '',
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const { processing_status, processing_progress } = data;
+
+          console.log(`[Conversion Poll] Status: ${processing_status}, Progress: ${processing_progress}%`);
+
+          // Atualizar progresso de conversão
+          if (processing_status === 'processing' || processing_status === 'converting') {
+            updateTask(taskId, {
+              status: 'converting',
+              conversionProgress: processing_progress || 0,
+            });
+          } else if (processing_status === 'completed' || processing_status === 'ready') {
+            // Conversão concluída!
+            updateTask(taskId, {
+              status: 'ready',
+              conversionProgress: 100,
+            });
+            console.log(`[Conversion Poll] ✅ Conversão concluída para task ${taskId}`);
+            return; // Para o polling
+          } else if (processing_status === 'error' || processing_status === 'failed') {
+            updateTask(taskId, {
+              status: 'error',
+              error: 'Erro na conversão do vídeo',
+            });
+            console.error(`[Conversion Poll] ❌ Erro na conversão para task ${taskId}`);
+            return; // Para o polling
+          }
+        }
+
+        // Continuar polling se não atingiu o máximo de tentativas
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, pollInterval);
+        } else {
+          console.warn(`[Conversion Poll] ⚠️ Timeout após ${maxAttempts} tentativas`);
+          updateTask(taskId, {
+            status: 'error',
+            error: 'Timeout aguardando conversão',
+          });
+        }
+      } catch (error) {
+        console.error('[Conversion Poll] Erro ao verificar status:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, pollInterval);
+        }
+      }
+    };
+
+    // Iniciar polling após 5 segundos (dar tempo para o backend iniciar a conversão)
+    setTimeout(poll, 5000);
   };
 
   const formatBytes = (bytes: number) => {
@@ -116,6 +396,12 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    startUpload: startSimultaneousUpload,
+    hasFiles: () => Boolean(videos.DUBLADO.file || videos.LEGENDADO.file),
+  }));
 
   return (
     <div className="space-y-6">
@@ -153,22 +439,22 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
               htmlFor="dublado-file"
               className="block w-full text-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg cursor-pointer transition-all font-medium"
             >
-              {videos.DUBLADO.file ? videos.DUBLADO.file.name : 'Selecionar Arquivo'}
+              {videos.DUBLADO.file ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>{videos.DUBLADO.file.name}</span>
+                </div>
+              ) : (
+                'Selecionar Arquivo'
+              )}
             </label>
 
             {videos.DUBLADO.file && (
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-300 mb-2">
-                  <span>{videos.DUBLADO.progress.toFixed(1)}%</span>
-                  <span>{formatBytes(videos.DUBLADO.totalSize)}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
-                    style={{ width: `${videos.DUBLADO.progress}%` }}
-                  />
-                </div>
-              </div>
+              <p className="mt-2 text-xs text-gray-400 text-center">
+                {formatBytes(videos.DUBLADO.totalSize)}
+              </p>
             )}
           </div>
 
@@ -197,38 +483,28 @@ export function SimultaneousVideoUpload({ contentId, onUploadComplete }: Props) 
               htmlFor="legendado-file"
               className="block w-full text-center px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg cursor-pointer transition-all font-medium"
             >
-              {videos.LEGENDADO.file ? videos.LEGENDADO.file.name : 'Selecionar Arquivo'}
+              {videos.LEGENDADO.file ? (
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span>{videos.LEGENDADO.file.name}</span>
+                </div>
+              ) : (
+                'Selecionar Arquivo'
+              )}
             </label>
 
             {videos.LEGENDADO.file && (
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-300 mb-2">
-                  <span>{videos.LEGENDADO.progress.toFixed(1)}%</span>
-                  <span>{formatBytes(videos.LEGENDADO.totalSize)}</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-300"
-                    style={{ width: `${videos.LEGENDADO.progress}%` }}
-                  />
-                </div>
-              </div>
+              <p className="mt-2 text-xs text-gray-400 text-center">
+                {formatBytes(videos.LEGENDADO.totalSize)}
+              </p>
             )}
           </div>
         </div>
-
-        {/* Upload Button */}
-        <button
-          onClick={startSimultaneousUpload}
-          disabled={!videos.DUBLADO.file && !videos.LEGENDADO.file}
-          className="mt-6 w-full py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 disabled:from-gray-700 disabled:to-gray-800 text-white font-bold rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg hover:shadow-xl flex items-center justify-center text-lg"
-        >
-          <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          Iniciar Upload Simultâneo
-        </button>
       </div>
     </div>
   );
-}
+});
+
+SimultaneousVideoUpload.displayName = 'SimultaneousVideoUpload';

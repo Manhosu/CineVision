@@ -3,7 +3,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import Hls from 'hls.js';
 import VideoOverlay from '@/components/VideoOverlay/VideoOverlay';
+import { trackSession, trackActivity } from '@/utils/analytics';
 
 // Dynamic imports for client-only hooks
 const useChromecastDynamic = () => {
@@ -87,6 +89,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
   // Use dynamic hooks for Chromecast and AirPlay (client-only)
   const {
@@ -144,6 +147,128 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       }));
     }
   }, [videoUrl]);
+
+  // HLS.js setup - Handle HLS streams and fallback to native video
+  useEffect(() => {
+    if (!videoRef.current || !videoUrl) return;
+
+    const video = videoRef.current;
+    const isHLS = videoUrl.endsWith('.m3u8') || videoUrl.includes('master.m3u8');
+
+    // Cleanup previous HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (isHLS) {
+      // HLS stream detected
+      if (Hls.isSupported()) {
+        // Use HLS.js for browsers that don't support HLS natively
+        console.log('[VideoPlayer] Loading HLS stream with HLS.js');
+
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 90,
+        });
+
+        hlsRef.current = hls;
+
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          console.log('[VideoPlayer] HLS media attached');
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+          console.log('[VideoPlayer] HLS manifest loaded, found', data.levels.length, 'quality levels');
+
+          // Extract quality levels
+          const qualities: QualityLevel[] = data.levels.map((level, index) => ({
+            height: level.height,
+            width: level.width,
+            bandwidth: level.bitrate,
+            id: `${index}`,
+            active: index === hls.currentLevel,
+          }));
+
+          setPlayerState(prev => ({
+            ...prev,
+            qualities,
+            activeQuality: hls.currentLevel >= 0 ? `${hls.currentLevel}` : null,
+          }));
+
+          if (autoplay) {
+            video.play().catch(err => console.error('[VideoPlayer] HLS autoplay failed:', err));
+          }
+        });
+
+        hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+          console.log('[VideoPlayer] Quality level switched to', data.level);
+          setPlayerState(prev => ({
+            ...prev,
+            activeQuality: `${data.level}`,
+          }));
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          console.error('[VideoPlayer] HLS error:', data);
+
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                console.error('[VideoPlayer] Fatal network error, trying to recover');
+                hls.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                console.error('[VideoPlayer] Fatal media error, trying to recover');
+                hls.recoverMediaError();
+                break;
+              default:
+                console.error('[VideoPlayer] Cannot recover from fatal error');
+                setPlayerState(prev => ({
+                  ...prev,
+                  error: 'Erro fatal ao carregar vídeo HLS',
+                  isLoading: false,
+                }));
+                break;
+            }
+          }
+        });
+
+        hls.loadSource(videoUrl);
+        hls.attachMedia(video);
+
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // Native HLS support (Safari)
+        console.log('[VideoPlayer] Using native HLS support');
+        video.src = videoUrl;
+        if (autoplay) {
+          video.play().catch(err => console.error('[VideoPlayer] Native HLS autoplay failed:', err));
+        }
+      } else {
+        console.error('[VideoPlayer] HLS not supported in this browser');
+        setPlayerState(prev => ({
+          ...prev,
+          error: 'Formato HLS não suportado neste navegador',
+        }));
+      }
+    } else {
+      // Direct MP4/WebM video
+      console.log('[VideoPlayer] Loading direct video source:', videoUrl);
+      video.src = videoUrl;
+      if (autoplay) {
+        video.play().catch(err => console.error('[VideoPlayer] Autoplay failed:', err));
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [videoUrl, autoplay]);
 
   // AirPlay setup
   useEffect(() => {
@@ -204,12 +329,55 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const handlePlay = () => {
       console.log('[VideoPlayer] Video play event fired');
-      setPlayerState(prev => ({ ...prev, isPlaying: true }));
+      setPlayerState(prev => {
+        const wasPlaying = prev.isPlaying;
+
+        // Track analytics
+        if (!wasPlaying) {
+          // First time playing or resuming
+          if (prev.currentTime === 0) {
+            trackActivity({
+              event_type: 'video_start',
+              content_id: contentId,
+              content_title: title,
+            });
+          } else {
+            trackActivity({
+              event_type: 'video_resume',
+              content_id: contentId,
+              content_title: title,
+            });
+          }
+
+          trackSession({
+            is_watching: true,
+            watching_content_id: contentId,
+            watching_content_title: title,
+          });
+        }
+
+        return { ...prev, isPlaying: true };
+      });
     };
 
     const handlePause = () => {
       console.log('[VideoPlayer] Video pause event fired');
-      setPlayerState(prev => ({ ...prev, isPlaying: false }));
+      setPlayerState(prev => {
+        // Track analytics
+        if (prev.isPlaying) {
+          trackActivity({
+            event_type: 'video_pause',
+            content_id: contentId,
+            content_title: title,
+          });
+
+          trackSession({
+            is_watching: false,
+          });
+        }
+
+        return { ...prev, isPlaying: false };
+      });
     };
 
     const handleVolumeChange = () => {
@@ -222,6 +390,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const handleEnded = () => {
       setPlayerState(prev => ({ ...prev, isPlaying: false }));
+
+      // Track video end analytics
+      trackActivity({
+        event_type: 'video_end',
+        content_id: contentId,
+        content_title: title,
+      });
+
+      trackSession({
+        is_watching: false,
+      });
+
       onEnded?.();
     };
 
@@ -258,6 +438,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     video.addEventListener('error', handleError);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    // iOS Safari fullscreen events
+    video.addEventListener('webkitbeginfullscreen', handleFullscreenChange);
+    video.addEventListener('webkitendfullscreen', handleFullscreenChange);
 
     return () => {
       video.removeEventListener('loadstart', handleLoadStart);
@@ -272,6 +458,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       video.removeEventListener('error', handleError);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+      video.removeEventListener('webkitbeginfullscreen', handleFullscreenChange);
+      video.removeEventListener('webkitendfullscreen', handleFullscreenChange);
     };
   }, [onTimeUpdate, onProgress, onLoadStart, onCanPlay, onEnded, onError]);
 
@@ -322,14 +512,48 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, []);
 
   const handleFullscreenToggle = useCallback(() => {
-    if (!containerRef.current) return;
+    if (!videoRef.current && !containerRef.current) return;
 
     try {
-      if (!document.fullscreenElement) {
-        containerRef.current.requestFullscreen();
+      const isFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isFullscreen) {
+        // Entrar em fullscreen
+        // iOS Safari precisa de webkitEnterFullscreen no elemento video
+        if (videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
+          console.log('[VideoPlayer] Using iOS fullscreen');
+          (videoRef.current as any).webkitEnterFullscreen();
+        } else if (containerRef.current) {
+          // Para outros navegadores, usar o container
+          if (containerRef.current.requestFullscreen) {
+            containerRef.current.requestFullscreen();
+          } else if ((containerRef.current as any).webkitRequestFullscreen) {
+            (containerRef.current as any).webkitRequestFullscreen();
+          } else if ((containerRef.current as any).mozRequestFullScreen) {
+            (containerRef.current as any).mozRequestFullScreen();
+          } else if ((containerRef.current as any).msRequestFullscreen) {
+            (containerRef.current as any).msRequestFullscreen();
+          }
+        }
         setPlayerState(prev => ({ ...prev, fullscreen: true }));
       } else {
-        document.exitFullscreen();
+        // Sair de fullscreen
+        if (videoRef.current && (videoRef.current as any).webkitExitFullscreen) {
+          (videoRef.current as any).webkitExitFullscreen();
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          (document as any).msExitFullscreen();
+        }
         setPlayerState(prev => ({ ...prev, fullscreen: false }));
       }
     } catch (error) {
@@ -472,6 +696,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         controls={false}
         crossOrigin="anonymous"
         src={videoUrl}
+        webkit-playsinline="true"
+        x-webkit-airplay="allow"
+        preload="metadata"
+        // iOS-specific attributes for fullscreen and audio
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain'
+        }}
       />
 
       {/* Custom Video Overlay */}

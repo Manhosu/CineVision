@@ -17,14 +17,14 @@ import { SystemLog } from '../logs/entities/system-log.entity';
 import { SupabaseModule } from '../../config/supabase.module';
 import { AuthModule } from '../auth/auth.module';
 import { CDNModule } from '../cdn/cdn.module';
-// import { VideoModule } from '../video/video.module';
+import { VideoModule } from '../video/video.module';
 import { VideoUploadModule } from '../video/video-upload.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
 console.log('ENABLE_TYPEORM env var:', process.env.ENABLE_TYPEORM);
 
-const conditionalControllers = [ContentController, ContentLanguageUploadController];
+const conditionalControllers = [ContentController, ContentLanguageUploadController]; // Always include ContentController
 const conditionalProviders = isTypeOrmEnabled() 
   ? [ContentService, TranscodeService, ContentLanguageService]
   : [
@@ -53,11 +53,12 @@ console.log('Content exports:', conditionalExports);
     ...optionalTypeOrmFeature([Content, ContentLanguage, Category, Series, Episode, VideoVariant, StreamingAnalytics, SystemLog]),
     SupabaseModule,
     forwardRef(() => AuthModule),
-    forwardRef(() => CDNModule),
-    forwardRef(() => VideoUploadModule),
+    CDNModule,
+    VideoModule,
+    VideoUploadModule,
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,
   exports: conditionalExports,
 })
-export class ContentModule {}//
+export class ContentModule {}

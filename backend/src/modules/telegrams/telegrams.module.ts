@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TelegramsService } from './telegrams.service';
 import { TelegramsEnhancedService } from './telegrams-enhanced.service';
@@ -31,7 +31,7 @@ const conditionalExports = isTypeOrmEnabled()
     ConfigModule,
     SupabaseModule,
     UsersModule,
-    ContentModule,
+    forwardRef(() => ContentModule),
     PurchasesModule,
   ],
   providers: conditionalProviders,

@@ -152,6 +152,7 @@ export class RequestsService {
       title: request.requested_title,
       description: request.description,
       status: request.status,
+      priority: request.priority,
       admin_notes: request.admin_notes,
       assigned_to: undefined, // Not available in current entity
       requester_telegram_id: request.telegram_chat_id,
@@ -161,6 +162,7 @@ export class RequestsService {
       created_at: request.created_at,
       updated_at: request.updated_at,
       processed_at: request.completed_at,
+      completed_at: request.completed_at,
     };
   }
 }

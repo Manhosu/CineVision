@@ -195,7 +195,7 @@ const MovieCard = memo(function MovieCard({
       <div className="card-hover rounded-xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:border-white/20 hover:shadow-2xl">
 
         {/* Movie Poster */}
-        <div className="relative aspect-[2/3] min-h-[300px] overflow-hidden">
+        <div className="relative aspect-[2/3] min-h-[240px] overflow-hidden">
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}

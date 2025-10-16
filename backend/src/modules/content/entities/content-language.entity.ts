@@ -91,6 +91,9 @@ export class ContentLanguage {
   @Column({ type: 'text', nullable: true })
   available_qualities?: string; // JSON string com qualidades disponíveis
 
+  @Column({ nullable: true, default: 'pending' })
+  upload_status?: string; // pending, processing, completed, failed
+
   @Column({ default: true })
   is_active: boolean;
 

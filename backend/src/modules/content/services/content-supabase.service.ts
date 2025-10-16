@@ -8,39 +8,7 @@ export class ContentSupabaseService {
 
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest') {
     const offset = (page - 1) * limit;
-
-    // If genre filter is provided, get movie IDs from content_categories first
-    let filteredMovieIds: string[] | null = null;
-    if (genre) {
-      // Get the category ID for the genre
-      const { data: category } = await this.supabaseService.client
-        .from('categories')
-        .select('id')
-        .eq('name', genre)
-        .single();
-
-      if (category) {
-        // Get all content IDs that have this category
-        const { data: contentCategories } = await this.supabaseService.client
-          .from('content_categories')
-          .select('content_id')
-          .eq('category_id', category.id);
-
-        filteredMovieIds = contentCategories?.map(cc => cc.content_id) || [];
-
-        // If no movies found with this genre, return empty result
-        if (filteredMovieIds.length === 0) {
-          return {
-            movies: [],
-            total: 0,
-            page,
-            limit,
-            totalPages: 0,
-          };
-        }
-      }
-    }
-
+    
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -48,13 +16,13 @@ export class ContentSupabaseService {
         categories:content_categories(
           category:categories(*)
         )
-      `, { count: 'exact' })
+      `)
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.MOVIE);
 
-    // Apply genre filter if we have filtered IDs
-    if (filteredMovieIds) {
-      query = query.in('id', filteredMovieIds);
+    // Filter by genre if provided
+    if (genre) {
+      query = query.contains('categories.category.name', [genre]);
     }
 
     // Apply sorting
@@ -103,9 +71,7 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
-        ),
-        video_variants(*),
-        content_languages(*)
+        )
       `)
       .eq('id', id)
       .eq('content_type', ContentType.MOVIE)

@@ -176,11 +176,42 @@ export class AdminContentSimpleService {
   }
 
   async publishContent(data: any, userId?: string) {
-    console.log('AdminContentSimpleService.publishContent called with:', data);
+    const contentId = data.content_id;
+    this.logger.log(`Publishing content with ID: ${contentId}`);
+
+    // Validar que o conteúdo existe
+    const { data: content, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !content) {
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    // Atualizar status para PUBLISHED
+    const { data: updatedContent, error: updateError } = await this.supabaseService.client
+      .from('content')
+      .update({
+        status: 'PUBLISHED',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contentId)
+      .select()
+      .single();
+
+    if (updateError) {
+      this.logger.error('Error publishing content:', updateError);
+      throw new Error(`Failed to publish content: ${updateError.message}`);
+    }
+
+    this.logger.log(`Content ${contentId} published successfully`);
+
     return {
       success: true,
-      data: { id: data.content_id },
-      message: 'Content published successfully'
+      data: updatedContent,
+      message: `Content "${content.title}" published successfully`
     };
   }
 

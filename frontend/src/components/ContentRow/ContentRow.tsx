@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
+import { Top10MovieCard } from '@/components/Top10MovieCard/Top10MovieCard';
 import { Movie } from '@/types/movie';
 
 interface ContentRowProps {
@@ -10,13 +11,15 @@ interface ContentRowProps {
   movies: Movie[];
   priority?: boolean; // Para otimização de imagens
   onMovieClick?: (movie: Movie) => void;
+  type?: 'featured' | 'latest' | 'popular' | 'top10'; // Section type
 }
 
 export function ContentRow({
   title,
   movies,
   priority = false,
-  onMovieClick
+  onMovieClick,
+  type
 }: ContentRowProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -68,19 +71,23 @@ export function ContentRow({
     return null;
   }
 
+  const isTop10 = type === 'top10';
+
   return (
-    <section className="relative py-8">
+    <section className={`relative ${isTop10 ? 'py-6 sm:py-8 md:py-10' : 'py-8'}`}>
       <div className="container mx-auto px-4 lg:px-6">
         {/* Título da seção */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl md:text-3xl font-bold text-white">
+          <h2 className={`font-bold text-white ${isTop10 ? 'text-2xl sm:text-3xl md:text-4xl' : 'text-2xl md:text-3xl'}`}>
             {title}
           </h2>
 
           {/* Contador de filmes (opcional) */}
-          <span className="hidden sm:block text-sm text-gray-400">
-            {movies.length} {movies.length === 1 ? 'filme' : 'filmes'}
-          </span>
+          {!isTop10 && (
+            <span className="hidden sm:block text-sm text-gray-400">
+              {movies.length} {movies.length === 1 ? 'filme' : 'filmes'}
+            </span>
+          )}
         </div>
 
         {/* Container do carrossel */}
@@ -112,7 +119,7 @@ export function ContentRow({
           {/* Container de scroll */}
           <div
             ref={scrollContainerRef}
-            className="flex space-x-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
+            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'space-x-3 sm:space-x-4 md:space-x-6 pb-6' : 'space-x-4 pb-4'}`}
             onScroll={handleScroll}
             style={{
               scrollSnapType: 'x mandatory',
@@ -122,15 +129,24 @@ export function ContentRow({
             {movies.map((movie, index) => (
               <div
                 key={movie.id}
-                className="flex-none w-64 md:w-72"
+                className="flex-none w-48 sm:w-56 md:w-64"
                 style={{ scrollSnapAlign: 'start' }}
               >
-                <MovieCard
-                  movie={movie}
-                  priority={priority && index < 3} // Prioridade para os 3 primeiros
-                  onClick={onMovieClick}
-                  lazyLoad={!priority || index >= 3}
-                />
+                {type === 'top10' ? (
+                  <Top10MovieCard
+                    movie={movie}
+                    ranking={index + 1}
+                    priority={priority && index < 3}
+                    onClick={onMovieClick}
+                  />
+                ) : (
+                  <MovieCard
+                    movie={movie}
+                    priority={priority && index < 3}
+                    onClick={onMovieClick}
+                    lazyLoad={!priority || index >= 3}
+                  />
+                )}
               </div>
             ))}
 

@@ -33,6 +33,8 @@ export class RequestsSupabaseService {
         description: dto.description,
         telegram_chat_id: dto.telegram_id,
         user_id: dto.user_id,
+        user_email: dto.user_email,
+        notify_when_added: dto.notify_when_added !== undefined ? dto.notify_when_added : true,
         status: RequestStatus.PENDING,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -45,6 +47,65 @@ export class RequestsSupabaseService {
     }
 
     return this.mapToResponseDto(data);
+  }
+
+  /**
+   * Notifica usuários que solicitaram um conteúdo quando ele for adicionado
+   */
+  async notifyRequesters(contentTitle: string, contentId: string): Promise<void> {
+    try {
+      // Buscar todas as solicitações pendentes para este título que querem notificação
+      const { data: requests, error } = await this.supabase
+        .from('content_requests')
+        .select('*')
+        .ilike('requested_title', `%${contentTitle}%`)
+        .eq('status', RequestStatus.PENDING)
+        .eq('notify_when_added', true)
+        .is('notified_at', null);
+
+      if (error || !requests || requests.length === 0) {
+        return;
+      }
+
+      console.log(`[RequestsService] Found ${requests.length} requests to notify for: ${contentTitle}`);
+
+      // Enviar notificação para cada solicitante via Telegram
+      for (const request of requests) {
+        try {
+          if (request.telegram_chat_id) {
+            // Enviar notificação via Telegram
+            const message = `🎬 Boa notícia!\n\nO conteúdo "${contentTitle}" que você solicitou já foi adicionado ao nosso site!\n\n✨ Assista agora: ${process.env.FRONTEND_URL || 'https://cinevision.vercel.app'}/watch/${contentId}\n\n🎉 Aproveite!`;
+
+            await fetch(`${process.env.API_URL || 'http://localhost:3001'}/api/v1/telegrams/send-notification`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chatId: request.telegram_chat_id,
+                message,
+              }),
+            });
+
+            console.log(`[RequestsService] Telegram notification sent to chat_id: ${request.telegram_chat_id}`);
+          }
+
+          // Marcar como notificado
+          await this.supabase
+            .from('content_requests')
+            .update({
+              notified_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', request.id);
+
+        } catch (notifyError) {
+          console.error(`[RequestsService] Error notifying request ${request.id}:`, notifyError);
+        }
+      }
+
+      console.log(`[RequestsService] Notification process completed for: ${contentTitle}`);
+    } catch (error) {
+      console.error(`[RequestsService] Error in notifyRequesters:`, error);
+    }
   }
 
   async findAllRequests(page = 1, limit = 20, status?: RequestStatus) {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { SimultaneousVideoUpload } from '@/components/SimultaneousVideoUpload';
+import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 
 interface ContentFormData {
@@ -12,7 +12,7 @@ interface ContentFormData {
   synopsis: string;
   release_date: string;
   duration_minutes: number;
-  genre: string;
+  genres: string[];
   rating: string;
   director: string;
   cast: string;
@@ -23,6 +23,28 @@ interface ContentFormData {
   is_featured: boolean;
   price_cents: number;
 }
+
+const AVAILABLE_GENRES = [
+  'Ação',
+  'Aventura',
+  'Animação',
+  'Comédia',
+  'Crime',
+  'Documentário',
+  'Drama',
+  'Fantasia',
+  'Ficção Científica',
+  'Guerra',
+  'História',
+  'Horror',
+  'Musical',
+  'Mistério',
+  'Romance',
+  'Suspense',
+  'Terror',
+  'Thriller',
+  'Western'
+];
 
 interface FileUploadState {
   posterFile: File | null;
@@ -35,6 +57,7 @@ interface FileUploadState {
 
 export default function AdminContentCreatePage() {
   const router = useRouter();
+  const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContentId, setCreatedContentId] = useState<string | null>(null);
   const [showLanguageManager, setShowLanguageManager] = useState(false);
@@ -44,7 +67,7 @@ export default function AdminContentCreatePage() {
     synopsis: '',
     release_date: '',
     duration_minutes: 0,
-    genre: '',
+    genres: [],
     rating: '',
     director: '',
     cast: '',
@@ -65,6 +88,9 @@ export default function AdminContentCreatePage() {
     backdropUrl: '',
   });
 
+  // Estado separado para o input de preço (permite digitação livre)
+  const [priceInput, setPriceInput] = useState<string>('19.90');
+
   // Informações de série
   const [seriesInfo, setSeriesInfo] = useState({
     totalSeasons: 1,
@@ -73,7 +99,7 @@ export default function AdminContentCreatePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validar se o pôster foi enviado
     if (!formData.poster_url) {
       alert('Por favor, faça o upload do pôster antes de criar o conteúdo.');
@@ -83,6 +109,12 @@ export default function AdminContentCreatePage() {
     // Verificar se ainda há uploads em andamento
     if (fileUpload.posterUploading) {
       alert('Aguarde o upload do pôster ser concluído antes de criar o conteúdo.');
+      return;
+    }
+
+    // Validar se pelo menos um gênero foi selecionado
+    if (formData.genres.length === 0) {
+      toast.error('Por favor, selecione pelo menos um gênero.');
       return;
     }
 
@@ -103,7 +135,7 @@ export default function AdminContentCreatePage() {
         price_cents: formData.price_cents,
         currency: 'BRL',
         is_featured: formData.is_featured,
-        genres: formData.genre ? [formData.genre] : undefined, // genre → genres (array)
+        genres: formData.genres.length > 0 ? formData.genres : undefined,
         director: formData.director || undefined,
         cast: formData.cast || undefined,
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined, // release_date → release_year
@@ -117,7 +149,7 @@ export default function AdminContentCreatePage() {
         backendData.total_episodes = seriesInfo.totalEpisodes;
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/content/create`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -233,6 +265,15 @@ export default function AdminContentCreatePage() {
       alert('Erro no upload do backdrop. Tente novamente.');
       setFileUpload(prev => ({ ...prev, backdropUploading: false }));
     }
+  };
+
+  const toggleGenre = (genre: string) => {
+    setFormData(prev => ({
+      ...prev,
+      genres: prev.genres.includes(genre)
+        ? prev.genres.filter(g => g !== genre)
+        : [...prev.genres, genre]
+    }));
   };
 
   return (
@@ -419,17 +460,75 @@ export default function AdminContentCreatePage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Gênero *</label>
-                  <input
-                    type="text"
-                    name="genre"
-                    value={formData.genre}
-                    onChange={handleChange}
-                    placeholder="Ação, Terror, Drama..."
-                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    required
-                  />
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Gêneros *
+                    <span className="text-xs text-gray-500 ml-2">
+                      (Selecione um ou mais gêneros)
+                    </span>
+                  </label>
+
+                  {/* Selected Genres Display */}
+                  {formData.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3 p-3 bg-blue-900/10 border border-blue-500/20 rounded-xl">
+                      {formData.genres.map((genre) => (
+                        <span
+                          key={genre}
+                          className="inline-flex items-center space-x-2 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white text-sm font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200"
+                        >
+                          <span>{genre}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleGenre(genre)}
+                            className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
+                            title={`Remover ${genre}`}
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Genre Selection Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-gray-900/50 border border-gray-600/50 rounded-xl max-h-64 overflow-y-auto">
+                    {AVAILABLE_GENRES.map((genre) => {
+                      const isSelected = formData.genres.includes(genre);
+                      return (
+                        <button
+                          key={genre}
+                          type="button"
+                          onClick={() => toggleGenre(genre)}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-105'
+                              : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/70 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between space-x-2">
+                            <span>{genre}</span>
+                            {isSelected && (
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Validation Message */}
+                  {formData.genres.length === 0 && (
+                    <p className="mt-2 text-xs text-gray-400 flex items-center space-x-1">
+                      <svg className="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span>Selecione pelo menos um gênero</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -587,21 +686,29 @@ export default function AdminContentCreatePage() {
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-green-400 font-bold text-lg">R$</span>
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       name="price_reais"
-                      value={(formData.price_cents / 100).toFixed(2)}
+                      value={priceInput}
                       onChange={(e) => {
-                        const reaisValue = parseFloat(e.target.value) || 0;
+                        const value = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.');
+                        setPriceInput(value);
+
+                        const reaisValue = parseFloat(value) || 0;
                         const centsValue = Math.round(reaisValue * 100);
                         setFormData(prev => ({ ...prev, price_cents: centsValue }));
                       }}
-                      min="0"
-                      step="0.01"
-                      placeholder="19.90"
+                      onBlur={() => {
+                        // Formata ao perder o foco
+                        const reaisValue = parseFloat(priceInput.replace(',', '.')) || 0;
+                        setPriceInput(reaisValue.toFixed(2));
+                      }}
+                      placeholder="7.10"
                       className="w-full pl-14 pr-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
                       required
                     />
                   </div>
+                  <p className="mt-1 text-xs text-gray-400">Valor em centavos: {formData.price_cents}</p>
                 </div>
 
                 <div className="flex items-center justify-center">
@@ -716,6 +823,7 @@ export default function AdminContentCreatePage() {
 
             {/* Simultaneous Video Upload Component */}
             <SimultaneousVideoUpload
+              ref={videoUploadRef}
               contentId={createdContentId}
               onUploadComplete={() => {
                 toast.success('Vídeos enviados com sucesso!');
@@ -723,56 +831,121 @@ export default function AdminContentCreatePage() {
             />
 
             {/* Action Buttons */}
-            <div className="flex gap-4">
-              <button
-                onClick={() => router.push('/admin/content')}
-                className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-green-900/50 flex items-center justify-center space-x-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <span>Finalizar e Ver Conteúdos</span>
-              </button>
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-4">
+                <button
+                  onClick={async () => {
+                    console.log('[Finalizar Button] Clicked');
+                    console.log('[Finalizar Button] videoUploadRef.current:', videoUploadRef.current);
+                    console.log('[Finalizar Button] hasFiles():', videoUploadRef.current?.hasFiles());
 
+                    // Se não há arquivos de vídeo selecionados, apenas redireciona
+                    if (!videoUploadRef.current?.hasFiles()) {
+                      console.log('[Finalizar Button] Nenhum arquivo selecionado, redirecionando...');
+                      router.push('/admin');
+                      return;
+                    }
+
+                    console.log('[Finalizar Button] Iniciando upload...');
+                    // Iniciar upload em background (não aguarda a conclusão, apenas inicia)
+                    videoUploadRef.current.startUpload().catch((error) => {
+                      console.error('[Finalizar Button] Upload error:', error);
+                      toast.error('Erro ao iniciar upload. Verifique os arquivos.');
+                    });
+
+                    // Pequeno delay para garantir que o upload foi iniciado
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    toast.success('Upload iniciado! Acompanhe o progresso na barra flutuante.');
+
+                    // Redirecionar para /admin
+                    console.log('[Finalizar Button] Redirecionando para /admin');
+                    router.push('/admin');
+                  }}
+                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-green-900/50 flex items-center justify-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Finalizar</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (confirm('Deseja criar outro conteúdo? Os vídeos do conteúdo atual já foram salvos.')) {
+                      setCreatedContentId(null);
+                      setShowLanguageManager(false);
+                      setFormData({
+                        title: '',
+                        description: '',
+                        synopsis: '',
+                        release_date: '',
+                        duration_minutes: 0,
+                        genres: [],
+                        rating: '',
+                        director: '',
+                        cast: '',
+                        trailer_url: '',
+                        poster_url: '',
+                        backdrop_url: '',
+                        content_type: 'movie',
+                        is_featured: false,
+                        price_cents: 1990,
+                      });
+                      setPriceInput('19.90');
+                      setFileUpload({
+                        posterFile: null,
+                        posterUploading: false,
+                        posterUrl: '',
+                        backdropFile: null,
+                        backdropUploading: false,
+                        backdropUrl: '',
+                      });
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-blue-900/50 flex items-center justify-center space-x-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Criar Outro Conteúdo</span>
+                </button>
+              </div>
+
+              {/* Publish Button */}
               <button
-                onClick={() => {
-                  if (confirm('Deseja criar outro conteúdo? Os vídeos do conteúdo atual já foram salvos.')) {
-                    setCreatedContentId(null);
-                    setShowLanguageManager(false);
-                    setFormData({
-                      title: '',
-                      description: '',
-                      synopsis: '',
-                      release_date: '',
-                      duration_minutes: 0,
-                      genre: '',
-                      rating: '',
-                      director: '',
-                      cast: '',
-                      trailer_url: '',
-                      poster_url: '',
-                      backdrop_url: '',
-                      content_type: 'movie',
-                      is_featured: false,
-                      price_cents: 1990,
+                onClick={async () => {
+                  if (!confirm('Tem certeza que deseja publicar este conteúdo? Ele ficará disponível para todos os usuários.')) {
+                    return;
+                  }
+
+                  try {
+                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      credentials: 'include',
                     });
-                    setFileUpload({
-                      posterFile: null,
-                      posterUploading: false,
-                      posterUrl: '',
-                      backdropFile: null,
-                      backdropUploading: false,
-                      backdropUrl: '',
-                    });
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+                    if (!response.ok) {
+                      throw new Error('Erro ao publicar conteúdo');
+                    }
+
+                    toast.success('✅ Conteúdo publicado com sucesso! Agora está disponível no catálogo.');
+                    router.push('/admin');
+                  } catch (error) {
+                    console.error('Error publishing content:', error);
+                    toast.error('Erro ao publicar conteúdo. Tente novamente.');
                   }
                 }}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-blue-900/50 flex items-center justify-center space-x-2"
+                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-purple-900/50 flex items-center justify-center space-x-2"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                <span>Criar Outro Conteúdo</span>
+                <span>📢 Publicar Conteúdo e Notificar Usuários</span>
               </button>
             </div>
           </div>

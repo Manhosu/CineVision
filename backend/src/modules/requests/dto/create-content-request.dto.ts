@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNotEmpty, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsNotEmpty, MaxLength, IsBoolean, IsEmail } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateContentRequestDto {
@@ -51,4 +51,21 @@ export class CreateContentRequestDto {
   @IsString()
   @IsOptional()
   user_id?: string;
+
+  @ApiPropertyOptional({
+    description: 'User email for notifications',
+    example: 'user@example.com',
+  })
+  @IsEmail()
+  @IsOptional()
+  user_email?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether to send notification when content is added',
+    example: true,
+    default: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  notify_when_added?: boolean;
 }

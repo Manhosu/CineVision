@@ -5,6 +5,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import * as bcrypt from 'bcrypt';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -23,6 +24,19 @@ interface PendingPurchase {
   timestamp: number;
 }
 
+interface PendingRegistration {
+  chat_id: number;
+  telegram_user_id: number;
+  content_id?: string;
+  step: 'name' | 'email' | 'password';
+  data: {
+    name?: string;
+    email?: string;
+    password?: string;
+  };
+  timestamp: number;
+}
+
 @Injectable()
 export class TelegramsEnhancedService implements OnModuleInit {
   private readonly logger = new Logger(TelegramsEnhancedService.name);
@@ -38,6 +52,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private pendingPurchases = new Map<string, PendingPurchase>();
   // Cache de verificações de e-mail aguardando resposta
   private emailVerifications = new Map<string, { chat_id: number; content_id: string; timestamp: number }>();
+  // Cache de registros em andamento
+  private pendingRegistrations = new Map<string, PendingRegistration>();
 
   // Polling state
   private pollingOffset = 0;
@@ -272,14 +288,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
    */
   private async generatePaymentUrl(purchaseId: string, content: any): Promise<string> {
     try {
+      this.logger.log(`Generating payment URL for purchase ${purchaseId}`);
+
       // Chamar endpoint do backend para criar payment intent no Stripe
       const response = await axios.post(
         `${this.apiUrl}/api/v1/payments/create`,
         {
           purchase_id: purchaseId,
-          payment_method: 'pix', // ou 'card'
-          return_url: `${this.apiUrl}/api/v1/telegram/payment-success`,
-          cancel_url: `${this.apiUrl}/api/v1/telegram/payment-cancel`,
+          payment_method: 'card', // Usar cartão como padrão
+          return_url: `https://cinevision.com/payment-success`,
+          cancel_url: `https://cinevision.com/payment-cancel`,
         },
         {
           headers: {
@@ -288,11 +306,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
         },
       );
 
+      this.logger.log(`Payment URL generated successfully: ${response.data.payment_url}`);
       return response.data.payment_url || `${this.apiUrl}/checkout/${purchaseId}`;
     } catch (error) {
       this.logger.error('Error generating payment URL:', error);
-      // Fallback para URL direta
-      return `${this.apiUrl}/checkout/${purchaseId}`;
+      this.logger.error('Error details:', error.response?.data || error.message);
+      throw new BadRequestException('Erro ao gerar link de pagamento');
     }
   }
 
@@ -481,6 +500,16 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
     }
 
+    // Verificar se há registro pendente
+    const regKey = `reg_${chatId}`;
+    const pendingReg = this.pendingRegistrations.get(regKey);
+
+    if (pendingReg) {
+      // Usuário está no meio de um processo de registro
+      await this.handleRegistrationStep(chatId, telegramUserId, text, pendingReg);
+      return;
+    }
+
     if (text?.startsWith('/start')) {
       await this.handleStartCommand(chatId, text);
     } else if (text === '/catalogo' || text === '/catalog') {
@@ -530,11 +559,12 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
           },
         });
       } else {
-        await this.sendMessage(chatId, `❌ ${verification.message}\n\nDeseja comprar sem cadastro?`, {
+        // NOVO FLUXO: Email não encontrado → Sugerir criar conta
+        await this.sendMessage(chatId, `❌ E-mail não encontrado!\n\n💡 Crie uma conta agora para continuar:`, {
           reply_markup: {
             inline_keyboard: [
               [
-                { text: '✅ Sim, comprar sem cadastro', callback_data: `buy_anon_${contentId}` },
+                { text: '📝 Criar Conta', callback_data: `create_account_${contentId}` },
                 { text: '🔙 Voltar', callback_data: 'catalog' },
               ],
             ],
@@ -544,6 +574,138 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     } catch (error) {
       this.logger.error('Error processing email input:', error);
       await this.sendMessage(chatId, '❌ Erro ao processar e-mail. Tente novamente.');
+    }
+  }
+
+  /**
+   * Handler para processar cada etapa do registro de conta
+   */
+  private async handleRegistrationStep(chatId: number, telegramUserId: number, text: string, pendingReg: PendingRegistration) {
+    const regKey = `reg_${chatId}`;
+
+    try {
+      if (pendingReg.step === 'name') {
+        // Validar nome
+        if (!text || text.trim().length < 3) {
+          await this.sendMessage(chatId, '❌ Nome inválido. Por favor, digite seu nome completo (mínimo 3 caracteres):');
+          return;
+        }
+
+        // Salvar nome e pedir email
+        pendingReg.data.name = text.trim();
+        pendingReg.step = 'email';
+        this.pendingRegistrations.set(regKey, pendingReg);
+
+        await this.sendMessage(chatId, `✅ Nome: ${text.trim()}\n\n📧 Agora digite seu e-mail:`);
+
+      } else if (pendingReg.step === 'email') {
+        // Validar email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(text)) {
+          await this.sendMessage(chatId, '❌ E-mail inválido. Por favor, digite um e-mail válido:');
+          return;
+        }
+
+        // Verificar se email já existe
+        const { data: existingUser } = await this.supabase
+          .from('users')
+          .select('id')
+          .eq('email', text.trim())
+          .single();
+
+        if (existingUser) {
+          await this.sendMessage(chatId, '❌ Este e-mail já está cadastrado! Use a opção "Sim, tenho conta" ou tente outro e-mail.');
+          this.pendingRegistrations.delete(regKey);
+          return;
+        }
+
+        // Salvar email e pedir senha
+        pendingReg.data.email = text.trim();
+        pendingReg.step = 'password';
+        this.pendingRegistrations.set(regKey, pendingReg);
+
+        await this.sendMessage(chatId, `✅ E-mail: ${text.trim()}\n\n🔐 Agora crie uma senha (mínimo 6 caracteres):`);
+
+      } else if (pendingReg.step === 'password') {
+        // Validar senha
+        if (!text || text.length < 6) {
+          await this.sendMessage(chatId, '❌ Senha muito curta. Digite uma senha com pelo menos 6 caracteres:');
+          return;
+        }
+
+        pendingReg.data.password = text;
+
+        // CRIAR CONTA
+        await this.sendMessage(chatId, '⏳ Criando sua conta...');
+
+        const hashedPassword = await bcrypt.hash(text, 12);
+
+        const { data: newUser, error: userError } = await this.supabase
+          .from('users')
+          .insert({
+            name: pendingReg.data.name,
+            email: pendingReg.data.email,
+            password: hashedPassword,
+            telegram_id: telegramUserId.toString(),
+            telegram_chat_id: chatId.toString(),
+            telegram_username: pendingReg.data.name, // Pode ser atualizado depois
+            role: 'user',
+            status: 'active',
+          })
+          .select()
+          .single();
+
+        if (userError || !newUser) {
+          this.logger.error('Error creating user:', userError);
+          await this.sendMessage(chatId, '❌ Erro ao criar conta. Tente novamente mais tarde.');
+          this.pendingRegistrations.delete(regKey);
+          return;
+        }
+
+        // Sucesso!
+        await this.sendMessage(chatId, `🎉 **Conta criada com sucesso!**\n\n👤 Nome: ${newUser.name}\n📧 E-mail: ${newUser.email}\n\n✅ Sua conta foi vinculada ao Telegram!`, {
+          parse_mode: 'Markdown'
+        });
+
+        // Se houver um content_id pendente, iniciar compra
+        if (pendingReg.content_id) {
+          await this.sendMessage(chatId, '🔐 Gerando link de pagamento...');
+
+          const purchase = await this.initiateTelegramPurchase({
+            chat_id: chatId.toString(),
+            telegram_user_id: telegramUserId,
+            content_id: pendingReg.content_id,
+            purchase_type: PurchaseType.WITH_ACCOUNT,
+            user_email: newUser.email,
+          });
+
+          await this.sendMessage(chatId, `💳 **Link de Pagamento**\n\n${purchase.message}`, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '💳 Pagar Agora', url: purchase.payment_url }],
+                [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+              ],
+            },
+          });
+        } else {
+          await this.sendMessage(chatId, 'Agora você pode comprar filmes e eles aparecerão automaticamente no seu dashboard!', {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+                [{ text: '🌐 Acessar Site', url: 'https://cinevision.com' }],
+              ],
+            },
+          });
+        }
+
+        // Limpar registro pendente
+        this.pendingRegistrations.delete(regKey);
+      }
+    } catch (error) {
+      this.logger.error('Error in registration step:', error);
+      await this.sendMessage(chatId, '❌ Erro ao processar registro. Tente novamente com /start');
+      this.pendingRegistrations.delete(regKey);
     }
   }
 
@@ -565,6 +727,10 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.handleBuyCallback(chatId, telegramUserId, data);
     } else if (data?.startsWith('watch_')) {
       await this.handleWatchVideoCallback(chatId, telegramUserId, data);
+    } else if (data?.startsWith('has_account_')) {
+      await this.handleHasAccountCallback(chatId, telegramUserId, data);
+    } else if (data?.startsWith('create_account_')) {
+      await this.handleCreateAccountCallback(chatId, telegramUserId, data);
     } else if (data === 'my_purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
@@ -572,10 +738,46 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     }
   }
 
+  /**
+   * Handler para quando usuário diz que TEM conta
+   */
+  private async handleHasAccountCallback(chatId: number, telegramUserId: number, data: string) {
+    const contentId = data.replace('has_account_', '');
+
+    await this.sendMessage(chatId, '✉️ Por favor, digite seu e-mail cadastrado:');
+
+    // Guardar no cache que está aguardando email
+    this.emailVerifications.set(`email_${chatId}`, {
+      chat_id: chatId,
+      content_id: contentId,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Handler para quando usuário quer CRIAR conta
+   */
+  private async handleCreateAccountCallback(chatId: number, telegramUserId: number, data: string) {
+    const contentId = data.replace('create_account_', '');
+
+    await this.sendMessage(chatId, '📝 **Criação de Conta**\n\nVamos criar sua conta em 3 passos simples:\n\n1️⃣ Nome completo\n2️⃣ E-mail\n3️⃣ Senha\n\n👤 Digite seu nome completo:', {
+      parse_mode: 'Markdown'
+    });
+
+    // Iniciar fluxo de registro
+    this.pendingRegistrations.set(`reg_${chatId}`, {
+      chat_id: chatId,
+      telegram_user_id: telegramUserId,
+      content_id: contentId,
+      step: 'name',
+      data: {},
+      timestamp: Date.now(),
+    });
+  }
+
   private async handleBuyCallback(chatId: number, telegramUserId: number, data: string) {
     const parts = data.split('_');
     const contentId = parts[parts.length - 1];
-    const isAnonymous = parts[1] === 'anon';
 
     // Buscar info do filme
     const { data: content } = await this.supabase
@@ -589,40 +791,21 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       return;
     }
 
-    if (isAnonymous) {
-      // Compra anônima direta
-      await this.sendMessage(chatId, '🔐 Gerando link de pagamento...');
-
-      const purchase = await this.initiateTelegramPurchase({
-        chat_id: chatId.toString(),
-        telegram_user_id: telegramUserId,
-        content_id: contentId,
-        purchase_type: PurchaseType.ANONYMOUS,
-      });
-
-      await this.sendMessage(chatId, `💳 **Pagamento Anônimo**\n\n${purchase.message}\n\n💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '💳 Pagar Agora', url: purchase.payment_url }],
+    // NOVO FLUXO: Sempre perguntar se possui conta (SEM opção de compra anônima)
+    await this.sendMessage(chatId, `🎬 **${content.title}**\n\n💰 R$ ${(content.price_cents / 100).toFixed(2)}\n\n📝 Para comprar, você precisa ter uma conta.\nVocê já possui uma conta no CineVision?`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Sim, tenho conta', callback_data: `has_account_${contentId}` },
           ],
-        },
-      });
-    } else {
-      // Perguntar se possui conta
-      await this.sendMessage(chatId, `🎬 **${content.title}**\n\n💰 R$ ${(content.price_cents / 100).toFixed(2)}\n\nVocê já possui uma conta na CineVision?`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Sim, tenho conta', callback_data: `has_account_${contentId}` },
-              { text: '🚫 Não possuo conta', callback_data: `buy_anon_${contentId}` },
-            ],
-            [{ text: '🔙 Voltar ao catálogo', callback_data: 'catalog' }],
+          [
+            { text: '📝 Não, criar conta agora', callback_data: `create_account_${contentId}` },
           ],
-        },
-      });
-    }
+          [{ text: '🔙 Voltar ao catálogo', callback_data: 'catalog' }],
+        ],
+      },
+    });
   }
 
   private async handleStartCommand(chatId: number, text: string) {
@@ -650,7 +833,9 @@ Use /catalogo para ver os filmes disponíveis!`;
 
   private async showCatalog(chatId: number) {
     try {
-      const { data: movies } = await this.supabase
+      this.logger.log(`Fetching catalog for chat ${chatId}`);
+
+      const { data: movies, error } = await this.supabase
         .from('content')
         .select('*')
         .eq('status', 'PUBLISHED')
@@ -658,27 +843,32 @@ Use /catalogo para ver os filmes disponíveis!`;
         .order('created_at', { ascending: false })
         .limit(10);
 
+      if (error) {
+        this.logger.error('Error fetching movies:', error);
+        await this.sendMessage(chatId, '❌ Erro ao carregar catálogo.');
+        return;
+      }
+
       if (!movies || movies.length === 0) {
         await this.sendMessage(chatId, '📭 Catálogo vazio. Em breve teremos novos filmes!');
         return;
       }
 
-      let catalogMessage = '🎬 **Catálogo de Filmes**\n\n';
+      this.logger.log(`Found ${movies.length} published movies`);
+
+      // Criar botões com nome do filme e preço
       const keyboard = [];
 
-      movies.forEach((movie, index) => {
-        catalogMessage += `${index + 1}. **${movie.title}**\n`;
-        catalogMessage += `   💰 R$ ${(movie.price_cents / 100).toFixed(2)}\n`;
-        if (movie.release_year) {
-          catalogMessage += `   📅 ${movie.release_year}\n`;
-        }
-        catalogMessage += '\n';
+      for (const movie of movies) {
+        const priceText = `R$ ${(movie.price_cents / 100).toFixed(2)}`;
+        keyboard.push([{
+          text: `${movie.title} - ${priceText}`,
+          callback_data: `buy_${movie.id}`
+        }]);
+      }
 
-        keyboard.push([{ text: `🛒 Comprar: ${movie.title}`, callback_data: `buy_${movie.id}` }]);
-      });
-
-      await this.sendMessage(chatId, catalogMessage, {
-        parse_mode: 'Markdown',
+      // Mensagem simples
+      await this.sendMessage(chatId, '🎬 Segue catálogo completo abaixo:', {
         reply_markup: {
           inline_keyboard: keyboard,
         },
@@ -699,7 +889,7 @@ Use /catalogo para ver os filmes disponíveis!`;
         .single();
 
       if (!user) {
-        await this.sendMessage(chatId, '📭 Você ainda não fez nenhuma compra com conta cadastrada.\n\n💡 Compras anônimas não ficam salvas.');
+        await this.sendMessage(chatId, '📭 Você ainda não está cadastrado.\n\n💡 Crie uma conta para fazer compras e acessar seus filmes!');
         return;
       }
 
@@ -747,9 +937,9 @@ Use /catalogo para ver os filmes disponíveis!`;
 
 💡 **Como funciona:**
 1️⃣ Escolha um filme do catálogo
-2️⃣ Decida se quer vincular à sua conta ou comprar sem cadastro
+2️⃣ Crie uma conta ou faça login com seu e-mail
 3️⃣ Faça o pagamento via Stripe
-4️⃣ Receba o filme aqui no chat!
+4️⃣ Receba o filme aqui no chat e no dashboard!
 
 🎬 Aproveite nosso catálogo!`;
 
@@ -830,6 +1020,10 @@ Use /catalogo para ver os filmes disponíveis!`;
   /**
    * Entrega o conteúdo ao usuário via Telegram após pagamento confirmado
    * Chamado pelo PaymentsService quando purchase status = 'paid'
+   *
+   * - Se compra COM CONTA: Adiciona ao dashboard + Envia no Telegram
+   * - Se compra SEM CONTA: Envia apenas no Telegram
+   * - Envia TODOS os idiomas disponíveis (dublado, legendado, etc.)
    */
   async deliverContentAfterPayment(purchase: any): Promise<void> {
     try {
@@ -860,38 +1054,49 @@ Use /catalogo para ver os filmes disponíveis!`;
         return;
       }
 
-      // Enviar mensagem de sucesso
+      // NOVO FLUXO: Todas as compras TÊM conta (não há mais compras anônimas)
       const priceText = (purchase.amount_cents / 100).toFixed(2);
+
       await this.sendMessage(parseInt(chatId),
-        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📺 Escolha o idioma para assistir:`,
+        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **O filme foi adicionado ao seu dashboard!**\nAcesse em: https://cinevision.com/dashboard\n\n📺 Escolha o idioma para assistir:`,
         { parse_mode: 'Markdown' }
       );
 
-      // Criar botões para cada idioma disponível
-      const buttons = [];
-      for (const lang of content.content_languages) {
-        if (lang.is_active && lang.video_storage_key) {
-          const langLabel = lang.language_type === 'dubbed' ? '🎙️ Dublado' : '📝 Legendado';
-          buttons.push([{
-            text: `${langLabel} - ${lang.language_code}`,
-            callback_data: `watch_${purchase.id}_${lang.id}`
-          }]);
-        }
-      }
+      // Filtrar apenas idiomas ativos com vídeo
+      const activeLanguages = content.content_languages.filter(
+        (lang: any) => lang.is_active && lang.video_storage_key && lang.upload_status === 'completed'
+      );
 
-      if (buttons.length === 0) {
+      if (activeLanguages.length === 0) {
         this.logger.error('No active languages with video_storage_key found');
         await this.sendMessage(parseInt(chatId), '❌ Nenhum vídeo disponível no momento. Entre em contato com suporte.');
         return;
       }
 
-      await this.sendMessage(parseInt(chatId), '🎬 Clique para assistir:', {
+      // Criar botões para TODOS os idiomas disponíveis
+      const buttons = [];
+      for (const lang of activeLanguages) {
+        const langLabel = lang.language_type === 'dubbed' ? '🎙️ Dublado' :
+                         lang.language_type === 'subtitled' ? '📝 Legendado' :
+                         '🎬 Original';
+
+        buttons.push([{
+          text: `${langLabel} - ${lang.language_name || lang.language_code}`,
+          callback_data: `watch_${purchase.id}_${lang.id}`
+        }]);
+      }
+
+      // NOVO FLUXO: Sempre adicionar botão de dashboard (todas compras têm conta)
+      buttons.push([{ text: '🌐 Ver no Dashboard', url: 'https://cinevision.com/dashboard' }]);
+
+      await this.sendMessage(parseInt(chatId), `🎬 **${activeLanguages.length} idioma(s) disponível(is):**`, {
         reply_markup: {
           inline_keyboard: buttons,
         },
       });
 
-      this.logger.log(`Content delivery completed for purchase ${purchase.id}`);
+      // Log de entrega
+      this.logger.log(`Content delivered: ${activeLanguages.length} language(s) to purchase ${purchase.id}`);
     } catch (error) {
       this.logger.error('Error delivering content to Telegram:', error);
       // Não fazer throw para não quebrar o webhook do Stripe
