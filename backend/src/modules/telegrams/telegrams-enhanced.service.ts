@@ -1656,12 +1656,8 @@ Use /catalogo para ver os filmes disponíveis!`;
       //   throw new BadRequestException('Invalid Telegram Web App data');
       // }
 
-      // Find or create user by Telegram ID
-      const { data: user } = await this.supabase
-        .from('users')
-        .select('*, telegram_chat_id')
-        .eq('telegram_id', data.telegram_id.toString())
-        .single();
+      // Find or create user by Telegram ID (same as handleBuyCallback)
+      let user = await this.findOrCreateUserByTelegramId(data.telegram_id, data.telegram_id);
 
       if (!user || !user.telegram_chat_id) {
         throw new NotFoundException('User not found. Please start the bot first with /start');
