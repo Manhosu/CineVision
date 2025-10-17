@@ -56,9 +56,8 @@ export default function MovieDetailPage() {
       console.log('=== PURCHASE DEBUG START ===');
       console.log('NEXT_PUBLIC_API_URL from env:', process.env.NEXT_PUBLIC_API_URL);
 
-      // Hardcode fallback URL to ensure it works
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://cinevisionn.onrender.com';
-      const fullUrl = `${apiUrl}/api/v1/telegrams/miniapp/purchase`;
+      // TEMPORARY: Hardcode URL completely to debug
+      const fullUrl = 'https://cinevisionn.onrender.com/api/v1/telegrams/miniapp/purchase';
 
       const requestData = {
         telegram_id: telegramUser.id,
