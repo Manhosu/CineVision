@@ -28,7 +28,8 @@ export class TelegramsController {
     @Body() webhookData: any,
     @Headers('x-telegram-bot-api-secret-token') signature?: string
   ) {
-    return this.telegramsService.handleWebhook(webhookData, signature);
+    // Use enhanced service which has Mini App support
+    return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
   }
 
   @Post('send-notification')
