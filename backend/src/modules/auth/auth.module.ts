@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { WebhooksController } from './webhooks.controller';
 import { AuthService } from './auth.service';
 import { TelegramAuthService } from './services/telegram-auth.service';
+import { AutoLoginService } from './services/auto-login.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
@@ -42,6 +43,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
   controllers: conditionalControllers,
   providers: [
     AuthService,
+    AutoLoginService,
     ...(isTypeOrmEnabled() ? [TelegramAuthService] : []),
     LocalStrategy,
     JwtStrategy,
@@ -49,6 +51,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
   ],
   exports: [
     AuthService,
+    AutoLoginService,
     ...(isTypeOrmEnabled() ? [TelegramAuthService] : []),
     JwtModule
   ],

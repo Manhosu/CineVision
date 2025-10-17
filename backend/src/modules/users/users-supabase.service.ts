@@ -24,10 +24,10 @@ export class UsersSupabaseService {
 
   async findAll(): Promise<any[]> {
     this.logger.log('Finding all users with Supabase REST client');
-    
+
     try {
       const users = await this.supabaseClient.select('users', {
-        select: 'id, name, email, phone, role, status, created_at, updated_at'
+        select: 'id, name, email, phone, role, status, telegram_id, telegram_username, telegram_chat_id, created_at, updated_at'
       });
       return users;
     } catch (error) {

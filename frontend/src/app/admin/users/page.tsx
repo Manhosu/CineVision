@@ -6,8 +6,12 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface User {
   id: string;
+  name?: string;
   email: string;
   role: string;
+  telegram_id?: string;
+  telegram_username?: string;
+  telegram_chat_id?: string;
   created_at: string;
 }
 
@@ -111,25 +115,32 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-      {/* Header */}
-      <header className="border-b border-gray-700/50 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBackToDashboard}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-                Voltar ao Painel
-              </button>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="mb-6">
+                <button
+                  onClick={handleBackToDashboard}
+                  className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Voltar para Admin
+                </button>
+              </div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-500 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
                 Gerenciamento de Usuários
               </h1>
+              <p className="text-gray-400 text-lg">
+                Gerencie contas de usuários e permissões
+              </p>
             </div>
+
+            {/* Action Buttons */}
             <div className="flex items-center gap-3">
               <button
                 onClick={handleGoHome}
@@ -140,6 +151,7 @@ export default function AdminUsersPage() {
                 </svg>
                 Home
               </button>
+
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors"
@@ -152,57 +164,62 @@ export default function AdminUsersPage() {
             </div>
           </div>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 border border-purple-500/30 rounded-xl p-6">
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-600 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div className="relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm font-medium mb-1">Total de Usuários</p>
                 <p className="text-3xl font-bold text-purple-300">{stats.total}</p>
               </div>
-              <div className="bg-purple-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 border border-blue-500/30 rounded-xl p-6">
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-cyan-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div className="relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm font-medium mb-1">Administradores</p>
                 <p className="text-3xl font-bold text-blue-300">{stats.admins}</p>
               </div>
-              <div className="bg-blue-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 border border-green-500/30 rounded-xl p-6">
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500 to-emerald-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div className="relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm font-medium mb-1">Usuários Comuns</p>
                 <p className="text-3xl font-bold text-green-300">{stats.users}</p>
               </div>
-              <div className="bg-green-500/20 p-3 rounded-lg">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
+            </div>
             </div>
           </div>
         </div>
 
         {/* Users Table */}
-        <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl overflow-hidden">
+        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden">
           <div className="p-6 border-b border-gray-700/50">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">Lista de Usuários</h2>
@@ -251,7 +268,8 @@ export default function AdminUsersPage() {
               <table className="w-full">
                 <thead className="bg-gray-900/50 border-b border-gray-700/50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Email</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Nome/Email</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Telegram ID</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Função</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Data de Criação</th>
                     <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">Ações</th>
@@ -263,10 +281,25 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold">
-                            {user.email.charAt(0).toUpperCase()}
+                            {(user.name || user.email).charAt(0).toUpperCase()}
                           </div>
-                          <span className="text-gray-200">{user.email}</span>
+                          <div className="flex flex-col">
+                            {user.name && <span className="text-gray-200 font-medium">{user.name}</span>}
+                            <span className={`${user.name ? 'text-gray-400 text-sm' : 'text-gray-200'}`}>{user.email}</span>
+                          </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {user.telegram_id ? (
+                          <div className="flex flex-col">
+                            <span className="text-gray-200 font-mono">{user.telegram_id}</span>
+                            {user.telegram_username && (
+                              <span className="text-gray-400 text-sm">@{user.telegram_username}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic">Sem Telegram</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border ${getRoleColor(user.role)}`}>
@@ -321,7 +354,7 @@ export default function AdminUsersPage() {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

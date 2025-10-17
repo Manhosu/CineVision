@@ -61,25 +61,49 @@ export class PaymentsController {
     return this.paymentsService.getPaymentStatus({ provider_payment_id });
   }
 
+  @Post('pix/create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Create PIX payment with QR Code',
+    description: 'Creates a PIX payment and returns QR Code for scanning'
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'PIX payment created successfully with QR Code',
+    schema: {
+      type: 'object',
+      properties: {
+        provider_payment_id: { type: 'string', description: 'Transaction ID' },
+        payment_method: { type: 'string', example: 'pix' },
+        qr_code_text: { type: 'string', description: 'EMV QR Code payload' },
+        qr_code_image: { type: 'string', description: 'Base64 QR Code image' },
+        copy_paste_code: { type: 'string', description: 'PIX copy-paste code' },
+        amount_cents: { type: 'number', example: 750 },
+        amount_brl: { type: 'string', example: '7.50' },
+        expires_in: { type: 'number', example: 3600 },
+        payment_instructions: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'PIX key not configured or invalid' })
+  @ApiResponse({ status: 404, description: 'Purchase not found' })
+  async createPixPayment(@Body() body: { purchase_id: string }) {
+    return this.paymentsService.createPixPayment(body.purchase_id);
+  }
+
   // Legacy endpoints for backward compatibility
   @Post('pix')
   @ApiOperation({
     summary: 'Create PIX payment (deprecated)',
     deprecated: true,
-    description: 'Use POST /payments/create with payment_method: "pix" instead'
+    description: 'Use POST /payments/pix/create instead'
   })
   @ApiResponse({ status: 201, description: 'PIX payment created successfully' })
-  async createPixPayment(@Body() body: any) {
+  async createPixPaymentLegacy(@Body() body: any) {
     if (body.purchase_id) {
-      return this.paymentsService.createPayment({
-        purchase_id: body.purchase_id,
-        payment_method: 'pix' as any,
-        pix_key: body.pix_key,
-        return_url: body.return_url,
-        cancel_url: body.cancel_url,
-      });
+      return this.paymentsService.createPixPayment(body.purchase_id);
     }
-    return { message: 'Legacy PIX payment endpoint. Use POST /payments/create instead.' };
+    return { message: 'Legacy PIX payment endpoint. Use POST /payments/pix/create instead.' };
   }
 
   @Post('card')

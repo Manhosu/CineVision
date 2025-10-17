@@ -6,6 +6,7 @@ import axios from 'axios';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as bcrypt from 'bcrypt';
+import { AutoLoginService } from '../auth/services/auto-login.service';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -54,12 +55,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private emailVerifications = new Map<string, { chat_id: number; content_id: string; timestamp: number }>();
   // Cache de registros em andamento
   private pendingRegistrations = new Map<string, PendingRegistration>();
+  // Cache de pagamentos PIX pendentes
+  private pendingPixPayments = new Map<string, { purchase_id: string; chat_id: number; transaction_id: string; timestamp: number }>();
 
   // Polling state
   private pollingOffset = 0;
   private isPolling = false;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private autoLoginService: AutoLoginService,
+  ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.webhookSecret = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
     this.botApiUrl = `https://api.telegram.org/bot${this.botToken}`;
@@ -208,9 +214,6 @@ export class TelegramsEnhancedService implements OnModuleInit {
       throw new BadRequestException('Erro ao criar compra');
     }
 
-    // Gerar link de pagamento Stripe via API backend
-    const paymentUrl = await this.generatePaymentUrl(purchase.id, content);
-
     // Salvar no cache temporário
     this.pendingPurchases.set(purchase.id, {
       chat_id: dto.chat_id,
@@ -222,13 +225,40 @@ export class TelegramsEnhancedService implements OnModuleInit {
       timestamp: Date.now(),
     });
 
+    // Enviar mensagem para escolher método de pagamento
+    await this.sendPaymentMethodSelection(parseInt(dto.chat_id), purchase.id, content);
+
     return {
       purchase_id: purchase.id,
-      payment_url: paymentUrl,
+      payment_url: '', // Será gerado quando usuário escolher método
       amount_cents: content.price_cents,
       status: 'pending',
-      message: `Compra vinculada à conta ${dto.user_email}. Após o pagamento, o filme aparecerá em "Meus Filmes" no site e você receberá o link aqui no Telegram.`,
+      message: `Compra criada! Escolha o método de pagamento.`,
     };
+  }
+
+  /**
+   * Envia menu de seleção de método de pagamento
+   */
+  private async sendPaymentMethodSelection(chatId: number, purchaseId: string, content: any) {
+    const priceText = (content.price_cents / 100).toFixed(2);
+
+    await this.sendMessage(chatId, `💳 *Escolha o método de pagamento:*\n\n🎬 ${content.title}\n💰 Valor: R$ ${priceText}\n\nSelecione uma opção:`, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '💳 Cartão de Crédito', callback_data: `pay_stripe_${purchaseId}` },
+          ],
+          [
+            { text: '📱 PIX', callback_data: `pay_pix_${purchaseId}` },
+          ],
+          [
+            { text: '🔙 Cancelar', callback_data: 'catalog' },
+          ],
+        ],
+      },
+    });
   }
 
   /**
@@ -500,34 +530,14 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
     }
 
-    // Verificar se há registro pendente
-    const regKey = `reg_${chatId}`;
-    const pendingReg = this.pendingRegistrations.get(regKey);
-
-    if (pendingReg) {
-      // Usuário está no meio de um processo de registro
-      await this.handleRegistrationStep(chatId, telegramUserId, text, pendingReg);
-      return;
-    }
-
     if (text?.startsWith('/start')) {
-      await this.handleStartCommand(chatId, text);
+      await this.handleStartCommand(chatId, text, telegramUserId);
     } else if (text === '/catalogo' || text === '/catalog') {
       await this.showCatalog(chatId);
     } else if (text === '/minhas-compras' || text === '/my-purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
-    } else {
-      // Verificar se está aguardando e-mail
-      const key = `email_${chatId}`;
-      const verification = this.emailVerifications.get(key);
-
-      if (verification && text?.includes('@')) {
-        // Processar e-mail recebido
-        await this.processEmailInput(chatId, telegramUserId, text, verification.content_id);
-        this.emailVerifications.delete(key);
-      }
     }
   }
 
@@ -727,14 +737,209 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.handleBuyCallback(chatId, telegramUserId, data);
     } else if (data?.startsWith('watch_')) {
       await this.handleWatchVideoCallback(chatId, telegramUserId, data);
-    } else if (data?.startsWith('has_account_')) {
-      await this.handleHasAccountCallback(chatId, telegramUserId, data);
-    } else if (data?.startsWith('create_account_')) {
-      await this.handleCreateAccountCallback(chatId, telegramUserId, data);
+    } else if (data?.startsWith('pay_pix_')) {
+      await this.handlePixPayment(chatId, data);
+    } else if (data?.startsWith('pay_stripe_')) {
+      await this.handleStripePayment(chatId, data);
+    } else if (data?.startsWith('check_pix_')) {
+      await this.handleCheckPixPayment(chatId, data);
     } else if (data === 'my_purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
       await this.handleHelpCommand(chatId);
+    }
+  }
+
+  /**
+   * Handler para pagamento com Stripe (Cartão)
+   */
+  private async handleStripePayment(chatId: number, data: string) {
+    try {
+      const purchaseId = data.replace('pay_stripe_', '');
+
+      await this.sendMessage(chatId, '⏳ Gerando link de pagamento com cartão...');
+
+      // Buscar purchase
+      const { data: purchase, error } = await this.supabase
+        .from('purchases')
+        .select('*, content(*)')
+        .eq('id', purchaseId)
+        .single();
+
+      if (error || !purchase) {
+        await this.sendMessage(chatId, '❌ Compra não encontrada.');
+        return;
+      }
+
+      // Gerar URL de pagamento Stripe
+      const paymentUrl = await this.generatePaymentUrl(purchaseId, purchase.content);
+
+      await this.sendMessage(chatId, `💳 *Pagamento com Cartão*\n\n🎬 ${purchase.content.title}\n💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n\nClique no botão abaixo para pagar:`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💳 Pagar com Cartão', url: paymentUrl }],
+            [{ text: '🔙 Voltar', callback_data: 'catalog' }],
+          ],
+        },
+      });
+    } catch (error) {
+      this.logger.error('Error handling Stripe payment:', error);
+      await this.sendMessage(chatId, '❌ Erro ao gerar link de pagamento. Tente novamente.');
+    }
+  }
+
+  /**
+   * Handler para pagamento com PIX
+   */
+  private async handlePixPayment(chatId: number, data: string) {
+    try {
+      const purchaseId = data.replace('pay_pix_', '');
+
+      await this.sendMessage(chatId, '⏳ Gerando QR Code PIX...');
+
+      // Chamar endpoint para criar pagamento PIX
+      const response = await axios.post(
+        `${this.apiUrl}/api/v1/payments/pix/create`,
+        { purchase_id: purchaseId },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      const pixData = response.data;
+
+      // Salvar no cache
+      this.pendingPixPayments.set(purchaseId, {
+        purchase_id: purchaseId,
+        chat_id: chatId,
+        transaction_id: pixData.provider_payment_id,
+        timestamp: Date.now(),
+      });
+
+      // Enviar QR Code como foto (se disponível)
+      if (pixData.qr_code_image) {
+        // Enviar como imagem base64 usando data URI
+        const photoUrl = `data:image/png;base64,${pixData.qr_code_image}`;
+
+        try {
+          await axios.post(`${this.botApiUrl}/sendPhoto`, {
+            chat_id: chatId,
+            photo: photoUrl,
+            caption: `📱 *Pagamento PIX*\n\n💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`,
+            parse_mode: 'Markdown'
+          });
+        } catch (photoError) {
+          this.logger.warn('Could not send QR Code as photo, sending text only');
+        }
+      }
+
+      // Enviar código copia e cola
+      await this.sendMessage(chatId, `\`${pixData.copy_paste_code}\``, {
+        parse_mode: 'Markdown'
+      });
+
+      // Enviar botão "Já paguei"
+      await this.sendMessage(chatId, '✅ *Após realizar o pagamento, clique no botão abaixo:*', {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✅ Já paguei!', callback_data: `check_pix_${purchaseId}` }],
+            [{ text: '❌ Cancelar', callback_data: 'catalog' }],
+          ],
+        },
+      });
+
+    } catch (error) {
+      this.logger.error('Error handling PIX payment:', error);
+      await this.sendMessage(chatId, '❌ Erro ao gerar QR Code PIX. Verifique se a chave PIX está configurada no admin.');
+    }
+  }
+
+  /**
+   * Handler para verificar se pagamento PIX foi confirmado
+   */
+  private async handleCheckPixPayment(chatId: number, data: string) {
+    try {
+      const purchaseId = data.replace('check_pix_', '');
+
+      await this.sendMessage(chatId, '⏳ Verificando pagamento...');
+
+      // Buscar payment no banco
+      const { data: payment, error: paymentError } = await this.supabase
+        .from('payments')
+        .select('*')
+        .eq('purchase_id', purchaseId)
+        .eq('provider', 'pix')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (paymentError || !payment) {
+        await this.sendMessage(chatId, '❌ Pagamento PIX não encontrado no sistema.');
+        return;
+      }
+
+      // Verificar status do pagamento
+      if (payment.status === 'completed' || payment.status === 'paid') {
+        // Pagamento confirmado!
+        await this.sendMessage(chatId, '🎉 *Pagamento Confirmado!*\n\n✅ Seu pagamento PIX foi aprovado!\n\n⏳ Preparando seu filme...', {
+          parse_mode: 'Markdown'
+        });
+
+        // Atualizar status da purchase
+        await this.supabase
+          .from('purchases')
+          .update({ status: 'COMPLETED' })
+          .eq('id', purchaseId);
+
+        // Entregar conteúdo
+        const { data: purchase } = await this.supabase
+          .from('purchases')
+          .select('*, content(*)')
+          .eq('id', purchaseId)
+          .single();
+
+        if (purchase) {
+          await this.deliverContentAfterPayment({
+            ...purchase,
+            provider_meta: { telegram_chat_id: chatId.toString() }
+          });
+        }
+
+        // Limpar cache
+        this.pendingPixPayments.delete(purchaseId);
+
+      } else if (payment.status === 'pending') {
+        // Pagamento ainda não confirmado
+        await this.sendMessage(chatId, `⏳ *Pagamento Pendente*\n\n⚠️ Ainda não identificamos seu pagamento.\n\n*Possíveis motivos:*\n• O pagamento ainda está sendo processado\n• Você ainda não finalizou o pagamento no app bancário\n\n💡 *O que fazer:*\n• Aguarde alguns minutos e clique em "Já paguei" novamente\n• Certifique-se de ter confirmado o pagamento no app\n• Se o problema persistir, entre em contato com o suporte\n\n📱 ID da transação: \`${payment.provider_payment_id}\``, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔄 Verificar Novamente', callback_data: `check_pix_${purchaseId}` }],
+              [{ text: '📞 Suporte', url: 'https://wa.me/seunumero' }],
+              [{ text: '🔙 Voltar', callback_data: 'catalog' }],
+            ],
+          },
+        });
+
+      } else {
+        // Pagamento com outro status (cancelado, expirado, etc)
+        await this.sendMessage(chatId, `❌ *Status do Pagamento: ${payment.status}*\n\nO pagamento não foi confirmado.\n\n💡 Tente fazer uma nova compra ou entre em contato com o suporte.`, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔙 Voltar ao Catálogo', callback_data: 'catalog' }],
+            ],
+          },
+        });
+      }
+
+    } catch (error) {
+      this.logger.error('Error checking PIX payment:', error);
+      await this.sendMessage(chatId, '❌ Erro ao verificar pagamento. Tente novamente em alguns instantes.');
     }
   }
 
@@ -791,31 +996,160 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       return;
     }
 
-    // NOVO FLUXO: Sempre perguntar se possui conta (SEM opção de compra anônima)
-    await this.sendMessage(chatId, `🎬 **${content.title}**\n\n💰 R$ ${(content.price_cents / 100).toFixed(2)}\n\n📝 Para comprar, você precisa ter uma conta.\nVocê já possui uma conta no CineVision?`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '✅ Sim, tenho conta', callback_data: `has_account_${contentId}` },
-          ],
-          [
-            { text: '📝 Não, criar conta agora', callback_data: `create_account_${contentId}` },
-          ],
-          [{ text: '🔙 Voltar ao catálogo', callback_data: 'catalog' }],
-        ],
-      },
-    });
+    // NOVO FLUXO: Autenticação automática via Telegram ID
+    await this.sendMessage(chatId, '⏳ Processando sua compra...');
+
+    try {
+      // Buscar ou criar usuário automaticamente usando Telegram ID
+      const user = await this.findOrCreateUserByTelegramId(telegramUserId, chatId);
+
+      if (!user) {
+        await this.sendMessage(chatId, '❌ Erro ao processar usuário. Tente novamente.');
+        return;
+      }
+
+      // Criar compra automaticamente
+      const { data: purchase, error: purchaseError } = await this.supabase
+        .from('purchases')
+        .insert({
+          user_id: user.id,
+          content_id: content.id,
+          amount_cents: content.price_cents,
+          currency: content.currency || 'BRL',
+          status: 'pending',
+          preferred_delivery: 'telegram',
+          provider_meta: {
+            telegram_user_id: telegramUserId,
+            telegram_chat_id: chatId.toString(),
+          },
+        })
+        .select()
+        .single();
+
+      if (purchaseError || !purchase) {
+        this.logger.error('Error creating purchase:', purchaseError);
+        await this.sendMessage(chatId, '❌ Erro ao criar compra. Tente novamente.');
+        return;
+      }
+
+      // Salvar no cache
+      this.pendingPurchases.set(purchase.id, {
+        chat_id: chatId.toString(),
+        telegram_user_id: telegramUserId,
+        content_id: content.id,
+        purchase_type: PurchaseType.WITH_ACCOUNT,
+        user_id: user.id,
+        timestamp: Date.now(),
+      });
+
+      // Enviar menu de seleção de pagamento
+      await this.sendPaymentMethodSelection(chatId, purchase.id, content);
+
+    } catch (error) {
+      this.logger.error('Error in handleBuyCallback:', error);
+      await this.sendMessage(chatId, '❌ Erro ao processar compra. Tente novamente.');
+    }
   }
 
-  private async handleStartCommand(chatId: number, text: string) {
+  /**
+   * Busca usuário pelo Telegram ID ou cria um novo automaticamente
+   */
+  private async findOrCreateUserByTelegramId(telegramUserId: number, chatId: number): Promise<any> {
+    try {
+      // Tentar buscar usuário existente
+      const { data: existingUser } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', telegramUserId.toString())
+        .single();
+
+      if (existingUser) {
+        this.logger.log(`User found with telegram_id ${telegramUserId}: ${existingUser.id}`);
+
+        // Atualizar chat_id se mudou
+        if (existingUser.telegram_chat_id !== chatId.toString()) {
+          await this.supabase
+            .from('users')
+            .update({ telegram_chat_id: chatId.toString() })
+            .eq('id', existingUser.id);
+        }
+
+        return existingUser;
+      }
+
+      // Usuário não existe, criar automaticamente
+      this.logger.log(`Creating new user for telegram_id ${telegramUserId}`);
+
+      const { data: newUser, error: createError } = await this.supabase
+        .from('users')
+        .insert({
+          telegram_id: telegramUserId.toString(),
+          telegram_chat_id: chatId.toString(),
+          telegram_username: `user_${telegramUserId}`,
+          name: `Usuário Telegram ${telegramUserId}`,
+          email: `telegram_${telegramUserId}@cinevision.temp`, // Email temporário
+          password: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
+          role: 'user',
+          status: 'active',
+        })
+        .select()
+        .single();
+
+      if (createError || !newUser) {
+        this.logger.error('Error creating user:', createError);
+        return null;
+      }
+
+      this.logger.log(`New user created: ${newUser.id} for telegram_id ${telegramUserId}`);
+      return newUser;
+
+    } catch (error) {
+      this.logger.error('Error in findOrCreateUserByTelegramId:', error);
+      return null;
+    }
+  }
+
+  private async handleStartCommand(chatId: number, text: string, telegramUserId?: number) {
+    // Buscar ou criar usuário automaticamente
+    const user = await this.findOrCreateUserByTelegramId(telegramUserId || chatId, chatId);
+
+    if (!user) {
+      await this.sendMessage(chatId, '❌ Erro ao processar usuário. Tente novamente com /start');
+      return;
+    }
+
+    // Verificar se há parâmetro no /start (deep link para compra direta)
+    // Formato: /start buy_CONTENT_ID
+    const parts = text.split(' ');
+    if (parts.length > 1) {
+      const param = parts[1];
+
+      // Se o parâmetro começa com "buy_", é uma deep link de compra
+      if (param.startsWith('buy_')) {
+        const contentId = param.replace('buy_', '');
+        this.logger.log(`Deep link detected: buying content ${contentId}`);
+
+        // Processar compra diretamente
+        await this.handleBuyCallback(chatId, telegramUserId || chatId, param);
+        return;
+      }
+    }
+
+    // Gerar link autenticado do catálogo
+    const catalogUrl = await this.autoLoginService.generateCatalogUrl(
+      user.id,
+      user.telegram_id
+    );
+
     const welcomeMessage = `🎬 **Bem-vindo ao CineVision Bot!**
 
 Aqui você pode:
-• 🛒 Comprar filmes
+• 🛒 Comprar filmes (sem precisar criar conta!)
 • 📱 Assistir online ou baixar
-• 💾 Receber filmes no Telegram
-• 🔔 Notificações de lançamentos
+• 💾 Receber filmes direto no Telegram
+• 🔔 Receber notificações de lançamentos
+
+🔐 **Seu ID do Telegram funciona como login automático!**
 
 Use /catalogo para ver os filmes disponíveis!`;
 
@@ -823,7 +1157,8 @@ Use /catalogo para ver os filmes disponíveis!`;
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+          [{ text: '🎬 Ver Catálogo no Telegram', callback_data: 'catalog' }],
+          [{ text: '🌐 Ver Catálogo no Site (Auto-Login)', url: catalogUrl }],
           [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
           [{ text: '❓ Ajuda', callback_data: 'help' }],
         ],
@@ -937,9 +1272,14 @@ Use /catalogo para ver os filmes disponíveis!`;
 
 💡 **Como funciona:**
 1️⃣ Escolha um filme do catálogo
-2️⃣ Crie uma conta ou faça login com seu e-mail
-3️⃣ Faça o pagamento via Stripe
+2️⃣ Sua conta é criada automaticamente usando seu ID do Telegram
+3️⃣ Escolha o método de pagamento (PIX ou Cartão)
 4️⃣ Receba o filme aqui no chat e no dashboard!
+
+🔐 **Segurança:**
+• Não precisa criar login ou senha
+• Seu ID do Telegram funciona como login automático
+• Todas as compras ficam vinculadas ao seu perfil
 
 🎬 Aproveite nosso catálogo!`;
 
@@ -1057,8 +1397,29 @@ Use /catalogo para ver os filmes disponíveis!`;
       // NOVO FLUXO: Todas as compras TÊM conta (não há mais compras anônimas)
       const priceText = (purchase.amount_cents / 100).toFixed(2);
 
+      // Gerar link autenticado do dashboard com a compra
+      let dashboardUrl = 'https://cinevision.com/dashboard';
+      try {
+        // Buscar usuário para gerar link autenticado
+        const { data: user } = await this.supabase
+          .from('users')
+          .select('*')
+          .eq('id', purchase.user_id)
+          .single();
+
+        if (user && user.telegram_id) {
+          dashboardUrl = await this.autoLoginService.generatePurchaseUrl(
+            user.id,
+            user.telegram_id,
+            purchase.id
+          );
+        }
+      } catch (error) {
+        this.logger.warn('Failed to generate auto-login URL, using default:', error);
+      }
+
       await this.sendMessage(parseInt(chatId),
-        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **O filme foi adicionado ao seu dashboard!**\nAcesse em: https://cinevision.com/dashboard\n\n📺 Escolha o idioma para assistir:`,
+        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **O filme foi adicionado ao seu dashboard!**\nAcesse em: ${dashboardUrl}\n\n📺 Escolha o idioma para assistir:`,
         { parse_mode: 'Markdown' }
       );
 
@@ -1087,7 +1448,7 @@ Use /catalogo para ver os filmes disponíveis!`;
       }
 
       // NOVO FLUXO: Sempre adicionar botão de dashboard (todas compras têm conta)
-      buttons.push([{ text: '🌐 Ver no Dashboard', url: 'https://cinevision.com/dashboard' }]);
+      buttons.push([{ text: '🌐 Ver no Dashboard (Auto-Login)', url: dashboardUrl }]);
 
       await this.sendMessage(parseInt(chatId), `🎬 **${activeLanguages.length} idioma(s) disponível(is):**`, {
         reply_markup: {

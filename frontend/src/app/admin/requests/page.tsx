@@ -177,41 +177,55 @@ export default function AdminRequestsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-950">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-dark-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={handleBackToDashboard}
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-700 rounded-lg transition-all duration-200"
-              >
-                ← Voltar ao Dashboard
-              </button>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="mb-6">
+                <button
+                  onClick={handleBackToDashboard}
+                  className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Voltar para Admin
+                </button>
+              </div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-500 via-yellow-600 to-orange-600 bg-clip-text text-transparent mb-2">
                 Gerenciar Pedidos
               </h1>
+              <p className="text-gray-400 text-lg">
+                Visualize e gerencie solicitações de conteúdo dos usuários
+              </p>
             </div>
+
+            {/* Action Buttons */}
             <div className="flex items-center gap-3">
               <button
                 onClick={handleGoHome}
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-dark-700 rounded-lg transition-all duration-200"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
               >
-                Início
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Home
               </button>
+
               <button
                 onClick={handleLogout}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-all duration-200"
+                className="flex items-center gap-2 px-4 py-2 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-lg transition-colors"
               >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
                 Sair
               </button>
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Error */}
         {error && (
           <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-xl">
@@ -221,7 +235,9 @@ export default function AdminRequestsPage() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-6 mb-8 max-w-xs">
-          <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:border-primary-500/30 transition-all duration-200">
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-yellow-500 to-orange-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div className="relative z-10">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
@@ -229,13 +245,16 @@ export default function AdminRequestsPage() {
                 </p>
                 <p className="text-sm text-gray-400 mt-1">Total de Pedidos</p>
               </div>
-              <Calendar className="w-8 h-8 text-primary-500" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-yellow-500 to-orange-500 shadow-lg">
+                <Calendar className="w-6 h-6 text-white" />
+              </div>
+            </div>
             </div>
           </div>
         </div>
 
         {/* Requests List */}
-        <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden">
+        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden">
           <div className="p-6 border-b border-white/10">
             <h2 className="text-xl font-bold text-white">Lista de Pedidos</h2>
             <p className="text-sm text-gray-400 mt-1">
@@ -311,10 +330,12 @@ export default function AdminRequestsPage() {
         </div>
       </div>
 
+      </div>
+
       {/* Update Modal */}
       {selectedRequest && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-dark-800 border border-white/10 rounded-xl max-w-lg w-full p-6">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
             <h3 className="text-xl font-bold text-white mb-4">Atualizar Pedido</h3>
 
             <div className="space-y-4">

@@ -6,6 +6,7 @@ import { AdminContentService } from './services/admin-content.service';
 import { AdminContentSimpleService } from './services/admin-content-simple.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { AdminSettingsService } from './services/admin-settings.service';
+import { AdminSettingsSupabaseService } from './services/admin-settings-supabase.service';
 import { AdminImageUploadController } from './controllers/admin-image-upload.controller';
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
@@ -57,6 +58,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   VideoUploadController, // Direct S3 multipart upload
 ] : [
   AdminContentController,
+  AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
   AdminUsersController,
@@ -85,12 +87,14 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ContentLanguageService,
 ] : [
   AdminContentSimpleService,
+  AdminSettingsSupabaseService,
   ImageUploadService,
   AdminPurchasesSimpleService,
   StripeService,
   MultipartUploadService,
   ContentLanguageSupabaseService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
+  { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];
 
 const conditionalExports = isTypeOrmEnabled() ? [
@@ -98,7 +102,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
   AdminContentService,
   AdminSettingsService,
   StripeService,
-] : [AdminContentSimpleService];
+] : [AdminContentSimpleService, AdminSettingsService];
 
 @Module({
   imports: [

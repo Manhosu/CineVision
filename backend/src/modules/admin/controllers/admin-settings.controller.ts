@@ -9,7 +9,7 @@ import { UserRole } from '../../users/entities/user.entity';
 
 @ApiTags('Admin - Settings')
 @ApiBearerAuth()
-@Controller('api/v1/admin/settings')
+@Controller('admin/settings')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class AdminSettingsController {

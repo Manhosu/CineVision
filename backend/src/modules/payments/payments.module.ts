@@ -4,6 +4,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentsSupabaseService } from './payments-supabase.service';
 import { PixService } from './services/pix.service';
 import { StripeService } from './services/stripe.service';
+import { PixQRCodeService } from './services/pix-qrcode.service';
 import { StripeTestController } from './controllers/stripe-test.controller';
 import { Payment } from './entities/payment.entity';
 import { Purchase } from '../purchases/entities/purchase.entity';
@@ -17,18 +18,18 @@ const conditionalControllers = [PaymentsController, StripeTestController];
 
 // When TypeORM is disabled, use PaymentsSupabaseService instead of PaymentsService
 const conditionalProviders = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService, {
+  ? [PaymentsService, PixService, StripeService, PixQRCodeService, {
       provide: 'IPaymentsService',
       useClass: PaymentsService,
     }]
-  : [PaymentsSupabaseService, StripeService, {
+  : [PaymentsSupabaseService, StripeService, PixQRCodeService, {
       provide: PaymentsService,
       useClass: PaymentsSupabaseService,
     }];
 
 const conditionalExports = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService]
-  : [PaymentsService, StripeService]; // PaymentsService alias points to PaymentsSupabaseService
+  ? [PaymentsService, PixService, StripeService, PixQRCodeService]
+  : [PaymentsService, StripeService, PixQRCodeService]; // PaymentsService alias points to PaymentsSupabaseService
 
 @Module({
   imports: [

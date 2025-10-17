@@ -15,6 +15,7 @@ import { UsersModule } from '../users/users.module';
 import { ContentModule } from '../content/content.module';
 import { PurchasesModule } from '../purchases/purchases.module';
 import { SupabaseModule } from '../../config/supabase.module';
+import { AuthModule } from '../auth/auth.module';
 
 // Always enable telegram controllers and services (works with both TypeORM and Supabase)
 const conditionalControllers = [TelegramsController];
@@ -33,6 +34,7 @@ const conditionalExports = isTypeOrmEnabled()
     UsersModule,
     forwardRef(() => ContentModule),
     PurchasesModule,
+    AuthModule,
   ],
   providers: conditionalProviders,
   controllers: conditionalControllers,

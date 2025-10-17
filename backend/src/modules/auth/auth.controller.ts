@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { TelegramAuthService } from './services/telegram-auth.service';
+import { AutoLoginService } from './services/auto-login.service';
 import { Optional } from '@nestjs/common';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -34,6 +35,7 @@ import { TelegramCallbackDto, TelegramCallbackResponseDto } from './dto/telegram
 export class AuthController {
   constructor(
     private authService: AuthService,
+    private autoLoginService: AutoLoginService,
     @Optional() private telegramAuthService?: TelegramAuthService,
   ) {}
 
@@ -178,5 +180,35 @@ export class AuthController {
       throw new BadRequestException('Telegram authentication is not available');
     }
     return this.telegramAuthService.processTelegramCallback(callbackDto);
+  }
+
+  @Post('auto-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate auto-login token and authenticate user' })
+  @ApiResponse({
+    status: 200,
+    description: 'Auto-login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            name: { type: 'string' },
+            role: { type: 'string' },
+            telegram_id: { type: 'string' },
+          },
+        },
+        access_token: { type: 'string' },
+        refresh_token: { type: 'string' },
+        redirect_url: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or expired token' })
+  async autoLogin(@Body() body: { token: string }) {
+    return this.autoLoginService.validateAndConsumeToken(body.token);
   }
 }

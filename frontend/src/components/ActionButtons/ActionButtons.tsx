@@ -95,39 +95,19 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
     }
   };
 
-  const handleTelegramPurchase = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/initiate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          content_id: movie.id,
-          preferred_delivery: 'telegram'
-        })
-      });
+  const handleTelegramPurchase = () => {
+    // Gerar deep link do Telegram direto
+    // Formato: https://t.me/BOT_USERNAME?start=buy_CONTENT_ID
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_Bot';
+    const deepLink = `https://t.me/${botUsername}?start=buy_${movie.id}`;
 
-      const data = await response.json();
+    toast.success('Abrindo Telegram...', {
+      duration: 2000,
+      icon: '📱'
+    });
 
-      if (response.ok && data.telegram_deep_link) {
-        toast.success('Redirecionando para o Telegram...', {
-          duration: 3000,
-          icon: '📱'
-        });
-
-        window.open(data.telegram_deep_link, '_blank');
-      } else {
-        throw new Error(data.message || 'Erro ao iniciar compra via Telegram');
-      }
-    } catch (error) {
-      console.error('Telegram purchase error:', error);
-      toast.error('Erro ao processar compra via Telegram. Tente novamente.', {
-        duration: 4000,
-        icon: '❌'
-      });
-    }
+    // Abrir Telegram
+    window.open(deepLink, '_blank');
   };
 
   const handleToggleFavorite = async () => {

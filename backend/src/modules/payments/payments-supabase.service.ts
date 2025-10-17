@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Inject, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../config/supabase.service';
 import { StripeService } from './services/stripe.service';
+import { PixQRCodeService } from './services/pix-qrcode.service';
 import {
   CreatePaymentDto,
   CreatePaymentResponseDto,
@@ -16,6 +17,7 @@ export class PaymentsSupabaseService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly pixQRCodeService: PixQRCodeService,
     private readonly configService: ConfigService,
   ) {
     this.logger.log('PaymentsSupabaseService initialized (Supabase mode)');
@@ -252,6 +254,131 @@ export class PaymentsSupabaseService {
       };
     } catch (error) {
       this.logger.error(`Error processing refund for payment ${providerPaymentId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Create PIX payment with QR Code
+   */
+  async createPixPayment(purchaseId: string): Promise<any> {
+    try {
+      this.logger.log(`Creating PIX payment for purchase ${purchaseId}`);
+
+      // Find purchase in Supabase
+      const { data: purchase, error: purchaseError } = await this.supabaseService.client
+        .from('purchases')
+        .select('*, content(*)')
+        .eq('id', purchaseId)
+        .single();
+
+      if (purchaseError || !purchase) {
+        throw new NotFoundException(`Purchase with ID ${purchaseId} not found`);
+      }
+
+      if (purchase.status === 'COMPLETED' || purchase.status === 'paid') {
+        throw new BadRequestException('Purchase is already paid');
+      }
+
+      // Get PIX settings from admin_settings
+      const { data: pixKeyData } = await this.supabaseService.client
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'pix_key')
+        .single();
+
+      const { data: merchantNameData } = await this.supabaseService.client
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'merchant_name')
+        .single();
+
+      const { data: merchantCityData } = await this.supabaseService.client
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'merchant_city')
+        .single();
+
+      const pixKey = pixKeyData?.value;
+      if (!pixKey) {
+        throw new BadRequestException('PIX key not configured. Please configure it in admin settings.');
+      }
+
+      const merchantName = merchantNameData?.value || 'Cine Vision';
+      const merchantCity = merchantCityData?.value || 'SAO PAULO';
+
+      // Validate PIX key
+      const validation = this.pixQRCodeService.validatePixKey(pixKey);
+      if (!validation.valid) {
+        throw new BadRequestException(`Invalid PIX key: ${validation.error}`);
+      }
+
+      // Generate unique transaction ID
+      const transactionId = `CIN${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+
+      // Generate PIX QR Code
+      const qrCodeData = this.pixQRCodeService.generatePixQRCode({
+        pixKey,
+        merchantName,
+        merchantCity,
+        amount: purchase.amount_cents / 100, // Convert cents to reais
+        transactionId,
+        description: `${purchase.content.title}`,
+      });
+
+      // Generate QR Code image
+      let qrCodeImage: string | undefined;
+      try {
+        qrCodeImage = await this.pixQRCodeService.generateQRCodeImage(qrCodeData.qrCodeText);
+      } catch (error) {
+        this.logger.warn('Could not generate QR Code image:', error.message);
+      }
+
+      // Create payment record in Supabase
+      const { data: payment, error: paymentError } = await this.supabaseService.client
+        .from('payments')
+        .insert({
+          purchase_id: purchase.id,
+          provider_payment_id: transactionId,
+          provider: 'pix',
+          status: 'pending',
+          amount_cents: purchase.amount_cents,
+          currency: purchase.currency,
+          payment_method: 'pix',
+          provider_meta: {
+            transaction_id: transactionId,
+            pix_key: pixKey,
+            qr_code_emv: qrCodeData.qrCodeText,
+            qr_code_image: qrCodeImage,
+          },
+        })
+        .select()
+        .single();
+
+      if (paymentError) {
+        this.logger.error('Error creating PIX payment record:', paymentError);
+        throw new BadRequestException('Failed to create PIX payment');
+      }
+
+      this.logger.log(`PIX payment created successfully: ${transactionId}`);
+
+      return {
+        provider_payment_id: transactionId,
+        payment_method: 'pix',
+        qr_code_text: qrCodeData.qrCodeText,
+        qr_code_image: qrCodeImage,
+        copy_paste_code: qrCodeData.copyPasteCode,
+        amount_cents: purchase.amount_cents,
+        amount_brl: (purchase.amount_cents / 100).toFixed(2),
+        currency: purchase.currency,
+        purchase_id: purchase.id,
+        provider: 'pix',
+        expires_in: 3600, // 1 hour
+        created_at: new Date(),
+        payment_instructions: 'Abra seu aplicativo bancário, escaneie o QR Code ou copie e cole o código PIX para efetuar o pagamento.',
+      };
+    } catch (error) {
+      this.logger.error(`Error creating PIX payment for purchase ${purchaseId}:`, error);
       throw error;
     }
   }

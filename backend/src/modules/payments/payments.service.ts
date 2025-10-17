@@ -457,4 +457,8 @@ export class PaymentsService {
       throw error;
     }
   }
+
+  async createPixPayment(purchaseId: string): Promise<any> {
+    throw new BadRequestException('PIX payments are only available in Supabase mode. This method should not be called in TypeORM mode.');
+  }
 }
