@@ -53,7 +53,12 @@ export default function MovieDetailPage() {
     }
 
     try {
-      console.log('Sending purchase request...');
+      console.log('=== PURCHASE DEBUG START ===');
+      console.log('NEXT_PUBLIC_API_URL from env:', process.env.NEXT_PUBLIC_API_URL);
+
+      // Hardcode fallback URL to ensure it works
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://cinevisionn.onrender.com';
+      const fullUrl = `${apiUrl}/api/v1/telegrams/miniapp/purchase`;
 
       const requestData = {
         telegram_id: telegramUser.id,
@@ -64,10 +69,10 @@ export default function MovieDetailPage() {
       };
 
       console.log('Request data:', requestData);
-      console.log('API URL:', `${process.env.NEXT_PUBLIC_API_URL}/api/v1/telegrams/miniapp/purchase`);
+      console.log('Full URL being called:', fullUrl);
 
       // Send movie purchase request to backend
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/telegrams/miniapp/purchase`, {
+      const response = await fetch(fullUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -76,6 +81,7 @@ export default function MovieDetailPage() {
       });
 
       console.log('Response status:', response.status);
+      console.log('=== PURCHASE DEBUG END ===');
 
       if (!response.ok) {
         const errorText = await response.text();
