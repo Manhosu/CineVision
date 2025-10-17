@@ -1170,7 +1170,6 @@ Use /catalogo para ver os filmes disponíveis!`;
       reply_markup: {
         inline_keyboard: [
           [{ text: '🎬 Abrir Catálogo (Mini App)', web_app: { url: `${process.env.FRONTEND_URL || 'https://cinevision.com'}/miniapp` } }],
-          [{ text: '🌐 Ver Catálogo no Site (Auto-Login)', url: catalogUrl }],
           [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
           [{ text: '❓ Ajuda', callback_data: 'help' }],
         ],
