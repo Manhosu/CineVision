@@ -48,6 +48,18 @@ export class TelegramsController {
     return this.telegramsService.setupWebhook(setupData.url, setupData.secretToken);
   }
 
+  @Get('setup-webhook')
+  @ApiOperation({ summary: 'Setup Telegram webhook (auto-detect URL)' })
+  @ApiResponse({ status: 200, description: 'Webhook setup successfully' })
+  async setupWebhookAuto() {
+    // Auto-detect backend URL from environment
+    const backendUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'https://cinevisionn.onrender.com';
+    const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
+
+    this.logger.log(`Setting up webhook with URL: ${webhookUrl}`);
+    return this.telegramsService.setupWebhook(webhookUrl);
+  }
+
   @Post('payment-confirmation')
   @ApiOperation({ summary: 'Send payment confirmation' })
   @ApiResponse({ status: 200, description: 'Payment confirmation sent' })
