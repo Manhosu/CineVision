@@ -1150,26 +1150,28 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       user.telegram_id
     );
 
-    const welcomeMessage = `🎬 Bem-vindo ao CineVision Bot!
+    const welcomeMessage = `🎬 *Bem-vindo ao CineVision!*
 
-Aqui você pode:
-• 🛒 Comprar filmes (sem precisar criar conta!)
-• 📱 Assistir online ou baixar
-• 💾 Receber filmes direto no Telegram
-• 🔔 Receber notificações de lançamentos
+🍿 Seu cinema favorito agora no Telegram!
 
-🔐 Seu ID do Telegram funciona como login automático!
+✨ *Como funciona:*
+1️⃣ Navegue pelo nosso catálogo no site
+2️⃣ Escolha o filme que deseja
+3️⃣ Clique em "Comprar no Telegram"
+4️⃣ Finalize o pagamento aqui mesmo (PIX ou Cartão)
+5️⃣ Receba o filme instantaneamente!
 
-Use /catalogo para ver os filmes disponíveis!`;
+🔐 *Login automático:* Seu ID do Telegram já é sua conta!
 
-    // Generate Mini App URL
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME');
-    const miniAppUrl = `https://t.me/${botUsername}/catalog`;
+👇 Clique no botão abaixo para ver nosso catálogo:`;
+
+    const siteUrl = process.env.FRONTEND_URL || 'https://cine-vision-murex.vercel.app';
 
     await this.sendMessage(chatId, welcomeMessage, {
+      parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🎬 Abrir Catálogo (Mini App)', web_app: { url: `${process.env.FRONTEND_URL || 'https://cinevision.com'}/miniapp` } }],
+          [{ text: '🌐 Ver Catálogo Completo', url: catalogUrl }],
           [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
           [{ text: '❓ Ajuda', callback_data: 'help' }],
         ],
