@@ -196,13 +196,13 @@ export class AutoLoginService {
   }
 
   /**
-   * Generate authenticated catalog URL for Telegram user
+   * Generate authenticated homepage URL for Telegram user
    */
   async generateCatalogUrl(userId: string, telegramId: string): Promise<string> {
     const { login_url } = await this.generateAutoLoginToken(
       userId,
       telegramId,
-      '/catalog',
+      '/',
     );
     return login_url;
   }
