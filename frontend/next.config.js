@@ -26,8 +26,27 @@ const nextConfig = {
     }
 
     return [
+      // Mini App routes - allow embedding in Telegram
       {
-        source: '/(.*)',
+        source: '/miniapp/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'ALLOWALL',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors https://web.telegram.org https://telegram.org",
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
+      // Regular pages - deny framing
+      {
+        source: '/((?!miniapp).*)',
         headers: [
           {
             key: 'X-Frame-Options',
