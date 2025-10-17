@@ -41,7 +41,6 @@ const MovieCard = memo(function MovieCard({
   const [isHovered, setIsHovered] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false); // TODO: Integrar com estado global
   const [isInWatchlist, setIsInWatchlist] = useState(false); // TODO: Integrar com estado global
-  const [isPurchasing, setIsPurchasing] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
 
   const formatPrice = (priceInCents: number) => {
@@ -91,44 +90,12 @@ const MovieCard = memo(function MovieCard({
     }
   };
 
-  const handlePurchase = async (e: React.MouseEvent) => {
+  const handlePurchase = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
 
-    if (isPurchasing) return;
-
-    setIsPurchasing(true);
-
-    try {
-      // Iniciar fluxo de compra
-      const response = await fetch('/api/purchases/initiate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          content_id: movie.id,
-          preferred_delivery: 'site' // ou 'telegram' baseado na preferência do usuário
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao iniciar compra');
-      }
-
-      const data = await response.json();
-
-      // Redirecionar para o Telegram para completar a compra
-      if (data.telegram_deep_link) {
-        window.open(data.telegram_deep_link, '_blank');
-        toast.success('Complete a compra no Telegram para assistir!');
-      }
-    } catch (error) {
-      console.error('Erro ao iniciar compra:', error);
-      toast.error('Erro ao processar compra. Tente novamente.');
-    } finally {
-      setIsPurchasing(false);
-    }
+    // Redirecionar para página de detalhes do filme
+    router.push(`/movies/${movie.id}`);
   };
 
   const handleFavorite = async (e: React.MouseEvent) => {
@@ -229,17 +196,11 @@ const MovieCard = memo(function MovieCard({
             <div className="absolute inset-0 flex items-center justify-center">
               <button
                 onClick={isPurchased ? handleWatch : handlePurchase}
-                disabled={isPurchasing}
                 className={`btn-primary text-sm px-4 py-2 transform transition-all duration-300 ${
                   isHovered ? 'scale-100 opacity-100' : 'scale-75 opacity-0'
-                } ${isPurchasing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                }`}
               >
-                {isPurchasing ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Comprando...</span>
-                  </div>
-                ) : isPurchased ? (
+                {isPurchased ? (
                   <>
                     <PlayIcon className="w-4 h-4 mr-2" />
                     Assistir
