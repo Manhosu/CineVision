@@ -419,6 +419,5 @@ export default function AdminPurchasesPage() {
         )}
       </div>
     </div>
-    </div>
   );
 }

@@ -20,7 +20,7 @@ export default function FilterControls({
   const searchParams = useSearchParams();
 
   const handleFilterChange = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams);
+    const params = new URLSearchParams(searchParams?.toString());
 
     if (value) {
       params.set(key, value);

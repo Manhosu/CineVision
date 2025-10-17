@@ -29,7 +29,7 @@ interface Content {
 export default function AdminContentEditPage() {
   const router = useRouter();
   const params = useParams();
-  const contentId = params.id as string;
+  const contentId = params?.id as string;
 
   const [content, setContent] = useState<Content | null>(null);
   const [isLoading, setIsLoading] = useState(true);

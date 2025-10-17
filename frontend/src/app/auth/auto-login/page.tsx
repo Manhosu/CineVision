@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function AutoLoginPage() {
+function AutoLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -12,8 +12,8 @@ export default function AutoLoginPage() {
   useEffect(() => {
     const handleAutoLogin = async () => {
       try {
-        const token = searchParams.get('token');
-        const redirectUrl = searchParams.get('redirect') || '/dashboard';
+        const token = searchParams?.get('token');
+        const redirectUrl = searchParams?.get('redirect') || '/dashboard';
 
         if (!token) {
           setStatus('error');
@@ -164,5 +164,17 @@ export default function AutoLoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AutoLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <AutoLoginContent />
+    </Suspense>
   );
 }

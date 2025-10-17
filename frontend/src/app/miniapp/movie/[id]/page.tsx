@@ -22,7 +22,7 @@ interface Movie {
 export default function MovieDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const movieId = params.id as string;
+  const movieId = params?.id as string;
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

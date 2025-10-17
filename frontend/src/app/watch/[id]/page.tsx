@@ -11,9 +11,9 @@ interface WatchPageProps {
 
 export default function WatchPage({ params }: WatchPageProps) {
   const router = useRouter();
-  const { id } = useParams();
+  const id = params.id;
   const searchParams = useSearchParams();
-  const selectedLanguageId = searchParams.get('lang');
+  const selectedLanguageId = searchParams?.get('lang');
 
   const [content, setContent] = useState<VideoContent | null>(null);
   const [loading, setLoading] = useState(true);

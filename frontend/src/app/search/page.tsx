@@ -15,7 +15,7 @@ function SearchResults() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isAuthenticated, user } = useAuth();
-  const query = searchParams.get('q') || '';
+  const query = searchParams?.get('q') || '';
   const [movies, setMovies] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRequesting, setIsRequesting] = useState(false);

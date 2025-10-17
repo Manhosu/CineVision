@@ -28,8 +28,8 @@ function PurchaseSuccessContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const purchaseToken = searchParams.get('token');
-  const purchaseId = searchParams.get('purchase_id');
+  const purchaseToken = searchParams?.get('token');
+  const purchaseId = searchParams?.get('purchase_id');
 
   useEffect(() => {
     const fetchPurchaseDetails = async () => {

@@ -86,9 +86,9 @@ function MoviesPageContent() {
   const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
-  const page = parseInt(searchParams.get('page') || '1');
-  const genre = searchParams.get('genre') || undefined;
-  const sort = searchParams.get('sort') || 'newest';
+  const page = parseInt(searchParams?.get('page') || '1');
+  const genre = searchParams?.get('genre') || undefined;
+  const sort = searchParams?.get('sort') || 'newest';
 
   useEffect(() => {
     const loadData = async () => {
