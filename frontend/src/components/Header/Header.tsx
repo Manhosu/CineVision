@@ -186,8 +186,8 @@ export function Header({ transparent = false }: HeaderProps) {
                 <MagnifyingGlassIcon className="w-5 h-5" />
               </button>
 
-              {/* Botão Entrar/Menu de Usuário estilo Netflix */}
-              {isAuthenticated ? (
+              {/* Menu de Usuário apenas para Admin */}
+              {isAuthenticated && user?.role === 'admin' && (
                 <div ref={userMenuRef} className="relative hidden sm:block">
                   <button
                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
@@ -208,11 +208,11 @@ export function Header({ transparent = false }: HeaderProps) {
 
                       <div className="py-2">
                         <Link
-                          href={user?.role === 'admin' ? '/admin' : '/dashboard'}
+                          href="/admin"
                           className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
                           onClick={() => setIsUserMenuOpen(false)}
                         >
-                          {user?.role === 'admin' ? 'Painel Admin' : 'Meu Perfil'}
+                          Painel Admin
                         </Link>
 
                         <button
@@ -225,13 +225,6 @@ export function Header({ transparent = false }: HeaderProps) {
                     </div>
                   )}
                 </div>
-              ) : (
-                <Link
-                  href="/login"
-                  className="hidden sm:inline-flex px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded transition-colors duration-200"
-                >
-                  Entrar
-                </Link>
               )}
 
               {/* Menu Mobile Toggle */}
@@ -286,49 +279,38 @@ export function Header({ transparent = false }: HeaderProps) {
                   ))}
                 </nav>
 
-                {/* Seção de Conta */}
-                <div className="border-t border-white/10 pt-6">
-                  <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
-                    Conta
-                  </div>
-                  {isAuthenticated ? (
-                    <>
-                      {user && (
-                        <div className="px-3 py-2 mb-2">
-                          <p className="text-sm font-medium text-white">{user.name}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
-                        </div>
-                      )}
-                      <Link
-                        href={user?.role === 'admin' ? '/admin' : '/dashboard'}
-                        className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
-                        <span className="flex-1">{user?.role === 'admin' ? 'Painel Admin' : 'Meu Perfil'}</span>
-                      </Link>
-                      <button
-                        onClick={() => {
-                          setIsMobileMenuOpen(false);
-                          handleLogout();
-                        }}
-                        className="flex items-center w-full px-3 py-3 rounded-lg text-base font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
-                      >
-                        <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
-                        <span className="flex-1 text-left">Sair</span>
-                      </button>
-                    </>
-                  ) : (
+                {/* Seção de Conta - Apenas Admin */}
+                {isAuthenticated && user?.role === 'admin' && (
+                  <div className="border-t border-white/10 pt-6">
+                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
+                      Admin
+                    </div>
+                    {user && (
+                      <div className="px-3 py-2 mb-2">
+                        <p className="text-sm font-medium text-white">{user.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
+                      </div>
+                    )}
                     <Link
-                      href="/login"
+                      href="/admin"
                       className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
-                      <span className="flex-1">Entrar</span>
+                      <span className="flex-1">Painel Admin</span>
                     </Link>
-                  )}
-                </div>
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="flex items-center w-full px-3 py-3 rounded-lg text-base font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
+                    >
+                      <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
+                      <span className="flex-1 text-left">Sair</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Seção de Busca Mobile */}
                 <div className="border-t border-white/10 pt-6 lg:hidden">
