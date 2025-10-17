@@ -1562,10 +1562,19 @@ Use /catalogo para ver os filmes disponíveis!`;
   // ==================== POLLING METHODS ====================
 
   async onModuleInit() {
-    // Start polling for local development
-    this.logger.log('Starting Telegram bot polling...');
-    await this.deleteWebhook(); // Remove webhook if exists
-    this.startPolling();
+    // Check environment to decide between polling or webhook
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+
+    if (nodeEnv === 'production') {
+      // In production, use webhook mode (don't start polling)
+      this.logger.log('Production mode: Webhook mode enabled (polling disabled)');
+      // Webhook should be configured manually via /setup-webhook endpoint
+    } else {
+      // In development, use polling
+      this.logger.log('Development mode: Starting Telegram bot polling...');
+      await this.deleteWebhook(); // Remove webhook if exists
+      this.startPolling();
+    }
   }
 
   private async deleteWebhook() {
