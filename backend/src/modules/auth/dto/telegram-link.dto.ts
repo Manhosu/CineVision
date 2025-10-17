@@ -9,13 +9,13 @@ export class TelegramLinkResponseDto {
 
   @ApiProperty({
     description: 'Deep link URL for Telegram bot',
-    example: 'https://t.me/CineVisionApp_Bot?start=abc123def456ghi789',
+    example: 'https://t.me/cinevisionv2bot?start=abc123def456ghi789',
   })
   deep_link: string;
 
   @ApiProperty({
     description: 'QR code data for mobile scanning',
-    example: 'https://t.me/CineVisionApp_Bot?start=abc123def456ghi789',
+    example: 'https://t.me/cinevisionv2bot?start=abc123def456ghi789',
   })
   qr_data: string;
 

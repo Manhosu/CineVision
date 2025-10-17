@@ -16,7 +16,7 @@ export class InitiatePurchaseResponseDto {
 
   @ApiProperty({
     description: 'Deep link to Telegram bot',
-    example: 'https://t.me/CineVisionApp_Bot?start=987fcdeb-51a2-43d7-8765-123456789abc',
+    example: 'https://t.me/cinevisionv2bot?start=987fcdeb-51a2-43d7-8765-123456789abc',
   })
   telegram_deep_link: string;
 

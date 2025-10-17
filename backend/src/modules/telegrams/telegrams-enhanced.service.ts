@@ -1110,6 +1110,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
   }
 
   private async handleStartCommand(chatId: number, text: string, telegramUserId?: number) {
+    this.logger.log(`handleStartCommand called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
+
     // Buscar ou criar usuário automaticamente
     const user = await this.findOrCreateUserByTelegramId(telegramUserId || chatId, chatId);
 
@@ -1121,18 +1123,25 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     // Verificar se há parâmetro no /start (deep link para compra direta)
     // Formato: /start buy_CONTENT_ID
     const parts = text.split(' ');
+    this.logger.log(`Split text into ${parts.length} parts:`, parts);
+
     if (parts.length > 1) {
       const param = parts[1];
+      this.logger.log(`Deep link parameter found: "${param}"`);
 
       // Se o parâmetro começa com "buy_", é uma deep link de compra
       if (param.startsWith('buy_')) {
         const contentId = param.replace('buy_', '');
-        this.logger.log(`Deep link detected: buying content ${contentId}`);
+        this.logger.log(`🎬 Deep link detected: buying content ${contentId}`);
 
         // Processar compra diretamente
         await this.handleBuyCallback(chatId, telegramUserId || chatId, param);
         return;
+      } else {
+        this.logger.warn(`Parameter "${param}" does not start with "buy_"`);
       }
+    } else {
+      this.logger.log('No deep link parameter - showing welcome message');
     }
 
     // Gerar link autenticado do catálogo
@@ -1141,7 +1150,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       user.telegram_id
     );
 
-    const welcomeMessage = `🎬 **Bem-vindo ao CineVision Bot!**
+    const welcomeMessage = `🎬 Bem-vindo ao CineVision Bot!
 
 Aqui você pode:
 • 🛒 Comprar filmes (sem precisar criar conta!)
@@ -1149,15 +1158,18 @@ Aqui você pode:
 • 💾 Receber filmes direto no Telegram
 • 🔔 Receber notificações de lançamentos
 
-🔐 **Seu ID do Telegram funciona como login automático!**
+🔐 Seu ID do Telegram funciona como login automático!
 
 Use /catalogo para ver os filmes disponíveis!`;
 
+    // Generate Mini App URL
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME');
+    const miniAppUrl = `https://t.me/${botUsername}/catalog`;
+
     await this.sendMessage(chatId, welcomeMessage, {
-      parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🎬 Ver Catálogo no Telegram', callback_data: 'catalog' }],
+          [{ text: '🎬 Abrir Catálogo (Mini App)', web_app: { url: `${process.env.FRONTEND_URL || 'https://cinevision.com'}/miniapp` } }],
           [{ text: '🌐 Ver Catálogo no Site (Auto-Login)', url: catalogUrl }],
           [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
           [{ text: '❓ Ajuda', callback_data: 'help' }],
@@ -1304,10 +1316,18 @@ Use /catalogo para ver os filmes disponíveis!`;
         ...options,
       };
 
+      this.logger.log(`Sending message to chat ${chatId}:`, JSON.stringify(payload, null, 2));
+
       const response = await axios.post(url, payload);
       return response.data;
     } catch (error) {
       this.logger.error('Error sending message:', error);
+      this.logger.error('Response data:', error.response?.data);
+      this.logger.error('Payload was:', JSON.stringify({
+        chat_id: chatId,
+        text,
+        ...options,
+      }, null, 2));
       throw error;
     }
   }
@@ -1613,6 +1633,108 @@ Use /catalogo para ver os filmes disponíveis!`;
 
   private async handleCallbackQuery(callbackQuery: any) {
     await this.processCallbackQuery(callbackQuery);
+  }
+
+  // ==================== TELEGRAM MINI APP ====================
+
+  /**
+   * Handle purchase initiated from Telegram Mini App
+   * User clicks "Buy" in Mini App, which sends movie info to bot
+   */
+  async handleMiniAppPurchase(data: {
+    telegram_id: number;
+    movie_id: string;
+    movie_title: string;
+    movie_price: number;
+    init_data: string;
+  }): Promise<any> {
+    try {
+      this.logger.log(`Mini App purchase request - telegram_id: ${data.telegram_id}, movie_id: ${data.movie_id}`);
+
+      // Validate Telegram init_data (optional but recommended for production)
+      // const isValid = this.validateTelegramWebAppData(data.init_data);
+      // if (!isValid) {
+      //   throw new BadRequestException('Invalid Telegram Web App data');
+      // }
+
+      // Find or create user by Telegram ID
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('*, telegram_chat_id')
+        .eq('telegram_id', data.telegram_id.toString())
+        .single();
+
+      if (!user || !user.telegram_chat_id) {
+        throw new NotFoundException('User not found. Please start the bot first with /start');
+      }
+
+      const chatId = parseInt(user.telegram_chat_id);
+
+      // Get movie content
+      const { data: content, error: contentError } = await this.supabase
+        .from('content')
+        .select('*')
+        .eq('id', data.movie_id)
+        .single();
+
+      if (contentError || !content) {
+        throw new NotFoundException('Movie not found');
+      }
+
+      // Create purchase
+      const { data: purchase, error: purchaseError } = await this.supabase
+        .from('purchases')
+        .insert({
+          user_id: user.id,
+          content_id: content.id,
+          amount_cents: content.price_cents,
+          currency: content.currency || 'BRL',
+          status: 'pending',
+          preferred_delivery: 'telegram',
+          provider_meta: {
+            telegram_user_id: data.telegram_id,
+            telegram_chat_id: chatId.toString(),
+            source: 'mini_app',
+          },
+        })
+        .select()
+        .single();
+
+      if (purchaseError || !purchase) {
+        throw new BadRequestException('Failed to create purchase');
+      }
+
+      // Save in cache
+      this.pendingPurchases.set(purchase.id, {
+        chat_id: chatId.toString(),
+        telegram_user_id: data.telegram_id,
+        content_id: content.id,
+        purchase_type: PurchaseType.WITH_ACCOUNT,
+        user_id: user.id,
+        timestamp: Date.now(),
+      });
+
+      // Send message to bot with payment options
+      await this.sendMessage(chatId, `🎬 *Compra via Mini App*\n\n✅ "${content.title}" foi adicionado ao carrinho!\n\n💰 Valor: R$ ${(content.price_cents / 100).toFixed(2)}\n\n👇 Escolha o método de pagamento:`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💳 Cartão de Crédito', callback_data: `pay_stripe_${purchase.id}` }],
+            [{ text: '📱 PIX', callback_data: `pay_pix_${purchase.id}` }],
+            [{ text: '🔙 Cancelar', callback_data: 'catalog' }],
+          ],
+        },
+      });
+
+      return {
+        success: true,
+        message: 'Purchase sent to Telegram bot',
+        purchase_id: purchase.id,
+      };
+    } catch (error) {
+      this.logger.error('Error handling Mini App purchase:', error);
+      throw error;
+    }
   }
 
 }

@@ -91,6 +91,19 @@ export class TelegramsController {
     return { message: 'Payment cancelled', purchase_id: data.purchase_id };
   }
 
+  @Post('miniapp/purchase')
+  @ApiOperation({ summary: 'Initiate purchase from Telegram Mini App' })
+  @ApiResponse({ status: 200, description: 'Mini App purchase initiated' })
+  async initiateMiniAppPurchase(@Body() data: {
+    telegram_id: number;
+    movie_id: string;
+    movie_title: string;
+    movie_price: number;
+    init_data: string;
+  }) {
+    return this.telegramsEnhancedService.handleMiniAppPurchase(data);
+  }
+
   @Get('health')
   @ApiOperation({ summary: 'Health check endpoint' })
   @ApiResponse({ status: 200, description: 'Service is healthy' })

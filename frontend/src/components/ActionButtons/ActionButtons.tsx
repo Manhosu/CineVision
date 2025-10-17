@@ -98,7 +98,7 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
   const handleTelegramPurchase = () => {
     // Gerar deep link do Telegram direto
     // Formato: https://t.me/BOT_USERNAME?start=buy_CONTENT_ID
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_Bot';
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
     const deepLink = `https://t.me/${botUsername}?start=buy_${movie.id}`;
 
     toast.success('Abrindo Telegram...', {
