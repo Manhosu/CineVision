@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 
 export default function AdminLayout({
   children,
@@ -22,19 +21,22 @@ export default function AdminLayout({
       return;
     }
 
-    const checkAuth = async () => {
+    const checkAuth = () => {
       try {
-        // Verificar autenticação via Supabase
-        const { data: { session } } = await supabase.auth.getSession();
+        // Verificar autenticação via localStorage (sistema do backend)
+        const token = localStorage.getItem('token');
+        const userStr = localStorage.getItem('user');
 
-        if (!session) {
+        if (!token || !userStr) {
           // Não autenticado, redirecionar para login
           router.push('/admin/login');
           return;
         }
 
+        const user = JSON.parse(userStr);
+
         // Verificar se é admin
-        if (session.user.email !== 'adm@cinevision.com.br') {
+        if (user.role !== 'admin') {
           // Não é admin, redirecionar para home
           router.push('/');
           return;

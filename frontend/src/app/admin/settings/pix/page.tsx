@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { toast } from 'react-hot-toast';
-import { supabase } from '@/lib/supabase';
 
 export default function PixSettingsPage() {
   const router = useRouter();
@@ -22,10 +21,10 @@ export default function PixSettingsPage() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      // Obter token do Supabase
-      const { data: { session } } = await supabase.auth.getSession();
+      // Obter token do localStorage
+      const token = localStorage.getItem('token');
 
-      if (!session) {
+      if (!token) {
         toast.error('Sessão expirada. Faça login novamente.');
         router.push('/admin/login');
         return;
@@ -34,7 +33,7 @@ export default function PixSettingsPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/settings/pix`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -73,10 +72,10 @@ export default function PixSettingsPage() {
 
     setSaving(true);
     try {
-      // Obter token do Supabase
-      const { data: { session } } = await supabase.auth.getSession();
+      // Obter token do localStorage
+      const token = localStorage.getItem('token');
 
-      if (!session) {
+      if (!token) {
         toast.error('Sessão expirada. Faça login novamente.');
         router.push('/admin/login');
         return;
@@ -86,7 +85,7 @@ export default function PixSettingsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           pix_key: pixKey,
