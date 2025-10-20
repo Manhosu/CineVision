@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { HeroBanner } from '@/components/HeroBanner/HeroBanner';
@@ -38,15 +38,11 @@ interface ContentSection {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export default function HomePage() {
+// Component that uses useSearchParams - must be wrapped in Suspense
+function AutoLoginHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isLoading, setIsLoading] = useState(true);
-  const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
-  const [contentSections, setContentSections] = useState<ContentSection[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
-  // Check for auto-login token in URL
   useEffect(() => {
     const token = searchParams?.get('token');
     const redirect = searchParams?.get('redirect') || '/';
@@ -56,6 +52,15 @@ export default function HomePage() {
       router.push(`/auth/auto-login?token=${token}&redirect=${redirect}`);
     }
   }, [searchParams, router]);
+
+  return null;
+}
+
+function HomePageContent() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
+  const [contentSections, setContentSections] = useState<ContentSection[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadContent() {
@@ -207,5 +212,19 @@ export default function HomePage() {
       {/* Rodapé */}
       <Footer />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <>
+      {/* Auto-login handler wrapped in Suspense */}
+      <Suspense fallback={null}>
+        <AutoLoginHandler />
+      </Suspense>
+
+      {/* Main content */}
+      <HomePageContent />
+    </>
   );
 }
