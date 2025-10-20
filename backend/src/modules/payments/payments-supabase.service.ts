@@ -335,14 +335,26 @@ export class PaymentsSupabaseService {
       }
 
       // Create payment record in Supabase
+      // Prepare user_id - convert to UUID or use a default for guest purchases
+      let paymentUserId = purchase.user_id;
+      if (!paymentUserId) {
+        // For guest purchases, create a temporary UUID to satisfy NOT NULL constraint
+        // This will be associated with the purchase via purchase_id in provider_meta
+        paymentUserId = '00000000-0000-0000-0000-000000000000';
+      }
+
       const { data: payment, error: paymentError } = await this.supabaseService.client
         .from('payments')
         .insert({
-          purchase_id: purchase.id,
-          provider_payment_id: transactionId,
-          provider: 'pix',
-          status: 'pending',
+          user_id: paymentUserId,
+          movie_id: purchase.content_id,
+          amount: (purchase.amount_cents / 100).toString(),
+          currency: purchase.currency,
+          payment_method: 'pix',
+          payment_status: 'pending',
+          stripe_payment_intent_id: transactionId,
           provider_meta: {
+            purchase_id: purchase.id,
             transaction_id: transactionId,
             pix_key: pixKey,
             qr_code_emv: qrCodeData.qrCodeText,
