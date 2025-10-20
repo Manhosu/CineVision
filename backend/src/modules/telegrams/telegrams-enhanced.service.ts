@@ -1490,7 +1490,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
         if (user && user.telegram_id) {
           const frontendUrl = this.configService.get('FRONTEND_URL');
-          dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/dashboard/purchases/${purchase.id}`;
+          dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/minha-lista`;
         }
       } catch (error) {
         this.logger.warn('Failed to generate auto-login URL, using default:', error);
