@@ -1210,8 +1210,12 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         return;
       }
 
-      // Gerar token de auto-login
-      const autoLoginResult = await this.autoLoginService.generateAutoLoginToken(user.id, user.telegram_id);
+      // Gerar token de auto-login com redirect para o catálogo
+      const autoLoginResult = await this.autoLoginService.generateAutoLoginToken(
+        user.id,
+        user.telegram_id,
+        '/filmes'
+      );
       const autoLoginUrl = autoLoginResult.login_url;
 
       await this.sendMessage(chatId,
