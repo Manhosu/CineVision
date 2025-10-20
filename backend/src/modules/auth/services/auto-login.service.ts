@@ -114,6 +114,15 @@ export class AutoLoginService {
         })
         .eq('id', tokenData.id);
 
+      // Update user's last login timestamp
+      await this.supabase
+        .from('users')
+        .update({
+          last_login_at: new Date().toISOString(),
+          last_active_at: new Date().toISOString(),
+        })
+        .eq('id', tokenData.user_id);
+
       // Get user data
       const { data: user, error: userError } = await this.supabase
         .from('users')

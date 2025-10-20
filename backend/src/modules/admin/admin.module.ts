@@ -17,7 +17,9 @@ import { AdminUsersController } from './controllers/admin-users.controller';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
 // Removed DriveImportController - replaced with VideoUploadController
 import { VideoUploadController } from './controllers/video-upload.controller';
+import { BroadcastController } from './controllers/broadcast.controller';
 import { MultipartUploadService } from './services/multipart-upload.service';
+import { BroadcastService } from './services/broadcast.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -56,6 +58,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
+  BroadcastController,
 ] : [
   AdminContentController,
   AdminSettingsController,
@@ -66,6 +69,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
+  BroadcastController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -85,6 +89,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ImageUploadService,
   MultipartUploadService,
   ContentLanguageService,
+  BroadcastService,
 ] : [
   AdminContentSimpleService,
   AdminSettingsSupabaseService,
@@ -93,6 +98,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   StripeService,
   MultipartUploadService,
   ContentLanguageSupabaseService,
+  BroadcastService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];
