@@ -1198,44 +1198,35 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     try {
       this.logger.log(`Fetching catalog for chat ${chatId}`);
 
-      const { data: movies, error } = await this.supabase
-        .from('content')
-        .select('*')
-        .eq('status', 'PUBLISHED')
-        .eq('content_type', 'movie')
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Buscar usuário pelo chat_id
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('id, telegram_id')
+        .eq('telegram_chat_id', chatId.toString())
+        .single();
 
-      if (error) {
-        this.logger.error('Error fetching movies:', error);
-        await this.sendMessage(chatId, '❌ Erro ao carregar catálogo.');
+      if (!user || !user.telegram_id) {
+        await this.sendMessage(chatId, '❌ Usuário não encontrado. Por favor, envie /start para começar.');
         return;
       }
 
-      if (!movies || movies.length === 0) {
-        await this.sendMessage(chatId, '📭 Catálogo vazio. Em breve teremos novos filmes!');
-        return;
-      }
+      // Gerar token de auto-login
+      const autoLoginToken = await this.autoLoginService.generateToken(user.id);
+      const autoLoginUrl = `${this.configService.get('FRONTEND_URL')}/auth/auto-login?token=${autoLoginToken}`;
 
-      this.logger.log(`Found ${movies.length} published movies`);
-
-      // Criar botões com nome do filme e preço
-      const keyboard = [];
-
-      for (const movie of movies) {
-        const priceText = `R$ ${(movie.price_cents / 100).toFixed(2)}`;
-        keyboard.push([{
-          text: `${movie.title} - ${priceText}`,
-          callback_data: `buy_${movie.id}`
-        }]);
-      }
-
-      // Mensagem simples
-      await this.sendMessage(chatId, '🎬 Segue catálogo completo abaixo:', {
-        reply_markup: {
-          inline_keyboard: keyboard,
-        },
-      });
+      await this.sendMessage(chatId,
+        '🎬 *Catálogo de Filmes*\n\n' +
+        'Acesse o catálogo completo clicando no botão abaixo.\n\n' +
+        'Você será automaticamente conectado e poderá navegar, comprar e assistir filmes!',
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🎬 Ver Catálogo Completo', url: autoLoginUrl }],
+            ],
+          },
+        }
+      );
     } catch (error) {
       this.logger.error('Error showing catalog:', error);
       await this.sendMessage(chatId, '❌ Erro ao carregar catálogo.');
