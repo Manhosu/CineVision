@@ -28,8 +28,8 @@ export class AutoLoginService {
       // Generate secure random token
       const token = crypto.randomBytes(32).toString('hex');
 
-      // Token expires in 5 minutes
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      // Token expires in 365 days (permanent link)
+      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
 
       // Clean up old expired tokens for this user
       await this.cleanupExpiredTokens(userId);
@@ -93,23 +93,16 @@ export class AutoLoginService {
         throw new UnauthorizedException('Invalid or expired login token');
       }
 
-      // Check if token is already used
-      if (tokenData.is_used) {
-        this.logger.warn(`Auto-login token already used: ${token}`);
-        throw new UnauthorizedException('Login token already used');
-      }
-
-      // Check if token is expired
+      // Check if token is expired (allow reuse - don't check is_used)
       if (new Date(tokenData.expires_at) < new Date()) {
         this.logger.warn(`Auto-login token expired: ${token}`);
         throw new UnauthorizedException('Login token expired');
       }
 
-      // Mark token as used
+      // Update last used timestamp (but don't mark as "used" - allow reuse)
       await this.supabase
         .from('auto_login_tokens')
         .update({
-          is_used: true,
           used_at: new Date().toISOString(),
         })
         .eq('id', tokenData.id);
