@@ -1211,8 +1211,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       }
 
       // Gerar token de auto-login
-      const autoLoginToken = await this.autoLoginService.generateAutoLoginToken(user.id);
-      const autoLoginUrl = `${this.configService.get('FRONTEND_URL')}/auth/auto-login?token=${autoLoginToken}`;
+      const autoLoginResult = await this.autoLoginService.generateAutoLoginToken(user.id, user.telegram_id);
+      const autoLoginUrl = autoLoginResult.login_url;
 
       await this.sendMessage(chatId,
         '🎬 *Catálogo de Filmes*\n\n' +
