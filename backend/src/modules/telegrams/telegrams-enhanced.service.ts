@@ -823,18 +823,28 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
       // Enviar QR Code como foto (se disponível)
       if (pixData.qr_code_image) {
-        // Enviar como imagem base64 usando data URI
-        const photoUrl = `data:image/png;base64,${pixData.qr_code_image}`;
-
         try {
-          await axios.post(`${this.botApiUrl}/sendPhoto`, {
-            chat_id: chatId,
-            photo: photoUrl,
-            caption: `📱 *Pagamento PIX*\n\n💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`,
-            parse_mode: 'Markdown'
+          // Converter base64 para Buffer
+          const imageBuffer = Buffer.from(pixData.qr_code_image, 'base64');
+
+          // Criar FormData para enviar a imagem
+          const FormData = require('form-data');
+          const form = new FormData();
+          form.append('chat_id', chatId.toString());
+          form.append('photo', imageBuffer, {
+            filename: 'qrcode.png',
+            contentType: 'image/png',
           });
+          form.append('caption', `📱 *Pagamento PIX*\n\n💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`);
+          form.append('parse_mode', 'Markdown');
+
+          await axios.post(`${this.botApiUrl}/sendPhoto`, form, {
+            headers: form.getHeaders(),
+          });
+
+          this.logger.log('QR Code image sent successfully');
         } catch (photoError) {
-          this.logger.warn('Could not send QR Code as photo, sending text only');
+          this.logger.warn('Could not send QR Code as photo:', photoError.message);
         }
       }
 
