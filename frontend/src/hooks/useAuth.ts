@@ -45,6 +45,30 @@ export function useAuth(): AuthState & {
 
     try {
       setIsLoading(true);
+
+      // First check for JWT tokens from backend (telegram-login)
+      const backendToken = localStorage.getItem('access_token');
+      const userStr = localStorage.getItem('user');
+
+      if (backendToken && userStr) {
+        try {
+          const userData = JSON.parse(userStr);
+          setUser({
+            id: userData.id,
+            email: userData.email || 'telegram-user@cinevision.com',
+            role: userData.role || 'user',
+            name: userData.name || userData.telegram_username || 'Usuário'
+          });
+          setIsAuthenticated(true);
+          localStorage.setItem('auth_token', backendToken);
+          setIsLoading(false);
+          return;
+        } catch (parseError) {
+          console.error('Error parsing backend user data:', parseError);
+        }
+      }
+
+      // Fallback to Supabase Auth
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
