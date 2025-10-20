@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { HeroBanner } from '@/components/HeroBanner/HeroBanner';
 import { ContentRow } from '@/components/ContentRow/ContentRow';
@@ -38,22 +39,58 @@ interface ContentSection {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function HomePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
   const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Check for auto-login token in URL
+  useEffect(() => {
+    const token = searchParams?.get('token');
+    const redirect = searchParams?.get('redirect') || '/';
+
+    if (token) {
+      // Redirect to auto-login page with token
+      router.push(`/auth/auto-login?token=${token}&redirect=${redirect}`);
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     async function loadContent() {
       try {
         setIsLoading(true);
 
+        // Get auth token from localStorage
+        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add Authorization header if user is authenticated
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         // Fetch real data from API
         const [featuredRes, top10Res, latestRes, popularRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, { cache: 'no-store' }),
-          fetch(`${API_URL}/api/v1/content/top10/films`, { cache: 'no-store' }),
-          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=newest`, { cache: 'no-store' }),
-          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=popular`, { cache: 'no-store' })
+          fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, {
+            cache: 'no-store',
+            headers
+          }),
+          fetch(`${API_URL}/api/v1/content/top10/films`, {
+            cache: 'no-store',
+            headers
+          }),
+          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=newest`, {
+            cache: 'no-store',
+            headers
+          }),
+          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=popular`, {
+            cache: 'no-store',
+            headers
+          })
         ]);
 
         if (!featuredRes.ok || !top10Res.ok || !latestRes.ok || !popularRes.ok) {

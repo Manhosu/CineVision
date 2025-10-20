@@ -17,10 +17,11 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { BroadcastService } from '../services/broadcast.service';
 import { SendBroadcastDto } from '../dto/broadcast.dto';
 import { ImageUploadService } from '../services/image-upload.service';
+import { UserRole } from '../../users/entities/user.entity';
 
 @Controller('api/v1/admin/broadcast')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('admin')
+@Roles(UserRole.ADMIN)
 export class BroadcastController {
   private readonly logger = new Logger(BroadcastController.name);
 
@@ -106,7 +107,10 @@ export class BroadcastController {
         throw new Error('No file provided');
       }
 
-      const imageUrl = await this.imageUploadService.uploadImage(file);
+      const imageUrl = await this.imageUploadService.uploadImage({
+        file,
+        imageType: 'cover',
+      });
 
       return {
         success: true,

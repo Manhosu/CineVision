@@ -43,8 +43,8 @@ export class AuthService {
 
     const tokens = await this.generateTokens(user);
 
-    // Save refresh token to database
-    await this.usersService.updateRefreshToken(user.id, tokens.refresh_token);
+    // Save refresh token to database - DISABLED (usando tabela refresh_tokens separada)
+    // await this.usersService.updateRefreshToken(user.id, tokens.refresh_token);
 
     return {
       user: userWithoutSensitiveData,
@@ -55,8 +55,8 @@ export class AuthService {
   async login(user: User, ip?: string, userAgent?: string) {
     const tokens = await this.generateTokens(user);
 
-    // Save refresh token to database
-    await this.usersService.updateRefreshToken(user.id, tokens.refresh_token);
+    // Save refresh token to database - DISABLED (usando tabela refresh_tokens separada)
+    // await this.usersService.updateRefreshToken(user.id, tokens.refresh_token);
 
     // Log successful login - temporarily commented
     // await this.logsService.logAuth(

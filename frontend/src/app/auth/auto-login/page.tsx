@@ -48,9 +48,9 @@ function AutoLoginContent() {
 
           setStatus('success');
 
-          // Redirecionar após 500ms
+          // Redirecionar após 500ms e forçar reload para atualizar o estado
           setTimeout(() => {
-            router.push(redirectUrl);
+            window.location.href = redirectUrl;
           }, 500);
         } else {
           throw new Error('Dados de autenticação inválidos');
