@@ -13,3 +13,12 @@ coverage
 *.swp
 *.swo
 *~
+.git
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wmv
+*.flv
+*.webm
+public/videos
