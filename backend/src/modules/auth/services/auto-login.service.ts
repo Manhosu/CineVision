@@ -205,6 +205,63 @@ export class AutoLoginService {
   }
 
   /**
+   * Login user directly by Telegram ID (permanent authentication)
+   * This method doesn't require a token and can be used multiple times
+   */
+  async loginByTelegramId(telegramId: string): Promise<{
+    access_token: string;
+    refresh_token: string;
+    user: any;
+  }> {
+    try {
+      // Get user data by telegram_id
+      const { data: user, error: userError } = await this.supabase
+        .from('users')
+        .select('*')
+        .eq('telegram_id', telegramId.toString())
+        .single();
+
+      if (userError || !user) {
+        this.logger.error(`User not found for telegram_id: ${telegramId}`);
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Update user's last login timestamp
+      await this.supabase
+        .from('users')
+        .update({
+          last_login_at: new Date().toISOString(),
+          last_active_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      // Generate JWT tokens
+      const tokens = await this.generateJwtTokens(user);
+
+      this.logger.log(`Telegram direct login successful for user ${user.id} (telegram_id: ${user.telegram_id})`);
+
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          telegram_id: user.telegram_id,
+          telegram_username: user.telegram_username,
+          role: user.role,
+          status: user.status,
+        },
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      this.logger.error('Error in loginByTelegramId:', error);
+      throw new UnauthorizedException('Failed to login with Telegram ID');
+    }
+  }
+
+  /**
    * Generate authenticated homepage URL for Telegram user
    */
   async generateCatalogUrl(userId: string, telegramId: string): Promise<string> {

@@ -211,4 +211,33 @@ export class AuthController {
   async autoLogin(@Body() body: { token: string }) {
     return this.autoLoginService.validateAndConsumeToken(body.token);
   }
+
+  @Post('telegram-login')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Authenticate user directly with Telegram ID (permanent link)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Telegram auto-login successful',
+    schema: {
+      type: 'object',
+      properties: {
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            email: { type: 'string' },
+            name: { type: 'string' },
+            role: { type: 'string' },
+            telegram_id: { type: 'string' },
+          },
+        },
+        access_token: { type: 'string' },
+        refresh_token: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Invalid Telegram ID' })
+  async telegramLogin(@Body() body: { telegram_id: string }) {
+    return this.autoLoginService.loginByTelegramId(body.telegram_id);
+  }
 }
