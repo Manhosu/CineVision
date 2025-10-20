@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { toast } from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 
 export default function PixSettingsPage() {
+  const router = useRouter();
   const [pixKey, setPixKey] = useState('');
   const [merchantName, setMerchantName] = useState('');
   const [merchantCity, setMerchantCity] = useState('');
@@ -19,31 +22,19 @@ export default function PixSettingsPage() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
-        : null;
+      // Obter token do Supabase
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (!token) {
-        toast.error('Token de autenticação não encontrado. Faça login novamente.');
-        setLoading(false);
+      if (!session) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        router.push('/admin/login');
         return;
-      }
-
-      // Extrair o access_token se for do Supabase
-      let actualToken = token;
-      if (token.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(token);
-          actualToken = parsed.access_token || token;
-        } catch {
-          actualToken = token;
-        }
       }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/settings/pix`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${actualToken}`
+          'Authorization': `Bearer ${session.access_token}`
         }
       });
 
@@ -82,32 +73,20 @@ export default function PixSettingsPage() {
 
     setSaving(true);
     try {
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem('admin_token') || localStorage.getItem('auth_token') || localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token'))
-        : null;
+      // Obter token do Supabase
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (!token) {
-        toast.error('Token de autenticação não encontrado. Faça login novamente.');
-        setSaving(false);
+      if (!session) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        router.push('/admin/login');
         return;
-      }
-
-      // Extrair o access_token se for do Supabase
-      let actualToken = token;
-      if (token.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(token);
-          actualToken = parsed.access_token || token;
-        } catch {
-          actualToken = token;
-        }
       }
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/settings/pix`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${actualToken}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           pix_key: pixKey,
@@ -182,8 +161,40 @@ export default function PixSettingsPage() {
           </p>
         </div>
 
+        {/* Current PIX Key Info (if exists) */}
+        {pixKey && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-6 max-w-2xl mb-6">
+            <h2 className="text-lg font-bold text-green-400 mb-3">
+              ✅ Chave PIX Configurada
+            </h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Chave PIX:</span>
+                <code className="text-green-400 bg-black/40 px-3 py-1 rounded font-mono">
+                  {pixKey}
+                </code>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Comerciante:</span>
+                <span className="text-white">{merchantName || 'Cine Vision'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Cidade:</span>
+                <span className="text-white">{merchantCity || 'SAO PAULO'}</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-4">
+              💡 Esta chave está sendo usada para gerar QR Codes PIX no bot do Telegram
+            </p>
+          </div>
+        )}
+
         {/* Form Card */}
         <div className="bg-black/60 backdrop-blur-lg rounded-xl border border-gray-800 p-6 max-w-2xl">
+          <h2 className="text-xl font-bold text-white mb-6">
+            {pixKey ? '✏️ Atualizar Configurações' : '➕ Configurar PIX'}
+          </h2>
+
           {/* PIX Key */}
           <div className="mb-6">
             <label htmlFor="pixKey" className="block text-sm font-medium text-gray-300 mb-2">

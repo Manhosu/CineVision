@@ -342,14 +342,14 @@ export class PaymentsSupabaseService {
           provider_payment_id: transactionId,
           provider: 'pix',
           status: 'pending',
-          amount_cents: purchase.amount_cents,
-          currency: purchase.currency,
-          payment_method: 'pix',
           provider_meta: {
             transaction_id: transactionId,
             pix_key: pixKey,
             qr_code_emv: qrCodeData.qrCodeText,
             qr_code_image: qrCodeImage,
+            amount_cents: purchase.amount_cents,
+            currency: purchase.currency,
+            payment_method: 'pix',
           },
         })
         .select()
