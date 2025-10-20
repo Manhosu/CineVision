@@ -1211,7 +1211,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       }
 
       // Gerar token de auto-login
-      const autoLoginToken = await this.autoLoginService.generateToken(user.id);
+      const autoLoginToken = await this.autoLoginService.generateAutoLoginToken(user.id);
       const autoLoginUrl = `${this.configService.get('FRONTEND_URL')}/auth/auto-login?token=${autoLoginToken}`;
 
       await this.sendMessage(chatId,
