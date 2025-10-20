@@ -1156,11 +1156,9 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       this.logger.log('No deep link parameter - showing welcome message');
     }
 
-    // Gerar link autenticado do catálogo
-    const catalogUrl = await this.autoLoginService.generateCatalogUrl(
-      user.id,
-      user.telegram_id
-    );
+    // Gerar link permanente autenticado do catálogo
+    const frontendUrl = this.configService.get('FRONTEND_URL');
+    const catalogUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/`;
 
     const welcomeMessage = `🎬 *Bem-vindo ao CineVision!*
 
@@ -1210,13 +1208,9 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         return;
       }
 
-      // Gerar token de auto-login com redirect para a homepage
-      const autoLoginResult = await this.autoLoginService.generateAutoLoginToken(
-        user.id,
-        user.telegram_id,
-        '/'
-      );
-      const autoLoginUrl = autoLoginResult.login_url;
+      // Gerar link permanente de auto-login baseado no telegram_id
+      const frontendUrl = this.configService.get('FRONTEND_URL');
+      const autoLoginUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/`;
 
       await this.sendMessage(chatId,
         '🎬 *Catálogo de Filmes*\n\n' +
@@ -1495,11 +1489,8 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           .single();
 
         if (user && user.telegram_id) {
-          dashboardUrl = await this.autoLoginService.generatePurchaseUrl(
-            user.id,
-            user.telegram_id,
-            purchase.id
-          );
+          const frontendUrl = this.configService.get('FRONTEND_URL');
+          dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/dashboard/purchases/${purchase.id}`;
         }
       } catch (error) {
         this.logger.warn('Failed to generate auto-login URL, using default:', error);
