@@ -536,6 +536,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.showCatalog(chatId);
     } else if (text === '/minhas-compras' || text === '/my-purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
+    } else if (text === '/meu-id' || text === '/my-id') {
+      await this.handleMyIdCommand(chatId, telegramUserId);
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
     }
@@ -892,7 +894,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         // Atualizar status da purchase
         await this.supabase
           .from('purchases')
-          .update({ status: 'COMPLETED' })
+          .update({ status: 'paid' })
           .eq('id', purchaseId);
 
         // Entregar conteúdo
@@ -1154,6 +1156,9 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
 🍿 Seu cinema favorito agora no Telegram!
 
+👤 *Seu ID do Telegram:* \`${telegramUserId}\`
+🔐 *Login automático:* Usamos seu ID do Telegram como sua identificação única no sistema!
+
 ✨ *Como funciona:*
 1️⃣ Navegue pelo nosso catálogo no site
 2️⃣ Escolha o filme que deseja
@@ -1161,7 +1166,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 4️⃣ Finalize o pagamento aqui mesmo (PIX ou Cartão)
 5️⃣ Receba o filme instantaneamente!
 
-🔐 *Login automático:* Seu ID do Telegram já é sua conta!
+💡 *Importante:* Todas as suas compras ficam vinculadas ao seu ID do Telegram automaticamente. Não precisa criar senha ou fazer login!
 
 👇 Clique no botão abaixo para ver nosso catálogo:`;
 
@@ -1245,7 +1250,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         .from('purchases')
         .select('*, content(*)')
         .eq('user_id', user.id)
-        .eq('status', 'paid')
+        .in('status', ['paid', 'COMPLETED', 'completed'])
         .order('created_at', { ascending: false });
 
       if (!purchases || purchases.length === 0) {
@@ -1254,19 +1259,48 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       }
 
       let message = '📱 **Minhas Compras**\n\n';
+      const buttons = [];
+
       purchases.forEach((purchase, index) => {
         message += `${index + 1}. **${purchase.content.title}**\n`;
         message += `   💰 R$ ${(purchase.amount_cents / 100).toFixed(2)}\n`;
         message += `   📅 ${new Date(purchase.created_at).toLocaleDateString('pt-BR')}\n\n`;
+
+        // Adicionar botão para assistir cada filme
+        buttons.push([{
+          text: `▶️ Assistir: ${purchase.content.title}`,
+          callback_data: `watch_${purchase.id}_default`
+        }]);
       });
+
+      // Buscar idiomas disponíveis para cada compra e criar botões
+      for (const purchase of purchases) {
+        const { data: languages } = await this.supabase
+          .from('content_languages')
+          .select('*')
+          .eq('content_id', purchase.content_id)
+          .eq('is_active', true)
+          .eq('upload_status', 'completed');
+
+        if (languages && languages.length > 0) {
+          const defaultLang = languages.find(l => l.is_default) || languages[0];
+          // Atualizar callback_data com o language_id correto
+          const buttonIndex = buttons.findIndex(b =>
+            b[0].callback_data === `watch_${purchase.id}_default`
+          );
+          if (buttonIndex >= 0) {
+            buttons[buttonIndex][0].callback_data = `watch_${purchase.id}_${defaultLang.id}`;
+          }
+        }
+      }
+
+      buttons.push([{ text: '🌐 Ver no Site', url: 'https://cinevision.com/dashboard' }]);
+      buttons.push([{ text: '🔙 Voltar ao Catálogo', callback_data: 'catalog' }]);
 
       await this.sendMessage(chatId, message, {
         parse_mode: 'Markdown',
         reply_markup: {
-          inline_keyboard: [
-            [{ text: '🌐 Ver no Site', url: 'https://cinevision.com/dashboard' }],
-            [{ text: '🔙 Voltar', callback_data: 'catalog' }],
-          ],
+          inline_keyboard: buttons,
         },
       });
     } catch (error) {
@@ -1275,12 +1309,39 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     }
   }
 
+  private async handleMyIdCommand(chatId: number, telegramUserId: number) {
+    const message = `👤 *Seu ID do Telegram*
+
+🔢 ID: \`${telegramUserId}\`
+
+ℹ️ *Para que serve?*
+• Seu ID é sua identificação única no sistema CineVision
+• Todas as compras ficam vinculadas a este ID
+• Não precisa criar senha ou fazer login manual
+• Use este ID para suporte técnico se necessário
+
+🔐 *Segurança:*
+O sistema identifica você automaticamente pelo Telegram, sem necessidade de senhas ou cadastros manuais!`;
+
+    await this.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+          [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
+          [{ text: '🔙 Voltar', callback_data: 'start' }],
+        ],
+      },
+    });
+  }
+
   private async handleHelpCommand(chatId: number) {
     const helpMessage = `🤖 **Comandos Disponíveis:**
 
 /start - Iniciar o bot
 /catalogo - Ver filmes disponíveis
 /minhas-compras - Ver suas compras
+/meu-id - Ver seu ID do Telegram
 /ajuda - Mostrar esta ajuda
 
 💡 **Como funciona:**
