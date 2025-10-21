@@ -179,14 +179,6 @@ const MovieCard = memo(function MovieCard({
           {/* Availability badge */}
           {availabilityBadge()}
 
-          {/* Rating badge */}
-          {movie.imdb_rating && (
-            <div className="absolute top-2 left-2 flex items-center space-x-1 bg-black/70 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
-              <StarIcon className="w-3 h-3 text-yellow-500" />
-              <span className="font-medium">{movie.imdb_rating.toFixed(1)}</span>
-            </div>
-          )}
-
           {/* Hover overlay */}
           <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
             isHovered ? 'opacity-100' : 'opacity-0'
@@ -309,15 +301,6 @@ const MovieCard = memo(function MovieCard({
             >
               Ver detalhes
             </Link>
-
-            <div className="flex items-center space-x-2">
-              {movie.imdb_rating && (
-                <div className="flex items-center space-x-1 text-xs text-gray-400">
-                  <StarIcon className="w-3 h-3 text-yellow-500" />
-                  <span>{movie.imdb_rating.toFixed(1)}</span>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>

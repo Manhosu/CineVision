@@ -294,6 +294,7 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         progress: 100,
         languageId,
         conversionProgress: needsConversion ? 0 : undefined,
+        completedAt: finalStatus === 'ready' ? Date.now() : undefined,
       });
 
       // Se precisa de conversão, iniciar polling
@@ -353,6 +354,7 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
             updateTask(taskId, {
               status: 'ready',
               conversionProgress: 100,
+              completedAt: Date.now(),
             });
             console.log(`[Conversion Poll] ✅ Conversão concluída para task ${taskId}`);
             return; // Para o polling

@@ -14,6 +14,7 @@ export interface UploadTask {
   languageId?: string;
   conversionProgress?: number; // 0-100 para conversão
   needsConversion?: boolean; // true se é MKV
+  completedAt?: number; // timestamp quando a tarefa foi concluída
 }
 
 interface UploadContextType {

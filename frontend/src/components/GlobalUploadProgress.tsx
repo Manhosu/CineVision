@@ -7,10 +7,18 @@ import { toast } from 'react-hot-toast';
 export function GlobalUploadProgress() {
   const { tasks, cancelTask, clearStuckTasks } = useUpload();
 
-  // Filter only uploading tasks
-  const uploadingTasks = tasks.filter(t => t.status === 'uploading');
+  // Show tasks that are uploading OR recently completed/failed (keep visible for 3s after completion)
+  const visibleTasks = tasks.filter(t =>
+    t.status === 'uploading' ||
+    t.status === 'error' ||
+    (t.status === 'completed' && Date.now() - (t.completedAt || 0) < 3000)
+  );
 
-  if (uploadingTasks.length === 0) return null;
+  // Don't show if no tasks at all
+  if (visibleTasks.length === 0 && tasks.length === 0) return null;
+
+  // Show all active tasks (including completed/error states)
+  const uploadingTasks = visibleTasks;
 
   // Calculate overall progress
   const overallProgress = uploadingTasks.length > 0
