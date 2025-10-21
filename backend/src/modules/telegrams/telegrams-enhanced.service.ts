@@ -1490,7 +1490,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
         if (user && user.telegram_id) {
           const frontendUrl = this.configService.get('FRONTEND_URL');
-          dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/minha-lista`;
+          dashboardUrl = `${frontendUrl}/auth/auto-login?token=${await this.generatePermanentToken(user.telegram_id)}`;
         }
       } catch (error) {
         this.logger.warn('Failed to generate auto-login URL, using default:', error);
@@ -1797,6 +1797,52 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     } catch (error) {
       this.logger.error('Error handling Mini App purchase:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Helper method to generate permanent token for Telegram user
+   */
+  private async generatePermanentToken(telegramId: string): Promise<string> {
+    try {
+      // Buscar ou criar token permanente para este usuário
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('telegram_id', telegramId)
+        .single();
+
+      if (!user) {
+        this.logger.error(`User not found for telegram_id: ${telegramId}`);
+        return '';
+      }
+
+      // Buscar token existente que ainda é válido
+      const { data: existingToken } = await this.supabase
+        .from('auto_login_tokens')
+        .select('token')
+        .eq('user_id', user.id)
+        .eq('telegram_id', telegramId)
+        .gte('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingToken) {
+        return existingToken.token;
+      }
+
+      // Se não existe, criar novo token permanente
+      const { token } = await this.autoLoginService.generateAutoLoginToken(
+        user.id,
+        telegramId,
+        '/watch-my-movies'
+      );
+
+      return token;
+    } catch (error) {
+      this.logger.error('Error generating permanent token:', error);
+      return '';
     }
   }
 
