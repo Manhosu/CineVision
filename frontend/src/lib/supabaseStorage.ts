@@ -29,36 +29,32 @@ export async function uploadImageToSupabase(
       throw new Error('O arquivo deve ter no máximo 10MB');
     }
 
-    // Generate unique file path
-    const timestamp = Date.now();
-    const randomId = Math.random().toString(36).substring(2, 15);
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `${timestamp}-${randomId}.${fileExtension}`;
-
-    const filePath = folder ? `${folder}/${fileName}` : fileName;
-
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw new Error(`Erro no upload: ${error.message}`);
+    // Create FormData to send to API route
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('bucket', bucket);
+    if (folder) {
+      formData.append('folder', folder);
     }
 
-    // Construct public URL manually for public buckets
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+    // Upload via API route (which uses service role key)
+    const response = await fetch('/api/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
 
-    console.log('✅ Image uploaded successfully:', publicUrl);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Erro no upload');
+    }
+
+    const data = await response.json();
+
+    console.log('✅ Image uploaded successfully:', data.publicUrl);
 
     return {
-      publicUrl,
-      path: filePath,
+      publicUrl: data.publicUrl,
+      path: data.path,
     };
   } catch (error: any) {
     console.error('Upload error:', error);
