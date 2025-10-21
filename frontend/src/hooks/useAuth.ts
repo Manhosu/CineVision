@@ -57,7 +57,9 @@ export function useAuth(): AuthState & {
             id: userData.id,
             email: userData.email || 'telegram-user@cinevision.com',
             role: userData.role || 'user',
-            name: userData.name || userData.telegram_username || 'Usuário'
+            name: userData.name || userData.telegram_username || 'Usuário',
+            telegram_id: userData.telegram_id,
+            telegram_username: userData.telegram_username
           });
           setIsAuthenticated(true);
           localStorage.setItem('auth_token', backendToken);
