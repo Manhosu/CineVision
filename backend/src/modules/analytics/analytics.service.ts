@@ -238,7 +238,16 @@ export class AnalyticsService {
 
       const { data, error } = await this.supabase
         .from('user_sessions')
-        .select('*')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            email,
+            name,
+            telegram_id,
+            telegram_username
+          )
+        `)
         .eq('status', 'online')
         .order('last_activity', { ascending: false });
 
@@ -246,7 +255,20 @@ export class AnalyticsService {
         throw error;
       }
 
-      return data || [];
+      // Flatten user data to session level for easier access in frontend
+      const sessions = (data || []).map(session => {
+        const user = session.users;
+        return {
+          ...session,
+          user_email: user?.email || session.user_email,
+          user_name: user?.name || session.user_name,
+          telegram_id: user?.telegram_id || session.telegram_id,
+          telegram_username: user?.telegram_username || session.telegram_username,
+          users: undefined, // Remove nested user object
+        };
+      });
+
+      return sessions;
     } catch (error) {
       this.logger.error('Failed to get active sessions:', error);
       throw error;
