@@ -170,7 +170,27 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
 
       const contentType = getContentType(file);
 
+      // Log details before making the fetch call
+      console.log('[SimultaneousVideoUpload] ========== UPLOAD INIT DEBUG ==========');
+      console.log('[SimultaneousVideoUpload] File:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        contentType
+      });
+      console.log('[SimultaneousVideoUpload] API URL:', process.env.NEXT_PUBLIC_API_URL);
+      console.log('[SimultaneousVideoUpload] Token:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+      console.log('[SimultaneousVideoUpload] Request payload:', {
+        contentId,
+        filename: file.name,
+        contentType,
+        size: file.size,
+        audioType: type.toLowerCase()
+      });
+      console.log('[SimultaneousVideoUpload] Headers:', headers);
+
       // 1. Iniciar upload multipart
+      console.log('[SimultaneousVideoUpload] Making fetch call to /api/v1/admin/uploads/init...');
       const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
         method: 'POST',
         headers,
@@ -181,6 +201,12 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
           size: file.size,
           audioType: type.toLowerCase(), // 'dublado' or 'legendado'
         }),
+      });
+
+      console.log('[SimultaneousVideoUpload] Response received:', {
+        ok: initResponse.ok,
+        status: initResponse.status,
+        statusText: initResponse.statusText
       });
 
       if (!initResponse.ok) {
@@ -306,7 +332,10 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         checkAndPublishIfComplete();
       }
     } catch (error: any) {
-      console.error(`Upload error for ${type}:`, error);
+      console.error('[SimultaneousVideoUpload] ========== UPLOAD ERROR ==========');
+      console.error(`[SimultaneousVideoUpload] Upload error for ${type}:`, error);
+      console.error('[SimultaneousVideoUpload] Error message:', error?.message);
+      console.error('[SimultaneousVideoUpload] Error stack:', error?.stack);
 
       // Update local state
       setVideos((prev) => ({
