@@ -7,15 +7,29 @@ import { toast } from 'react-hot-toast';
 export function GlobalUploadProgress() {
   const { tasks, cancelTask, clearStuckTasks } = useUpload();
 
-  // Show tasks that are uploading OR recently completed/failed (keep visible for 3s after completion)
-  const visibleTasks = tasks.filter(t =>
-    t.status === 'uploading' ||
-    t.status === 'error' ||
-    (t.status === 'completed' && Date.now() - (t.completedAt || 0) < 3000)
-  );
+  // Show all active tasks (not completed or ready yet)
+  // Keep completed/ready tasks visible for 3 seconds after completion
+  const visibleTasks = tasks.filter(t => {
+    // Always show if uploading, converting, or error
+    if (t.status === 'uploading' || t.status === 'converting' || t.status === 'error') {
+      return true;
+    }
+
+    // Show completed/ready tasks for 3 seconds after completion
+    if ((t.status === 'completed' || t.status === 'ready') && t.completedAt) {
+      return Date.now() - t.completedAt < 3000;
+    }
+
+    // Show any task that doesn't have completedAt set yet (still in progress)
+    if (!t.completedAt) {
+      return true;
+    }
+
+    return false;
+  });
 
   // Don't show if no tasks at all
-  if (visibleTasks.length === 0 && tasks.length === 0) return null;
+  if (visibleTasks.length === 0) return null;
 
   // Show all active tasks (including completed/error states)
   const uploadingTasks = visibleTasks;

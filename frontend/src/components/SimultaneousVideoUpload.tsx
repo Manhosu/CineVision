@@ -133,9 +133,10 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         },
       }));
 
-      // Get auth token with automatic refresh
-      const { getValidAccessToken } = await import('../lib/authTokens');
-      const token = await getValidAccessToken();
+      // Get auth token - try both 'auth_token' and 'token' for compatibility
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('token') || localStorage.getItem('auth_token'))
+        : null;
 
       if (!token) {
         throw new Error('Não foi possível obter token de autenticação. Faça login novamente.');
