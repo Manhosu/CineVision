@@ -66,17 +66,19 @@ export default function AdminDashboard() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
         // Buscar conteúdos
-        const contentResponse = await fetch('http://localhost:3001/api/v1/admin/content', { headers });
+        const contentResponse = await fetch(`${API_URL}/api/v1/admin/content`, { headers });
         const contentData = await contentResponse.json();
 
         // Buscar usuários
-        const usersResponse = await fetch('http://localhost:3001/api/v1/users/stats', { headers });
+        const usersResponse = await fetch(`${API_URL}/api/v1/users/stats`, { headers });
         const usersData = await usersResponse.json();
         const totalUsers = usersData.total || 0;
 
         // Buscar solicitações
-        const requestsResponse = await fetch('http://localhost:3001/api/v1/admin/requests/stats', { headers });
+        const requestsResponse = await fetch(`${API_URL}/api/v1/admin/requests/stats`, { headers });
         const requestsData = await requestsResponse.json();
         const totalRequests = requestsData.total || 0;
 

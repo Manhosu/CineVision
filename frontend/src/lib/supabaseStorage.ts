@@ -55,8 +55,14 @@ export async function uploadImageToSupabase(
       .from(bucket)
       .getPublicUrl(filePath);
 
+    // Ensure the URL has /public/ in the correct position
+    let publicUrl = publicUrlData.publicUrl;
+    if (publicUrl && !publicUrl.includes('/object/public/')) {
+      publicUrl = publicUrl.replace('/object/', '/object/public/');
+    }
+
     return {
-      publicUrl: publicUrlData.publicUrl,
+      publicUrl,
       path: filePath,
     };
   } catch (error: any) {
