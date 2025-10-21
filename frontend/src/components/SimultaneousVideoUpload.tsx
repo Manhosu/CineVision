@@ -301,6 +301,9 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       // Se precisa de conversão, iniciar polling
       if (needsConversion && languageId) {
         startConversionPolling(taskId, languageId, token);
+      } else {
+        // Se NÃO precisa conversão (upload direto), verificar se pode publicar
+        checkAndPublishIfComplete();
       }
     } catch (error: any) {
       console.error(`Upload error for ${type}:`, error);
@@ -318,6 +321,48 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       // Update UploadContext
       updateTask(taskId, { status: 'error', error: error.message || 'Erro no upload' });
       throw error;
+    }
+  };
+
+  // Função para verificar se todos os uploads estão completos e publicar automaticamente
+  const checkAndPublishIfComplete = async () => {
+    // Aguardar um pequeno delay para garantir que o estado foi atualizado
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Pegar todas as tasks deste contentId
+    const contentTasks = tasks.filter(t => t.id.includes('upload-'));
+
+    // Verificar se TODAS as tasks estão ready ou error
+    const allCompleted = contentTasks.every(t => t.status === 'ready' || t.status === 'error');
+    const hasAtLeastOneReady = contentTasks.some(t => t.status === 'ready');
+
+    console.log('[Auto-Publish] Verificando se pode publicar:', {
+      allCompleted,
+      hasAtLeastOneReady,
+      tasks: contentTasks.map(t => ({ id: t.id, status: t.status }))
+    });
+
+    if (allCompleted && hasAtLeastOneReady && contentId) {
+      console.log('[Auto-Publish] ✅ Todos os uploads concluídos! Publicando conteúdo...');
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}/publish`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          console.log('[Auto-Publish] ✅ Conteúdo publicado e notificações enviadas automaticamente!');
+        } else {
+          console.error('[Auto-Publish] ❌ Erro ao publicar conteúdo');
+        }
+      } catch (error) {
+        console.error('[Auto-Publish] ❌ Erro ao publicar:', error);
+      }
     }
   };
 
@@ -358,6 +403,10 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
               completedAt: Date.now(),
             });
             console.log(`[Conversion Poll] ✅ Conversão concluída para task ${taskId}`);
+
+            // Verificar se todos os uploads estão completos e publicar
+            checkAndPublishIfComplete();
+
             return; // Para o polling
           } else if (processing_status === 'error' || processing_status === 'failed') {
             updateTask(taskId, {
@@ -365,6 +414,10 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
               error: 'Erro na conversão do vídeo',
             });
             console.error(`[Conversion Poll] ❌ Erro na conversão para task ${taskId}`);
+
+            // Verificar se todos os uploads estão completos (mesmo com erro)
+            checkAndPublishIfComplete();
+
             return; // Para o polling
           }
         }

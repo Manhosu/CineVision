@@ -882,10 +882,8 @@ export default function AdminContentCreatePage() {
                     // Pequeno delay para garantir que o upload foi iniciado
                     await new Promise(resolve => setTimeout(resolve, 500));
 
-                    // Publicar conteúdo em background
-                    publishContent();
-
-                    toast.success('Upload iniciado! Conteúdo será publicado automaticamente.');
+                    // NÃO publicar agora - será publicado automaticamente quando uploads estiverem 100%
+                    toast.success('Upload iniciado! O conteúdo será publicado automaticamente quando todos os uploads terminarem.');
 
                     // Redirecionar para /admin
                     console.log('[Finalizar Button] Redirecionando para /admin');
