@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { compressImage, needsCompression } from './imageCompression';
 
 export interface ImageUploadResult {
   publicUrl: string;
@@ -24,14 +25,22 @@ export async function uploadImageToSupabase(
       throw new Error('O arquivo deve ser uma imagem');
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Compress image if it's too large (> 2MB)
+    let fileToUpload = file;
+    if (needsCompression(file, 2)) {
+      console.log(`📦 Compressing image from ${(file.size / 1024 / 1024).toFixed(2)}MB...`);
+      fileToUpload = await compressImage(file, 2, 2000);
+      console.log(`✅ Compressed to ${(fileToUpload.size / 1024 / 1024).toFixed(2)}MB`);
+    }
+
+    // Validate compressed file size (max 10MB as fallback)
+    if (fileToUpload.size > 10 * 1024 * 1024) {
       throw new Error('O arquivo deve ter no máximo 10MB');
     }
 
     // Create FormData to send to API route
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', fileToUpload);
     formData.append('bucket', bucket);
     if (folder) {
       formData.append('folder', folder);

@@ -12,6 +12,10 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
   },
 });
 
+// Configure route to accept larger file uploads (15MB)
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60 seconds timeout
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
