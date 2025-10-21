@@ -133,20 +133,18 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         },
       }));
 
-      // Get auth token - try both 'auth_token' and 'token' for compatibility
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem('auth_token') || localStorage.getItem('token'))
-        : null;
+      // Get auth token with automatic refresh
+      const { getValidAccessToken } = await import('../lib/authTokens');
+      const token = await getValidAccessToken();
+
+      if (!token) {
+        throw new Error('Não foi possível obter token de autenticação. Faça login novamente.');
+      }
 
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       };
-
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      } else {
-        throw new Error('No authentication token found');
-      }
 
       // Detect content type from file
       const getContentType = (file: File): string => {
@@ -185,7 +183,10 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       });
 
       if (!initResponse.ok) {
-        const errorData = await initResponse.json();
+        if (initResponse.status === 401) {
+          throw new Error('Autenticação falhou. Faça logout e login novamente no painel admin.');
+        }
+        const errorData = await initResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
         throw new Error(errorData.message || 'Erro ao iniciar upload');
       }
 
