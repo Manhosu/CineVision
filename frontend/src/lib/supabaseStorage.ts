@@ -50,16 +50,11 @@ export async function uploadImageToSupabase(
       throw new Error(`Erro no upload: ${error.message}`);
     }
 
-    // Get public URL
-    const { data: publicUrlData } = supabase.storage
-      .from(bucket)
-      .getPublicUrl(filePath);
+    // Construct public URL manually for public buckets
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${filePath}`;
 
-    // Ensure the URL has /public/ in the correct position
-    let publicUrl = publicUrlData.publicUrl;
-    if (publicUrl && !publicUrl.includes('/object/public/')) {
-      publicUrl = publicUrl.replace('/object/', '/object/public/');
-    }
+    console.log('✅ Image uploaded successfully:', publicUrl);
 
     return {
       publicUrl,
