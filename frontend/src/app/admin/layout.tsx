@@ -29,7 +29,9 @@ export default function AdminLayout({
 
         if (!token || !userStr) {
           // Não autenticado, redirecionar para login
-          router.push('/admin/login');
+          setIsChecking(false);
+          setIsAuthenticated(false);
+          router.replace('/admin/login');
           return;
         }
 
@@ -38,7 +40,9 @@ export default function AdminLayout({
         // Verificar se é admin
         if (user.role !== 'admin') {
           // Não é admin, redirecionar para home
-          router.push('/');
+          setIsChecking(false);
+          setIsAuthenticated(false);
+          router.replace('/');
           return;
         }
 
@@ -47,7 +51,9 @@ export default function AdminLayout({
         setIsChecking(false);
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error);
-        router.push('/admin/login');
+        setIsChecking(false);
+        setIsAuthenticated(false);
+        router.replace('/admin/login');
       }
     };
 
