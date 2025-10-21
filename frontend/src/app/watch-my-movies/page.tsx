@@ -126,16 +126,27 @@ export default function WatchMyMoviesPage() {
 
       <main className="container mx-auto px-4 py-8 mt-16">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            🎬 Meus Filmes
+        <div className="mb-8 bg-gradient-to-r from-primary-900/20 to-purple-900/20 rounded-xl p-6 border border-primary-500/20">
+          <h1 className="text-3xl font-bold text-white mb-3">
+            🎬 Meu Dashboard
           </h1>
-          <p className="text-gray-400">
-            Bem-vindo, {user.name || user.telegram_username || 'Usuário'}!
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
-            ID do Telegram: {user.telegram_id}
-          </p>
+          <div className="flex flex-col gap-2">
+            <p className="text-gray-300 text-lg">
+              👤 Bem-vindo, <span className="font-semibold text-primary-400">
+                {user.name || user.telegram_username || 'Usuário'}
+              </span>!
+            </p>
+            <div className="flex items-center gap-4 text-sm">
+              <p className="text-gray-400">
+                📱 <span className="font-mono text-primary-300">ID: {user.telegram_id}</span>
+              </p>
+              {user.telegram_username && (
+                <p className="text-gray-400">
+                  💬 <span className="text-primary-300">@{user.telegram_username}</span>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Tabs */}
