@@ -201,7 +201,7 @@ function PurchaseSuccessContent() {
                 </li>
                 <li className="flex items-start">
                   <span className="text-blue-400 mr-2">2.</span>
-                  <span>Também pode acessar através da página "Minha Lista"</span>
+                  <span>Também pode acessar através do seu Dashboard</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-blue-400 mr-2">3.</span>
@@ -223,13 +223,13 @@ function PurchaseSuccessContent() {
               </Link>
 
               <Link
-                href="/my-list"
+                href="/dashboard"
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-dark-800 text-white font-medium rounded-xl hover:bg-dark-700 border border-white/10 transition-all duration-300"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
-                Minha Lista
+                Meu Dashboard
               </Link>
             </div>
 

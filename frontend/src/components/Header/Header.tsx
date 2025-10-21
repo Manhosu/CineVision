@@ -84,7 +84,6 @@ export function Header({ transparent = false }: HeaderProps) {
     { label: 'Início', href: '/' },
     { label: 'Filmes', href: '/movies' },
     { label: 'Categorias', href: '/categories' },
-    { label: 'Minha Lista', href: '/my-list' },
   ];
 
   return (
