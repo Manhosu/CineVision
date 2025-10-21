@@ -1836,7 +1836,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       const { token } = await this.autoLoginService.generateAutoLoginToken(
         user.id,
         telegramId,
-        '/watch-my-movies'
+        '/dashboard'
       );
 
       return token;
