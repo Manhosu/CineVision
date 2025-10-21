@@ -24,6 +24,8 @@ interface ActiveSession {
   user_id?: string;
   user_email?: string;
   user_name?: string;
+  telegram_id?: string;
+  telegram_username?: string;
   current_page?: string;
   is_watching: boolean;
   watching_content_title?: string;
@@ -248,9 +250,19 @@ export function RealtimeAnalytics() {
                     className="border-b border-white/5 hover:bg-white/5 transition-colors"
                   >
                     <td className="py-3 px-4">
-                      <p className="text-white font-medium">
-                        {session.user_name || `Visitante #${session.session_id.slice(-6)}`}
-                      </p>
+                      <div className="flex flex-col">
+                        <p className="text-white font-medium">
+                          {session.user_name || `Visitante #${session.session_id.slice(-6)}`}
+                        </p>
+                        {session.telegram_id && (
+                          <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                            <span className="font-mono">📱 {session.telegram_id}</span>
+                            {session.telegram_username && (
+                              <span>@{session.telegram_username}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4">
                       {session.is_watching ? (

@@ -16,6 +16,8 @@ interface Purchase {
     id: string;
     email: string;
     name?: string;
+    telegram_id?: string;
+    telegram_username?: string;
   };
   content?: {
     id: string;
@@ -356,6 +358,12 @@ export default function AdminPurchasesPage() {
                         <div className="text-sm">
                           <div className="text-white">{purchase.user?.name || 'N/A'}</div>
                           <div className="text-gray-400">{purchase.user?.email || 'N/A'}</div>
+                          {purchase.user?.telegram_id && (
+                            <div className="text-xs text-blue-400 mt-1 font-mono">
+                              📱 {purchase.user.telegram_id}
+                              {purchase.user.telegram_username && ` @${purchase.user.telegram_username}`}
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
