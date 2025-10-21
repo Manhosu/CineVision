@@ -195,9 +195,27 @@ export default function DashboardPage() {
 
       <div className="container mx-auto px-4 lg:px-6 py-12 mt-20">
         {/* Header do Dashboard */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Meu Dashboard</h1>
-          <p className="text-gray-400">Bem-vindo, {user.name || user.email}!</p>
+        <div className="mb-8 bg-gradient-to-r from-red-900/20 to-purple-900/20 rounded-xl p-6 border border-red-500/20">
+          <h1 className="text-4xl font-bold text-white mb-3">🎬 Meu Dashboard</h1>
+          <div className="flex flex-col gap-2">
+            <p className="text-gray-300 text-lg">
+              👤 Bem-vindo, <span className="font-semibold text-red-400">
+                {user.name || user.telegram_username || user.email}
+              </span>!
+            </p>
+            {user.telegram_id && (
+              <div className="flex items-center gap-4 text-sm">
+                <p className="text-gray-400">
+                  📱 <span className="font-mono text-red-300">ID: {user.telegram_id}</span>
+                </p>
+                {user.telegram_username && (
+                  <p className="text-gray-400">
+                    💬 <span className="text-red-300">@{user.telegram_username}</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
