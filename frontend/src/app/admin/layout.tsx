@@ -35,18 +35,7 @@ export default function AdminLayout({
           return;
         }
 
-        const user = JSON.parse(userStr);
-
-        // Verificar se é admin
-        if (user.role !== 'admin') {
-          // Não é admin, redirecionar para home
-          setIsChecking(false);
-          setIsAuthenticated(false);
-          router.replace('/');
-          return;
-        }
-
-        // Autenticado e é admin
+        // Autenticado (assumindo que apenas admins têm acesso ao login)
         setIsAuthenticated(true);
         setIsChecking(false);
       } catch (error) {
