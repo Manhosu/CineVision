@@ -839,9 +839,35 @@ export default function AdminContentCreatePage() {
                     console.log('[Finalizar Button] videoUploadRef.current:', videoUploadRef.current);
                     console.log('[Finalizar Button] hasFiles():', videoUploadRef.current?.hasFiles());
 
-                    // Se não há arquivos de vídeo selecionados, apenas redireciona
+                    // Publicar conteúdo e notificar usuários
+                    const publishContent = async () => {
+                      try {
+                        const token = localStorage.getItem('token');
+                        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                          },
+                        });
+
+                        if (!response.ok) {
+                          console.error('Erro ao publicar conteúdo');
+                          toast.error('Erro ao publicar conteúdo.');
+                        } else {
+                          console.log('✅ Conteúdo publicado e notificações enviadas');
+                          toast.success('✅ Conteúdo publicado e usuários notificados!');
+                        }
+                      } catch (error) {
+                        console.error('Error publishing content:', error);
+                        toast.error('Erro ao publicar conteúdo.');
+                      }
+                    };
+
+                    // Se não há arquivos de vídeo selecionados, apenas publica e redireciona
                     if (!videoUploadRef.current?.hasFiles()) {
-                      console.log('[Finalizar Button] Nenhum arquivo selecionado, redirecionando...');
+                      console.log('[Finalizar Button] Nenhum arquivo selecionado, publicando...');
+                      await publishContent();
                       router.push('/admin');
                       return;
                     }
@@ -856,7 +882,10 @@ export default function AdminContentCreatePage() {
                     // Pequeno delay para garantir que o upload foi iniciado
                     await new Promise(resolve => setTimeout(resolve, 500));
 
-                    toast.success('Upload iniciado! Acompanhe o progresso na barra flutuante.');
+                    // Publicar conteúdo em background
+                    publishContent();
+
+                    toast.success('Upload iniciado! Conteúdo será publicado automaticamente.');
 
                     // Redirecionar para /admin
                     console.log('[Finalizar Button] Redirecionando para /admin');
@@ -912,41 +941,6 @@ export default function AdminContentCreatePage() {
                   <span>Criar Outro Conteúdo</span>
                 </button>
               </div>
-
-              {/* Publish Button */}
-              <button
-                onClick={async () => {
-                  if (!confirm('Tem certeza que deseja publicar este conteúdo? Ele ficará disponível para todos os usuários.')) {
-                    return;
-                  }
-
-                  try {
-                    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      credentials: 'include',
-                    });
-
-                    if (!response.ok) {
-                      throw new Error('Erro ao publicar conteúdo');
-                    }
-
-                    toast.success('✅ Conteúdo publicado com sucesso! Agora está disponível no catálogo.');
-                    router.push('/admin');
-                  } catch (error) {
-                    console.error('Error publishing content:', error);
-                    toast.error('Erro ao publicar conteúdo. Tente novamente.');
-                  }
-                }}
-                className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-purple-900/50 flex items-center justify-center space-x-2"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                <span>📢 Publicar Conteúdo e Notificar Usuários</span>
-              </button>
             </div>
           </div>
         )}
