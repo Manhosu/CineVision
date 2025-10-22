@@ -246,9 +246,12 @@ export class AnalyticsService {
    */
   async getActiveSessions(): Promise<any[]> {
     try {
-      await this.supabase.rpc('cleanup_inactive_sessions').catch(err => {
-        this.logger.warn('Failed to cleanup inactive sessions:', err);
-      });
+      // Try to cleanup inactive sessions, but don't fail if it doesn't work
+      try {
+        await this.supabase.rpc('cleanup_inactive_sessions');
+      } catch (cleanupError) {
+        this.logger.warn('Failed to cleanup inactive sessions:', cleanupError);
+      }
 
       // Don't try to join with users table - just get sessions
       const { data, error } = await this.supabase
