@@ -72,23 +72,13 @@ export default function AdminDashboard() {
         const contentResponse = await fetch(`${API_URL}/api/v1/admin/content`, { headers });
         const contentData = await contentResponse.json();
 
-        // Buscar usuários
-        const usersResponse = await fetch(`${API_URL}/api/v1/users/stats`, { headers });
-        const usersData = await usersResponse.json();
-        const totalUsers = usersData.total || 0;
-
-        // Buscar solicitações
-        const requestsResponse = await fetch(`${API_URL}/api/v1/admin/requests/stats`, { headers });
-        const requestsData = await requestsResponse.json();
-        const totalRequests = requestsData.total || 0;
-
         // Calcular visualizações totais
         const totalViews = contentData.data?.reduce((sum: number, content: any) => sum + (content.views_count || 0), 0) || 0;
 
         setStats({
           totalContent: contentData.data?.length || 0,
-          totalUsers,
-          totalRequests,
+          totalUsers: 0, // Endpoint não existe ainda
+          totalRequests: 0, // Endpoint não existe ainda
           recentUploads: totalViews
         });
 

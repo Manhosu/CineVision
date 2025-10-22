@@ -96,23 +96,39 @@ export function useAuth(): AuthState & {
 
   const login = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+      // Call backend login endpoint to get JWT tokens
+      const response = await fetch(`${API_URL}/api/v1/supabase-auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (error) throw error;
+      const result = await response.json();
 
-      if (data.user) {
-        const mappedUser = await mapSupabaseUser(data.user);
-        setUser(mappedUser);
-        setIsAuthenticated(true);
-
-        // Salvar token também no localStorage para compatibilidade
-        if (data.session?.access_token && typeof window !== 'undefined') {
-          localStorage.setItem('auth_token', data.session.access_token);
-        }
+      if (result.status === 'error' || !result.access_token) {
+        throw new Error(result.message || 'Login failed');
       }
+
+      // Save backend JWT tokens
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('access_token', result.access_token);
+        localStorage.setItem('refresh_token', result.refresh_token);
+        localStorage.setItem('auth_token', result.access_token); // For compatibility
+        localStorage.setItem('user', JSON.stringify(result.user));
+      }
+
+      // Set user state
+      setUser({
+        id: result.user.id,
+        email: result.user.email,
+        role: result.user.role || 'user',
+        name: result.user.name || result.user.email.split('@')[0],
+      });
+      setIsAuthenticated(true);
     } catch (error: any) {
       console.error('Login error:', error);
       throw new Error(error.message || 'Login failed');
@@ -160,6 +176,9 @@ export function useAuth(): AuthState & {
       await supabase.auth.signOut();
       if (typeof window !== 'undefined') {
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user');
       }
       setUser(null);
       setIsAuthenticated(false);
