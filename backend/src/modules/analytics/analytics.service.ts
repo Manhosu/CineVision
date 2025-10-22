@@ -66,12 +66,17 @@ export class AnalyticsService {
       // Se temos user_id mas não temos user_name, buscar do auth.users
       let userName = session.user_name;
       if (session.user_id && !userName) {
-        const { data: userData } = await this.supabase.auth.admin.getUserById(session.user_id);
-        if (userData?.user?.user_metadata?.name) {
-          userName = userData.user.user_metadata.name;
-        } else if (userData?.user?.email) {
-          // Fallback: usar parte do email antes do @
-          userName = userData.user.email.split('@')[0];
+        try {
+          const { data: userData } = await this.supabase.auth.admin.getUserById(session.user_id);
+          if (userData?.user?.user_metadata?.name) {
+            userName = userData.user.user_metadata.name;
+          } else if (userData?.user?.email) {
+            // Fallback: usar parte do email antes do @
+            userName = userData.user.email.split('@')[0];
+          }
+        } catch (userError) {
+          // Ignorar erros ao buscar dados do usuário - pode não existir mais
+          this.logger.warn(`Could not fetch user data for ${session.user_id}: ${userError.message}`);
         }
       }
 
@@ -79,7 +84,7 @@ export class AnalyticsService {
         .from('user_sessions')
         .upsert({
           session_id: session.session_id,
-          user_id: session.user_id,
+          user_id: session.user_id || null, // Allow null user_id for anonymous sessions
           user_email: session.user_email,
           user_name: userName,
           ip_address: session.ip_address,
@@ -96,13 +101,20 @@ export class AnalyticsService {
 
       if (error) {
         this.logger.error('Error upserting user session:', error);
-        throw error;
+        // Don't throw if it's a foreign key constraint error - just log it
+        if (error.code !== '23503') {
+          throw error;
+        } else {
+          this.logger.warn(`Foreign key constraint violation for user_id ${session.user_id} - session will be tracked without user reference`);
+        }
+        return;
       }
 
       this.logger.debug(`Session updated: ${session.session_id}`);
     } catch (error) {
       this.logger.error('Failed to upsert user session:', error);
-      throw error;
+      // Don't throw - we don't want analytics to break the app
+      return;
     }
   }
 
@@ -234,44 +246,28 @@ export class AnalyticsService {
    */
   async getActiveSessions(): Promise<any[]> {
     try {
-      await this.supabase.rpc('cleanup_inactive_sessions');
+      await this.supabase.rpc('cleanup_inactive_sessions').catch(err => {
+        this.logger.warn('Failed to cleanup inactive sessions:', err);
+      });
 
+      // Don't try to join with users table - just get sessions
       const { data, error } = await this.supabase
         .from('user_sessions')
-        .select(`
-          *,
-          users:user_id (
-            id,
-            email,
-            name,
-            telegram_id,
-            telegram_username
-          )
-        `)
+        .select('*')
         .eq('status', 'online')
         .order('last_activity', { ascending: false });
 
       if (error) {
-        throw error;
+        this.logger.error('Error fetching active sessions:', error);
+        // Return empty array instead of throwing
+        return [];
       }
 
-      // Flatten user data to session level for easier access in frontend
-      const sessions = (data || []).map(session => {
-        const user = session.users;
-        return {
-          ...session,
-          user_email: user?.email || session.user_email,
-          user_name: user?.name || session.user_name,
-          telegram_id: user?.telegram_id || session.telegram_id,
-          telegram_username: user?.telegram_username || session.telegram_username,
-          users: undefined, // Remove nested user object
-        };
-      });
-
-      return sessions;
+      return data || [];
     } catch (error) {
       this.logger.error('Failed to get active sessions:', error);
-      throw error;
+      // Return empty array instead of throwing - don't break the app
+      return [];
     }
   }
 
