@@ -3,6 +3,8 @@
  * Gerencia upload de arquivos grandes em chunks sem carregar tudo na memória
  */
 
+import { supabase } from '@/lib/supabase';
+
 const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB por chunk
 const MAX_CONCURRENT_UPLOADS = 3; // Máximo de uploads simultâneos
 
@@ -43,26 +45,35 @@ export class MultipartUploadService {
   }
 
   /**
-   * Obtém o token de autenticação
+   * Obtém o token de autenticação fresco
    */
-  private getAuthToken(): string {
-    let token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token');
+  private async getAuthToken(): Promise<string> {
+    // First try backend JWT token
+    let token = localStorage.getItem('access_token');
 
-    if (!token) {
-      // Tentar obter do Supabase
-      const supabaseToken = localStorage.getItem('sb-szghyvnbmjlquznxhqum-auth-token');
-      if (supabaseToken) {
-        try {
-          const parsed = JSON.parse(supabaseToken);
-          token = parsed.access_token;
-        } catch (e) {
-          token = supabaseToken;
-        }
-      }
+    if (token) {
+      return token;
     }
 
+    // Fallback to Supabase session (auto-refreshed)
+    const { data: { session }, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('Error getting Supabase session:', error);
+    }
+
+    if (session?.access_token) {
+      token = session.access_token;
+      // Update localStorage for consistency
+      localStorage.setItem('auth_token', token);
+      return token;
+    }
+
+    // Last fallback: try localStorage (but this might be stale)
+    token = localStorage.getItem('admin_token') || localStorage.getItem('auth_token');
+
     if (!token) {
-      throw new Error('Token de autenticação não encontrado');
+      throw new Error('Token de autenticação não encontrado. Faça login novamente.');
     }
 
     return token;
@@ -178,7 +189,7 @@ export class MultipartUploadService {
     languageType: 'dubbed' | 'subtitled',
     file: File
   ): Promise<string> {
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
 
     const response = await fetch(`${this.apiUrl}/api/v1/content-language-upload/language`, {
       method: 'POST',
@@ -213,7 +224,7 @@ export class MultipartUploadService {
     languageId: string,
     file: File
   ): Promise<{ uploadId: string; key: string }> {
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
 
     const response = await fetch(`${this.apiUrl}/api/v1/content-language-upload/initiate-multipart`, {
       method: 'POST',
@@ -249,7 +260,7 @@ export class MultipartUploadService {
     chunk: Blob,
     key: string
   ): Promise<string> {
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
 
     // 1. Obter URL pré-assinada para esta parte
     const urlResponse = await fetch(`${this.apiUrl}/api/v1/content-language-upload/presigned-url`, {
@@ -306,7 +317,7 @@ export class MultipartUploadService {
     key: string,
     fileSize: number
   ): Promise<void> {
-    const token = this.getAuthToken();
+    const token = await this.getAuthToken();
 
     const response = await fetch(`${this.apiUrl}/api/v1/content-language-upload/complete-multipart`, {
       method: 'POST',

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 import { useUpload } from '@/contexts/UploadContext';
+import { supabase } from '@/lib/supabase';
 
 interface VideoFile {
   file: File | null;
@@ -162,10 +163,31 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         },
       }));
 
-      // Get auth token - try both 'auth_token' and 'token' for compatibility
-      const token = typeof window !== 'undefined'
-        ? (localStorage.getItem('token') || localStorage.getItem('auth_token'))
-        : null;
+      // Get fresh auth token from Supabase session (handles token refresh automatically)
+      let token: string | null = null;
+
+      if (typeof window !== 'undefined') {
+        // First try to get backend JWT token
+        const backendToken = localStorage.getItem('access_token');
+        if (backendToken) {
+          token = backendToken;
+        } else {
+          // Fallback to Supabase session token (auto-refreshed)
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error) {
+            console.error('[SimultaneousVideoUpload] Error getting session:', error);
+          }
+
+          if (session?.access_token) {
+            token = session.access_token;
+            // Update localStorage for consistency
+            localStorage.setItem('auth_token', token);
+          } else {
+            // Last fallback: try localStorage (but this might be stale)
+            token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+          }
+        }
+      }
 
       if (!token) {
         throw new Error('Não foi possível obter token de autenticação. Faça login novamente.');
@@ -220,7 +242,7 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
 
       // 1. Iniciar upload multipart
       console.log('[SimultaneousVideoUpload] Making fetch call to /api/v1/admin/uploads/init...');
-      const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
+      let initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -238,10 +260,66 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         statusText: initResponse.statusText
       });
 
-      if (!initResponse.ok) {
-        if (initResponse.status === 401) {
+      // Handle 401 by refreshing token and retrying
+      if (!initResponse.ok && initResponse.status === 401) {
+        console.log('[SimultaneousVideoUpload] Got 401, attempting to refresh token...');
+
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          try {
+            const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/refresh`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ refresh_token: refreshToken }),
+            });
+
+            if (refreshResponse.ok) {
+              const { access_token, refresh_token: newRefreshToken } = await refreshResponse.json();
+
+              // Update tokens in localStorage
+              localStorage.setItem('access_token', access_token);
+              if (newRefreshToken) {
+                localStorage.setItem('refresh_token', newRefreshToken);
+              }
+
+              console.log('[SimultaneousVideoUpload] Token refreshed successfully, retrying upload...');
+
+              // Update headers with new token
+              headers['Authorization'] = `Bearer ${access_token}`;
+
+              // Retry the init request with new token
+              initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  contentId: contentId,
+                  filename: file.name,
+                  contentType: contentType,
+                  size: file.size,
+                  audioType: type.toLowerCase(),
+                }),
+              });
+
+              console.log('[SimultaneousVideoUpload] Retry response:', {
+                ok: initResponse.ok,
+                status: initResponse.status
+              });
+            } else {
+              throw new Error('Não foi possível renovar o token. Faça logout e login novamente.');
+            }
+          } catch (refreshError) {
+            console.error('[SimultaneousVideoUpload] Token refresh failed:', refreshError);
+            throw new Error('Autenticação falhou. Faça logout e login novamente no painel admin.');
+          }
+        } else {
           throw new Error('Autenticação falhou. Faça logout e login novamente no painel admin.');
         }
+      }
+
+      // Now check if the request (original or retry) was successful
+      if (!initResponse.ok) {
         const errorData = await initResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
         throw new Error(errorData.message || 'Erro ao iniciar upload');
       }

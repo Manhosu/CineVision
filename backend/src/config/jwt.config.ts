@@ -3,7 +3,7 @@ import { JwtModuleOptions } from '@nestjs/jwt';
 export const jwtConfig: JwtModuleOptions = {
   secret: process.env.JWT_SECRET || 'cine-vision-secret-key',
   signOptions: {
-    expiresIn: process.env.JWT_EXPIRES_IN || '15m', // Access token expires in 15 minutes
+    expiresIn: process.env.JWT_EXPIRES_IN || '24h', // Access token expires in 24 hours (allows long uploads)
   },
 };
 
