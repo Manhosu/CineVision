@@ -84,26 +84,55 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
     const uploads = [];
 
     if (videos.DUBLADO.file) {
+      console.log('[SimultaneousVideoUpload] Adding DUBLADO to upload queue');
       uploads.push(uploadFile(videos.DUBLADO.file, 'DUBLADO'));
     }
 
     if (videos.LEGENDADO.file) {
+      console.log('[SimultaneousVideoUpload] Adding LEGENDADO to upload queue');
       uploads.push(uploadFile(videos.LEGENDADO.file, 'LEGENDADO'));
     }
 
+    console.log(`[SimultaneousVideoUpload] Starting ${uploads.length} uploads in parallel`);
+
     try {
-      await Promise.all(uploads);
+      // Use Promise.allSettled para que um upload falhado não cancele o outro
+      const results = await Promise.allSettled(uploads);
+
+      console.log('[SimultaneousVideoUpload] All uploads finished:', {
+        total: results.length,
+        fulfilled: results.filter(r => r.status === 'fulfilled').length,
+        rejected: results.filter(r => r.status === 'rejected').length
+      });
+
+      // Log erros de uploads que falharam
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`[SimultaneousVideoUpload] Upload ${index} failed:`, result.reason);
+        }
+      });
+
       onUploadComplete?.();
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('[SimultaneousVideoUpload] Unexpected error:', error);
     }
   };
 
   const uploadFile = async (file: File, type: 'DUBLADO' | 'LEGENDADO') => {
 
     // Create task ID and add to UploadContext
-    const taskId = `upload-${Date.now()}-${type}`;
+    // Use crypto.randomUUID() para garantir IDs únicos, ou fallback para Date.now() + random
+    const uniqueId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const taskId = `upload-${type}-${uniqueId}`;
     taskIdsRef.current[type] = taskId;
+
+    console.log(`[SimultaneousVideoUpload] Creating upload task for ${type}:`, {
+      taskId,
+      fileName: file.name,
+      fileSize: file.size
+    });
 
     // Variable to track abort controller
     let abortController = new AbortController();
