@@ -3,10 +3,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import NextImage from 'next/image';
-import { 
-  PlayIcon, 
-  InformationCircleIcon, 
-  StarIcon,
+import {
+  PlayIcon,
   ClockIcon,
   CalendarIcon,
   ChevronLeftIcon,
@@ -174,10 +172,11 @@ export function HeroBanner({
             </h1>
             
             <div className="flex items-center gap-4 mb-4 text-white/80">
-              <div className="flex items-center gap-1">
-                <StarIcon className="w-5 h-5 text-yellow-400" />
-                <span>{currentMovie.imdb_rating?.toFixed(1) || 'N/A'}</span>
-              </div>
+              {currentMovie.age_rating && (
+                <div className="border-2 border-yellow-500 text-yellow-500 px-3 py-1 rounded font-bold text-sm">
+                  {currentMovie.age_rating}
+                </div>
+              )}
               <div className="flex items-center gap-1">
                 <ClockIcon className="w-5 h-5" />
                 <span>{currentMovie.duration_minutes ? `${currentMovie.duration_minutes} min` : 'N/A'}</span>
@@ -194,16 +193,11 @@ export function HeroBanner({
 
             <div className="flex items-center gap-4">
               <button
-                onClick={handleWatchClick}
+                onClick={() => router.push(`/movies/${currentMovie.id}`)}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
               >
                 <PlayIcon className="w-5 h-5" />
                 Assistir - {formatPrice(currentMovie.price_cents || 1999)}
-              </button>
-              
-              <button className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-6 py-3 rounded-lg font-semibold transition-colors backdrop-blur-sm">
-                <InformationCircleIcon className="w-5 h-5" />
-                Mais Informações
               </button>
             </div>
           </div>

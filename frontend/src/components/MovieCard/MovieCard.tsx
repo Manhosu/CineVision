@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
 import {
   PlayIcon,
-  StarIcon,
   ClockIcon,
   HeartIcon,
   PlusIcon,
@@ -254,6 +253,16 @@ const MovieCard = memo(function MovieCard({
           ) : (
             <div className="text-primary-500 font-extrabold text-2xl">
               {formatPrice(movie.price_cents)}
+            </div>
+          )}
+
+          {/* Age Rating */}
+          {movie.age_rating && (
+            <div className="flex items-center space-x-2">
+              <div className="border-2 border-yellow-500 text-yellow-500 px-2 py-1 rounded text-xs font-bold">
+                {movie.age_rating}
+              </div>
+              <span className="text-xs text-gray-400">Anos</span>
             </div>
           )}
 

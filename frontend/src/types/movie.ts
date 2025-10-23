@@ -8,6 +8,7 @@ export interface Movie {
   trailer_url?: string;
   price_cents: number;
   imdb_rating?: number;
+  age_rating?: string; // Classificação indicativa: 'L' | '10' | '12' | '14' | '16' | '18'
   release_year?: number;
   duration_minutes?: number;
   genres?: string[];
