@@ -48,11 +48,15 @@ function SearchResults() {
   };
 
   const handleRequestMovie = () => {
-    // Abrir Telegram direto no chat do bot
+    // Abrir Telegram com comando pré-preenchido e o título pesquisado
     const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
-    const deepLink = `https://t.me/${botUsername}`;
+    // Usar o parâmetro 'start' do Telegram para enviar dados ao bot
+    // O formato é: https://t.me/botname?start=PAYLOAD
+    // Vamos codificar o título pesquisado em base64 para enviar ao bot
+    const payload = btoa(encodeURIComponent(query)).replace(/=/g, '');
+    const deepLink = `https://t.me/${botUsername}?start=request_${payload}`;
 
-    toast.success('Abrindo Telegram... Digite /solicitar para fazer seu pedido!', {
+    toast.success('Abrindo Telegram...', {
       duration: 3000,
       icon: '📱'
     });
