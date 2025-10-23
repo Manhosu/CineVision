@@ -1078,27 +1078,58 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       if (existingUser) {
         this.logger.log(`User found with telegram_id ${telegramUserId}: ${existingUser.id}`);
 
-        // Atualizar chat_id se mudou
+        // Buscar dados atualizados do Telegram
+        const telegramUserData = await this.getTelegramUserData(chatId);
+
+        // Atualizar dados do usuário se mudaram (chat_id, username, nome)
+        const updates: any = {};
+
         if (existingUser.telegram_chat_id !== chatId.toString()) {
-          await this.supabase
-            .from('users')
-            .update({ telegram_chat_id: chatId.toString() })
-            .eq('id', existingUser.id);
+          updates.telegram_chat_id = chatId.toString();
         }
 
-        return existingUser;
+        if (telegramUserData) {
+          if (telegramUserData.username && existingUser.telegram_username !== telegramUserData.username) {
+            updates.telegram_username = telegramUserData.username;
+          }
+
+          const fullName = `${telegramUserData.first_name || ''} ${telegramUserData.last_name || ''}`.trim();
+          if (fullName && existingUser.name !== fullName) {
+            updates.name = fullName;
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await this.supabase
+            .from('users')
+            .update(updates)
+            .eq('id', existingUser.id);
+
+          this.logger.log(`Updated user data for telegram_id ${telegramUserId}:`, updates);
+        }
+
+        return { ...existingUser, ...updates };
       }
 
       // Usuário não existe, criar automaticamente
       this.logger.log(`Creating new user for telegram_id ${telegramUserId}`);
+
+      // Buscar dados do Telegram para criar usuário com informações corretas
+      const telegramUserData = await this.getTelegramUserData(chatId);
+
+      const userName = telegramUserData
+        ? `${telegramUserData.first_name || ''} ${telegramUserData.last_name || ''}`.trim()
+        : `Usuário Telegram ${telegramUserId}`;
+
+      const username = telegramUserData?.username || `user_${telegramUserId}`;
 
       const { data: newUser, error: createError } = await this.supabase
         .from('users')
         .insert({
           telegram_id: telegramUserId.toString(),
           telegram_chat_id: chatId.toString(),
-          telegram_username: `user_${telegramUserId}`,
-          name: `Usuário Telegram ${telegramUserId}`,
+          telegram_username: username,
+          name: userName,
           email: `telegram_${telegramUserId}@cinevision.temp`, // Email temporário
           password: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
           role: 'user',
@@ -1112,11 +1143,35 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         return null;
       }
 
-      this.logger.log(`New user created: ${newUser.id} for telegram_id ${telegramUserId}`);
+      this.logger.log(`New user created: ${newUser.id} for telegram_id ${telegramUserId} (${userName})`);
       return newUser;
 
     } catch (error) {
       this.logger.error('Error in findOrCreateUserByTelegramId:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Busca dados do usuário do Telegram via API
+   */
+  private async getTelegramUserData(chatId: number): Promise<any> {
+    try {
+      const response = await axios.get(`${this.botApiUrl}/getChat`, {
+        params: { chat_id: chatId }
+      });
+
+      if (response.data?.ok && response.data?.result) {
+        return {
+          first_name: response.data.result.first_name,
+          last_name: response.data.result.last_name,
+          username: response.data.result.username,
+        };
+      }
+
+      return null;
+    } catch (error) {
+      this.logger.warn(`Could not fetch Telegram user data for chatId ${chatId}:`, error.message);
       return null;
     }
   }
