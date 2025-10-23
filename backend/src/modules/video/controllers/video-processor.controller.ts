@@ -47,15 +47,17 @@ export class VideoProcessorController {
       });
 
       return {
-        success: true,
-        contentId: dto.contentId,
-        outputFormat: result.outputFormat,
-        outputPath: result.outputPath,
+        success: result.success,
+        contentId: result.contentId,
+        originalFormat: result.originalFormat,
+        finalFormat: result.finalFormat,
+        hlsGenerated: result.hlsGenerated,
         hlsMasterUrl: result.hlsMasterUrl,
-        qualitiesGenerated: result.qualitiesGenerated,
+        videoUrl: result.videoUrl,
+        fileSize: result.fileSize,
         processingTime: result.processingTime,
-        message: result.message,
-      };
+        error: result.error,
+      } as any;
     } catch (error) {
       this.logger.error(`Failed to process video: ${error.message}`, error.stack);
       throw new HttpException(
