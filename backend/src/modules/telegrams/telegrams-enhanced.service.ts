@@ -1243,8 +1243,55 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         // Processar compra diretamente
         await this.handleBuyCallback(chatId, telegramUserId || chatId, param);
         return;
+      }
+      // Se o parâmetro começa com "request_", é uma solicitação de conteúdo
+      else if (param.startsWith('request_')) {
+        try {
+          // Decodificar o payload em base64
+          const encodedTitle = param.replace('request_', '');
+          // Adicionar padding se necessário
+          const padding = '='.repeat((4 - (encodedTitle.length % 4)) % 4);
+          const decodedTitle = decodeURIComponent(Buffer.from(encodedTitle + padding, 'base64').toString());
+
+          this.logger.log(`📝 Deep link detected: content request for "${decodedTitle}"`);
+
+          // Criar a solicitação diretamente com o título já preenchido
+          // Pedir apenas o tipo (filme ou série)
+          const requestKey = `request_${chatId}`;
+          this.pendingContentRequests.set(requestKey, {
+            chat_id: chatId,
+            telegram_user_id: telegramUserId || chatId,
+            step: 'type',
+            data: {
+              title: decodedTitle,
+            },
+            timestamp: Date.now(),
+          });
+
+          await this.sendMessage(
+            chatId,
+            `📝 *Solicitação de Conteúdo*\n\n` +
+            `📺 Título: *${decodedTitle}*\n\n` +
+            `Que tipo de conteúdo você está procurando?`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '🎬 Filme', callback_data: 'request_type_movie' },
+                    { text: '📺 Série', callback_data: 'request_type_series' },
+                  ],
+                ],
+              },
+            },
+          );
+          return;
+        } catch (error) {
+          this.logger.error(`Error decoding request payload: ${error.message}`);
+          await this.sendMessage(chatId, '❌ Erro ao processar solicitação. Por favor, use /solicitar para fazer seu pedido.');
+        }
       } else {
-        this.logger.warn(`Parameter "${param}" does not start with "buy_"`);
+        this.logger.warn(`Parameter "${param}" does not start with "buy_" or "request_"`);
       }
     } else {
       this.logger.log('No deep link parameter - showing welcome message');
