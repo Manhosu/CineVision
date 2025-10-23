@@ -18,7 +18,7 @@ import {
   VideoProcessingStatusDto,
 } from '../dto/process-video.dto';
 
-@Controller('api/v1/video-processor')
+@Controller('video-processor')
 export class VideoProcessorController {
   private readonly logger = new Logger(VideoProcessorController.name);
 
