@@ -73,13 +73,11 @@ export class VideoProcessorController {
    */
   @Get('status/:contentId')
   @UseGuards(JwtAuthGuard)
-  async getProcessingStatus(
-    @Param('contentId') contentId: string,
-  ): Promise<VideoProcessingStatusDto> {
+  async getProcessingStatus(@Param('contentId') contentId: string) {
     try {
-      const logs = await this.videoConversionLogsService.getLogsByContentId(contentId);
+      const log = await this.videoConversionLogsService.getLogByContentId(contentId);
 
-      if (!logs || logs.length === 0) {
+      if (!log) {
         return {
           contentId,
           status: 'not_found',
@@ -87,68 +85,19 @@ export class VideoProcessorController {
         };
       }
 
-      // Get the most recent log
-      const latestLog = logs[0];
-
       return {
         contentId,
-        status: latestLog.status,
-        progress: latestLog.progress,
-        conversionType: latestLog.conversion_type,
-        outputFormat: latestLog.output_format,
-        outputPath: latestLog.output_hls_path,
-        qualitiesGenerated: latestLog.qualities_generated,
-        processingTime: latestLog.processing_time_seconds,
-        errorMessage: latestLog.error_message,
-        startedAt: latestLog.started_at,
-        completedAt: latestLog.completed_at,
+        status: log.status,
+        progress: log.progress,
+        conversionType: log.conversion_type,
+        outputFormat: log.output_format,
+        processingTime: log.processing_time_seconds,
+        errorMessage: log.error_message,
+        startedAt: log.started_at,
+        completedAt: log.completed_at,
       };
     } catch (error) {
       this.logger.error(`Failed to get processing status: ${error.message}`);
-      throw new HttpException(
-        {
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Get all conversion logs for content
-   */
-  @Get('logs/:contentId')
-  @UseGuards(JwtAuthGuard)
-  async getConversionLogs(@Param('contentId') contentId: string) {
-    try {
-      const logs = await this.videoConversionLogsService.getLogsByContentId(contentId);
-      return {
-        contentId,
-        logs,
-        totalCount: logs.length,
-      };
-    } catch (error) {
-      this.logger.error(`Failed to get conversion logs: ${error.message}`);
-      throw new HttpException(
-        {
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Get conversion statistics
-   */
-  @Get('stats')
-  @UseGuards(JwtAuthGuard)
-  async getConversionStats() {
-    try {
-      const stats = await this.videoConversionLogsService.getConversionStats();
-      return stats;
-    } catch (error) {
-      this.logger.error(`Failed to get conversion stats: ${error.message}`);
       throw new HttpException(
         {
           error: error.message,
