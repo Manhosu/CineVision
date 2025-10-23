@@ -7,6 +7,8 @@ export interface UserSession {
   user_id?: string;
   user_email?: string;
   user_name?: string;
+  telegram_id?: string;
+  telegram_username?: string;
   ip_address?: string;
   user_agent?: string;
   current_page?: string;
@@ -253,10 +255,19 @@ export class AnalyticsService {
         this.logger.warn('Failed to cleanup inactive sessions:', cleanupError);
       }
 
-      // Don't try to join with users table - just get sessions
+      // Get sessions with user data including Telegram info
       const { data, error } = await this.supabase
         .from('user_sessions')
-        .select('*')
+        .select(`
+          *,
+          users:user_id (
+            id,
+            name,
+            email,
+            telegram_id,
+            telegram_username
+          )
+        `)
         .eq('status', 'online')
         .order('last_activity', { ascending: false });
 
@@ -266,7 +277,22 @@ export class AnalyticsService {
         return [];
       }
 
-      return data || [];
+      // Map the data to include user info at the top level
+      const mappedSessions = (data || []).map(session => {
+        const userData = Array.isArray(session.users) ? session.users[0] : session.users;
+
+        return {
+          ...session,
+          user_name: session.user_name || userData?.name,
+          user_email: session.user_email || userData?.email,
+          telegram_id: userData?.telegram_id,
+          telegram_username: userData?.telegram_username,
+          // Remove nested users object
+          users: undefined
+        };
+      });
+
+      return mappedSessions;
     } catch (error) {
       this.logger.error('Failed to get active sessions:', error);
       // Return empty array instead of throwing - don't break the app
