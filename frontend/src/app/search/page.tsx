@@ -1,24 +1,20 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { Movie } from '@/types/movie';
 import { MagnifyingGlassIcon, FilmIcon, PlusCircleIcon } from '@heroicons/react/24/outline';
-import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 function SearchResults() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const { isAuthenticated, user } = useAuth();
   const query = searchParams?.get('q') || '';
   const [movies, setMovies] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRequesting, setIsRequesting] = useState(false);
 
   useEffect(() => {
     if (query) {
@@ -51,56 +47,18 @@ function SearchResults() {
     }
   };
 
-  const handleRequestMovie = async () => {
-    // Verificar autenticação
-    if (!isAuthenticated || !user) {
-      toast.error('Você precisa estar logado para fazer solicitações');
-      router.push('/login');
-      return;
-    }
+  const handleRequestMovie = () => {
+    // Redirecionar para o Telegram para fazer a solicitação
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+    const deepLink = `https://t.me/${botUsername}?start=request_${encodeURIComponent(query)}`;
 
-    setIsRequesting(true);
-    try {
-      const token = localStorage.getItem('token');
+    toast.success('Abrindo Telegram para solicitar o filme...', {
+      duration: 2000,
+      icon: '📱'
+    });
 
-      console.log('[SearchPage] Enviando solicitação:', {
-        title: query,
-        user_id: user.id,
-        user_email: user.email,
-      });
-
-      const response = await fetch(`${API_URL}/api/v1/requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          title: query,
-          description: `Solicitação de conteúdo: ${query}`,
-          user_id: user.id,
-          user_email: user.email,
-          notify_when_added: true,
-        }),
-      });
-
-      const responseData = await response.json();
-      console.log('[SearchPage] Resposta do servidor:', responseData);
-
-      if (!response.ok) {
-        throw new Error(responseData.message || 'Erro ao criar solicitação');
-      }
-
-      toast.success(
-        'Solicitação enviada! Você será notificado pelo Telegram quando o conteúdo for adicionado.',
-        { duration: 5000 }
-      );
-    } catch (error: any) {
-      console.error('[SearchPage] Erro ao solicitar filme:', error);
-      toast.error(error.message || 'Erro ao enviar solicitação');
-    } finally {
-      setIsRequesting(false);
-    }
+    // Abrir Telegram
+    window.open(deepLink, '_blank');
   };
 
   if (!query) {
@@ -179,45 +137,15 @@ function SearchResults() {
                 Solicite e receba uma notificação pelo Telegram assim que o conteúdo for adicionado à plataforma!
               </p>
 
-              {!isAuthenticated ? (
-                <div className="space-y-3">
-                  <p className="text-yellow-400 text-sm flex items-center justify-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    Você precisa estar logado para fazer solicitações
-                  </p>
-                  <button
-                    onClick={() => router.push('/login')}
-                    className="btn-primary text-lg px-8 py-4 w-full sm:w-auto"
-                  >
-                    <span className="flex items-center justify-center">
-                      <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                      </svg>
-                      Fazer Login
-                    </span>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleRequestMovie}
-                  disabled={isRequesting}
-                  className="btn-primary text-lg px-8 py-4 w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isRequesting ? (
-                    <span className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Enviando...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center">
-                      <PlusCircleIcon className="w-6 h-6 mr-2" />
-                      Solicitar "{query}"
-                    </span>
-                  )}
-                </button>
-              )}
+              <button
+                onClick={handleRequestMovie}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-4 rounded-lg transition-colors duration-200 w-full sm:w-auto flex items-center justify-center gap-3"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                </svg>
+                <span>Solicitar via Telegram</span>
+              </button>
             </div>
 
             <div className="text-sm text-gray-500">

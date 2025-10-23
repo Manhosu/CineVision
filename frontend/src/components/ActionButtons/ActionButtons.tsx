@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Movie } from '@/types/movie';
-import { useAuth } from '@/hooks/useAuth';
-import favoritesService from '@/services/favorites.service';
 import toast from 'react-hot-toast';
 
 interface ActionButtonsProps {
@@ -17,20 +15,14 @@ interface PurchaseStatus {
 }
 
 export default function ActionButtons({ movie }: ActionButtonsProps) {
-  const { isAuthenticated } = useAuth();
   const [purchaseStatus, setPurchaseStatus] = useState<PurchaseStatus>({
     isOwned: false,
     isLoading: true
   });
-  const [isAddingToFavorites, setIsAddingToFavorites] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
 
   useEffect(() => {
     checkOwnershipStatus();
-    if (isAuthenticated) {
-      checkFavoriteStatus();
-    }
-  }, [movie.id, isAuthenticated]);
+  }, [movie.id]);
 
   const checkOwnershipStatus = async () => {
     try {
@@ -57,16 +49,6 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
         isLoading: false,
         error: 'Erro ao verificar propriedade'
       });
-    }
-  };
-
-  const checkFavoriteStatus = async () => {
-    try {
-      const { isFavorite: favStatus } = await favoritesService.checkFavorite(movie.id);
-      setIsFavorite(favStatus);
-    } catch (error) {
-      console.error('Error checking favorite status:', error);
-      setIsFavorite(false);
     }
   };
 
@@ -110,53 +92,10 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
     window.open(deepLink, '_blank');
   };
 
-  const handleToggleFavorite = async () => {
-    if (!isAuthenticated) {
-      toast.error('Faça login para adicionar favoritos', {
-        duration: 3000,
-        icon: '🔒'
-      });
-      return;
-    }
-
-    setIsAddingToFavorites(true);
-
-    try {
-      if (isFavorite) {
-        await favoritesService.removeFavorite(movie.id);
-        setIsFavorite(false);
-        toast.success('Removido dos favoritos', {
-          duration: 2000,
-          icon: '💔'
-        });
-      } else {
-        await favoritesService.addFavorite(movie.id);
-        setIsFavorite(true);
-        toast.success('Adicionado aos favoritos', {
-          duration: 2000,
-          icon: '❤️'
-        });
-      }
-    } catch (error) {
-      console.error('Favorite toggle error:', error);
-      toast.error('Erro ao atualizar favoritos', {
-        duration: 3000,
-        icon: '❌'
-      });
-    } finally {
-      setIsAddingToFavorites(false);
-    }
-  };
-
   if (purchaseStatus.isLoading) {
     return (
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 h-12 bg-gray-300/20 animate-pulse rounded-xl" />
-        <div className="flex gap-3">
-          <div className="w-12 h-12 bg-gray-300/20 animate-pulse rounded-xl" />
-          <div className="w-12 h-12 bg-gray-300/20 animate-pulse rounded-xl" />
-          <div className="w-12 h-12 bg-gray-300/20 animate-pulse rounded-xl" />
-        </div>
       </div>
     );
   }
@@ -192,34 +131,6 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
           </button>
         )}
       </div>
-
-      {/* Favorite Button */}
-      <button
-        onClick={handleToggleFavorite}
-        disabled={isAddingToFavorites}
-        className={`flex items-center justify-center gap-2 tv:gap-3 px-6 py-3 tv:px-8 tv:py-4 border rounded-lg focus:outline-none focus:ring-2 tv:focus:ring-4 transition-all duration-200 disabled:cursor-not-allowed min-w-[160px] tv:min-w-[200px] ${
-          isFavorite
-            ? 'bg-red-600/20 border-red-600/30 text-red-400 hover:bg-red-600/30 focus:bg-red-600/30 focus:ring-red-500'
-            : 'bg-white/5 border-white/20 text-gray-300 hover:bg-white/10 focus:bg-white/10 focus:ring-white/50'
-        }`}
-      >
-        {isAddingToFavorites ? (
-          <div className="w-5 h-5 tv:w-6 tv:h-6 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-        ) : (
-          <svg
-            className={`w-5 h-5 tv:w-6 tv:h-6 transition-all duration-200 ${
-              isFavorite ? 'fill-current' : 'stroke-current fill-none'
-            }`}
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-          >
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-        )}
-        <span className="font-medium text-base tv:text-lg">
-          {isFavorite ? 'Favoritado' : 'Favoritar'}
-        </span>
-      </button>
     </div>
   );
 }
