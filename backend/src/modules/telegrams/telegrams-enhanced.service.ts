@@ -38,6 +38,17 @@ interface PendingRegistration {
   timestamp: number;
 }
 
+interface PendingRequest {
+  chat_id: number;
+  telegram_user_id: number;
+  step: 'title' | 'type';
+  data: {
+    title?: string;
+    type?: 'movie' | 'series';
+  };
+  timestamp: number;
+}
+
 @Injectable()
 export class TelegramsEnhancedService implements OnModuleInit {
   private readonly logger = new Logger(TelegramsEnhancedService.name);
@@ -57,6 +68,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private pendingRegistrations = new Map<string, PendingRegistration>();
   // Cache de pagamentos PIX pendentes
   private pendingPixPayments = new Map<string, { purchase_id: string; chat_id: number; transaction_id: string; timestamp: number }>();
+  // Cache de solicitações de conteúdo em andamento
+  private pendingContentRequests = new Map<string, PendingRequest>();
 
   // Polling state
   private pollingOffset = 0;
@@ -530,6 +543,14 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
     }
 
+    // Verificar se usuário está em processo de solicitação de conteúdo
+    const requestKey = `request_${chatId}`;
+    const pendingRequest = this.pendingContentRequests.get(requestKey);
+    if (pendingRequest && text && !text.startsWith('/')) {
+      await this.handleRequestStep(chatId, telegramUserId, text, pendingRequest);
+      return;
+    }
+
     if (text?.startsWith('/start')) {
       await this.handleStartCommand(chatId, text, telegramUserId);
     } else if (text === '/catalogo' || text === '/catalog') {
@@ -538,6 +559,10 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (text === '/meu-id' || text === '/my-id') {
       await this.handleMyIdCommand(chatId, telegramUserId);
+    } else if (text === '/solicitar' || text === '/request') {
+      await this.handleRequestCommand(chatId, telegramUserId);
+    } else if (text === '/minhas-solicitacoes' || text === '/my-requests') {
+      await this.handleMyRequestsCommand(chatId, telegramUserId);
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
     }
@@ -749,6 +774,20 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
       await this.handleHelpCommand(chatId);
+    } else if (data === 'request_type_movie') {
+      await this.completeContentRequest(chatId, telegramUserId, 'movie');
+    } else if (data === 'request_type_series') {
+      await this.completeContentRequest(chatId, telegramUserId, 'series');
+    } else if (data === 'request_cancel') {
+      const requestKey = `request_${chatId}`;
+      this.pendingContentRequests.delete(requestKey);
+      await this.sendMessage(chatId, '❌ Solicitação cancelada.', {
+        reply_markup: {
+          inline_keyboard: [[{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }]]
+        }
+      });
+    } else if (data === 'request_new') {
+      await this.handleRequestCommand(chatId, telegramUserId);
     }
   }
 
@@ -1389,12 +1428,252 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     });
   }
 
+  // ==================== SOLICITAÇÃO DE CONTEÚDO ====================
+
+  /**
+   * Comando /solicitar - Inicia o fluxo de solicitação de filme ou série
+   */
+  private async handleRequestCommand(chatId: number, telegramUserId: number) {
+    try {
+      const requestKey = `request_${chatId}`;
+
+      // Iniciar novo processo de solicitação
+      this.pendingContentRequests.set(requestKey, {
+        chat_id: chatId,
+        telegram_user_id: telegramUserId,
+        step: 'title',
+        data: {},
+        timestamp: Date.now(),
+      });
+
+      await this.sendMessage(chatId,
+        `📝 **Solicitar Conteúdo**\n\n` +
+        `Por favor, digite o nome do filme ou série que você gostaria de assistir:\n\n` +
+        `💡 _Exemplo: Superman 2025, Breaking Bad, etc._`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (error) {
+      this.logger.error('Error in handleRequestCommand:', error);
+      await this.sendMessage(chatId, '❌ Erro ao iniciar solicitação. Tente novamente com /solicitar');
+    }
+  }
+
+  /**
+   * Processa cada etapa do fluxo de solicitação
+   */
+  private async handleRequestStep(chatId: number, telegramUserId: number, text: string, pendingReq: PendingRequest) {
+    const requestKey = `request_${chatId}`;
+
+    try {
+      if (pendingReq.step === 'title') {
+        // Validar título
+        if (!text || text.trim().length < 2) {
+          await this.sendMessage(chatId, '❌ Título muito curto. Por favor, digite o nome do conteúdo:');
+          return;
+        }
+
+        // Salvar título e pedir tipo
+        pendingReq.data.title = text.trim();
+        pendingReq.step = 'type';
+        this.pendingContentRequests.set(requestKey, pendingReq);
+
+        await this.sendMessage(chatId,
+          `✅ Conteúdo: **${text.trim()}**\n\n` +
+          `Agora, selecione o tipo:`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '🎬 Filme', callback_data: 'request_type_movie' },
+                  { text: '📺 Série', callback_data: 'request_type_series' }
+                ],
+                [{ text: '🔙 Cancelar', callback_data: 'request_cancel' }]
+              ]
+            }
+          }
+        );
+
+      }
+    } catch (error) {
+      this.logger.error('Error in handleRequestStep:', error);
+      this.pendingContentRequests.delete(requestKey);
+      await this.sendMessage(chatId, '❌ Erro ao processar solicitação. Tente novamente com /solicitar');
+    }
+  }
+
+  /**
+   * Finaliza a solicitação e salva no banco
+   */
+  private async completeContentRequest(chatId: number, telegramUserId: number, type: 'movie' | 'series') {
+    const requestKey = `request_${chatId}`;
+    const pendingReq = this.pendingContentRequests.get(requestKey);
+
+    if (!pendingReq || !pendingReq.data.title) {
+      await this.sendMessage(chatId, '❌ Solicitação inválida. Use /solicitar para começar novamente.');
+      this.pendingContentRequests.delete(requestKey);
+      return;
+    }
+
+    try {
+      // Buscar ou criar usuário
+      const user = await this.findOrCreateUserByTelegramId(telegramUserId, chatId);
+
+      if (!user) {
+        await this.sendMessage(chatId, '❌ Erro ao identificar usuário. Tente /start primeiro.');
+        return;
+      }
+
+      // Criar solicitação no banco
+      const { data, error } = await this.supabase
+        .from('content_requests')
+        .insert({
+          requested_title: pendingReq.data.title,
+          description: `Tipo: ${type === 'movie' ? 'Filme' : 'Série'}`,
+          content_type: type,
+          user_id: user.id,
+          telegram_chat_id: chatId.toString(),
+          status: 'pending',
+          notify_when_added: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        this.logger.error('Error creating content request:', error);
+        await this.sendMessage(chatId, '❌ Erro ao salvar solicitação. Tente novamente mais tarde.');
+        return;
+      }
+
+      // Limpar cache
+      this.pendingContentRequests.delete(requestKey);
+
+      // Enviar confirmação
+      await this.sendMessage(chatId,
+        `✅ **Solicitação Enviada!**\n\n` +
+        `📽️ Conteúdo: ${pendingReq.data.title}\n` +
+        `🎭 Tipo: ${type === 'movie' ? 'Filme' : 'Série'}\n\n` +
+        `Sua solicitação foi recebida! Você será notificado aqui no Telegram assim que o conteúdo for adicionado à plataforma.\n\n` +
+        `📊 Use /minhas-solicitacoes para ver todas as suas solicitações.`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+              [{ text: '📝 Nova Solicitação', callback_data: 'request_new' }]
+            ]
+          }
+        }
+      );
+
+      this.logger.log(`Content request created: ${pendingReq.data.title} (${type}) by user ${user.id}`);
+
+    } catch (error) {
+      this.logger.error('Error completing content request:', error);
+      this.pendingContentRequests.delete(requestKey);
+      await this.sendMessage(chatId, '❌ Erro ao processar solicitação. Tente novamente com /solicitar');
+    }
+  }
+
+  /**
+   * Comando /minhas-solicitacoes - Lista as solicitações do usuário
+   */
+  private async handleMyRequestsCommand(chatId: number, telegramUserId: number) {
+    try {
+      // Buscar usuário
+      const user = await this.findOrCreateUserByTelegramId(telegramUserId, chatId);
+
+      if (!user) {
+        await this.sendMessage(chatId, '❌ Erro ao identificar usuário. Tente /start primeiro.');
+        return;
+      }
+
+      // Buscar solicitações do usuário
+      const { data: requests, error } = await this.supabase
+        .from('content_requests')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        this.logger.error('Error fetching user requests:', error);
+        await this.sendMessage(chatId, '❌ Erro ao buscar suas solicitações.');
+        return;
+      }
+
+      if (!requests || requests.length === 0) {
+        await this.sendMessage(chatId,
+          `📋 **Minhas Solicitações**\n\n` +
+          `Você ainda não fez nenhuma solicitação.\n\n` +
+          `Use /solicitar para solicitar um filme ou série!`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[{ text: '📝 Fazer Solicitação', callback_data: 'request_new' }]]
+            }
+          }
+        );
+        return;
+      }
+
+      // Formatar lista de solicitações
+      let message = `📋 **Suas Solicitações** (${requests.length})\n\n`;
+
+      requests.forEach((req, index) => {
+        const statusEmoji = req.status === 'pending' ? '⏳' :
+                           req.status === 'completed' ? '✅' :
+                           req.status === 'in_progress' ? '🔄' : '❌';
+        const typeEmoji = req.content_type === 'movie' ? '🎬' : '📺';
+        const date = new Date(req.created_at).toLocaleDateString('pt-BR');
+
+        message += `${index + 1}. ${statusEmoji} ${typeEmoji} **${req.requested_title}**\n`;
+        message += `   Status: ${this.getStatusText(req.status)}\n`;
+        message += `   Data: ${date}\n\n`;
+      });
+
+      message += `💡 _Você será notificado quando o conteúdo for adicionado!_`;
+
+      await this.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📝 Nova Solicitação', callback_data: 'request_new' }],
+            [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }]
+          ]
+        }
+      });
+
+    } catch (error) {
+      this.logger.error('Error in handleMyRequestsCommand:', error);
+      await this.sendMessage(chatId, '❌ Erro ao buscar solicitações. Tente novamente.');
+    }
+  }
+
+  /**
+   * Converte status para texto legível
+   */
+  private getStatusText(status: string): string {
+    const statusMap = {
+      'pending': 'Pendente',
+      'in_progress': 'Em Andamento',
+      'completed': 'Adicionado ✅',
+      'rejected': 'Rejeitado',
+      'cancelled': 'Cancelado'
+    };
+    return statusMap[status] || status;
+  }
+
   private async handleHelpCommand(chatId: number) {
     const helpMessage = `🤖 **Comandos Disponíveis:**
 
 /start - Iniciar o bot
 /catalogo - Ver filmes disponíveis
 /minhas-compras - Ver suas compras
+/solicitar - Solicitar filme ou série
+/minhas-solicitacoes - Ver suas solicitações
 /meu-id - Ver seu ID do Telegram
 /ajuda - Mostrar esta ajuda
 
