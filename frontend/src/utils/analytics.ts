@@ -36,6 +36,27 @@ async function getUserInfo() {
       // Get user name from metadata, fallback to email username
       const userName = user.user_metadata?.name || user.email?.split('@')[0];
 
+      // Buscar dados adicionais do usuário na tabela users (incluindo telegram_id)
+      try {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('telegram_id, telegram_username, name')
+          .eq('id', user.id)
+          .single();
+
+        if (userData) {
+          return {
+            user_id: user.id,
+            user_email: user.email,
+            user_name: userData.name || userName,
+            telegram_id: userData.telegram_id,
+            telegram_username: userData.telegram_username,
+          };
+        }
+      } catch (dbError) {
+        console.debug('Error fetching user data from database:', dbError);
+      }
+
       return {
         user_id: user.id,
         user_email: user.email,
