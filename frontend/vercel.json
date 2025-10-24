@@ -2,6 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": ".next",
   "framework": "nextjs",
+  "alias": ["cine-vision-murex.vercel.app"],
   "headers": [
     {
       "source": "/api/(.*)",
