@@ -256,11 +256,11 @@ export class AnalyticsService {
       }
 
       // Get sessions with user data including Telegram info
-      const { data, error } = await this.supabase
+      const { data, error} = await this.supabase
         .from('user_sessions')
         .select(`
           *,
-          users:user_id (
+          users!user_id (
             id,
             name,
             email,
