@@ -27,7 +27,7 @@ interface BroadcastHistory {
 
 export default function BroadcastPage() {
   const router = useRouter();
-  const { user, isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [messageText, setMessageText] = useState('');
