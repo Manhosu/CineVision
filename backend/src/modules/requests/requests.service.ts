@@ -39,6 +39,7 @@ export class RequestsService {
 
   async findAllRequests(page = 1, limit = 20, status?: RequestStatus) {
     const queryBuilder = this.requestRepository.createQueryBuilder('request')
+      .leftJoinAndSelect('request.user', 'user')
       .orderBy('request.created_at', 'DESC');
 
     if (status) {
@@ -156,9 +157,10 @@ export class RequestsService {
       admin_notes: request.admin_notes,
       assigned_to: undefined, // Not available in current entity
       requester_telegram_id: request.telegram_chat_id,
-      requester_telegram_username: undefined, // Not available in current entity
-      requester_telegram_first_name: undefined, // Not available in current entity
+      requester_telegram_username: request.user?.telegram_username,
+      requester_telegram_first_name: request.user?.name,
       user_id: request.user_id,
+      telegram_user_id: request.user?.telegram_id,
       created_at: request.created_at,
       updated_at: request.updated_at,
       processed_at: request.completed_at,

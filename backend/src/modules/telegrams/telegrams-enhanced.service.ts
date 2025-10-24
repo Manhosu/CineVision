@@ -1601,9 +1601,9 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       await this.sendMessage(chatId,
         `✅ **Solicitação Enviada!**\n\n` +
         `📽️ Conteúdo: ${pendingReq.data.title}\n` +
-        `🎭 Tipo: ${type === 'movie' ? 'Filme' : 'Série'}\n\n` +
-        `Sua solicitação foi recebida! Você será notificado aqui no Telegram assim que o conteúdo for adicionado à plataforma.\n\n` +
-        `📊 Use /minhas-solicitacoes para ver todas as suas solicitações.`,
+        `🎭 Tipo: ${type === 'movie' ? 'Filme' : 'Série'}\n` +
+        `👤 ID do Telegram: ${telegramUserId}\n\n` +
+        `Sua solicitação foi recebida! Você será notificado aqui no Telegram assim que o conteúdo for adicionado à plataforma.`,
         {
           parse_mode: 'Markdown',
           reply_markup: {

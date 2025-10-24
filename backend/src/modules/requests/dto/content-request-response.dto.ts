@@ -70,6 +70,12 @@ export class ContentRequestResponseDto {
   })
   user_id?: string;
 
+  @ApiPropertyOptional({
+    description: 'Telegram User ID from users table',
+    example: '123456789',
+  })
+  telegram_user_id?: string;
+
   @ApiProperty({
     description: 'Date when the request was created',
     example: '2024-01-15T10:30:00Z',

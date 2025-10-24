@@ -12,6 +12,7 @@ interface ContentRequest {
   status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   user_id?: string;
+  telegram_user_id?: string;
   admin_notes?: string;
   created_at: string;
   updated_at: string;
@@ -305,7 +306,7 @@ export default function AdminRequestsPage() {
                         <div className="flex items-center gap-4 text-xs text-gray-400">
                           <div className="flex items-center gap-1">
                             <UserIcon className="w-3.5 h-3.5" />
-                            {request.user_id ? `ID: ${request.user_id.substring(0, 8)}...` : 'Anônimo'}
+                            {request.telegram_user_id ? `Telegram ID: ${request.telegram_user_id}` : 'Anônimo'}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
