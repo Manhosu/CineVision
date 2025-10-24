@@ -2004,14 +2004,17 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   async onModuleInit() {
     // Check environment to decide between polling or webhook
     const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const webhookUrl = this.configService.get<string>('TELEGRAM_WEBHOOK_URL');
 
-    if (nodeEnv === 'production') {
-      // In production, use webhook mode (don't start polling)
+    if (nodeEnv === 'production' && webhookUrl) {
+      // In production with webhook configured, use webhook mode
       this.logger.log('Production mode: Webhook mode enabled (polling disabled)');
+      this.logger.log(`Webhook URL: ${webhookUrl}`);
       // Webhook should be configured manually via /setup-webhook endpoint
     } else {
-      // In development, use polling
-      this.logger.log('Development mode: Starting Telegram bot polling...');
+      // In development OR production without webhook, use polling
+      const mode = nodeEnv === 'production' ? 'Production (no webhook configured)' : 'Development';
+      this.logger.log(`${mode}: Starting Telegram bot polling...`);
       await this.deleteWebhook(); // Remove webhook if exists
       this.startPolling();
     }
