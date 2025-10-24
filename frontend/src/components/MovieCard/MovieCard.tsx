@@ -93,8 +93,13 @@ const MovieCard = memo(function MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
-    // Redirecionar para página de detalhes do filme
-    router.push(`/movies/${movie.id}`);
+    // Redirecionar para página de detalhes (filme ou série)
+    const contentType = (movie as any).content_type || 'movie';
+    if (contentType === 'series') {
+      router.push(`/series/${movie.id}`);
+    } else {
+      router.push(`/movies/${movie.id}`);
+    }
   };
 
   const handleFavorite = async (e: React.MouseEvent) => {
@@ -244,6 +249,18 @@ const MovieCard = memo(function MovieCard({
             {movie.title}
           </h3>
 
+          {/* Series Badge */}
+          {(movie as any).content_type === 'series' && (
+            <div className="flex items-center space-x-2 text-xs text-blue-400 mb-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+              </svg>
+              <span className="font-semibold">
+                📺 {(movie as any).total_seasons || 1} {((movie as any).total_seasons || 1) > 1 ? 'Temporadas' : 'Temporada'}
+              </span>
+            </div>
+          )}
+
           {/* Price or Purchased Badge */}
           {isPurchased ? (
             <div className="flex items-center space-x-2">
@@ -304,7 +321,7 @@ const MovieCard = memo(function MovieCard({
           {/* Quick Actions */}
           <div className="flex items-center justify-between pt-2">
             <Link
-              href={`/movies/${movie.id}`}
+              href={(movie as any).content_type === 'series' ? `/series/${movie.id}` : `/movies/${movie.id}`}
               className="text-xs text-gray-400 hover:text-white transition-colors focus-outline"
               onClick={(e) => e.stopPropagation()}
             >

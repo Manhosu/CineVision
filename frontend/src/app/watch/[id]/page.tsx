@@ -5,6 +5,17 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import VideoPlayer from '@/components/VideoPlayer/VideoPlayer';
 import { VideoContent } from '@/types/video';
 
+interface Episode {
+  id: string;
+  season_number: number;
+  episode_number: number;
+  title: string;
+  description: string;
+  thumbnail_url?: string;
+  duration_minutes: number;
+  video_url?: string;
+}
+
 interface WatchPageProps {
   params: { id: string };
 }
@@ -14,6 +25,8 @@ export default function WatchPage({ params }: WatchPageProps) {
   const id = params.id;
   const searchParams = useSearchParams();
   const selectedLanguageId = searchParams?.get('lang');
+  const episodeParam = searchParams?.get('episode');
+  const seasonParam = searchParams?.get('season');
 
   const [content, setContent] = useState<VideoContent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,6 +34,13 @@ export default function WatchPage({ params }: WatchPageProps) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [resumePosition, setResumePosition] = useState<number>(0);
   const [showResumeModal, setShowResumeModal] = useState<boolean>(true);
+
+  // Series-specific state
+  const [isSeries, setIsSeries] = useState(false);
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<number>(1);
+  const [loadingEpisodes, setLoadingEpisodes] = useState(false);
 
   // Fetch content details and access token
   useEffect(() => {
@@ -73,6 +93,63 @@ export default function WatchPage({ params }: WatchPageProps) {
 
         setContent(contentData);
 
+        // Check if this is a series
+        const isSeriesContent = contentData.content_type === 'series';
+        setIsSeries(isSeriesContent);
+
+        // If series, fetch episodes
+        if (isSeriesContent) {
+          try {
+            setLoadingEpisodes(true);
+            const episodesResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/series/${id}/episodes`,
+              { credentials: 'include' }
+            );
+
+            if (episodesResponse.ok) {
+              const episodesData = await episodesResponse.json();
+              setEpisodes(episodesData);
+
+              // Set selected season from URL or default to 1
+              const season = seasonParam ? parseInt(seasonParam) : 1;
+              setSelectedSeason(season);
+
+              // Find the episode to play
+              let episodeToPlay: Episode | null = null;
+              if (episodeParam) {
+                const epNum = parseInt(episodeParam);
+                episodeToPlay = episodesData.find(
+                  (ep: Episode) => ep.season_number === season && ep.episode_number === epNum
+                ) || null;
+              }
+
+              // If no episode specified, play first episode of selected season
+              if (!episodeToPlay && episodesData.length > 0) {
+                episodeToPlay = episodesData.find(
+                  (ep: Episode) => ep.season_number === season
+                ) || episodesData[0];
+              }
+
+              setCurrentEpisode(episodeToPlay);
+
+              // Override content video URL with episode video URL if available
+              if (episodeToPlay?.video_url) {
+                contentData = {
+                  ...contentData,
+                  video_url: episodeToPlay.video_url,
+                  title: `${contentData.title} - S${episodeToPlay.season_number}E${episodeToPlay.episode_number}: ${episodeToPlay.title}`,
+                  duration_minutes: episodeToPlay.duration_minutes,
+                };
+                setContent(contentData);
+              }
+            }
+          } catch (episodesError) {
+            console.error('Error fetching episodes:', episodesError);
+          } finally {
+            setLoadingEpisodes(false);
+          }
+        }
+
         // Get access token if authenticated
         const token = localStorage.getItem('access_token');
         if (token) {
@@ -80,8 +157,14 @@ export default function WatchPage({ params }: WatchPageProps) {
 
           // Get resume position from backend if user is authenticated
           try {
+            // For series, we track progress per episode
+            let progressKey = id;
+            if (isSeriesContent && currentEpisode) {
+              progressKey = `${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+            }
+
             const progressResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`,
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${progressKey}`,
               {
                 headers: {
                   'Authorization': `Bearer ${token}`,
@@ -99,14 +182,22 @@ export default function WatchPage({ params }: WatchPageProps) {
           } catch (progressError) {
             console.log('Could not load watch progress:', progressError);
             // Fallback to localStorage for backward compatibility
-            const savedPosition = localStorage.getItem(`resume_${id}`);
+            let storageKey = `resume_${id}`;
+            if (isSeriesContent && currentEpisode) {
+              storageKey = `resume_${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+            }
+            const savedPosition = localStorage.getItem(storageKey);
             if (savedPosition) {
               setResumePosition(parseFloat(savedPosition));
             }
           }
         } else {
           // Fallback to localStorage for unauthenticated users
-          const savedPosition = localStorage.getItem(`resume_${id}`);
+          let storageKey = `resume_${id}`;
+          if (isSeriesContent && currentEpisode) {
+            storageKey = `resume_${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+          }
+          const savedPosition = localStorage.getItem(storageKey);
           if (savedPosition) {
             setResumePosition(parseFloat(savedPosition));
           }
@@ -121,17 +212,25 @@ export default function WatchPage({ params }: WatchPageProps) {
     };
 
     fetchContent();
-  }, [id, selectedLanguageId]);
+  }, [id, selectedLanguageId, episodeParam, seasonParam, router]);
 
   // Save resume position
   const handleTimeUpdate = (currentTime: number) => {
     if (!id || currentTime < 30) return; // Don't save very early positions
 
+    // For series, save progress per episode
+    let progressKey = id;
+    let storageKey = `resume_${id}`;
+    if (isSeries && currentEpisode) {
+      progressKey = `${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+      storageKey = `resume_${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+    }
+
     const token = localStorage.getItem('access_token');
     if (token && content) {
       // Save to backend if authenticated
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${progressKey}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -144,16 +243,16 @@ export default function WatchPage({ params }: WatchPageProps) {
         }).catch(error => {
           console.error('Failed to save progress to backend:', error);
           // Fallback to localStorage
-          localStorage.setItem(`resume_${id}`, currentTime.toString());
+          localStorage.setItem(storageKey, currentTime.toString());
         });
       } catch (error) {
         console.error('Failed to save progress to backend:', error);
         // Fallback to localStorage
-        localStorage.setItem(`resume_${id}`, currentTime.toString());
+        localStorage.setItem(storageKey, currentTime.toString());
       }
     } else {
       // Fallback to localStorage for unauthenticated users
-      localStorage.setItem(`resume_${id}`, currentTime.toString());
+      localStorage.setItem(storageKey, currentTime.toString());
     }
   };
 
@@ -161,11 +260,19 @@ export default function WatchPage({ params }: WatchPageProps) {
   const handleVideoEnded = () => {
     if (!id) return;
 
+    // For series, use episode-specific keys
+    let progressKey = id;
+    let storageKey = `resume_${id}`;
+    if (isSeries && currentEpisode) {
+      progressKey = `${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+      storageKey = `resume_${id}_s${currentEpisode.season_number}e${currentEpisode.episode_number}`;
+    }
+
     const token = localStorage.getItem('access_token');
     if (token && content) {
       // Mark as completed in backend
       try {
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${id}`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/progress/${progressKey}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -184,11 +291,76 @@ export default function WatchPage({ params }: WatchPageProps) {
     }
 
     // Clear resume position from localStorage
-    localStorage.removeItem(`resume_${id}`);
+    localStorage.removeItem(storageKey);
 
-    // Redirect to next episode or related content
-    // For now, just show completion message
-    console.log('Video playback completed');
+    // For series, auto-play next episode
+    if (isSeries && currentEpisode) {
+      const nextEpisode = getNextEpisode();
+      if (nextEpisode) {
+        playEpisode(nextEpisode);
+      } else {
+        console.log('Series completed - no more episodes');
+      }
+    } else {
+      console.log('Video playback completed');
+    }
+  };
+
+  // Get next episode in the series
+  const getNextEpisode = (): Episode | null => {
+    if (!currentEpisode || episodes.length === 0) return null;
+
+    // Sort episodes by season and episode number
+    const sortedEpisodes = [...episodes].sort((a, b) => {
+      if (a.season_number !== b.season_number) {
+        return a.season_number - b.season_number;
+      }
+      return a.episode_number - b.episode_number;
+    });
+
+    // Find current episode index
+    const currentIndex = sortedEpisodes.findIndex(
+      ep => ep.season_number === currentEpisode.season_number &&
+            ep.episode_number === currentEpisode.episode_number
+    );
+
+    // Return next episode if exists
+    if (currentIndex >= 0 && currentIndex < sortedEpisodes.length - 1) {
+      return sortedEpisodes[currentIndex + 1];
+    }
+
+    return null;
+  };
+
+  // Get previous episode in the series
+  const getPreviousEpisode = (): Episode | null => {
+    if (!currentEpisode || episodes.length === 0) return null;
+
+    // Sort episodes by season and episode number
+    const sortedEpisodes = [...episodes].sort((a, b) => {
+      if (a.season_number !== b.season_number) {
+        return a.season_number - b.season_number;
+      }
+      return a.episode_number - b.episode_number;
+    });
+
+    // Find current episode index
+    const currentIndex = sortedEpisodes.findIndex(
+      ep => ep.season_number === currentEpisode.season_number &&
+            ep.episode_number === currentEpisode.episode_number
+    );
+
+    // Return previous episode if exists
+    if (currentIndex > 0) {
+      return sortedEpisodes[currentIndex - 1];
+    }
+
+    return null;
+  };
+
+  // Play a specific episode
+  const playEpisode = (episode: Episode) => {
+    router.push(`/watch/${id}?season=${episode.season_number}&episode=${episode.episode_number}`);
   };
 
   // Handle playback errors
@@ -314,6 +486,65 @@ export default function WatchPage({ params }: WatchPageProps) {
                 <span className="text-green-400">Free</span>
               )}
             </div>
+
+            {/* Episode Navigation (for series) */}
+            {isSeries && currentEpisode && (
+              <div className="mt-6 p-4 bg-dark-800/60 rounded-lg border border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-white">
+                    S{currentEpisode.season_number}E{currentEpisode.episode_number}: {currentEpisode.title}
+                  </h3>
+                  {currentEpisode.duration_minutes && (
+                    <span className="text-xs text-gray-400">
+                      {currentEpisode.duration_minutes}min
+                    </span>
+                  )}
+                </div>
+
+                {currentEpisode.description && (
+                  <p className="text-xs text-gray-400 mb-4 line-clamp-2">
+                    {currentEpisode.description}
+                  </p>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => {
+                      const prevEp = getPreviousEpisode();
+                      if (prevEp) playEpisode(prevEp);
+                    }}
+                    disabled={!getPreviousEpisode()}
+                    className="flex-1 px-4 py-2 bg-dark-700 hover:bg-dark-600 disabled:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm text-white font-medium transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                    <span>Anterior</span>
+                  </button>
+
+                  <button
+                    onClick={() => router.push(`/series/${id}`)}
+                    className="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm text-white font-medium transition-colors"
+                  >
+                    Episódios
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const nextEp = getNextEpisode();
+                      if (nextEp) playEpisode(nextEp);
+                    }}
+                    disabled={!getNextEpisode()}
+                    className="flex-1 px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-dark-800 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-sm text-white font-medium transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <span>Próximo</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex items-center space-x-3 mt-6">

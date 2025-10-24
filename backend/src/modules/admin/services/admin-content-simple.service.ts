@@ -226,10 +226,109 @@ export class AdminContentSimpleService {
 
   async createEpisode(data: any, userId?: string) {
     console.log('AdminContentSimpleService.createEpisode called with:', data);
+
+    // Validate series exists
+    const { data: series, error: seriesError } = await this.supabaseService.client
+      .from('content')
+      .select('id, content_type')
+      .eq('id', data.series_id)
+      .single();
+
+    if (seriesError || !series) {
+      throw new NotFoundException(`Series with ID ${data.series_id} not found`);
+    }
+
+    if (series.content_type !== 'series') {
+      throw new Error('Content is not a series');
+    }
+
+    // Insert episode into episodes table
+    const episodeData = {
+      series_id: data.series_id,
+      season_number: data.season_number,
+      episode_number: data.episode_number,
+      title: data.title,
+      description: data.description,
+      duration_minutes: data.duration_minutes,
+      thumbnail_url: data.thumbnail_url || null,
+      video_url: data.video_url || null,
+      storage_path: data.storage_path || null,
+      file_storage_key: data.file_storage_key || null,
+      processing_status: data.processing_status || 'pending',
+      created_by_id: userId || null,
+      updated_by_id: userId || null,
+    };
+
+    const { data: episode, error: insertError } = await this.supabaseService.client
+      .from('episodes')
+      .insert(episodeData)
+      .select()
+      .single();
+
+    if (insertError) {
+      this.logger.error('Error creating episode:', insertError);
+      throw new Error(`Failed to create episode: ${insertError.message}`);
+    }
+
     return {
       success: true,
-      data: { id: 'test-episode-id', ...data },
+      data: episode,
       message: 'Episode created successfully'
+    };
+  }
+
+  async updateEpisode(seriesId: string, episodeId: string, updateData: any, userId?: string) {
+    this.logger.log(`Updating episode ${episodeId} for series ${seriesId}`);
+
+    // Verify episode belongs to series
+    const { data: episode, error: fetchError } = await this.supabaseService.client
+      .from('episodes')
+      .select('*')
+      .eq('id', episodeId)
+      .eq('series_id', seriesId)
+      .single();
+
+    if (fetchError || !episode) {
+      throw new NotFoundException(`Episode ${episodeId} not found in series ${seriesId}`);
+    }
+
+    // Prepare update data
+    const episodeUpdate: any = {
+      updated_by_id: userId || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Only update fields that are provided
+    if (updateData.title !== undefined) episodeUpdate.title = updateData.title;
+    if (updateData.description !== undefined) episodeUpdate.description = updateData.description;
+    if (updateData.season_number !== undefined) episodeUpdate.season_number = updateData.season_number;
+    if (updateData.episode_number !== undefined) episodeUpdate.episode_number = updateData.episode_number;
+    if (updateData.duration_minutes !== undefined) episodeUpdate.duration_minutes = updateData.duration_minutes;
+    if (updateData.thumbnail_url !== undefined) episodeUpdate.thumbnail_url = updateData.thumbnail_url;
+    if (updateData.video_url !== undefined) episodeUpdate.video_url = updateData.video_url;
+    if (updateData.storage_path !== undefined) episodeUpdate.storage_path = updateData.storage_path;
+    if (updateData.file_storage_key !== undefined) episodeUpdate.file_storage_key = updateData.file_storage_key;
+    if (updateData.file_size_bytes !== undefined) episodeUpdate.file_size_bytes = updateData.file_size_bytes;
+    if (updateData.processing_status !== undefined) episodeUpdate.processing_status = updateData.processing_status;
+    if (updateData.available_qualities !== undefined) episodeUpdate.available_qualities = updateData.available_qualities;
+
+    // Update episode
+    const { data: updatedEpisode, error: updateError } = await this.supabaseService.client
+      .from('episodes')
+      .update(episodeUpdate)
+      .eq('id', episodeId)
+      .select()
+      .single();
+
+    if (updateError) {
+      this.logger.error('Error updating episode:', updateError);
+      throw new Error(`Failed to update episode: ${updateError.message}`);
+    }
+
+    return {
+      success: true,
+      data: updatedEpisode,
+      message: 'Episode updated successfully'
     };
   }
 

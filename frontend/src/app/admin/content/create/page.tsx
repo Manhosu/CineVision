@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import { supabase } from '@/lib/supabase';
 
 interface ContentFormData {
   title: string;
@@ -55,6 +56,21 @@ interface FileUploadState {
   backdropUrl: string;
 }
 
+interface Episode {
+  id?: string;
+  season_number: number;
+  episode_number: number;
+  title: string;
+  description: string;
+  duration_minutes: number;
+  thumbnail_url?: string;
+  video_file?: File;
+  thumbnail_file?: File;
+  uploading?: boolean;
+  uploaded?: boolean;
+  error?: string;
+}
+
 export default function AdminContentCreatePage() {
   const router = useRouter();
   const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
@@ -96,6 +112,12 @@ export default function AdminContentCreatePage() {
     totalSeasons: 1,
     totalEpisodes: 1
   });
+
+  // Estado para gerenciar episódios
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [showEpisodeManager, setShowEpisodeManager] = useState(false);
+  const [currentSeason, setCurrentSeason] = useState(1);
+  const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -166,7 +188,14 @@ export default function AdminContentCreatePage() {
       const data = await response.json();
       toast.success('Conteúdo criado com sucesso!');
       setCreatedContentId(data.id);
-      setShowLanguageManager(true);
+
+      // Para séries, mostrar gerenciador de episódios
+      if (formData.content_type === 'series') {
+        setShowEpisodeManager(true);
+      } else {
+        // Para filmes, mostrar gerenciador de vídeos/idiomas
+        setShowLanguageManager(true);
+      }
     } catch (error: any) {
       console.error('Error creating content:', error);
       toast.error(error.message || 'Erro ao criar conteúdo');
@@ -274,6 +303,203 @@ export default function AdminContentCreatePage() {
         ? prev.genres.filter(g => g !== genre)
         : [...prev.genres, genre]
     }));
+  };
+
+  // Episode management functions
+  const addEpisode = () => {
+    const newEpisode: Episode = {
+      season_number: currentSeason,
+      episode_number: episodes.filter(ep => ep.season_number === currentSeason).length + 1,
+      title: '',
+      description: '',
+      duration_minutes: 0,
+    };
+    setEditingEpisode(newEpisode);
+  };
+
+  const saveEpisode = (episode: Episode) => {
+    if (!episode.title || !episode.description || episode.duration_minutes <= 0) {
+      toast.error('Por favor, preencha todos os campos do episódio');
+      return;
+    }
+
+    setEpisodes(prev => {
+      const existing = prev.findIndex(
+        ep => ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+      );
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing] = episode;
+        return updated;
+      }
+      return [...prev, episode];
+    });
+    setEditingEpisode(null);
+    toast.success('Episódio adicionado com sucesso!');
+  };
+
+  const deleteEpisode = (season: number, episode: number) => {
+    setEpisodes(prev => prev.filter(
+      ep => !(ep.season_number === season && ep.episode_number === episode)
+    ));
+    toast.success('Episódio removido');
+  };
+
+  const uploadEpisode = async (episode: Episode) => {
+    if (!episode.video_file) {
+      toast.error('Por favor, selecione um arquivo de vídeo para o episódio');
+      return;
+    }
+
+    if (!createdContentId) {
+      toast.error('Erro: ID do conteúdo não encontrado');
+      return;
+    }
+
+    try {
+      // Marcar como uploading
+      setEpisodes(prev => prev.map(ep =>
+        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+          ? { ...ep, uploading: true, error: undefined }
+          : ep
+      ));
+
+      // 1. Upload thumbnail se houver
+      let thumbnailUrl = episode.thumbnail_url;
+      if (episode.thumbnail_file) {
+        const thumbResult = await uploadImageToSupabase(
+          episode.thumbnail_file,
+          'cinevision-capas',
+          `episodes/s${episode.season_number}e${episode.episode_number}`
+        );
+        if (thumbResult.error) throw new Error(thumbResult.error);
+        thumbnailUrl = thumbResult.publicUrl;
+      }
+
+      // 2. Criar episódio no backend
+      const episodeData = {
+        series_id: createdContentId,
+        season_number: episode.season_number,
+        episode_number: episode.episode_number,
+        title: episode.title,
+        description: episode.description,
+        duration_minutes: episode.duration_minutes,
+        thumbnail_url: thumbnailUrl,
+      };
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(episodeData),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Erro ao criar episódio');
+      }
+
+      const createdEpisode = await response.json();
+      const episodeId = createdEpisode.data?.id || createdEpisode.id;
+
+      // 3. Upload do vídeo do episódio para Supabase Storage
+      const videoFile = episode.video_file;
+      const fileName = `${createdContentId}/episodes/s${episode.season_number}e${episode.episode_number}/${videoFile.name}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('cinevision-videos')
+        .upload(fileName, videoFile, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        throw new Error(`Erro no upload do vídeo: ${uploadError.message}`);
+      }
+
+      // 4. Obter URL pública do vídeo
+      const { data: urlData } = supabase.storage
+        .from('cinevision-videos')
+        .getPublicUrl(fileName);
+
+      // 5. Atualizar episódio com URL do vídeo (se endpoint existir)
+      try {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes/${episodeId}`,
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              video_url: urlData.publicUrl,
+              storage_path: fileName,
+              file_size_bytes: videoFile.size,
+            }),
+          }
+        );
+      } catch (updateError) {
+        console.warn('Aviso: Episódio criado mas não foi possível atualizar URL do vídeo');
+      }
+
+      setEpisodes(prev => prev.map(ep =>
+        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+          ? { ...ep, id: episodeId, uploading: false, uploaded: true }
+          : ep
+      ));
+
+      toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado com sucesso!`);
+    } catch (error: any) {
+      console.error('Error uploading episode:', error);
+      setEpisodes(prev => prev.map(ep =>
+        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+          ? { ...ep, uploading: false, error: error.message }
+          : ep
+      ));
+      toast.error(error.message || 'Erro ao fazer upload do episódio');
+    }
+  };
+
+  const finalizeSeries = async () => {
+    if (episodes.length === 0) {
+      toast.error('Por favor, adicione pelo menos um episódio antes de finalizar');
+      return;
+    }
+
+    const allUploaded = episodes.every(ep => ep.uploaded);
+    if (!allUploaded) {
+      const confirmation = confirm(
+        'Alguns episódios ainda não foram enviados. Deseja finalizar mesmo assim?'
+      );
+      if (!confirmation) return;
+    }
+
+    try {
+      // Publicar série
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Erro ao publicar série');
+      }
+
+      toast.success('✅ Série publicada com sucesso!');
+      router.push('/admin');
+    } catch (error: any) {
+      console.error('Error finalizing series:', error);
+      toast.error(error.message || 'Erro ao finalizar série');
+    }
   };
 
   return (
@@ -939,6 +1165,258 @@ export default function AdminContentCreatePage() {
                   <span>Criar Outro Conteúdo</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Episode Manager - shown after series creation */}
+        {showEpisodeManager && createdContentId && (
+          <div className="mt-8 space-y-6">
+            {/* Success Banner for Series */}
+            <div className="relative bg-gradient-to-br from-green-900/50 via-green-800/30 to-gray-900/50 backdrop-blur-xl rounded-2xl p-8 border-2 border-green-500/50 shadow-2xl overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent"></div>
+
+              <div className="relative z-10">
+                <div className="flex items-start space-x-6 mb-6">
+                  <div className="flex-shrink-0">
+                    <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                      <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="flex-1">
+                    <h2 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
+                      ✅ Série Criada com Sucesso!
+                    </h2>
+                    <p className="text-xl text-gray-300 mb-4">
+                      Agora adicione os episódios da sua série. Você pode adicionar episódios para cada temporada.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Season Selector */}
+                <div className="flex items-center space-x-4 mb-6">
+                  <label className="text-white font-semibold">Temporada:</label>
+                  <select
+                    value={currentSeason}
+                    onChange={(e) => setCurrentSeason(parseInt(e.target.value))}
+                    className="px-4 py-2 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {Array.from({ length: seriesInfo.totalSeasons }, (_, i) => i + 1).map(season => (
+                      <option key={season} value={season}>Temporada {season}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    onClick={addEpisode}
+                    className="ml-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl font-semibold flex items-center space-x-2 transition-all duration-300 hover:scale-105"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Adicionar Episódio</span>
+                  </button>
+                </div>
+
+                {/* Episodes List for Current Season */}
+                <div className="space-y-4">
+                  {episodes
+                    .filter(ep => ep.season_number === currentSeason)
+                    .sort((a, b) => a.episode_number - b.episode_number)
+                    .map((episode) => (
+                      <div
+                        key={`s${episode.season_number}e${episode.episode_number}`}
+                        className="bg-gray-900/50 border border-gray-700/50 rounded-xl p-6 space-y-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-bold text-white mb-2">
+                              S{episode.season_number}E{episode.episode_number}: {episode.title}
+                            </h3>
+                            <p className="text-gray-400 text-sm mb-2">{episode.description}</p>
+                            <p className="text-gray-500 text-xs">Duração: {episode.duration_minutes} minutos</p>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {episode.uploaded ? (
+                              <span className="px-3 py-1 bg-green-900/30 border border-green-500/50 text-green-400 text-sm rounded-lg flex items-center space-x-1">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <span>Enviado</span>
+                              </span>
+                            ) : episode.uploading ? (
+                              <span className="px-3 py-1 bg-blue-900/30 border border-blue-500/50 text-blue-400 text-sm rounded-lg flex items-center space-x-2">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                                <span>Enviando...</span>
+                              </span>
+                            ) : episode.video_file ? (
+                              <button
+                                onClick={() => uploadEpisode(episode)}
+                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                              >
+                                Fazer Upload
+                              </button>
+                            ) : (
+                              <label className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg cursor-pointer transition-colors">
+                                Selecionar Vídeo
+                                <input
+                                  type="file"
+                                  accept="video/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      setEpisodes(prev => prev.map(ep =>
+                                        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+                                          ? { ...ep, video_file: file }
+                                          : ep
+                                      ));
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+
+                            <button
+                              onClick={() => setEditingEpisode(episode)}
+                              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+
+                            <button
+                              onClick={() => deleteEpisode(episode.season_number, episode.episode_number)}
+                              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors"
+                              title="Remover"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+
+                        {episode.error && (
+                          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
+                            Erro: {episode.error}
+                          </div>
+                        )}
+
+                        {episode.video_file && !episode.uploaded && (
+                          <div className="text-xs text-gray-400 bg-gray-900/30 px-3 py-2 rounded-lg">
+                            📹 {episode.video_file.name} ({(episode.video_file.size / 1024 / 1024).toFixed(2)} MB)
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                  {episodes.filter(ep => ep.season_number === currentSeason).length === 0 && (
+                    <div className="text-center py-12 text-gray-400">
+                      <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
+                      </svg>
+                      <p className="text-lg">Nenhum episódio adicionado para a Temporada {currentSeason}</p>
+                      <p className="text-sm mt-2">Clique em "Adicionar Episódio" para começar</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Episode Form Modal */}
+            {editingEpisode && (
+              <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-8 max-w-2xl w-full border border-gray-700 shadow-2xl">
+                  <h3 className="text-2xl font-bold text-white mb-6">
+                    {editingEpisode.id ? 'Editar' : 'Adicionar'} Episódio S{editingEpisode.season_number}E{editingEpisode.episode_number}
+                  </h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Título do Episódio *</label>
+                      <input
+                        type="text"
+                        value={editingEpisode.title}
+                        onChange={(e) => setEditingEpisode({ ...editingEpisode, title: e.target.value })}
+                        placeholder="Ex: O Início"
+                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Descrição *</label>
+                      <textarea
+                        value={editingEpisode.description}
+                        onChange={(e) => setEditingEpisode({ ...editingEpisode, description: e.target.value })}
+                        rows={3}
+                        placeholder="Descrição do episódio..."
+                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Duração (minutos) *</label>
+                      <input
+                        type="number"
+                        value={editingEpisode.duration_minutes || ''}
+                        onChange={(e) => setEditingEpisode({ ...editingEpisode, duration_minutes: parseInt(e.target.value) || 0 })}
+                        min="1"
+                        placeholder="45"
+                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Thumbnail (Opcional)</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setEditingEpisode({ ...editingEpisode, thumbnail_file: file });
+                          }
+                        }}
+                        className="w-full px-4 py-3 bg-gray-900/50 border-2 border-dashed border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-4 mt-8">
+                    <button
+                      onClick={() => setEditingEpisode(null)}
+                      className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-semibold transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => saveEpisode(editingEpisode)}
+                      className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
+                    >
+                      Salvar Episódio
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Finalize Button */}
+            <div className="flex gap-4">
+              <button
+                onClick={finalizeSeries}
+                className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-green-900/50 flex items-center justify-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Finalizar e Publicar Série ({episodes.length} episódios)</span>
+              </button>
             </div>
           </div>
         )}

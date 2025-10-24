@@ -79,12 +79,16 @@ function HomePageContent() {
         }
 
         // Fetch real data from API
-        const [featuredRes, top10Res, latestRes, popularRes] = await Promise.all([
+        const [featuredRes, top10Res, top10SeriesRes, latestRes, popularRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, {
             cache: 'no-store',
             headers
           }),
           fetch(`${API_URL}/api/v1/content/top10/films`, {
+            cache: 'no-store',
+            headers
+          }),
+          fetch(`${API_URL}/api/v1/content/top10/series`, {
             cache: 'no-store',
             headers
           }),
@@ -98,12 +102,13 @@ function HomePageContent() {
           })
         ]);
 
-        if (!featuredRes.ok || !top10Res.ok || !latestRes.ok || !popularRes.ok) {
+        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !latestRes.ok || !popularRes.ok) {
           throw new Error('Erro ao carregar dados da API');
         }
 
         const featuredData = await featuredRes.json();
         const top10Films = await top10Res.json();
+        const top10Series = await top10SeriesRes.json();
         const latestData = await latestRes.json();
         const popularData = await popularRes.json();
 
@@ -120,6 +125,11 @@ function HomePageContent() {
             title: 'Top 10 Filmes da Semana',
             type: 'top10' as const,
             movies: Array.isArray(top10Films) ? top10Films : []
+          },
+          {
+            title: 'Top 10 Séries da Semana',
+            type: 'top10' as const,
+            movies: Array.isArray(top10Series) ? top10Series : []
           },
           {
             title: 'Lançamentos',

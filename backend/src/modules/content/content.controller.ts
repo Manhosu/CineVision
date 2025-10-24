@@ -79,6 +79,19 @@ export class ContentController {
     return this.contentService.findRelatedMovies(movieId, genreArray, Number(limit));
   }
 
+  @Get('series/:id/episodes')
+  @ApiOperation({ summary: 'Get all episodes for a series' })
+  @ApiParam({ name: 'id', description: 'Series ID' })
+  @ApiQuery({ name: 'season', description: 'Filter by season number', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Episodes retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Series not found' })
+  async getSeriesEpisodes(
+    @Param('id') seriesId: string,
+    @Query('season') season?: number,
+  ) {
+    return this.contentService.findSeriesEpisodes(seriesId, season ? Number(season) : undefined);
+  }
+
   @Get(':id/stream')
   @UseGuards(OptionalAuthGuard)
   @ApiBearerAuth()

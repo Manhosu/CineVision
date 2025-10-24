@@ -92,6 +92,47 @@ export class ContentService {
     return relatedMovies;
   }
 
+  async findSeriesEpisodes(seriesId: string, season?: number) {
+    // First check if series exists
+    const series = await this.contentRepository.findOne({
+      where: { id: seriesId, status: ContentStatus.PUBLISHED },
+    });
+
+    if (!series) {
+      throw new NotFoundException('Series not found');
+    }
+
+    // Query episodes from the episodes table
+    const query = `
+      SELECT
+        id,
+        series_id,
+        season_number,
+        episode_number,
+        title,
+        description,
+        thumbnail_url,
+        video_url,
+        duration_minutes,
+        storage_path,
+        file_storage_key,
+        processing_status,
+        available_qualities,
+        views_count,
+        created_at,
+        updated_at
+      FROM episodes
+      WHERE series_id = $1
+      ${season ? 'AND season_number = $2' : ''}
+      ORDER BY season_number ASC, episode_number ASC
+    `;
+
+    const params = season ? [seriesId, season] : [seriesId];
+    const episodes = await this.contentRepository.query(query, params);
+
+    return episodes;
+  }
+
   async findAllCategories() {
     return this.categoryRepository.find({
       order: { name: 'ASC' },

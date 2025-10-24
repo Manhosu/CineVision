@@ -185,6 +185,29 @@ export class AdminContentController {
     );
   }
 
+  @Put('series/:seriesId/episodes/:episodeId')
+  @ApiOperation({
+    summary: 'Update episode',
+    description: 'Updates episode metadata, video URL, or processing status',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Episode updated successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Episode not found',
+  })
+  @HttpCode(HttpStatus.OK)
+  async updateEpisode(
+    @Param('seriesId') seriesId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() updateData: any,
+    // @GetUser() user: User, // Temporarily disabled
+  ) {
+    return this.adminContentService.updateEpisode(seriesId, episodeId, updateData, 'test-user-id');
+  }
+
   @Delete(':id')
   @ApiOperation({
     summary: 'Delete content',
