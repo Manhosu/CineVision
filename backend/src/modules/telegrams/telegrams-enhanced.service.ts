@@ -74,6 +74,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   // Polling state
   private pollingOffset = 0;
   private isPolling = false;
+  private conflictRetries = 0;
+  private readonly MAX_CONFLICT_RETRIES = 3;
 
   constructor(
     private configService: ConfigService,
@@ -2060,6 +2062,9 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       });
 
       if (response.data.ok && response.data.result.length > 0) {
+        // Reset conflict retries on successful poll
+        this.conflictRetries = 0;
+
         for (const update of response.data.result) {
           await this.handleUpdate(update);
           this.pollingOffset = update.update_id + 1;
@@ -2068,11 +2073,19 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     } catch (error) {
       // Handle 409 Conflict error (concurrent polling or webhook active)
       if (error.response?.status === 409) {
-        this.logger.error('Conflict detected (409): Another instance may be polling or webhook is active');
+        this.conflictRetries++;
+
+        if (this.conflictRetries >= this.MAX_CONFLICT_RETRIES) {
+          this.logger.warn(`Max conflict retries (${this.MAX_CONFLICT_RETRIES}) reached. Stopping polling to avoid conflicts with other instance.`);
+          this.isPolling = false;
+          return;
+        }
+
+        this.logger.error(`Conflict detected (409): Another instance may be polling (retry ${this.conflictRetries}/${this.MAX_CONFLICT_RETRIES})`);
         this.logger.log('Attempting to delete webhook and retry...');
         await this.deleteWebhook();
-        // Wait 5 seconds before retrying
-        setTimeout(() => this.poll(), 5000);
+        // Wait 10 seconds before retrying to give other instance time to stabilize
+        setTimeout(() => this.poll(), 10000);
         return;
       }
 
