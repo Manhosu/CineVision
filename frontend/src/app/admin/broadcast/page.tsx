@@ -47,7 +47,16 @@ export default function BroadcastPage() {
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
+    console.log('[Broadcast Debug]', {
+      authLoading,
+      isAuthenticated,
+      userRole: user?.role,
+      userEmail: user?.email,
+      shouldRedirect: !authLoading && (!isAuthenticated || user?.role !== 'admin')
+    });
+
     if (!authLoading && (!isAuthenticated || user?.role !== 'admin')) {
+      console.log('[Broadcast] Redirecting to home - not authenticated or not admin');
       router.push('/');
     }
   }, [isAuthenticated, user, authLoading, router]);
