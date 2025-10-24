@@ -2023,10 +2023,17 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   private async deleteWebhook() {
     try {
       const url = `${this.botApiUrl}/deleteWebhook`;
-      await axios.post(url);
-      this.logger.log('Webhook deleted successfully');
+      const response = await axios.post(url, {
+        drop_pending_updates: true
+      });
+
+      if (response.data.ok) {
+        this.logger.log('Webhook deleted successfully');
+      } else {
+        this.logger.warn('Failed to delete webhook:', response.data);
+      }
     } catch (error) {
-      this.logger.error('Error deleting webhook:', error);
+      this.logger.error('Error deleting webhook:', error.message);
     }
   }
 
@@ -2059,6 +2066,16 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         }
       }
     } catch (error) {
+      // Handle 409 Conflict error (concurrent polling or webhook active)
+      if (error.response?.status === 409) {
+        this.logger.error('Conflict detected (409): Another instance may be polling or webhook is active');
+        this.logger.log('Attempting to delete webhook and retry...');
+        await this.deleteWebhook();
+        // Wait 5 seconds before retrying
+        setTimeout(() => this.poll(), 5000);
+        return;
+      }
+
       this.logger.error('Polling error:', error.message);
     }
 
