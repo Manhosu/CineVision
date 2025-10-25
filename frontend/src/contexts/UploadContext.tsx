@@ -21,6 +21,7 @@ export interface UploadTask {
   episodeId?: string; // ID do episódio
   seasonNumber?: number; // número da temporada
   episodeNumber?: number; // número do episódio
+  processingStatus?: 'pending' | 'processing' | 'ready' | 'failed'; // status do processamento no backend
 }
 
 interface UploadContextType {

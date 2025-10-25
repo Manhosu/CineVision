@@ -367,6 +367,89 @@ export default function AdminContentCreatePage() {
     toast.success('Episódio removido');
   };
 
+  /**
+   * Poll episode processing status after upload completes
+   */
+  const pollProcessingStatus = async (taskId: string, episodeId: string) => {
+    const maxAttempts = 60; // 5 minutes max (60 * 5 seconds)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+        if (!token) {
+          console.error('[pollProcessingStatus] No auth token found');
+          return;
+        }
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/episodes/${episodeId}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          console.error('[pollProcessingStatus] Failed to fetch episode status');
+          return;
+        }
+
+        const episodeData = await response.json();
+        const processingStatus = episodeData.data?.processing_status || episodeData.processing_status;
+
+        console.log(`[pollProcessingStatus] Episode ${episodeId} status:`, processingStatus);
+
+        // Update task with processing status
+        updateTask(taskId, { processingStatus });
+
+        if (processingStatus === 'ready') {
+          // Processing complete
+          updateTask(taskId, {
+            status: 'ready',
+            processingStatus: 'ready',
+            completedAt: Date.now(),
+          });
+          toast.success('Processamento concluído! Episódio pronto para assistir.');
+          return;
+        } else if (processingStatus === 'failed') {
+          // Processing failed
+          updateTask(taskId, {
+            status: 'error',
+            processingStatus: 'failed',
+            error: 'Falha no processamento do vídeo',
+          });
+          toast.error('Erro no processamento do vídeo');
+          return;
+        }
+
+        // Continue polling if still processing
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else {
+          // Timeout
+          console.log('[pollProcessingStatus] Polling timeout reached');
+          updateTask(taskId, {
+            processingStatus: 'processing',
+            completedAt: Date.now(),
+          });
+        }
+      } catch (error) {
+        console.error('[pollProcessingStatus] Error:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        }
+      }
+    };
+
+    // Start polling after 5 seconds (give backend time to start processing)
+    setTimeout(poll, 5000);
+  };
+
   const uploadEpisode = async (episode: Episode) => {
     if (!episode.video_file) {
       toast.error('Por favor, selecione um arquivo de vídeo para o episódio');
@@ -567,14 +650,18 @@ export default function AdminContentCreatePage() {
           : ep
       ));
 
-      // Mark global task as completed
+      // Mark upload as completed, now start monitoring processing
       updateTask(taskId, {
         status: 'completed',
         progress: 100,
-        completedAt: Date.now()
+        processingStatus: 'pending',
+        episodeId: episodeId,
       });
 
-      toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado com sucesso!`);
+      toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado - aguardando processamento...`);
+
+      // Start polling for processing status
+      pollProcessingStatus(taskId, episodeId);
     } catch (error: any) {
       console.error('Error uploading episode:', error);
       setEpisodes(prev => prev.map(ep =>

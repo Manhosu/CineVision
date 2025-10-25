@@ -14,20 +14,21 @@ export function FloatingUploadProgress() {
     console.log('[FloatingUploadProgress] Episode tasks:', episodeTasks);
   }, [tasks]);
 
-  // Auto-remove completed episode tasks after 10 seconds
+  // Auto-remove FULLY completed episode tasks after 10 seconds
+  // Only remove when processing is complete (status=ready OR processingStatus=ready)
   useEffect(() => {
     const episodeTasks = tasks.filter(t => t.type === 'episode');
-    const completedTasks = episodeTasks.filter(t =>
-      (t.status === 'completed' || t.status === 'ready') && t.completedAt
+    const fullyCompletedTasks = episodeTasks.filter(t =>
+      (t.status === 'ready' || t.processingStatus === 'ready') && t.completedAt
     );
 
-    if (completedTasks.length > 0) {
-      const timers = completedTasks.map(task => {
+    if (fullyCompletedTasks.length > 0) {
+      const timers = fullyCompletedTasks.map(task => {
         const timeElapsed = Date.now() - (task.completedAt || 0);
         const timeRemaining = Math.max(0, 10000 - timeElapsed);
 
         return setTimeout(() => {
-          console.log('[FloatingUploadProgress] Auto-removing completed task:', task.id);
+          console.log('[FloatingUploadProgress] Auto-removing fully completed task:', task.id);
           removeTask(task.id);
         }, timeRemaining);
       });
@@ -112,11 +113,19 @@ export function FloatingUploadProgress() {
           return (
             <div key={task.id} className="flex items-center space-x-2">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                {task.status === 'completed' || task.status === 'ready' ? (
+                {task.status === 'ready' ? (
                   <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
-                ) : task.status === 'error' || task.status === 'cancelled' ? (
+                ) : task.status === 'completed' && task.processingStatus === 'ready' ? (
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                ) : task.status === 'completed' && (task.processingStatus === 'processing' || task.processingStatus === 'pending') ? (
+                  <svg className="w-5 h-5 text-yellow-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : task.status === 'error' || task.status === 'cancelled' || task.processingStatus === 'failed' ? (
                   <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                   </svg>
@@ -141,11 +150,26 @@ export function FloatingUploadProgress() {
                     style={{ width: `${task.progress}%` }}
                   />
                 </div>
+                {task.status === 'uploading' && (
+                  <p className="text-xs text-blue-400 mt-1">Fazendo upload...</p>
+                )}
+                {task.status === 'completed' && task.processingStatus === 'pending' && (
+                  <p className="text-xs text-yellow-400 mt-1">Upload concluído - aguardando processamento...</p>
+                )}
+                {task.status === 'completed' && task.processingStatus === 'processing' && (
+                  <p className="text-xs text-yellow-400 mt-1">Processando vídeo...</p>
+                )}
+                {task.status === 'completed' && task.processingStatus === 'ready' && (
+                  <p className="text-xs text-green-400 mt-1">Pronto para assistir!</p>
+                )}
+                {task.status === 'ready' && (
+                  <p className="text-xs text-green-400 mt-1">Pronto para assistir!</p>
+                )}
                 {task.status === 'converting' && (
                   <p className="text-xs text-yellow-400 mt-1">Convertendo vídeo...</p>
                 )}
-                {task.error && (
-                  <p className="text-xs text-red-400 mt-1">{task.error}</p>
+                {(task.processingStatus === 'failed' || task.status === 'error') && (
+                  <p className="text-xs text-red-400 mt-1">{task.error || 'Erro no processamento'}</p>
                 )}
               </div>
               <button
