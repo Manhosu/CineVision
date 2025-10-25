@@ -7,9 +7,12 @@ import { toast } from 'react-hot-toast';
 export function GlobalUploadProgress() {
   const { tasks, cancelTask, clearStuckTasks } = useUpload();
 
+  // ONLY show movie uploads (NOT episodes - those have their own FloatingUploadProgress)
+  const movieTasks = tasks.filter(t => t.type !== 'episode');
+
   // Show all active tasks (not completed or ready yet)
   // Keep completed/ready tasks visible for 3 seconds after completion
-  const visibleTasks = tasks.filter(t => {
+  const visibleTasks = movieTasks.filter(t => {
     // Always show if uploading, converting, or error
     if (t.status === 'uploading' || t.status === 'converting' || t.status === 'error') {
       return true;
