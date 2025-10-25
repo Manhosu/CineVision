@@ -77,7 +77,7 @@ export class AdminContentController {
     @Body() dto: CreateContentDto,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.createContent(dto, 'test-user-id');
+    return this.adminContentService.createContent(dto, null);
   }
 
   @Post('initiate-upload')
@@ -93,7 +93,7 @@ export class AdminContentController {
     @Body() dto: InitiateUploadDto,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.initiateUpload(dto, 'test-user-id');
+    return this.adminContentService.initiateUpload(dto, null);
   }
 
   @Post('complete-upload')
@@ -110,7 +110,7 @@ export class AdminContentController {
     @Body() dto: CompleteUploadDto,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.completeUpload(dto, 'test-user-id');
+    return this.adminContentService.completeUpload(dto, null);
   }
 
   @Get(':id/status')
@@ -143,7 +143,7 @@ export class AdminContentController {
   ) {
     return this.adminContentService.publishContent(
       { content_id: contentId, ...dto },
-      'test-user-id',
+      null,
     );
   }
 
@@ -162,7 +162,7 @@ export class AdminContentController {
     @Body() dto: CreateSeriesDto,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.createSeries(dto, 'test-user-id');
+    return this.adminContentService.createSeries(dto, null);
   }
 
   @Post('series/:seriesId/episodes')
@@ -181,7 +181,7 @@ export class AdminContentController {
   ) {
     return this.adminContentService.createEpisode(
       { series_id: seriesId, ...dto },
-      'test-user-id',
+      null, // Pass null instead of invalid user ID
     );
   }
 
@@ -205,7 +205,7 @@ export class AdminContentController {
     @Body() updateData: any,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.updateEpisode(seriesId, episodeId, updateData, 'test-user-id');
+    return this.adminContentService.updateEpisode(seriesId, episodeId, updateData, null);
   }
 
   @Delete(':id')
@@ -226,7 +226,7 @@ export class AdminContentController {
     @Param('id') contentId: string,
     // @GetUser() user: User, // Temporarily disabled
   ) {
-    return this.adminContentService.deleteContent(contentId, 'test-user-id');
+    return this.adminContentService.deleteContent(contentId, null);
   }
 
   @Put(':id')
