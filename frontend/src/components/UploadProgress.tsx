@@ -9,12 +9,15 @@ export default function UploadProgress() {
   const [minimized, setMinimized] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
 
-  if (tasks.length === 0) return null;
+  // ONLY show movie uploads (NOT episodes - those have FloatingUploadProgress)
+  const movieTasks = tasks.filter(t => t.type !== 'episode');
 
-  const activeTasks = tasks.filter(t => t.status === 'uploading' || t.status === 'converting');
-  const completedTasks = tasks.filter(t => t.status === 'ready');
-  const errorTasks = tasks.filter(t => t.status === 'error');
-  const cancelledTasks = tasks.filter(t => t.status === 'cancelled');
+  if (movieTasks.length === 0) return null;
+
+  const activeTasks = movieTasks.filter(t => t.status === 'uploading' || t.status === 'converting');
+  const completedTasks = movieTasks.filter(t => t.status === 'ready');
+  const errorTasks = movieTasks.filter(t => t.status === 'error');
+  const cancelledTasks = movieTasks.filter(t => t.status === 'cancelled');
 
   // Check for stuck uploads (0% progress)
   const hasStuckUploads = activeTasks.some(t => t.progress === 0);

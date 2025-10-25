@@ -5,7 +5,7 @@ import { useUpload } from '@/contexts/UploadContext';
 import { toast } from 'react-hot-toast';
 
 export function FloatingUploadProgress() {
-  const { tasks, cancelTask, clearStuckTasks } = useUpload();
+  const { tasks, cancelTask, clearStuckTasks, removeTask } = useUpload();
 
   // Debug: Log tasks to console
   useEffect(() => {
@@ -14,11 +14,32 @@ export function FloatingUploadProgress() {
     console.log('[FloatingUploadProgress] Episode tasks:', episodeTasks);
   }, [tasks]);
 
+  // Auto-remove completed episode tasks after 10 seconds
+  useEffect(() => {
+    const episodeTasks = tasks.filter(t => t.type === 'episode');
+    const completedTasks = episodeTasks.filter(t =>
+      (t.status === 'completed' || t.status === 'ready') && t.completedAt
+    );
+
+    if (completedTasks.length > 0) {
+      const timers = completedTasks.map(task => {
+        const timeElapsed = Date.now() - (task.completedAt || 0);
+        const timeRemaining = Math.max(0, 10000 - timeElapsed);
+
+        return setTimeout(() => {
+          console.log('[FloatingUploadProgress] Auto-removing completed task:', task.id);
+          removeTask(task.id);
+        }, timeRemaining);
+      });
+
+      return () => timers.forEach(timer => clearTimeout(timer));
+    }
+  }, [tasks, removeTask]);
+
   // Filtrar apenas uploads de episódios
   const episodeTasks = tasks.filter(t => t.type === 'episode');
 
   // Show all episode tasks during the entire upload session
-  // Don't auto-hide - let user see completed uploads
   const visibleTasks = episodeTasks;
 
   // Não mostrar se não há uploads de episódios
