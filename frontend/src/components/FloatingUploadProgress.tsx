@@ -1,18 +1,28 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useUpload } from '@/contexts/UploadContext';
 
 export function FloatingUploadProgress() {
   const { tasks } = useUpload();
+
+  // Debug: Log tasks to console
+  useEffect(() => {
+    console.log('[FloatingUploadProgress] All tasks:', tasks);
+    const episodeTasks = tasks.filter(t => t.type === 'episode');
+    console.log('[FloatingUploadProgress] Episode tasks:', episodeTasks);
+  }, [tasks]);
 
   // Filtrar apenas uploads de episódios
   const episodeTasks = tasks.filter(t => t.type === 'episode');
 
   // Não mostrar se não há uploads de episódios
   if (episodeTasks.length === 0) {
+    console.log('[FloatingUploadProgress] No episode tasks, hiding component');
     return null;
   }
+
+  console.log('[FloatingUploadProgress] Rendering with', episodeTasks.length, 'episode tasks');
 
   // Calcular estatísticas
   const uploading = episodeTasks.filter(t => t.status === 'uploading');
