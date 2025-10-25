@@ -582,16 +582,70 @@ export default function AdminContentCreatePage() {
       return;
     }
 
-    const allUploaded = episodes.every(ep => ep.uploaded);
-    if (!allUploaded) {
-      const confirmation = confirm(
-        'Alguns episódios ainda não foram enviados. Deseja finalizar mesmo assim?'
-      );
-      if (!confirmation) return;
+    // Verificar se há episódios sem arquivos de vídeo
+    const episodesWithoutFiles = episodes.filter(ep => !ep.video_file);
+    if (episodesWithoutFiles.length > 0) {
+      toast.error(`${episodesWithoutFiles.length} episódio(s) não possuem arquivo de vídeo selecionado`);
+      return;
     }
 
+    // Iniciar upload de todos os episódios
+    const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
+
+    if (episodesToUpload.length > 0) {
+      toast.success(`Iniciando upload de ${episodesToUpload.length} episódio(s)...`);
+
+      // Add all episodes to the upload queue
+      const queueItems = episodesToUpload.map(episode => ({
+        id: `${episode.season_number}-${episode.episode_number}`,
+        execute: () => uploadEpisode(episode),
+        priority: episode.season_number * 1000 + episode.episode_number,
+      }));
+
+      uploadQueue.addBatch(queueItems);
+
+      // Não aguardar - upload acontece em background
+      // A publicação será feita automaticamente quando todos os uploads terminarem
+      uploadQueue.waitForCompletion().then(async () => {
+        const stats = uploadQueue.getStats();
+
+        if (stats.failed > 0) {
+          toast.error(`${stats.completed} episódio(s) enviado(s), ${stats.failed} falharam. Publicação cancelada.`);
+          return;
+        }
+
+        // Todos os uploads completaram com sucesso - publicar automaticamente
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
+            {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error('Erro ao publicar série');
+          }
+
+          toast.success('✅ Série publicada e usuários notificados!');
+        } catch (error: any) {
+          console.error('Error publishing series:', error);
+          toast.error('Erro ao publicar série: ' + error.message);
+        }
+      });
+
+      toast.success('Upload iniciado! A série será publicada automaticamente quando todos os uploads terminarem.');
+      router.push('/admin');
+      return;
+    }
+
+    // Se todos já foram enviados, apenas publicar
     try {
-      // Publicar série
       const token = localStorage.getItem('token');
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
@@ -1310,6 +1364,73 @@ export default function AdminContentCreatePage() {
                   </div>
                 </div>
 
+                {/* Bulk Video Upload Section */}
+                <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/20 border-2 border-purple-500/40 rounded-xl p-6 mb-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white mb-2 flex items-center space-x-2">
+                        <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span>Upload em Lote de Vídeos</span>
+                      </h3>
+                      <p className="text-gray-400 text-sm">
+                        Selecione todos os arquivos de vídeo de uma vez. Eles serão atribuídos automaticamente aos episódios na ordem.
+                      </p>
+                    </div>
+                    <label className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 flex items-center space-x-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      <span>Selecionar Arquivos</span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          if (files.length === 0) return;
+
+                          // Sort episodes by season and episode number
+                          const sortedEpisodes = [...episodes].sort((a, b) => {
+                            if (a.season_number !== b.season_number) {
+                              return a.season_number - b.season_number;
+                            }
+                            return a.episode_number - b.episode_number;
+                          });
+
+                          // Assign files to episodes in order
+                          setEpisodes(prev => {
+                            const updated = [...prev];
+                            files.forEach((file, index) => {
+                              if (index < sortedEpisodes.length) {
+                                const episodeToUpdate = sortedEpisodes[index];
+                                const episodeIndex = updated.findIndex(
+                                  ep => ep.season_number === episodeToUpdate.season_number &&
+                                        ep.episode_number === episodeToUpdate.episode_number
+                                );
+                                if (episodeIndex !== -1) {
+                                  updated[episodeIndex] = { ...updated[episodeIndex], video_file: file };
+                                }
+                              }
+                            });
+                            return updated;
+                          });
+
+                          toast.success(`${files.length} arquivo(s) selecionado(s)!`);
+                        }}
+                      />
+                    </label>
+                  </div>
+
+                  {episodes.filter(ep => ep.video_file).length > 0 && (
+                    <div className="text-sm text-purple-300 bg-purple-900/20 px-4 py-2 rounded-lg">
+                      ✓ {episodes.filter(ep => ep.video_file).length} de {episodes.length} episódios com vídeos selecionados
+                    </div>
+                  )}
+                </div>
+
                 {/* Season Selector */}
                 <div className="flex items-center space-x-4 mb-6">
                   <label className="text-white font-semibold">Temporada:</label>
@@ -1322,25 +1443,6 @@ export default function AdminContentCreatePage() {
                       <option key={season} value={season}>Temporada {season}</option>
                     ))}
                   </select>
-
-                  {/* Upload All Episodes Button */}
-                  {episodes.filter(ep => ep.video_file && !ep.uploaded).length > 0 && (
-                    <button
-                      onClick={uploadAllEpisodes}
-                      disabled={queueStats.active > 0 || queueStats.pending > 0}
-                      className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-xl font-semibold flex items-center space-x-2 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      <span>
-                        {queueStats.active > 0 || queueStats.pending > 0
-                          ? `Enviando... (${queueStats.completed}/${queueStats.total})`
-                          : `Enviar Todos (${episodes.filter(ep => ep.video_file && !ep.uploaded).length})`
-                        }
-                      </span>
-                    </button>
-                  )}
 
                   <button
                     onClick={addEpisode}
@@ -1427,17 +1529,19 @@ export default function AdminContentCreatePage() {
                                 <span>Enviado</span>
                               </span>
                             ) : episode.uploading ? (
-                              <span className="px-3 py-1 bg-blue-900/30 border border-blue-500/50 text-blue-400 text-sm rounded-lg flex items-center space-x-2">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-                                <span>Enviando...</span>
-                              </span>
+                              <div className="flex items-center space-x-2">
+                                <span className="px-3 py-1 bg-blue-900/30 border border-blue-500/50 text-blue-400 text-sm rounded-lg flex items-center space-x-2">
+                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                                  <span>Enviando {episode.uploadProgress || 0}%</span>
+                                </span>
+                              </div>
                             ) : episode.video_file ? (
-                              <button
-                                onClick={() => uploadEpisode(episode)}
-                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-                              >
-                                Fazer Upload
-                              </button>
+                              <span className="px-3 py-1 bg-purple-900/30 border border-purple-500/50 text-purple-400 text-sm rounded-lg flex items-center space-x-1">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                                </svg>
+                                <span>Pronto</span>
+                              </span>
                             ) : (
                               <label className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg cursor-pointer transition-colors">
                                 Selecionar Vídeo
