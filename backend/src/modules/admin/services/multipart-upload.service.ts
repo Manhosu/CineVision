@@ -16,6 +16,7 @@ export interface InitMultipartUploadDto {
   contentType: string;
   size: number;
   contentId?: string;
+  episodeId?: string;
   audioType?: 'dublado' | 'legendado' | 'original';
 }
 
@@ -23,7 +24,8 @@ export interface CompleteMultipartUploadDto {
   uploadId: string;
   key: string;
   parts: Array<{ PartNumber: number; ETag: string }>;
-  contentId: string;
+  contentId?: string;
+  episodeId?: string;
 }
 
 export interface UploadRecord {
@@ -78,7 +80,7 @@ export class MultipartUploadService {
    * Initialize multipart upload and return presigned URLs for each part
    */
   async initMultipartUpload(dto: InitMultipartUploadDto) {
-    const { filename, contentType, size, contentId, audioType } = dto;
+    const { filename, contentType, size, contentId, episodeId, audioType } = dto;
 
     // Validate file size
     if (size > this.maxFileSize) {
@@ -98,9 +100,18 @@ export class MultipartUploadService {
     // Generate unique key
     const timestamp = Date.now();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = contentId
-      ? `raw/${contentId}/${audioType || 'original'}/${timestamp}-${sanitizedFilename}`
-      : `raw/temp/${timestamp}-${sanitizedFilename}`;
+    let key: string;
+
+    if (episodeId) {
+      // For episodes: raw/episodes/{episodeId}/{timestamp}-{filename}
+      key = `raw/episodes/${episodeId}/${timestamp}-${sanitizedFilename}`;
+    } else if (contentId) {
+      // For movies: raw/{contentId}/{audioType}/{timestamp}-{filename}
+      key = `raw/${contentId}/${audioType || 'original'}/${timestamp}-${sanitizedFilename}`;
+    } else {
+      // For temp uploads
+      key = `raw/temp/${timestamp}-${sanitizedFilename}`;
+    }
 
     this.logger.log(`Initiating multipart upload: ${key}`);
 
@@ -112,6 +123,7 @@ export class MultipartUploadService {
       Metadata: {
         originalFilename: filename,
         contentId: contentId || '',
+        episodeId: episodeId || '',
         audioType: audioType || 'original',
       },
     });
@@ -148,17 +160,26 @@ export class MultipartUploadService {
     }
 
     // Create record in database
+    const uploadData: any = {
+      key,
+      upload_id: UploadId,
+      filename,
+      size,
+      status: 'uploading',
+      parts_count: partsCount,
+    };
+
+    if (contentId) {
+      uploadData.content_id = contentId;
+    }
+
+    if (episodeId) {
+      uploadData.episode_id = episodeId;
+    }
+
     const { data: uploadRecord, error } = await this.supabase
       .from('video_uploads')
-      .insert({
-        key,
-        upload_id: UploadId,
-        content_id: contentId,
-        filename,
-        size,
-        status: 'uploading',
-        parts_count: partsCount,
-      })
+      .insert(uploadData)
       .select()
       .single();
 
@@ -183,7 +204,7 @@ export class MultipartUploadService {
    * Complete multipart upload
    */
   async completeMultipartUpload(dto: CompleteMultipartUploadDto) {
-    const { uploadId, key, parts, contentId } = dto;
+    const { uploadId, key, parts, contentId, episodeId } = dto;
 
     this.logger.log(`Completing multipart upload: ${key}`);
 
@@ -241,8 +262,22 @@ export class MultipartUploadService {
           .eq('id', contentId);
       }
 
+      // Update episode record if episodeId provided
+      if (episodeId) {
+        await this.supabase
+          .from('episodes')
+          .update({
+            storage_path: key,
+            file_storage_key: key,
+            file_size_bytes: size,
+            processing_status: 'processing',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', episodeId);
+      }
+
       // TODO: Enqueue transcode job here
-      // await this.queueService.addTranscodeJob({ key, contentId });
+      // await this.queueService.addTranscodeJob({ key, contentId, episodeId });
 
       return {
         success: true,

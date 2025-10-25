@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { supabase } from '@/lib/supabase';
+import { UploadQueue, QueueStats } from '@/lib/uploadQueue';
 
 interface ContentFormData {
   title: string;
@@ -68,6 +69,7 @@ interface Episode {
   thumbnail_file?: File;
   uploading?: boolean;
   uploaded?: boolean;
+  uploadProgress?: number;
   error?: string;
 }
 
@@ -118,6 +120,18 @@ export default function AdminContentCreatePage() {
   const [showEpisodeManager, setShowEpisodeManager] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(1);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
+
+  // Upload queue state
+  const [uploadQueue] = useState(() => new UploadQueue(2, (stats) => {
+    setQueueStats(stats);
+  }));
+  const [queueStats, setQueueStats] = useState<QueueStats>({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    pending: 0,
+    active: 0,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -405,43 +419,110 @@ export default function AdminContentCreatePage() {
       const createdEpisode = await response.json();
       const episodeId = createdEpisode.data?.id || createdEpisode.id;
 
-      // 3. Upload do vídeo do episódio para Supabase Storage
+      // 3. Upload do vídeo do episódio usando multipart upload S3
       const videoFile = episode.video_file;
-      const fileName = `${createdContentId}/episodes/s${episode.season_number}e${episode.episode_number}/${videoFile.name}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('cinevision-videos')
-        .upload(fileName, videoFile, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        throw new Error(`Erro no upload do vídeo: ${uploadError.message}`);
+      // Get auth token
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado');
       }
 
-      // 4. Obter URL pública do vídeo
-      const { data: urlData } = supabase.storage
-        .from('cinevision-videos')
-        .getPublicUrl(fileName);
+      // Detect content type
+      const getContentType = (file: File): string => {
+        if (file.type && file.type.startsWith('video/')) {
+          return file.type;
+        }
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        switch (extension) {
+          case 'mp4': return 'video/mp4';
+          case 'mkv': return 'video/x-matroska';
+          case 'mov': return 'video/quicktime';
+          default: return 'video/mp4';
+        }
+      };
 
-      // 5. Atualizar episódio com URL do vídeo (se endpoint existir)
-      try {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes/${episodeId}`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              video_url: urlData.publicUrl,
-              storage_path: fileName,
-              file_size_bytes: videoFile.size,
-            }),
-          }
-        );
-      } catch (updateError) {
-        console.warn('Aviso: Episódio criado mas não foi possível atualizar URL do vídeo');
+      const contentType = getContentType(videoFile);
+
+      // 3.1. Initiate multipart upload
+      const initResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            episodeId: episodeId,
+            filename: videoFile.name,
+            contentType: contentType,
+            size: videoFile.size,
+          }),
+        }
+      );
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json().catch(() => ({ message: 'Erro ao iniciar upload' }));
+        throw new Error(errorData.message || 'Erro ao iniciar upload');
+      }
+
+      const { uploadId, key, partSize, partsCount, presignedUrls } = await initResponse.json();
+      const uploadedParts: { ETag: string; PartNumber: number }[] = [];
+
+      // 3.2. Upload parts to S3
+      for (let i = 0; i < presignedUrls.length; i++) {
+        const { partNumber, url: presignedUrl } = presignedUrls[i];
+        const start = (partNumber - 1) * partSize;
+        const end = Math.min(start + partSize, videoFile.size);
+        const chunk = videoFile.slice(start, end);
+
+        const partResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: chunk,
+        });
+
+        if (!partResponse.ok) {
+          throw new Error(`Erro ao fazer upload da parte ${partNumber}`);
+        }
+
+        const etag = partResponse.headers.get('ETag');
+        if (!etag) {
+          throw new Error(`ETag não retornado para parte ${partNumber}`);
+        }
+
+        uploadedParts.push({ ETag: etag.replace(/"/g, ''), PartNumber: partNumber });
+
+        // Update progress
+        const progress = Math.round(((i + 1) / partsCount) * 100);
+        setEpisodes(prev => prev.map(ep =>
+          ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
+            ? { ...ep, uploadProgress: progress }
+            : ep
+        ));
+      }
+
+      // 3.3. Complete multipart upload
+      const completeResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/complete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            uploadId,
+            key,
+            parts: uploadedParts,
+            episodeId: episodeId,
+          }),
+        }
+      );
+
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json().catch(() => ({ message: 'Erro ao finalizar upload' }));
+        throw new Error(errorData.message || 'Erro ao finalizar upload');
       }
 
       setEpisodes(prev => prev.map(ep =>
@@ -459,6 +540,39 @@ export default function AdminContentCreatePage() {
           : ep
       ));
       toast.error(error.message || 'Erro ao fazer upload do episódio');
+    }
+  };
+
+  /**
+   * Upload all episodes that have video files but haven't been uploaded yet
+   */
+  const uploadAllEpisodes = async () => {
+    const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
+
+    if (episodesToUpload.length === 0) {
+      toast.error('Nenhum episódio disponível para upload');
+      return;
+    }
+
+    toast.success(`Iniciando upload de ${episodesToUpload.length} episódio(s) em fila...`);
+
+    // Add all episodes to the upload queue
+    const queueItems = episodesToUpload.map(episode => ({
+      id: `${episode.season_number}-${episode.episode_number}`,
+      execute: () => uploadEpisode(episode),
+      priority: episode.season_number * 1000 + episode.episode_number, // Upload in order
+    }));
+
+    uploadQueue.addBatch(queueItems);
+
+    // Wait for completion
+    await uploadQueue.waitForCompletion();
+
+    const stats = uploadQueue.getStats();
+    if (stats.failed > 0) {
+      toast.error(`${stats.completed} episódio(s) enviado(s), ${stats.failed} falharam`);
+    } else {
+      toast.success(`Todos os ${stats.completed} episódio(s) foram enviados com sucesso!`);
     }
   };
 
@@ -1209,6 +1323,25 @@ export default function AdminContentCreatePage() {
                     ))}
                   </select>
 
+                  {/* Upload All Episodes Button */}
+                  {episodes.filter(ep => ep.video_file && !ep.uploaded).length > 0 && (
+                    <button
+                      onClick={uploadAllEpisodes}
+                      disabled={queueStats.active > 0 || queueStats.pending > 0}
+                      className="px-6 py-2 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 rounded-xl font-semibold flex items-center space-x-2 transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <span>
+                        {queueStats.active > 0 || queueStats.pending > 0
+                          ? `Enviando... (${queueStats.completed}/${queueStats.total})`
+                          : `Enviar Todos (${episodes.filter(ep => ep.video_file && !ep.uploaded).length})`
+                        }
+                      </span>
+                    </button>
+                  )}
+
                   <button
                     onClick={addEpisode}
                     className="ml-auto px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl font-semibold flex items-center space-x-2 transition-all duration-300 hover:scale-105"
@@ -1219,6 +1352,52 @@ export default function AdminContentCreatePage() {
                     <span>Adicionar Episódio</span>
                   </button>
                 </div>
+
+                {/* Queue Statistics */}
+                {(queueStats.total > 0) && (
+                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-white font-semibold flex items-center space-x-2">
+                        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span>Status do Upload em Fila</span>
+                      </h4>
+                      <div className="text-sm text-gray-400">
+                        {queueStats.active > 0 ? (
+                          <span className="text-blue-400 animate-pulse">⚡ {queueStats.active} em progresso</span>
+                        ) : queueStats.pending > 0 ? (
+                          <span className="text-yellow-400">⏳ {queueStats.pending} aguardando</span>
+                        ) : (
+                          <span className="text-green-400">✓ Concluído</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-white">{queueStats.total}</div>
+                        <div className="text-xs text-gray-400">Total</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-400">{queueStats.completed}</div>
+                        <div className="text-xs text-gray-400">Concluídos</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-blue-400">{queueStats.active}</div>
+                        <div className="text-xs text-gray-400">Em Progresso</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-yellow-400">{queueStats.pending}</div>
+                        <div className="text-xs text-gray-400">Na Fila</div>
+                      </div>
+                    </div>
+                    {queueStats.failed > 0 && (
+                      <div className="mt-3 p-2 bg-red-900/30 border border-red-500/50 rounded text-red-400 text-sm">
+                        ⚠️ {queueStats.failed} episódio(s) falharam
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Episodes List for Current Season */}
                 <div className="space-y-4">
