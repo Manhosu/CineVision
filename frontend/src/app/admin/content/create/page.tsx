@@ -639,6 +639,15 @@ export default function AdminContentCreatePage() {
     // Iniciar upload de todos os episódios que ainda não foram enviados
     const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
 
+    console.log('[finalizeSeries] Total episodes:', episodes.length);
+    console.log('[finalizeSeries] Episodes to upload:', episodesToUpload.length);
+    console.log('[finalizeSeries] Episodes details:', episodesToUpload.map(ep => ({
+      season: ep.season_number,
+      episode: ep.episode_number,
+      title: ep.title,
+      hasVideo: !!ep.video_file
+    })));
+
     if (episodesToUpload.length > 0) {
       toast.success(`Iniciando upload de ${episodesToUpload.length} episódio(s)...`);
 
@@ -649,6 +658,7 @@ export default function AdminContentCreatePage() {
         priority: episode.season_number * 1000 + episode.episode_number,
       }));
 
+      console.log('[finalizeSeries] Adding to queue:', queueItems.map(item => item.id));
       uploadQueue.addBatch(queueItems);
 
       // Upload acontece em background - publicação será automática após conclusão
