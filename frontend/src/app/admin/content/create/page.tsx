@@ -640,12 +640,20 @@ export default function AdminContentCreatePage() {
     const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
 
     console.log('[finalizeSeries] Total episodes:', episodes.length);
-    console.log('[finalizeSeries] Episodes to upload:', episodesToUpload.length);
-    console.log('[finalizeSeries] Episodes details:', episodesToUpload.map(ep => ({
+    console.log('[finalizeSeries] All episodes:', episodes.map(ep => ({
       season: ep.season_number,
       episode: ep.episode_number,
       title: ep.title,
-      hasVideo: !!ep.video_file
+      hasVideo: !!ep.video_file,
+      uploaded: ep.uploaded,
+      uploading: ep.uploading
+    })));
+    console.log('[finalizeSeries] Episodes WITHOUT video file:', episodesWithoutFiles.length);
+    console.log('[finalizeSeries] Episodes to upload:', episodesToUpload.length);
+    console.log('[finalizeSeries] Episodes to upload details:', episodesToUpload.map(ep => ({
+      season: ep.season_number,
+      episode: ep.episode_number,
+      title: ep.title
     })));
 
     if (episodesToUpload.length > 0) {
