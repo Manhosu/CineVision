@@ -42,14 +42,19 @@ export function RealtimeAnalytics() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  // Fetch realtime stats
-  const fetchStats = async () => {
+  // Fetch realtime stats with retry
+  const fetchStats = async (retries = 2) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/analytics/realtime-stats`, {
         cache: 'no-store',
       });
 
       if (!response.ok) {
+        if (retries > 0 && (response.status === 502 || response.status === 503)) {
+          // Backend cold start - retry after delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return fetchStats(retries - 1);
+        }
         throw new Error('Erro ao carregar estatísticas');
       }
 
@@ -60,27 +65,39 @@ export function RealtimeAnalytics() {
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
-      setError('Erro ao carregar estatísticas');
+      if (retries === 0) {
+        setError('Erro ao carregar estatísticas');
+      }
     }
   };
 
-  // Fetch active sessions
-  const fetchSessions = async () => {
+  // Fetch active sessions with retry
+  const fetchSessions = async (retries = 2) => {
     try {
       const response = await fetch(`${API_URL}/api/v1/analytics/active-sessions`, {
         cache: 'no-store',
       });
 
       if (!response.ok) {
+        if (retries > 0 && (response.status === 502 || response.status === 503)) {
+          // Backend cold start - retry after delay
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          return fetchSessions(retries - 1);
+        }
         throw new Error('Erro ao carregar sessões');
       }
 
       const result = await response.json();
       if (result.success && result.data) {
         setSessions(result.data);
+        setError(null);
       }
     } catch (err) {
       console.error('Error fetching sessions:', err);
+      // Silently fail - don't break the UI
+      if (retries === 0) {
+        setSessions([]);
+      }
     }
   };
 
