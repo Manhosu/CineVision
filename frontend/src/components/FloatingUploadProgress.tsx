@@ -17,26 +17,9 @@ export function FloatingUploadProgress() {
   // Filtrar apenas uploads de episódios
   const episodeTasks = tasks.filter(t => t.type === 'episode');
 
-  // Show all active tasks (not completed or ready yet)
-  // Keep completed/ready tasks visible for 5 seconds after completion
-  const visibleTasks = episodeTasks.filter(t => {
-    // Always show if uploading, converting, or error
-    if (t.status === 'uploading' || t.status === 'converting' || t.status === 'error') {
-      return true;
-    }
-
-    // Show completed/ready tasks for 5 seconds after completion
-    if ((t.status === 'completed' || t.status === 'ready') && t.completedAt) {
-      return Date.now() - t.completedAt < 5000;
-    }
-
-    // Show any task that doesn't have completedAt set yet (still in progress)
-    if (!t.completedAt) {
-      return true;
-    }
-
-    return false;
-  });
+  // Show all episode tasks during the entire upload session
+  // Don't auto-hide - let user see completed uploads
+  const visibleTasks = episodeTasks;
 
   // Não mostrar se não há uploads de episódios
   if (visibleTasks.length === 0) {

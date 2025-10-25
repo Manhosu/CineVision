@@ -334,10 +334,16 @@ export default function AdminContentCreatePage() {
   };
 
   const saveEpisode = (episode: Episode) => {
-    if (!episode.title || !episode.description || episode.duration_minutes <= 0) {
-      toast.error('Por favor, preencha todos os campos do episódio');
+    if (!episode.title || !episode.description) {
+      toast.error('Por favor, preencha título e descrição do episódio');
       return;
     }
+
+    // Set default duration of 45 minutes if not provided
+    const episodeWithDefaults = {
+      ...episode,
+      duration_minutes: episode.duration_minutes || 45,
+    };
 
     setEpisodes(prev => {
       const existing = prev.findIndex(
@@ -345,10 +351,10 @@ export default function AdminContentCreatePage() {
       );
       if (existing >= 0) {
         const updated = [...prev];
-        updated[existing] = episode;
+        updated[existing] = episodeWithDefaults;
         return updated;
       }
-      return [...prev, episode];
+      return [...prev, episodeWithDefaults];
     });
     setEditingEpisode(null);
     toast.success('Episódio adicionado com sucesso!');
@@ -562,7 +568,11 @@ export default function AdminContentCreatePage() {
       ));
 
       // Mark global task as completed
-      updateTask(taskId, { status: 'completed', progress: 100 });
+      updateTask(taskId, {
+        status: 'completed',
+        progress: 100,
+        completedAt: Date.now()
+      });
 
       toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado com sucesso!`);
     } catch (error: any) {
@@ -1606,36 +1616,9 @@ export default function AdminContentCreatePage() {
                       <textarea
                         value={editingEpisode.description}
                         onChange={(e) => setEditingEpisode({ ...editingEpisode, description: e.target.value })}
-                        rows={3}
+                        rows={4}
                         placeholder="Descrição do episódio..."
                         className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Duração (minutos) *</label>
-                      <input
-                        type="number"
-                        value={editingEpisode.duration_minutes || ''}
-                        onChange={(e) => setEditingEpisode({ ...editingEpisode, duration_minutes: parseInt(e.target.value) || 0 })}
-                        min="1"
-                        placeholder="45"
-                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">Thumbnail (Opcional)</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setEditingEpisode({ ...editingEpisode, thumbnail_file: file });
-                          }
-                        }}
-                        className="w-full px-4 py-3 bg-gray-900/50 border-2 border-dashed border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
                       />
                     </div>
                   </div>
