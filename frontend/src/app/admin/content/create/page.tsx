@@ -582,14 +582,14 @@ export default function AdminContentCreatePage() {
       return;
     }
 
-    // Verificar se há episódios sem arquivos de vídeo
+    // Verificar se todos os episódios têm arquivos de vídeo selecionados
     const episodesWithoutFiles = episodes.filter(ep => !ep.video_file);
     if (episodesWithoutFiles.length > 0) {
       toast.error(`${episodesWithoutFiles.length} episódio(s) não possuem arquivo de vídeo selecionado`);
       return;
     }
 
-    // Iniciar upload de todos os episódios
+    // Iniciar upload de todos os episódios que ainda não foram enviados
     const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
 
     if (episodesToUpload.length > 0) {
@@ -604,8 +604,7 @@ export default function AdminContentCreatePage() {
 
       uploadQueue.addBatch(queueItems);
 
-      // Não aguardar - upload acontece em background
-      // A publicação será feita automaticamente quando todos os uploads terminarem
+      // Upload acontece em background - publicação será automática após conclusão
       uploadQueue.waitForCompletion().then(async () => {
         const stats = uploadQueue.getStats();
 
@@ -614,7 +613,7 @@ export default function AdminContentCreatePage() {
           return;
         }
 
-        // Todos os uploads completaram com sucesso - publicar automaticamente
+        // Todos os uploads completaram - publicar automaticamente
         try {
           const token = localStorage.getItem('token');
           const response = await fetch(
@@ -1362,73 +1361,6 @@ export default function AdminContentCreatePage() {
                       Agora adicione os episódios da sua série. Você pode adicionar episódios para cada temporada.
                     </p>
                   </div>
-                </div>
-
-                {/* Bulk Video Upload Section */}
-                <div className="bg-gradient-to-br from-purple-900/30 to-blue-900/20 border-2 border-purple-500/40 rounded-xl p-6 mb-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-2 flex items-center space-x-2">
-                        <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <span>Upload em Lote de Vídeos</span>
-                      </h3>
-                      <p className="text-gray-400 text-sm">
-                        Selecione todos os arquivos de vídeo de uma vez. Eles serão atribuídos automaticamente aos episódios na ordem.
-                      </p>
-                    </div>
-                    <label className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold rounded-xl cursor-pointer transition-all duration-300 hover:scale-105 flex items-center space-x-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <span>Selecionar Arquivos</span>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          if (files.length === 0) return;
-
-                          // Sort episodes by season and episode number
-                          const sortedEpisodes = [...episodes].sort((a, b) => {
-                            if (a.season_number !== b.season_number) {
-                              return a.season_number - b.season_number;
-                            }
-                            return a.episode_number - b.episode_number;
-                          });
-
-                          // Assign files to episodes in order
-                          setEpisodes(prev => {
-                            const updated = [...prev];
-                            files.forEach((file, index) => {
-                              if (index < sortedEpisodes.length) {
-                                const episodeToUpdate = sortedEpisodes[index];
-                                const episodeIndex = updated.findIndex(
-                                  ep => ep.season_number === episodeToUpdate.season_number &&
-                                        ep.episode_number === episodeToUpdate.episode_number
-                                );
-                                if (episodeIndex !== -1) {
-                                  updated[episodeIndex] = { ...updated[episodeIndex], video_file: file };
-                                }
-                              }
-                            });
-                            return updated;
-                          });
-
-                          toast.success(`${files.length} arquivo(s) selecionado(s)!`);
-                        }}
-                      />
-                    </label>
-                  </div>
-
-                  {episodes.filter(ep => ep.video_file).length > 0 && (
-                    <div className="text-sm text-purple-300 bg-purple-900/20 px-4 py-2 rounded-lg">
-                      ✓ {episodes.filter(ep => ep.video_file).length} de {episodes.length} episódios com vídeos selecionados
-                    </div>
-                  )}
                 </div>
 
                 {/* Season Selector */}
