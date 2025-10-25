@@ -2,9 +2,10 @@
 
 import React, { useEffect } from 'react';
 import { useUpload } from '@/contexts/UploadContext';
+import { toast } from 'react-hot-toast';
 
 export function FloatingUploadProgress() {
-  const { tasks } = useUpload();
+  const { tasks, cancelTask, clearStuckTasks } = useUpload();
 
   // Debug: Log tasks to console
   useEffect(() => {
@@ -16,133 +17,151 @@ export function FloatingUploadProgress() {
   // Filtrar apenas uploads de episódios
   const episodeTasks = tasks.filter(t => t.type === 'episode');
 
+  // Show all active tasks (not completed or ready yet)
+  // Keep completed/ready tasks visible for 5 seconds after completion
+  const visibleTasks = episodeTasks.filter(t => {
+    // Always show if uploading, converting, or error
+    if (t.status === 'uploading' || t.status === 'converting' || t.status === 'error') {
+      return true;
+    }
+
+    // Show completed/ready tasks for 5 seconds after completion
+    if ((t.status === 'completed' || t.status === 'ready') && t.completedAt) {
+      return Date.now() - t.completedAt < 5000;
+    }
+
+    // Show any task that doesn't have completedAt set yet (still in progress)
+    if (!t.completedAt) {
+      return true;
+    }
+
+    return false;
+  });
+
   // Não mostrar se não há uploads de episódios
-  if (episodeTasks.length === 0) {
-    console.log('[FloatingUploadProgress] No episode tasks, hiding component');
+  if (visibleTasks.length === 0) {
+    console.log('[FloatingUploadProgress] No visible episode tasks, hiding component');
     return null;
   }
 
-  console.log('[FloatingUploadProgress] Rendering with', episodeTasks.length, 'episode tasks');
+  console.log('[FloatingUploadProgress] Rendering with', visibleTasks.length, 'visible episode tasks');
 
-  // Calcular estatísticas
-  const uploading = episodeTasks.filter(t => t.status === 'uploading');
-  const completed = episodeTasks.filter(t => t.status === 'completed' || t.status === 'ready');
-  const failed = episodeTasks.filter(t => t.status === 'error' || t.status === 'cancelled');
-  const total = episodeTasks.length;
+  // Calculate overall progress
+  const overallProgress = visibleTasks.length > 0
+    ? visibleTasks.reduce((acc, task) => acc + task.progress, 0) / visibleTasks.length
+    : 0;
 
-  // Calcular progresso total
-  const totalProgress = total > 0 ? ((completed.length / total) * 100) : 0;
+  const handleClearStuckTasks = async () => {
+    try {
+      await clearStuckTasks();
+      toast.success('Uploads travados removidos com sucesso!');
+    } catch (error) {
+      console.error('Error clearing stuck tasks:', error);
+      toast.error('Erro ao limpar uploads travados');
+    }
+  };
+
+  const handleCancelTask = async (taskId: string, episodeTitle: string) => {
+    try {
+      await cancelTask(taskId);
+      toast.success(`Upload de "${episodeTitle}" cancelado`);
+    } catch (error) {
+      console.error('Error canceling task:', error);
+      toast.error('Erro ao cancelar upload');
+    }
+  };
 
   return (
-    <div className="fixed bottom-6 right-6 w-96 bg-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-700 z-50 animate-in slide-in-from-bottom-5 duration-300">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-700 bg-gradient-to-r from-purple-600 to-purple-700">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white flex items-center">
-            <svg className="w-5 h-5 mr-2 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Upload de Episódios
-          </h3>
-          <div className="text-sm text-purple-200">
-            {uploading.length > 0 ? (
-              <span className="animate-pulse">⚡ Em andamento</span>
-            ) : failed.length > 0 ? (
-              <span>❌ Com erros</span>
-            ) : (
-              <span>✓ Concluído</span>
-            )}
-          </div>
-        </div>
+    <div className="fixed bottom-6 right-6 z-50 w-96 bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 border-2 border-purple-500/50 shadow-2xl backdrop-blur-xl animate-slide-in">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-lg font-bold text-white flex items-center">
+          <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
+          Upload de Episódios ({visibleTasks.length})
+        </h4>
+        <button
+          onClick={handleClearStuckTasks}
+          className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
+          title="Limpar todos os uploads travados"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Limpar Todos
+        </button>
       </div>
 
       {/* Overall Progress */}
-      <div className="p-4 border-b border-gray-700/50">
-        <div className="flex justify-between text-sm text-gray-300 mb-2">
-          <span className="font-semibold">Progresso Geral</span>
-          <span className="font-bold text-white">{totalProgress.toFixed(0)}%</span>
-        </div>
-        <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-500 ease-out relative overflow-hidden"
-            style={{ width: `${totalProgress}%` }}
-          >
-            {/* Animated shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-          </div>
-        </div>
-        <div className="flex justify-between text-xs text-gray-400 mt-2">
-          <span>{completed.length} de {total} concluídos</span>
-          {failed.length > 0 && (
-            <span className="text-red-400 font-semibold">❌ {failed.length} falharam</span>
-          )}
-        </div>
+      <div className="w-full bg-gray-700 rounded-full h-2 mb-4 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-600 transition-all duration-300"
+          style={{
+            width: `${overallProgress}%`,
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 2s linear infinite'
+          }}
+        />
       </div>
 
-      {/* Statistics Grid */}
-      <div className="p-4 border-b border-gray-700/50">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-blue-400">{uploading.length}</div>
-            <div className="text-xs text-gray-400 mt-1">Em Progresso</div>
-          </div>
-          <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-400">{Math.max(0, total - completed.length - uploading.length - failed.length)}</div>
-            <div className="text-xs text-gray-400 mt-1">Na Fila</div>
-          </div>
-          <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-green-400">{completed.length}</div>
-            <div className="text-xs text-gray-400 mt-1">Completos</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Currently Uploading Episodes */}
-      {uploading.length > 0 && (
-        <div className="p-4 max-h-60 overflow-y-auto">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-            Enviando Agora ({uploading.length})
-          </h4>
-          <div className="space-y-3">
-            {uploading.map((task) => (
-              <div
-                key={task.id}
-                className="bg-gray-800/50 rounded-lg p-3 border border-gray-700"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-white">
-                    S{task.seasonNumber}E{task.episodeNumber}
+      {/* Individual Progress */}
+      <div className="space-y-3 max-h-60 overflow-y-auto">
+        {visibleTasks.map((task) => {
+          return (
+            <div key={task.id} className="flex items-center space-x-2">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                {task.status === 'completed' || task.status === 'ready' ? (
+                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                ) : task.status === 'error' || task.status === 'cancelled' ? (
+                  <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                ) : task.status === 'converting' ? (
+                  <svg className="w-5 h-5 text-yellow-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between text-xs text-gray-300 mb-1">
+                  <span className="font-medium truncate max-w-[160px]" title={task.contentTitle}>
+                    S{task.seasonNumber}E{task.episodeNumber} - {task.contentTitle}
                   </span>
-                  <span className="text-xs text-blue-400 font-semibold">
-                    {task.progress.toFixed(0)}%
-                  </span>
+                  <span className="ml-2">{task.progress.toFixed(0)}%</span>
                 </div>
-                <p className="text-xs text-gray-400 mb-2 truncate" title={task.contentTitle}>
-                  {task.contentTitle}
-                </p>
                 <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-600 transition-all duration-300"
                     style={{ width: `${task.progress}%` }}
                   />
                 </div>
+                {task.status === 'converting' && (
+                  <p className="text-xs text-yellow-400 mt-1">Convertendo vídeo...</p>
+                )}
+                {task.error && (
+                  <p className="text-xs text-red-400 mt-1">{task.error}</p>
+                )}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              <button
+                onClick={() => handleCancelTask(task.id, task.contentTitle)}
+                className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                title="Cancelar upload"
+                disabled={task.status === 'completed' || task.status === 'ready'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
 
-      {/* Success message when all done */}
-      {total > 0 && completed.length === total && failed.length === 0 && (
-        <div className="p-4 bg-green-900/20 border-t border-green-500/30">
-          <div className="flex items-center space-x-2 text-green-400">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span className="text-sm font-semibold">Todos os episódios foram enviados!</span>
-          </div>
-        </div>
-      )}
+      <p className="mt-4 text-xs text-gray-400 text-center">
+        Navegue entre páginas livremente - os uploads continuarão em segundo plano
+      </p>
     </div>
   );
 }
