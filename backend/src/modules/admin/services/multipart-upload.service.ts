@@ -269,7 +269,7 @@ export class MultipartUploadService {
           .update({
             storage_path: key,
             file_storage_key: key,
-            file_size_bytes: size,
+            file_size_bytes: uploadRecord.size,
             processing_status: 'processing',
             updated_at: new Date().toISOString(),
           })
