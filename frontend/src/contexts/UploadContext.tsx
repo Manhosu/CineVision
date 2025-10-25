@@ -15,6 +15,12 @@ export interface UploadTask {
   conversionProgress?: number; // 0-100 para conversão
   needsConversion?: boolean; // true se é MKV
   completedAt?: number; // timestamp quando a tarefa foi concluída
+
+  // Episode-specific fields
+  type?: 'movie' | 'episode'; // tipo de upload
+  episodeId?: string; // ID do episódio
+  seasonNumber?: number; // número da temporada
+  episodeNumber?: number; // número do episódio
 }
 
 interface UploadContextType {

@@ -1,32 +1,27 @@
 'use client';
 
 import React from 'react';
-import { QueueStats } from '@/lib/uploadQueue';
+import { useUpload } from '@/contexts/UploadContext';
 
-interface FloatingUploadProgressProps {
-  stats: QueueStats;
-  episodes?: Array<{
-    season_number: number;
-    episode_number: number;
-    title: string;
-    uploading?: boolean;
-    uploaded?: boolean;
-    uploadProgress?: number;
-  }>;
-}
+export function FloatingUploadProgress() {
+  const { tasks } = useUpload();
 
-export function FloatingUploadProgress({ stats, episodes = [] }: FloatingUploadProgressProps) {
-  // Não mostrar se não há uploads
-  if (stats.total === 0) {
+  // Filtrar apenas uploads de episódios
+  const episodeTasks = tasks.filter(t => t.type === 'episode');
+
+  // Não mostrar se não há uploads de episódios
+  if (episodeTasks.length === 0) {
     return null;
   }
 
-  // Calcular progresso total
-  const totalProgress = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
+  // Calcular estatísticas
+  const uploading = episodeTasks.filter(t => t.status === 'uploading');
+  const completed = episodeTasks.filter(t => t.status === 'completed' || t.status === 'ready');
+  const failed = episodeTasks.filter(t => t.status === 'error' || t.status === 'cancelled');
+  const total = episodeTasks.length;
 
-  // Filtrar episódios em upload
-  const uploadingEpisodes = episodes.filter(ep => ep.uploading);
-  const completedEpisodes = episodes.filter(ep => ep.uploaded);
+  // Calcular progresso total
+  const totalProgress = total > 0 ? ((completed.length / total) * 100) : 0;
 
   return (
     <div className="fixed bottom-6 right-6 w-96 bg-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-700 z-50 animate-in slide-in-from-bottom-5 duration-300">
@@ -40,10 +35,10 @@ export function FloatingUploadProgress({ stats, episodes = [] }: FloatingUploadP
             Upload de Episódios
           </h3>
           <div className="text-sm text-purple-200">
-            {stats.active > 0 ? (
+            {uploading.length > 0 ? (
               <span className="animate-pulse">⚡ Em andamento</span>
-            ) : stats.pending > 0 ? (
-              <span>⏳ Aguardando</span>
+            ) : failed.length > 0 ? (
+              <span>❌ Com erros</span>
             ) : (
               <span>✓ Concluído</span>
             )}
@@ -67,9 +62,9 @@ export function FloatingUploadProgress({ stats, episodes = [] }: FloatingUploadP
           </div>
         </div>
         <div className="flex justify-between text-xs text-gray-400 mt-2">
-          <span>{stats.completed} de {stats.total} concluídos</span>
-          {stats.failed > 0 && (
-            <span className="text-red-400 font-semibold">❌ {stats.failed} falharam</span>
+          <span>{completed.length} de {total} concluídos</span>
+          {failed.length > 0 && (
+            <span className="text-red-400 font-semibold">❌ {failed.length} falharam</span>
           )}
         </div>
       </div>
@@ -78,47 +73,47 @@ export function FloatingUploadProgress({ stats, episodes = [] }: FloatingUploadP
       <div className="p-4 border-b border-gray-700/50">
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-blue-400">{stats.active}</div>
+            <div className="text-2xl font-bold text-blue-400">{uploading.length}</div>
             <div className="text-xs text-gray-400 mt-1">Em Progresso</div>
           </div>
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
+            <div className="text-2xl font-bold text-yellow-400">{Math.max(0, total - completed.length - uploading.length - failed.length)}</div>
             <div className="text-xs text-gray-400 mt-1">Na Fila</div>
           </div>
           <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-green-400">{stats.completed}</div>
+            <div className="text-2xl font-bold text-green-400">{completed.length}</div>
             <div className="text-xs text-gray-400 mt-1">Completos</div>
           </div>
         </div>
       </div>
 
       {/* Currently Uploading Episodes */}
-      {uploadingEpisodes.length > 0 && (
+      {uploading.length > 0 && (
         <div className="p-4 max-h-60 overflow-y-auto">
           <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
-            Enviando Agora ({uploadingEpisodes.length})
+            Enviando Agora ({uploading.length})
           </h4>
           <div className="space-y-3">
-            {uploadingEpisodes.map((ep) => (
+            {uploading.map((task) => (
               <div
-                key={`${ep.season_number}-${ep.episode_number}`}
+                key={task.id}
                 className="bg-gray-800/50 rounded-lg p-3 border border-gray-700"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-white">
-                    S{ep.season_number}E{ep.episode_number}
+                    S{task.seasonNumber}E{task.episodeNumber}
                   </span>
                   <span className="text-xs text-blue-400 font-semibold">
-                    {ep.uploadProgress || 0}%
+                    {task.progress.toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mb-2 truncate" title={ep.title}>
-                  {ep.title}
+                <p className="text-xs text-gray-400 mb-2 truncate" title={task.contentTitle}>
+                  {task.contentTitle}
                 </p>
                 <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
-                    style={{ width: `${ep.uploadProgress || 0}%` }}
+                    style={{ width: `${task.progress}%` }}
                   />
                 </div>
               </div>
@@ -128,7 +123,7 @@ export function FloatingUploadProgress({ stats, episodes = [] }: FloatingUploadP
       )}
 
       {/* Success message when all done */}
-      {stats.total > 0 && stats.completed === stats.total && stats.failed === 0 && (
+      {total > 0 && completed.length === total && failed.length === 0 && (
         <div className="p-4 bg-green-900/20 border-t border-green-500/30">
           <div className="flex items-center space-x-2 text-green-400">
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">

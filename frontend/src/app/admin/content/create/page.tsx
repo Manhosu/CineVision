@@ -7,7 +7,7 @@ import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/component
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { supabase } from '@/lib/supabase';
 import { UploadQueue, QueueStats } from '@/lib/uploadQueue';
-import { FloatingUploadProgress } from '@/components/FloatingUploadProgress';
+import { useUpload } from '@/contexts/UploadContext';
 
 interface ContentFormData {
   title: string;
@@ -77,6 +77,7 @@ interface Episode {
 export default function AdminContentCreatePage() {
   const router = useRouter();
   const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
+  const { addTask, updateTask } = useUpload(); // Global upload context
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContentId, setCreatedContentId] = useState<string | null>(null);
   const [showLanguageManager, setShowLanguageManager] = useState(false);
@@ -371,6 +372,19 @@ export default function AdminContentCreatePage() {
       return;
     }
 
+    // Create global upload task that persists across page navigation
+    const taskId = `episode-${createdContentId}-s${episode.season_number}e${episode.episode_number}-${Date.now()}`;
+    addTask({
+      id: taskId,
+      type: 'episode',
+      fileName: episode.video_file.name,
+      contentTitle: episode.title,
+      progress: 0,
+      status: 'uploading',
+      seasonNumber: episode.season_number,
+      episodeNumber: episode.episode_number,
+    });
+
     try {
       // Marcar como uploading
       setEpisodes(prev => prev.map(ep =>
@@ -494,13 +508,16 @@ export default function AdminContentCreatePage() {
 
         uploadedParts.push({ ETag: etag.replace(/"/g, ''), PartNumber: partNumber });
 
-        // Update progress
+        // Update progress (both local and global)
         const progress = Math.round(((i + 1) / partsCount) * 100);
         setEpisodes(prev => prev.map(ep =>
           ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
             ? { ...ep, uploadProgress: progress }
             : ep
         ));
+
+        // Update global task progress
+        updateTask(taskId, { progress });
       }
 
       // 3.3. Complete multipart upload
@@ -532,6 +549,9 @@ export default function AdminContentCreatePage() {
           : ep
       ));
 
+      // Mark global task as completed
+      updateTask(taskId, { status: 'completed', progress: 100 });
+
       toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado com sucesso!`);
     } catch (error: any) {
       console.error('Error uploading episode:', error);
@@ -540,6 +560,10 @@ export default function AdminContentCreatePage() {
           ? { ...ep, uploading: false, error: error.message }
           : ep
       ));
+
+      // Mark global task as error
+      updateTask(taskId, { status: 'error', error: error.message });
+
       toast.error(error.message || 'Erro ao fazer upload do episódio');
     }
   };
@@ -1637,9 +1661,6 @@ export default function AdminContentCreatePage() {
           </div>
         )}
       </div>
-
-      {/* Floating Upload Progress Bar */}
-      <FloatingUploadProgress stats={queueStats} episodes={episodes} />
     </div>
   );
 }
