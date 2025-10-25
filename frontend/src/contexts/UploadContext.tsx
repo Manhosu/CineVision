@@ -69,7 +69,12 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   }, [tasks, mounted]);
 
   const addTask = useCallback((task: UploadTask) => {
-    setTasks(prev => [...prev, task]);
+    console.log('[UploadContext] addTask called with:', task);
+    setTasks(prev => {
+      const newTasks = [...prev, task];
+      console.log('[UploadContext] New tasks array:', newTasks);
+      return newTasks;
+    });
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<UploadTask>) => {

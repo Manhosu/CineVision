@@ -374,6 +374,16 @@ export default function AdminContentCreatePage() {
 
     // Create global upload task that persists across page navigation
     const taskId = `episode-${createdContentId}-s${episode.season_number}e${episode.episode_number}-${Date.now()}`;
+
+    console.log('[uploadEpisode] Creating task:', {
+      taskId,
+      type: 'episode',
+      fileName: episode.video_file.name,
+      contentTitle: episode.title,
+      seasonNumber: episode.season_number,
+      episodeNumber: episode.episode_number,
+    });
+
     addTask({
       id: taskId,
       type: 'episode',
@@ -384,6 +394,8 @@ export default function AdminContentCreatePage() {
       seasonNumber: episode.season_number,
       episodeNumber: episode.episode_number,
     });
+
+    console.log('[uploadEpisode] Task created successfully');
 
     try {
       // Marcar como uploading
