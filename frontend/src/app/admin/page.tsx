@@ -360,68 +360,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Recent Content */}
-        <div className="bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-700/50 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-red-900/20 to-transparent">
-            <h2 className="text-xl font-bold text-white flex items-center">
-              <svg className="w-6 h-6 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-              </svg>
-              Conteúdo Recente
-            </h2>
-          </div>
-          <div className="p-6">
-            {loading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-                <span className="ml-2 text-gray-400">Carregando...</span>
-              </div>
-            ) : recentContent.length > 0 ? (
-              <div className="space-y-4">
-                {recentContent.slice(0, 5).map((content, index) => (
-                  <div key={content.id || index} className="flex items-center space-x-4 p-4 rounded-xl bg-gray-800/30 hover:bg-gray-800/50 transition-all">
-                    <div className="flex-shrink-0">
-                      <div className="h-12 w-12 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-white">
-                        {content.title || `Conteúdo ${index + 1}`}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {content.type || 'Tipo não especificado'} • {content.createdAt ? new Date(content.createdAt).toLocaleDateString('pt-BR') : 'Data não disponível'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <div className="inline-flex p-6 rounded-full bg-gray-800/50 mb-4">
-                  <svg className="h-12 w-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Nenhum conteúdo</h3>
-                <p className="text-gray-400 mb-6">
-                  Comece adicionando seu primeiro filme ou série.
-                </p>
-                <Link
-                  href="/admin/content/create"
-                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-red-500/50"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Adicionar Conteúdo
-                </Link>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );
