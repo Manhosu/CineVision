@@ -7,6 +7,7 @@ import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/component
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { supabase } from '@/lib/supabase';
 import { UploadQueue, QueueStats } from '@/lib/uploadQueue';
+import { FloatingUploadProgress } from '@/components/FloatingUploadProgress';
 
 interface ContentFormData {
   title: string;
@@ -1636,6 +1637,9 @@ export default function AdminContentCreatePage() {
           </div>
         )}
       </div>
+
+      {/* Floating Upload Progress Bar */}
+      <FloatingUploadProgress stats={queueStats} episodes={episodes} />
     </div>
   );
 }
