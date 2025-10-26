@@ -73,6 +73,8 @@ export default function DashboardPage() {
 
         if (contentRes.ok) {
           const contentData = await contentRes.json();
+          console.log('[Dashboard] Content data from API:', contentData);
+          console.log('[Dashboard] First item:', contentData[0]);
           setMyContent(contentData);
         }
 

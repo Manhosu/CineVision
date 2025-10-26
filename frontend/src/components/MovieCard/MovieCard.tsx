@@ -95,6 +95,8 @@ const MovieCard = memo(function MovieCard({
 
     // Redirecionar para página de detalhes (filme ou série)
     const contentType = (movie as any).content_type || 'movie';
+    console.log('[MovieCard] handlePurchase - movie:', movie);
+    console.log('[MovieCard] handlePurchase - content_type:', contentType);
     if (contentType === 'series') {
       router.push(`/series/${movie.id}`);
     } else {
