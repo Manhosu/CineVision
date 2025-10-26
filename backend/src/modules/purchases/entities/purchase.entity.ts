@@ -14,6 +14,7 @@ import { createEnumColumn, createJsonColumn } from '../../../database/transforme
 export enum PurchaseStatus {
   PENDING = 'pending',
   PAID = 'paid',
+  COMPLETED = 'COMPLETED',
   FAILED = 'failed',
   REFUNDED = 'refunded',
 }
