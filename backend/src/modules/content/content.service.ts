@@ -74,6 +74,19 @@ export class ContentService {
     return movie;
   }
 
+  async findSeriesById(id: string) {
+    const series = await this.contentRepository.findOne({
+      where: { id, status: ContentStatus.PUBLISHED },
+      relations: ['categories', 'languages'],
+    });
+
+    if (!series) {
+      throw new NotFoundException('Series not found');
+    }
+
+    return series;
+  }
+
   async findRelatedMovies(movieId: string, genres: string[] = [], limit = 6) {
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .leftJoinAndSelect('content.categories', 'categories')

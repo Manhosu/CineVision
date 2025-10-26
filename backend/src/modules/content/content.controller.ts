@@ -42,6 +42,14 @@ export class ContentController {
     return this.contentService.findMovieById(id);
   }
 
+  @Get('series/:id')
+  @ApiOperation({ summary: 'Get series by ID' })
+  @ApiResponse({ status: 200, description: 'Series retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Series not found' })
+  async getSeries(@Param('id') id: string) {
+    return this.contentService.findSeriesById(id);
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Get all categories' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
