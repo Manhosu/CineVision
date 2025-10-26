@@ -51,13 +51,23 @@ export default function WatchPage({ params }: WatchPageProps) {
         setLoading(true);
         setError(null);
 
-        // Get content details
-        const contentResponse = await fetch(
+        // Try to get content details - first try movies endpoint, then series
+        let contentResponse = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies/${id}`,
           {
             credentials: 'include',
           }
         );
+
+        // If movie endpoint returns 404, try series endpoint
+        if (!contentResponse.ok && contentResponse.status === 404) {
+          contentResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/series/${id}`,
+            {
+              credentials: 'include',
+            }
+          );
+        }
 
         if (!contentResponse.ok) {
           throw new Error(`Failed to load content: ${contentResponse.statusText}`);
