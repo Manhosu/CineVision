@@ -256,8 +256,10 @@ export class MultipartUploadService {
         await this.supabase
           .from('content')
           .update({
-            file_key: key,
-            status: 'PROCESSING',
+            file_storage_key: key,
+            storage_path: key,
+            processing_status: 'processing',
+            updated_at: new Date().toISOString(),
           })
           .eq('id', contentId);
       }

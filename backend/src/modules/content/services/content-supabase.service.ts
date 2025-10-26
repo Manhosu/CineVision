@@ -84,6 +84,22 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movie: ${error.message}`);
     }
 
+    // Generate video_url from file_storage_key if video_url is null
+    if (movie && !movie.video_url && movie.file_storage_key) {
+      // Check if it's an S3 key (starts with "raw/")
+      if (movie.file_storage_key.startsWith('raw/')) {
+        // AWS S3 URL
+        const awsRegion = process.env.AWS_REGION || 'us-east-2';
+        const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
+        movie.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${movie.file_storage_key}`;
+      } else {
+        // Supabase Storage URL (fallback)
+        const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
+        const bucketName = 'cinevision-filmes';
+        movie.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${movie.file_storage_key}`;
+      }
+    }
+
     return movie;
   }
 
