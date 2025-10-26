@@ -182,6 +182,58 @@ export class ContentSupabaseService {
     return series;
   }
 
+  async findSeriesEpisodes(seriesId: string, season?: number) {
+    // First check if series exists
+    const { data: series, error: seriesError } = await this.supabaseService.client
+      .from('content')
+      .select('id, status')
+      .eq('id', seriesId)
+      .eq('status', ContentStatus.PUBLISHED)
+      .single();
+
+    if (seriesError || !series) {
+      throw new NotFoundException('Series not found');
+    }
+
+    // Query episodes from the episodes table
+    let query = this.supabaseService.client
+      .from('episodes')
+      .select(`
+        id,
+        series_id,
+        season_number,
+        episode_number,
+        title,
+        description,
+        thumbnail_url,
+        video_url,
+        duration_minutes,
+        storage_path,
+        file_storage_key,
+        processing_status,
+        available_qualities,
+        views_count,
+        created_at,
+        updated_at
+      `)
+      .eq('series_id', seriesId)
+      .order('season_number', { ascending: true })
+      .order('episode_number', { ascending: true });
+
+    // Filter by season if provided
+    if (season) {
+      query = query.eq('season_number', season);
+    }
+
+    const { data: episodes, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to fetch episodes: ${error.message}`);
+    }
+
+    return episodes || [];
+  }
+
   async searchContent(query: string, page = 1, limit = 20) {
     const offset = (page - 1) * limit;
     
