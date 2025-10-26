@@ -1376,77 +1376,33 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
   private async handleMyPurchasesCommand(chatId: number, telegramUserId: number) {
     try {
-      // Buscar compras do usuário (pelo telegram_id)
-      const { data: user } = await this.supabase
-        .from('users')
-        .select('id')
-        .eq('telegram_id', telegramUserId.toString())
-        .single();
+      // Gerar link da dashboard com autologin baseado no telegram_id
+      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://cine-vision-murex.vercel.app';
+      const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${telegramUserId}&redirect=/dashboard`;
 
-      if (!user) {
-        await this.sendMessage(chatId, '📭 Você ainda não está cadastrado.\n\n💡 Crie uma conta para fazer compras e acessar seus filmes!');
-        return;
-      }
+      const message = `📱 *Minhas Compras*
 
-      const { data: purchases } = await this.supabase
-        .from('purchases')
-        .select('*, content(*)')
-        .eq('user_id', user.id)
-        .in('status', ['paid', 'COMPLETED', 'completed'])
-        .order('created_at', { ascending: false });
+🎬 Acesse sua dashboard para ver todos os filmes e séries que você comprou!
 
-      if (!purchases || purchases.length === 0) {
-        await this.sendMessage(chatId, '📭 Você ainda não tem compras confirmadas.');
-        return;
-      }
+✨ *Recursos da Dashboard:*
+• 🎥 Assistir online com player HD
+• 📥 Baixar conteúdo
+• 📊 Histórico de compras
+• 🔐 Acesso automático sem senha
 
-      let message = '📱 **Minhas Compras**\n\n';
-      const buttons = [];
-
-      purchases.forEach((purchase, index) => {
-        message += `${index + 1}. **${purchase.content.title}**\n`;
-        message += `   💰 R$ ${(purchase.amount_cents / 100).toFixed(2)}\n`;
-        message += `   📅 ${new Date(purchase.created_at).toLocaleDateString('pt-BR')}\n\n`;
-
-        // Adicionar botão para assistir cada filme
-        buttons.push([{
-          text: `▶️ Assistir: ${purchase.content.title}`,
-          callback_data: `watch_${purchase.id}_default`
-        }]);
-      });
-
-      // Buscar idiomas disponíveis para cada compra e criar botões
-      for (const purchase of purchases) {
-        const { data: languages } = await this.supabase
-          .from('content_languages')
-          .select('*')
-          .eq('content_id', purchase.content_id)
-          .eq('is_active', true)
-          .eq('upload_status', 'completed');
-
-        if (languages && languages.length > 0) {
-          const defaultLang = languages.find(l => l.is_default) || languages[0];
-          // Atualizar callback_data com o language_id correto
-          const buttonIndex = buttons.findIndex(b =>
-            b[0].callback_data === `watch_${purchase.id}_default`
-          );
-          if (buttonIndex >= 0) {
-            buttons[buttonIndex][0].callback_data = `watch_${purchase.id}_${defaultLang.id}`;
-          }
-        }
-      }
-
-      buttons.push([{ text: '🌐 Ver no Site', url: 'https://cinevision.com/dashboard' }]);
-      buttons.push([{ text: '🔙 Voltar ao Catálogo', callback_data: 'catalog' }]);
+👇 Clique no botão abaixo para acessar:`;
 
       await this.sendMessage(chatId, message, {
         parse_mode: 'Markdown',
         reply_markup: {
-          inline_keyboard: buttons,
+          inline_keyboard: [
+            [{ text: '🎬 Abrir Dashboard', url: dashboardUrl }],
+            [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
+          ],
         },
       });
     } catch (error) {
-      this.logger.error('Error fetching purchases:', error);
+      this.logger.error('Error sending dashboard link:', error);
       await this.sendMessage(chatId, '❌ Erro ao buscar compras.');
     }
   }
