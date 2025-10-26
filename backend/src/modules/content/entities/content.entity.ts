@@ -121,6 +121,16 @@ export class Content {
   @Column({ nullable: true })
   release_year?: number;
 
+  // Series-specific fields
+  @Column({ type: 'int', nullable: true })
+  total_seasons?: number;
+
+  @Column({ type: 'int', nullable: true })
+  total_episodes?: number;
+
+  @Column({ type: 'varchar', length: 10, nullable: true })
+  age_rating?: string;
+
   @Column({ nullable: true })
   director?: string;
 

@@ -256,6 +256,12 @@ export class PurchasesService {
           purchased_at: purchase.created_at,
           access_token: purchase.access_token,
           access_expires_at: purchase.access_expires_at,
+          // Series-specific fields
+          total_seasons: purchase.content.total_seasons,
+          total_episodes: purchase.content.total_episodes,
+          age_rating: purchase.content.age_rating,
+          price_cents: purchase.content.price_cents,
+          availability: purchase.content.availability,
         });
       }
     }
