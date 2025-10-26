@@ -166,10 +166,6 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
-        ),
-        series:series(
-          *,
-          episodes:episodes(*)
         )
       `)
       .eq('id', id)
