@@ -228,10 +228,10 @@ export class PurchasesService {
 
   async findUserContentList(userId: string): Promise<any[]> {
     const purchases = await this.purchaseRepository.find({
-      where: {
-        user_id: userId,
-        status: PurchaseStatus.PAID
-      },
+      where: [
+        { user_id: userId, status: PurchaseStatus.PAID },
+        { user_id: userId, status: PurchaseStatus.COMPLETED }
+      ],
       relations: ['content'],
       order: { created_at: 'DESC' },
     });
