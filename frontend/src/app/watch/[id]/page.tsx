@@ -526,25 +526,89 @@ export default function WatchPage({ params }: WatchPageProps) {
             </div>
 
             {/* Episode Navigation (for series) */}
-            {isSeries && currentEpisode && (
-              <div className="mt-6 p-4 bg-dark-800/60 rounded-lg border border-white/10">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold text-white">
-                    S{currentEpisode.season_number}E{currentEpisode.episode_number}: {currentEpisode.title}
-                  </h3>
-                  {currentEpisode.duration_minutes && (
-                    <span className="text-xs text-gray-400">
-                      {currentEpisode.duration_minutes}min
-                    </span>
-                  )}
-                </div>
-
-                {currentEpisode.description && (
-                  <p className="text-xs text-gray-400 mb-4 line-clamp-2">
-                    {currentEpisode.description}
-                  </p>
+            {isSeries && episodes.length > 0 && (
+              <div className="mt-6 space-y-4">
+                {/* Current Episode Info */}
+                {currentEpisode && (
+                  <div className="p-4 bg-dark-800/60 rounded-lg border border-white/10">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-white">
+                        S{currentEpisode.season_number}E{currentEpisode.episode_number}: {currentEpisode.title}
+                      </h3>
+                      {currentEpisode.duration_minutes && (
+                        <span className="text-xs text-gray-400">
+                          {currentEpisode.duration_minutes}min
+                        </span>
+                      )}
+                    </div>
+                    {currentEpisode.description && (
+                      <p className="text-xs text-gray-400 line-clamp-2">
+                        {currentEpisode.description}
+                      </p>
+                    )}
+                  </div>
                 )}
 
+                {/* Season Selector Dropdown */}
+                <div className="p-4 bg-dark-800/60 rounded-lg border border-white/10">
+                  <label className="block text-xs font-semibold text-gray-400 mb-2">
+                    Selecionar Temporada e Episódio
+                  </label>
+                  <select
+                    value={selectedSeason}
+                    onChange={(e) => {
+                      const season = Number(e.target.value);
+                      setSelectedSeason(season);
+                      // Auto-play first episode of selected season
+                      const firstEp = episodes.find(ep => ep.season_number === season);
+                      if (firstEp) playEpisode(firstEp);
+                    }}
+                    className="w-full mb-3 px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+                  >
+                    {Array.from(new Set(episodes.map(ep => ep.season_number)))
+                      .sort((a, b) => a - b)
+                      .map(season => (
+                        <option key={season} value={season}>
+                          Temporada {season}
+                        </option>
+                      ))}
+                  </select>
+
+                  {/* Episode List for Selected Season */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {episodes
+                      .filter(ep => ep.season_number === selectedSeason)
+                      .map(ep => (
+                        <button
+                          key={ep.id}
+                          onClick={() => playEpisode(ep)}
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
+                            currentEpisode?.id === ep.id
+                              ? 'bg-primary-600 text-white'
+                              : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
+                          }`}
+                        >
+                          <span className="text-sm font-medium">
+                            Ep. {ep.episode_number}: {ep.title}
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            {ep.duration_minutes && (
+                              <span className="text-xs text-gray-400">
+                                {ep.duration_minutes}min
+                              </span>
+                            )}
+                            {!ep.video_url && (
+                              <span className="text-xs text-yellow-400">
+                                Em breve
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Navigation Buttons */}
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => {
@@ -558,13 +622,6 @@ export default function WatchPage({ params }: WatchPageProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                     <span>Anterior</span>
-                  </button>
-
-                  <button
-                    onClick={() => router.push(`/series/${id}`)}
-                    className="px-4 py-2 bg-dark-700 hover:bg-dark-600 rounded-lg text-sm text-white font-medium transition-colors"
-                  >
-                    Episódios
                   </button>
 
                   <button
