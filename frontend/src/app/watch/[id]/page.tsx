@@ -142,13 +142,14 @@ export default function WatchPage({ params }: WatchPageProps) {
 
               setCurrentEpisode(episodeToPlay);
 
-              // Override content video URL with episode video URL if available
-              if (episodeToPlay?.video_url) {
+              // For series, always update the content with episode info
+              if (episodeToPlay) {
                 contentData = {
                   ...contentData,
-                  video_url: episodeToPlay.video_url,
+                  // Use episode video URL if available, otherwise keep content video URL
+                  video_url: episodeToPlay.video_url || contentData.video_url,
                   title: `${contentData.title} - S${episodeToPlay.season_number}E${episodeToPlay.episode_number}: ${episodeToPlay.title}`,
-                  duration_minutes: episodeToPlay.duration_minutes,
+                  duration_minutes: episodeToPlay.duration_minutes || contentData.duration_minutes,
                 };
                 setContent(contentData);
               }
@@ -444,21 +445,48 @@ export default function WatchPage({ params }: WatchPageProps) {
     <div className="min-h-screen bg-dark-950">
       {/* Video Player Container */}
       <div className="relative">
-        <VideoPlayer
-          contentId={content.id}
-          title={content.title}
-          subtitle={content.description}
-          accessToken={accessToken || undefined}
-          autoplay={true}
-          poster={content.poster}
-          startTime={resumePosition}
-          videoUrl={content.video_url}
-          onTimeUpdate={handleTimeUpdate}
-          onEnded={handleVideoEnded}
-          onError={handleVideoError}
-          onBackToCatalog={() => router.push('/dashboard')}
-          className="w-full aspect-video max-h-screen"
-        />
+        {!content.video_url && isSeries && currentEpisode ? (
+          <div className="w-full aspect-video max-h-screen bg-dark-900 flex items-center justify-center">
+            <div className="text-center px-6 py-12 max-w-md">
+              <div className="mb-6">
+                <svg className="w-20 h-20 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-white mb-3">
+                Episódio Não Disponível
+              </h2>
+              <p className="text-gray-400 mb-2">
+                O vídeo para <span className="text-white font-semibold">S{currentEpisode.season_number}E{currentEpisode.episode_number}</span> ainda não foi carregado.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Por favor, tente outro episódio ou aguarde o upload deste conteúdo.
+              </p>
+              <button
+                onClick={() => router.push(`/series/${id}`)}
+                className="btn-primary"
+              >
+                Ver Todos os Episódios
+              </button>
+            </div>
+          </div>
+        ) : (
+          <VideoPlayer
+            contentId={content.id}
+            title={content.title}
+            subtitle={content.description}
+            accessToken={accessToken || undefined}
+            autoplay={true}
+            poster={content.poster}
+            startTime={resumePosition}
+            videoUrl={content.video_url}
+            onTimeUpdate={handleTimeUpdate}
+            onEnded={handleVideoEnded}
+            onError={handleVideoError}
+            onBackToCatalog={() => router.push('/dashboard')}
+            className="w-full aspect-video max-h-screen"
+          />
+        )}
       </div>
 
       {/* Content Info (shown below player on mobile, overlay on desktop) */}
