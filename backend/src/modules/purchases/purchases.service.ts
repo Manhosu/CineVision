@@ -245,7 +245,7 @@ export class PurchasesService {
           id: purchase.content.id,
           title: purchase.content.title,
           description: purchase.content.description,
-          content_type: purchase.content.content_type, // Add content_type to differentiate movies from series
+          content_type: purchase.content.type, // Add content_type to differentiate movies from series
           poster_url: purchase.content.poster_url,
           thumbnail_url: purchase.content.poster_url, // Use poster_url as thumbnail
           backdrop_url: purchase.content.banner_url, // Use banner_url as backdrop
