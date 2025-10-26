@@ -55,8 +55,24 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movies: ${error.message}`);
     }
 
+    // Generate video_url for movies that don't have it
+    const moviesWithUrls = (movies || []).map(movie => {
+      if (!movie.video_url && movie.file_storage_key) {
+        if (movie.file_storage_key.startsWith('raw/')) {
+          const awsRegion = process.env.AWS_REGION || 'us-east-2';
+          const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
+          movie.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${movie.file_storage_key}`;
+        } else {
+          const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
+          const bucketName = 'cinevision-filmes';
+          movie.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${movie.file_storage_key}`;
+        }
+      }
+      return movie;
+    });
+
     return {
-      movies: movies || [],
+      movies: moviesWithUrls,
       total: count || 0,
       page,
       limit,
@@ -118,15 +134,14 @@ export class ContentSupabaseService {
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest') {
     const offset = (page - 1) * limit;
-    
+
     let query = this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
-        ),
-        series:series(*)
+        )
       `)
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.SERIES);
@@ -166,8 +181,24 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch series: ${error.message}`);
     }
 
+    // Generate video_url for series that don't have it
+    const seriesWithUrls = (series || []).map(item => {
+      if (!item.video_url && item.file_storage_key) {
+        if (item.file_storage_key.startsWith('raw/')) {
+          const awsRegion = process.env.AWS_REGION || 'us-east-2';
+          const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
+          item.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${item.file_storage_key}`;
+        } else {
+          const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
+          const bucketName = 'cinevision-filmes';
+          item.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${item.file_storage_key}`;
+        }
+      }
+      return item;
+    });
+
     return {
-      data: series || [],
+      data: seriesWithUrls,
       total: count || 0,
       page,
       limit,
