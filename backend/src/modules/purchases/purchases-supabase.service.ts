@@ -296,7 +296,7 @@ export class PurchasesSupabaseService {
 
   async findUserContentList(userId: string): Promise<any[]> {
     console.log('[findUserContentList] Fetching content for user:', userId);
-    console.log('[findUserContentList] Looking for status:', PurchaseStatus.PAID);
+    console.log('[findUserContentList] Looking for status:', PurchaseStatus.PAID, 'and', PurchaseStatus.COMPLETED);
 
     const { data, error } = await this.supabase
       .from('purchases')
@@ -305,7 +305,7 @@ export class PurchasesSupabaseService {
         content(*)
       `)
       .eq('user_id', userId)
-      .eq('status', PurchaseStatus.PAID)
+      .in('status', [PurchaseStatus.PAID, PurchaseStatus.COMPLETED])
       .order('created_at', { ascending: false });
 
     console.log('[findUserContentList] Query result:', { data, error, dataLength: data?.length });
@@ -332,6 +332,7 @@ export class PurchasesSupabaseService {
           id: purchase.content.id,
           title: purchase.content.title,
           description: purchase.content.description,
+          content_type: purchase.content.content_type, // Add content_type to differentiate movies from series
           poster_url: purchase.content.poster_url,
           thumbnail_url: purchase.content.poster_url, // Use poster_url as thumbnail
           backdrop_url: purchase.content.banner_url, // Use banner_url as backdrop
