@@ -231,7 +231,26 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch episodes: ${error.message}`);
     }
 
-    return episodes || [];
+    // Generate video_url from file_storage_key if video_url is null
+    const episodesWithUrls = (episodes || []).map(episode => {
+      if (!episode.video_url && episode.file_storage_key) {
+        // Check if it's an S3 key (starts with "raw/")
+        if (episode.file_storage_key.startsWith('raw/')) {
+          // AWS S3 URL
+          const awsRegion = process.env.AWS_REGION || 'us-east-2';
+          const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
+          episode.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${episode.file_storage_key}`;
+        } else {
+          // Supabase Storage URL (fallback)
+          const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
+          const bucketName = 'cinevision-filmes';
+          episode.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${episode.file_storage_key}`;
+        }
+      }
+      return episode;
+    });
+
+    return episodesWithUrls;
   }
 
   async searchContent(query: string, page = 1, limit = 20) {
