@@ -55,8 +55,8 @@ export class MultipartUploadService {
   constructor(private readonly configService: ConfigService) {
     this.region = this.configService.get<string>('AWS_REGION', 'us-east-2');
     this.videoBucket = this.configService.get<string>(
-      'S3_VIDEO_BUCKET',
-      'cinevision-video',
+      'S3_RAW_BUCKET',
+      'cinevision-raw',
     );
 
     this.s3Client = new S3Client({
