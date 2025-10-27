@@ -16,6 +16,7 @@ export class ContentController {
     @Optional() private readonly cdnService?: CDNService,
     @Optional() private readonly videoIngestService?: VideoIngestService,
     @Optional() private readonly videoTranscodingService?: VideoTranscodingService,
+    @Optional() @Inject('MultipartUploadService') private readonly multipartUploadService?: any,
   ) {}
 
   @Get('movies')
@@ -273,7 +274,7 @@ export class ContentController {
   }
 
   @Delete('all')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete all content',
     description: 'Removes all content (movies, series, etc.) from the database (admin only)'
   })
@@ -281,5 +282,18 @@ export class ContentController {
   @ApiResponse({ status: 500, description: 'Error deleting content' })
   async deleteAllContent() {
     return this.contentService.deleteAllContent();
+  }
+
+  @Get('video-url/:key(*)')
+  @ApiOperation({ summary: 'Generate presigned URL for video playback' })
+  @ApiParam({ name: 'key', description: 'S3 storage key for the video file', type: String })
+  @ApiResponse({ status: 200, description: 'Presigned URL generated successfully' })
+  @ApiResponse({ status: 400, description: 'Failed to generate URL' })
+  async getVideoUrl(@Param('key') key: string) {
+    if (!this.multipartUploadService) {
+      throw new NotFoundException('Video service not available');
+    }
+    const url = await this.multipartUploadService.generatePresignedUrl(key);
+    return { url };
   }
 }

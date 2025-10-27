@@ -53,6 +53,7 @@ console.log('Content exports:', conditionalExports);
     ...optionalTypeOrmFeature([Content, ContentLanguage, Category, Series, Episode, VideoVariant, StreamingAnalytics, SystemLog]),
     SupabaseModule,
     forwardRef(() => AuthModule),
+    forwardRef(() => import('../admin/admin.module').then(m => m.AdminModule)),
     CDNModule,
     VideoModule,
     VideoUploadModule,

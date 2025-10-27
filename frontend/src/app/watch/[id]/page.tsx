@@ -14,6 +14,7 @@ interface Episode {
   thumbnail_url?: string;
   duration_minutes: number;
   video_url?: string;
+  file_storage_key?: string;
 }
 
 interface WatchPageProps {
@@ -101,6 +102,19 @@ export default function WatchPage({ params }: WatchPageProps) {
           }
         }
 
+        // If no video URL but has file_storage_key, generate presigned URL
+        if (!contentData.video_url && contentData.file_storage_key) {
+          try {
+            const presignedUrl = await getPresignedVideoUrl(contentData.file_storage_key);
+            contentData = {
+              ...contentData,
+              video_url: presignedUrl,
+            };
+          } catch (presignedError) {
+            console.error('Error generating presigned URL for content:', presignedError);
+          }
+        }
+
         setContent(contentData);
 
         // Check if this is a series
@@ -144,10 +158,20 @@ export default function WatchPage({ params }: WatchPageProps) {
 
               // For series, always update the content with episode info
               if (episodeToPlay) {
+                // If episode has no video_url but has file_storage_key, generate presigned URL
+                let episodeVideoUrl = episodeToPlay.video_url;
+                if (!episodeVideoUrl && episodeToPlay.file_storage_key) {
+                  try {
+                    episodeVideoUrl = await getPresignedVideoUrl(episodeToPlay.file_storage_key);
+                  } catch (presignedError) {
+                    console.error('Error generating presigned URL for episode:', presignedError);
+                  }
+                }
+
                 contentData = {
                   ...contentData,
-                  // Use episode video URL if available, otherwise keep content video URL
-                  video_url: episodeToPlay.video_url || contentData.video_url,
+                  // Use episode video URL (presigned or direct) if available, otherwise keep content video URL
+                  video_url: episodeVideoUrl || contentData.video_url,
                   title: `${contentData.title} - S${episodeToPlay.season_number}E${episodeToPlay.episode_number}: ${episodeToPlay.title}`,
                   duration_minutes: episodeToPlay.duration_minutes || contentData.duration_minutes,
                 };
@@ -372,6 +396,25 @@ export default function WatchPage({ params }: WatchPageProps) {
   // Play a specific episode
   const playEpisode = (episode: Episode) => {
     router.push(`/watch/${id}?season=${episode.season_number}&episode=${episode.episode_number}`);
+  };
+
+  // Generate presigned URL from S3 storage key
+  const getPresignedVideoUrl = async (fileStorageKey: string): Promise<string> => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/video-url/${encodeURIComponent(fileStorageKey)}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to get presigned URL: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data.url;
+    } catch (error) {
+      console.error('Error getting presigned URL:', error);
+      throw error;
+    }
   };
 
   // Handle playback errors

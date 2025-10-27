@@ -108,7 +108,8 @@ const conditionalExports = isTypeOrmEnabled() ? [
   AdminContentService,
   AdminSettingsService,
   StripeService,
-] : [AdminContentSimpleService, AdminSettingsService];
+  MultipartUploadService,
+] : [AdminContentSimpleService, AdminSettingsService, MultipartUploadService];
 
 @Module({
   imports: [

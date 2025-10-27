@@ -7,6 +7,7 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   ListPartsCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -364,6 +365,29 @@ export class MultipartUploadService {
         totalParts: uploadRecord.parts_count,
         progress: 0,
       };
+    }
+  }
+
+  /**
+   * Generate presigned URL for video playback
+   * This URL allows direct video streaming without CORS issues
+   */
+  async generatePresignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.videoBucket,
+        Key: key,
+      });
+
+      const url = await getSignedUrl(this.s3Client, command, {
+        expiresIn, // URL válida por 1 hora por padrão
+      });
+
+      this.logger.log(`Generated presigned URL for key: ${key}`);
+      return url;
+    } catch (error) {
+      this.logger.error(`Failed to generate presigned URL for key ${key}:`, error);
+      throw new BadRequestException('Failed to generate video URL');
     }
   }
 }

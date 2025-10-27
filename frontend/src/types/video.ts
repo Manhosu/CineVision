@@ -20,6 +20,7 @@ export interface VideoContent {
   status: 'processing' | 'ready' | 'error' | 'deleted';
   processing_status?: ProcessingStatus;
   video_url?: string; // Direct video URL (MP4, WebM)
+  file_storage_key?: string; // S3 storage key for generating presigned URLs
   hls_master_url?: string; // HLS master playlist URL
   hls_base_path?: string; // Base path for HLS files
   created_at: string;
