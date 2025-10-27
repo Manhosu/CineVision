@@ -1,135 +1,212 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 
 @Injectable()
 export class AdminPurchasesSimpleService {
   private readonly logger = new Logger(AdminPurchasesSimpleService.name);
 
-  constructor() {
-    console.log('AdminPurchasesSimpleService instantiated successfully');
+  constructor(private readonly supabaseClient: SupabaseRestClient) {
+    this.logger.log('AdminPurchasesSimpleService instantiated successfully with real Supabase queries');
   }
 
   async getAllOrders(page: number = 1, limit: number = 20, status?: string) {
-    console.log('AdminPurchasesSimpleService.getAllOrders called with:', { page, limit, status });
-    
-    // Mock data for testing - simulating purchase orders
-    const mockOrders = [
-      {
-        id: 'order-1',
-        user_id: 'user-123',
-        content_id: 'content-456',
-        content_title: 'Superman',
-        amount_cents: 710,
-        currency: 'BRL',
-        status: 'paid',
-        payment_method: 'pix',
-        created_at: new Date('2024-01-15T10:30:00Z'),
-        updated_at: new Date('2024-01-15T10:35:00Z'),
-      },
-      {
-        id: 'order-2',
-        user_id: 'user-789',
-        content_id: 'content-321',
-        content_title: 'Lilo & Stitch',
-        amount_cents: 690,
-        currency: 'BRL',
-        status: 'pending',
-        payment_method: 'credit_card',
-        created_at: new Date('2024-01-14T15:20:00Z'),
-        updated_at: new Date('2024-01-14T15:20:00Z'),
-      },
-      {
-        id: 'order-3',
-        user_id: 'user-456',
-        content_id: 'content-789',
-        content_title: 'Como Treinar o Seu Dragão',
-        amount_cents: 698,
-        currency: 'BRL',
-        status: 'failed',
-        payment_method: 'boleto',
-        created_at: new Date('2024-01-13T09:15:00Z'),
-        updated_at: new Date('2024-01-13T09:45:00Z'),
-      },
-    ];
+    this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}`);
 
-    // Filter by status if provided
-    let filteredOrders = mockOrders;
-    if (status) {
-      filteredOrders = mockOrders.filter(order => order.status === status);
-    }
+    try {
+      // Calculate pagination
+      const offset = (page - 1) * limit;
 
-    // Simple pagination
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+      // Build query options for purchases
+      const queryOptions: any = {
+        select: '*',
+        order: { column: 'created_at', ascending: false },
+        limit,
+        offset,
+      };
 
-    return {
-      success: true,
-      data: {
-        orders: paginatedOrders,
-        pagination: {
-          page,
-          limit,
-          total: filteredOrders.length,
-          totalPages: Math.ceil(filteredOrders.length / limit),
+      // Add status filter if provided
+      if (status) {
+        queryOptions.where = { status };
+      }
+
+      // Fetch purchases
+      const purchases = await this.supabaseClient.select('purchases', queryOptions);
+
+      // Get total count for pagination
+      const totalCount = await this.supabaseClient.count('purchases', status ? { status } : {});
+
+      // Extract unique user IDs and content IDs
+      const userIds = [...new Set(purchases.map((p: any) => p.user_id).filter(Boolean))];
+      const contentIds = [...new Set(purchases.map((p: any) => p.content_id).filter(Boolean))];
+
+      // Fetch users and content separately
+      const users = userIds.length > 0
+        ? await this.supabaseClient.select('users', {
+            select: 'id,telegram_id,telegram_username,name',
+          })
+        : [];
+
+      const contents = contentIds.length > 0
+        ? await this.supabaseClient.select('content', {
+            select: 'id,title,poster_url',
+          })
+        : [];
+
+      // Create lookup maps
+      const userMap = new Map(users.map((u: any) => [u.id, u]));
+      const contentMap = new Map(contents.map((c: any) => [c.id, c]));
+
+      // Transform data to match frontend expectations
+      const transformedOrders = purchases.map((purchase: any) => ({
+        id: purchase.id,
+        user_id: purchase.user_id,
+        content_id: purchase.content_id,
+        amount_cents: purchase.amount_cents,
+        currency: purchase.currency || 'BRL',
+        status: purchase.status,
+        payment_method: purchase.preferred_delivery || 'pix',
+        created_at: purchase.created_at,
+        updated_at: purchase.updated_at,
+        // Include nested user and content data
+        user: userMap.get(purchase.user_id) || null,
+        content: contentMap.get(purchase.content_id) || null,
+      }));
+
+      return {
+        success: true,
+        data: {
+          orders: transformedOrders,
+          pagination: {
+            page,
+            limit,
+            total: totalCount,
+            totalPages: Math.ceil(totalCount / limit),
+          },
         },
-      },
-      message: 'Orders retrieved successfully (mock data)',
-    };
+        message: 'Orders retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error('Error fetching orders:', error);
+      throw error;
+    }
   }
 
   async getOrderById(orderId: string) {
-    console.log('AdminPurchasesSimpleService.getOrderById called with:', orderId);
-    
-    // Mock single order data
-    const mockOrder = {
-      id: orderId,
-      user_id: 'user-123',
-      content_id: 'content-456',
-      content_title: 'Superman',
-      amount_cents: 710,
-      currency: 'BRL',
-      status: 'paid',
-      payment_method: 'pix',
-      payment_details: {
-        transaction_id: 'tx-' + orderId,
-        payment_date: new Date('2024-01-15T10:35:00Z'),
-      },
-      created_at: new Date('2024-01-15T10:30:00Z'),
-      updated_at: new Date('2024-01-15T10:35:00Z'),
-    };
+    this.logger.log(`Fetching order by ID: ${orderId}`);
 
-    return {
-      success: true,
-      data: mockOrder,
-      message: 'Order retrieved successfully (mock data)',
-    };
+    try {
+      // Fetch single purchase
+      const purchase = await this.supabaseClient.selectOne('purchases', {
+        select: '*',
+        where: { id: orderId },
+      });
+
+      if (!purchase) {
+        return {
+          success: false,
+          data: null,
+          message: 'Order not found',
+        };
+      }
+
+      // Fetch related user and content
+      const user = purchase.user_id
+        ? await this.supabaseClient.selectOne('users', {
+            select: 'id,telegram_id,telegram_username,name',
+            where: { id: purchase.user_id },
+          })
+        : null;
+
+      const content = purchase.content_id
+        ? await this.supabaseClient.selectOne('content', {
+            select: 'id,title,poster_url',
+            where: { id: purchase.content_id },
+          })
+        : null;
+
+      // Transform data
+      const transformedOrder = {
+        id: purchase.id,
+        user_id: purchase.user_id,
+        content_id: purchase.content_id,
+        amount_cents: purchase.amount_cents,
+        currency: purchase.currency || 'BRL',
+        status: purchase.status,
+        payment_method: purchase.preferred_delivery || 'pix',
+        payment_details: purchase.provider_meta || {},
+        created_at: purchase.created_at,
+        updated_at: purchase.updated_at,
+        user,
+        content,
+      };
+
+      return {
+        success: true,
+        data: transformedOrder,
+        message: 'Order retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error('Error fetching order by ID:', error);
+      throw error;
+    }
   }
 
   async getOrderStats() {
-    console.log('AdminPurchasesSimpleService.getOrderStats called');
-    
-    // Mock statistics
-    const mockStats = {
-      total_orders: 156,
-      total_revenue_cents: 108420, // R$ 1,084.20
-      orders_by_status: {
-        paid: 98,
-        pending: 23,
-        failed: 35,
-      },
-      orders_by_payment_method: {
-        pix: 67,
-        credit_card: 45,
-        boleto: 44,
-      },
-      recent_orders_count: 12, // last 24h
-      conversion_rate: 0.73, // 73%
-    };
+    this.logger.log('Calculating purchase statistics');
 
-    return {
-      success: true,
-      data: mockStats,
-      message: 'Order statistics retrieved successfully (mock data)',
-    };
+    try {
+      // Fetch all purchases for statistics
+      const allPurchases = await this.supabaseClient.select('purchases', {
+        select: 'id,status,payment_method,amount_cents,created_at',
+      });
+
+      // Calculate total orders
+      const totalOrders = allPurchases.length;
+
+      // Calculate total revenue (only from paid orders)
+      const totalRevenueCents = allPurchases
+        .filter((p: any) => p.status === 'paid')
+        .reduce((sum: number, p: any) => sum + (p.amount_cents || 0), 0);
+
+      // Count orders by status
+      const ordersByStatus = allPurchases.reduce((acc: any, p: any) => {
+        acc[p.status] = (acc[p.status] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Count orders by payment method
+      const ordersByPaymentMethod = allPurchases.reduce((acc: any, p: any) => {
+        const method = p.payment_method || 'unknown';
+        acc[method] = (acc[method] || 0) + 1;
+        return acc;
+      }, {});
+
+      // Count recent orders (last 24h)
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const recentOrdersCount = allPurchases.filter(
+        (p: any) => new Date(p.created_at) >= yesterday
+      ).length;
+
+      // Calculate conversion rate (paid vs total)
+      const paidOrders = ordersByStatus.paid || 0;
+      const conversionRate = totalOrders > 0 ? paidOrders / totalOrders : 0;
+
+      return {
+        success: true,
+        data: {
+          total_orders: totalOrders,
+          total_revenue_cents: totalRevenueCents,
+          orders_by_status: ordersByStatus,
+          orders_by_payment_method: ordersByPaymentMethod,
+          recent_orders_count: recentOrdersCount,
+          conversion_rate: parseFloat(conversionRate.toFixed(2)),
+        },
+        message: 'Order statistics retrieved successfully',
+      };
+    } catch (error) {
+      this.logger.error('Error calculating statistics:', error);
+      throw error;
+    }
   }
 }

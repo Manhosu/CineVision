@@ -388,7 +388,57 @@ export class AdminContentSimpleService {
       }
     }
 
-    // 4. Deletar registros relacionados (cascade deve funcionar, mas garantimos)
+    // 4. Se for série, deletar episódios e seus arquivos do S3
+    if (content.content_type === 'series') {
+      const { data: episodes } = await this.supabaseService.client
+        .from('episodes')
+        .select('id, file_storage_key, thumbnail_url')
+        .eq('series_id', contentId);
+
+      if (episodes && episodes.length > 0) {
+        this.logger.log(`Found ${episodes.length} episodes to delete`);
+
+        for (const episode of episodes) {
+          // Deletar arquivo de vídeo do episódio do S3
+          if (episode.file_storage_key) {
+            try {
+              await this.s3Client.send(new DeleteObjectCommand({
+                Bucket: this.bucketName,
+                Key: episode.file_storage_key,
+              }));
+              this.logger.log(`Deleted episode video from S3: ${episode.file_storage_key}`);
+            } catch (s3Error) {
+              this.logger.warn(`Failed to delete episode video ${episode.file_storage_key}:`, s3Error);
+            }
+          }
+
+          // Deletar thumbnail do episódio do S3
+          if (episode.thumbnail_url) {
+            try {
+              const url = new URL(episode.thumbnail_url);
+              const key = url.pathname.substring(1);
+              await this.s3Client.send(new DeleteObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+              }));
+              this.logger.log(`Deleted episode thumbnail from S3: ${key}`);
+            } catch (error) {
+              this.logger.warn(`Failed to delete episode thumbnail from S3:`, error);
+            }
+          }
+        }
+
+        // Deletar episódios do banco
+        await this.supabaseService.client
+          .from('episodes')
+          .delete()
+          .eq('series_id', contentId);
+
+        this.logger.log(`Deleted ${episodes.length} episodes from database`);
+      }
+    }
+
+    // 5. Deletar registros relacionados (cascade deve funcionar, mas garantimos)
     await this.supabaseService.client
       .from('content_languages')
       .delete()
@@ -404,7 +454,7 @@ export class AdminContentSimpleService {
       .delete()
       .eq('content_id', contentId);
 
-    // 5. Deletar o conteúdo do banco
+    // 6. Deletar o conteúdo do banco
     const { error: deleteError } = await this.supabaseService.client
       .from('content')
       .delete()

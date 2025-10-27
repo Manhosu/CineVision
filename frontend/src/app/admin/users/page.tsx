@@ -7,9 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 interface User {
   id: string;
   name?: string;
-  email: string;
   role: string;
-  telegram_id?: string;
+  telegram_id: string;
   telegram_username?: string;
   telegram_chat_id?: string;
   created_at: string;
@@ -268,7 +267,7 @@ export default function AdminUsersPage() {
               <table className="w-full">
                 <thead className="bg-gray-900/50 border-b border-gray-700/50">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Nome/Email</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Nome</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Telegram ID</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Função</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Data de Criação</th>
@@ -281,11 +280,12 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold">
-                            {(user.name || user.email).charAt(0).toUpperCase()}
+                            {(user.name || user.telegram_username || 'U').charAt(0).toUpperCase()}
                           </div>
                           <div className="flex flex-col">
-                            {user.name && <span className="text-gray-200 font-medium">{user.name}</span>}
-                            <span className={`${user.name ? 'text-gray-400 text-sm' : 'text-gray-200'}`}>{user.email}</span>
+                            <span className="text-gray-200 font-medium">
+                              {user.name || user.telegram_username || `User ${user.telegram_id.slice(-4)}`}
+                            </span>
                           </div>
                         </div>
                       </td>

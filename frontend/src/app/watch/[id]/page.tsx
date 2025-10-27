@@ -564,7 +564,7 @@ export default function WatchPage({ params }: WatchPageProps) {
       </div>
 
       {/* Content Info (shown below player on mobile, overlay on desktop) */}
-      <div className="lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:bottom-0 lg:pointer-events-none">
+      <div className="lg:absolute lg:top-0 lg:left-0 lg:right-0 lg:bottom-0 lg:pointer-events-none z-50">
         <div className="lg:absolute lg:bottom-20 lg:left-8 lg:right-8 lg:pointer-events-auto">
           <div className="bg-dark-900/90 backdrop-blur-sm rounded-lg p-6 lg:max-w-2xl">
             <h1 className="text-2xl lg:text-3xl font-bold text-white mb-2">
