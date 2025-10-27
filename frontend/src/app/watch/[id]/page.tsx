@@ -134,8 +134,11 @@ export default function WatchPage({ params }: WatchPageProps) {
               const episodesData = await episodesResponse.json();
               setEpisodes(episodesData);
 
-              // Set selected season from URL or default to 1
-              const season = seasonParam ? parseInt(seasonParam) : 1;
+              // Get all unique seasons sorted
+              const availableSeasons = Array.from(new Set(episodesData.map((ep: Episode) => ep.season_number))).sort((a, b) => a - b);
+
+              // Set selected season from URL or default to first available season
+              const season = seasonParam ? parseInt(seasonParam) : (availableSeasons[0] || 1);
               setSelectedSeason(season);
 
               // Find the episode to play
@@ -147,11 +150,14 @@ export default function WatchPage({ params }: WatchPageProps) {
                 ) || null;
               }
 
-              // If no episode specified, play first episode of selected season
+              // If no episode specified, play first episode of first available season
               if (!episodeToPlay && episodesData.length > 0) {
-                episodeToPlay = episodesData.find(
-                  (ep: Episode) => ep.season_number === season
-                ) || episodesData[0];
+                // Sort episodes by season and episode number, then get the first one
+                const sortedEpisodes = [...episodesData].sort((a: Episode, b: Episode) => {
+                  if (a.season_number !== b.season_number) return a.season_number - b.season_number;
+                  return a.episode_number - b.episode_number;
+                });
+                episodeToPlay = sortedEpisodes[0];
               }
 
               setCurrentEpisode(episodeToPlay);
@@ -393,9 +399,34 @@ export default function WatchPage({ params }: WatchPageProps) {
     return null;
   };
 
-  // Play a specific episode
-  const playEpisode = (episode: Episode) => {
-    router.push(`/watch/${id}?season=${episode.season_number}&episode=${episode.episode_number}`);
+  // Play a specific episode without reloading the page
+  const playEpisode = async (episode: Episode) => {
+    // Update URL without reloading
+    const newUrl = `/watch/${id}?season=${episode.season_number}&episode=${episode.episode_number}`;
+    window.history.pushState({}, '', newUrl);
+
+    // Generate presigned URL if needed
+    let episodeVideoUrl = episode.video_url;
+    if (!episodeVideoUrl && episode.file_storage_key) {
+      try {
+        episodeVideoUrl = await getPresignedVideoUrl(episode.file_storage_key);
+      } catch (presignedError) {
+        console.error('Error generating presigned URL for episode:', presignedError);
+      }
+    }
+
+    // Update content with new episode
+    if (content) {
+      setContent({
+        ...content,
+        video_url: episodeVideoUrl || content.video_url,
+        title: `${content.title.split(' - ')[0]} - S${episode.season_number}E${episode.episode_number}: ${episode.title}`,
+        duration_minutes: episode.duration_minutes || content.duration_minutes,
+      });
+    }
+
+    // Update current episode
+    setCurrentEpisode(episode);
   };
 
   // Generate presigned URL from S3 storage key
