@@ -55,24 +55,9 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movies: ${error.message}`);
     }
 
-    // Generate video_url for movies that don't have it
-    const moviesWithUrls = (movies || []).map(movie => {
-      if (!movie.video_url && movie.file_storage_key) {
-        if (movie.file_storage_key.startsWith('raw/')) {
-          const awsRegion = process.env.AWS_REGION || 'us-east-2';
-          const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
-          movie.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${movie.file_storage_key}`;
-        } else {
-          const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
-          const bucketName = 'cinevision-filmes';
-          movie.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${movie.file_storage_key}`;
-        }
-      }
-      return movie;
-    });
-
+    // Return movies with file_storage_key - frontend will generate presigned URLs
     return {
-      movies: moviesWithUrls,
+      movies: movies || [],
       total: count || 0,
       page,
       limit,
@@ -100,22 +85,7 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movie: ${error.message}`);
     }
 
-    // Generate video_url from file_storage_key if video_url is null
-    if (movie && !movie.video_url && movie.file_storage_key) {
-      // Check if it's an S3 key (starts with "raw/")
-      if (movie.file_storage_key.startsWith('raw/')) {
-        // AWS S3 URL
-        const awsRegion = process.env.AWS_REGION || 'us-east-2';
-        const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
-        movie.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${movie.file_storage_key}`;
-      } else {
-        // Supabase Storage URL (fallback)
-        const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
-        const bucketName = 'cinevision-filmes';
-        movie.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${movie.file_storage_key}`;
-      }
-    }
-
+    // Return movie with file_storage_key - frontend will generate presigned URLs
     return movie;
   }
 
@@ -278,26 +248,8 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch episodes: ${error.message}`);
     }
 
-    // Generate video_url from file_storage_key if video_url is null
-    const episodesWithUrls = (episodes || []).map(episode => {
-      if (!episode.video_url && episode.file_storage_key) {
-        // Check if it's an S3 key (starts with "raw/")
-        if (episode.file_storage_key.startsWith('raw/')) {
-          // AWS S3 URL
-          const awsRegion = process.env.AWS_REGION || 'us-east-2';
-          const s3Bucket = process.env.S3_RAW_BUCKET || 'cinevision-raw';
-          episode.video_url = `https://${s3Bucket}.s3.${awsRegion}.amazonaws.com/${episode.file_storage_key}`;
-        } else {
-          // Supabase Storage URL (fallback)
-          const supabaseUrl = process.env.SUPABASE_URL || 'https://szghyvnbmjlquznxhqum.supabase.co';
-          const bucketName = 'cinevision-filmes';
-          episode.video_url = `${supabaseUrl}/storage/v1/object/public/${bucketName}/${episode.file_storage_key}`;
-        }
-      }
-      return episode;
-    });
-
-    return episodesWithUrls;
+    // Return episodes with file_storage_key - frontend will generate presigned URLs
+    return episodes || [];
   }
 
   async searchContent(query: string, page = 1, limit = 20) {
