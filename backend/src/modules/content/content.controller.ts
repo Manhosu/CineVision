@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import { CDNService } from '../cdn/services/cdn.service';
 import { VideoIngestService } from '../video/services/video-ingest.service';
 import { VideoTranscodingService } from '../video/services/video-transcoding.service';
+import { MultipartUploadService } from '../admin/services/multipart-upload.service';
 import { OptionalAuthGuard } from '../auth/guards/optional-auth.guard';
 
 @ApiTags('content')
@@ -16,7 +17,7 @@ export class ContentController {
     @Optional() private readonly cdnService?: CDNService,
     @Optional() private readonly videoIngestService?: VideoIngestService,
     @Optional() private readonly videoTranscodingService?: VideoTranscodingService,
-    @Optional() @Inject('MultipartUploadService') private readonly multipartUploadService?: any,
+    @Optional() private readonly multipartUploadService?: MultipartUploadService,
   ) {}
 
   @Get('movies')

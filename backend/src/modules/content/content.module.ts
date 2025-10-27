@@ -16,6 +16,7 @@ import { StreamingAnalytics } from './entities/streaming-analytics.entity';
 import { SystemLog } from '../logs/entities/system-log.entity';
 import { SupabaseModule } from '../../config/supabase.module';
 import { AuthModule } from '../auth/auth.module';
+import { AdminModule } from '../admin/admin.module';
 import { CDNModule } from '../cdn/cdn.module';
 import { VideoModule } from '../video/video.module';
 import { VideoUploadModule } from '../video/video-upload.module';
@@ -53,7 +54,7 @@ console.log('Content exports:', conditionalExports);
     ...optionalTypeOrmFeature([Content, ContentLanguage, Category, Series, Episode, VideoVariant, StreamingAnalytics, SystemLog]),
     SupabaseModule,
     forwardRef(() => AuthModule),
-    forwardRef(() => import('../admin/admin.module').then(m => m.AdminModule)),
+    forwardRef(() => AdminModule),
     CDNModule,
     VideoModule,
     VideoUploadModule,
