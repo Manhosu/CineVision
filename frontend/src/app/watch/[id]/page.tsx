@@ -640,7 +640,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                                 {ep.duration_minutes}min
                               </span>
                             )}
-                            {!ep.video_url && (
+                            {!ep.file_storage_key && !ep.video_url && (
                               <span className="text-xs text-yellow-400">
                                 Em breve
                               </span>
