@@ -243,11 +243,11 @@ export class MultipartUploadService {
       const result = await this.s3Client.send(completeCommand);
       this.logger.log(`Upload completed: ${result.Location}`);
 
-      // Update database record
+      // Update database record - mark as ready since no video processing is needed
       await this.supabase
         .from('video_uploads')
         .update({
-          status: 'processing',
+          status: 'ready',
           updated_at: new Date().toISOString(),
         })
         .eq('upload_id', uploadId);
@@ -259,7 +259,7 @@ export class MultipartUploadService {
           .update({
             file_storage_key: key,
             storage_path: key,
-            processing_status: 'processing',
+            processing_status: 'ready',
             updated_at: new Date().toISOString(),
           })
           .eq('id', contentId);
@@ -273,7 +273,7 @@ export class MultipartUploadService {
             storage_path: key,
             file_storage_key: key,
             file_size_bytes: uploadRecord.size,
-            processing_status: 'processing',
+            processing_status: 'ready',
             updated_at: new Date().toISOString(),
           })
           .eq('id', episodeId);
