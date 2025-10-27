@@ -680,4 +680,79 @@ export class AdminContentSimpleService {
       },
     };
   }
+
+  async deleteEpisode(episodeId: string) {
+    this.logger.log(`Deleting episode: ${episodeId}`);
+
+    // Buscar o episódio primeiro
+    const { data: episode, error: fetchError } = await this.supabaseService.client
+      .from('episodes')
+      .select('*')
+      .eq('id', episodeId)
+      .single();
+
+    if (fetchError || !episode) {
+      throw new NotFoundException(`Episode with ID ${episodeId} not found`);
+    }
+
+    // Deletar arquivos do S3 se existirem
+    if (episode.file_storage_key) {
+      try {
+        await this.s3Client.send(new DeleteObjectCommand({
+          Bucket: this.bucketName,
+          Key: episode.file_storage_key,
+        }));
+        this.logger.log(`Deleted S3 object: ${episode.file_storage_key}`);
+      } catch (s3Error) {
+        this.logger.warn(`Failed to delete S3 object:`, s3Error);
+      }
+    }
+
+    // Deletar arquivos HLS se existirem
+    if (episode.hls_base_path) {
+      try {
+        const listCommand = new ListObjectsV2Command({
+          Bucket: this.bucketName,
+          Prefix: episode.hls_base_path,
+        });
+        const listResult = await this.s3Client.send(listCommand);
+
+        if (listResult.Contents && listResult.Contents.length > 0) {
+          for (const object of listResult.Contents) {
+            await this.s3Client.send(new DeleteObjectCommand({
+              Bucket: this.bucketName,
+              Key: object.Key,
+            }));
+          }
+          this.logger.log(`Deleted HLS files from: ${episode.hls_base_path}`);
+        }
+      } catch (s3Error) {
+        this.logger.warn(`Failed to delete HLS files:`, s3Error);
+      }
+    }
+
+    // Deletar do banco
+    const { error: deleteError } = await this.supabaseService.client
+      .from('episodes')
+      .delete()
+      .eq('id', episodeId);
+
+    if (deleteError) {
+      this.logger.error('Error deleting episode:', deleteError);
+      throw new Error(`Failed to delete episode: ${deleteError.message}`);
+    }
+
+    this.logger.log(`Episode ${episodeId} deleted successfully`);
+
+    return {
+      success: true,
+      message: 'Episode deleted successfully',
+      deletedEpisode: {
+        id: episode.id,
+        title: episode.title,
+        season: episode.season_number,
+        episode: episode.episode_number,
+      },
+    };
+  }
 }

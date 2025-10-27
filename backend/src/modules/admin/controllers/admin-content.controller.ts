@@ -293,4 +293,18 @@ export class AdminContentController {
   ) {
     return this.adminContentService.deleteAudioTrack(contentId, audioId);
   }
+
+  @Delete('episodes/:episodeId')
+  @ApiOperation({
+    summary: 'Delete episode',
+    description: 'Removes episode from series and deletes from S3',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Episode deleted successfully',
+  })
+  @HttpCode(HttpStatus.OK)
+  async deleteEpisode(@Param('episodeId') episodeId: string) {
+    return this.adminContentService.deleteEpisode(episodeId);
+  }
 }
