@@ -1,6 +1,0 @@
-{
-  "CallerReference": "cinevision-public-key-2024",
-  "Name": "cinevision-public-key",
-  "EncodedKey": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjUtE1YxR0hefUz/Dr1zR\ny2387xeD5V2/pc+CXtOZax9cnPUngDqqpS6j1YBRfkTMqe8Uf7Y2/3Lq4HvP6nya\nvgRGKX3WzRfb31/3lfcMa1tpp5KbRjgy9lFh1sO0YXg+eTou8oV4JYSkKW7+41Vk\nFbFA2BzNX0moSuyJg2DOpeGS/43Gj37/AUHqEMEN/sdz0HgJ2+U0goe5BZi/WqUp\nKHf5ugGmWLpt/CZNyAGBicwO759BVoE7xYIUztpBko0UNULHikA0NzM1YA5V6EQ+\nhsgrkAXR7HngkgUDcs7uswG75NDrIWWnGUvyNif0RauzvXEyEOXrgR3wsfhoVpcR\n2QIDAQAB\n-----END PUBLIC KEY-----",
-  "Comment": "Public key for CineVision signed URLs"
-}

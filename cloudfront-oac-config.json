@@ -1,7 +1,0 @@
-{
-  "Name": "cinevision-oac",
-  "Description": "Origin Access Control for CineVision S3 bucket",
-  "SigningProtocol": "sigv4",
-  "SigningBehavior": "always",
-  "OriginAccessControlOriginType": "s3"
-}
