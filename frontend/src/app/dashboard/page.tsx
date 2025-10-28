@@ -60,6 +60,7 @@ export default function DashboardPage() {
       const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) {
         console.error('[Dashboard] No refresh token found');
+        handleAuthExpired();
         return null;
       }
 
@@ -82,12 +83,42 @@ export default function DashboardPage() {
         }
         return data.access_token;
       } else {
-        console.error('[Dashboard] Failed to refresh token');
+        console.error('[Dashboard] Failed to refresh token - refresh_token expired');
+        handleAuthExpired();
         return null;
       }
     } catch (error) {
       console.error('[Dashboard] Error refreshing token:', error);
+      handleAuthExpired();
       return null;
+    }
+  };
+
+  // Função para lidar com sessão expirada
+  const handleAuthExpired = () => {
+    console.log('[Dashboard] Session expired, clearing tokens and redirecting...');
+
+    // Limpar todos os tokens
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
+
+    // Se usuário tem telegram_id, redirecionar para autologin do Telegram
+    if (user?.telegram_id) {
+      toast.error('Sua sessão expirou. Redirecionando para autenticação...');
+
+      // Redirecionar para Telegram autologin
+      const redirectUrl = `/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/dashboard`;
+      setTimeout(() => {
+        router.push(redirectUrl);
+      }, 1500);
+    } else {
+      // Se não tem telegram_id, redirecionar para login normal
+      toast.error('Sua sessão expirou. Por favor, faça login novamente.');
+      setTimeout(() => {
+        router.push('/auth/login');
+      }, 1500);
     }
   };
 
@@ -116,9 +147,7 @@ export default function DashboardPage() {
         // Tenta novamente com o novo token
         response = await makeRequest(newToken);
       } else {
-        // Se não conseguiu renovar, redireciona para login
-        console.error('[Dashboard] Could not refresh token, redirecting to login');
-        router.push('/auth/login');
+        // Se não conseguiu renovar, handleAuthExpired já cuidou do redirecionamento
         throw new Error('Authentication failed');
       }
     }
