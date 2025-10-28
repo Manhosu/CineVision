@@ -328,6 +328,11 @@ export function Header({ transparent = false }: HeaderProps) {
         </div>
       )}
 
+      {/* Modal de Solicitação de Conteúdo */}
+      <RequestContentModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+      />
     </>
   );
 }
