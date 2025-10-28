@@ -1427,11 +1427,10 @@ export default function AdminContentCreatePage() {
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                     // NÃO publicar agora - será publicado automaticamente quando uploads estiverem 100%
-                    toast.success('Upload iniciado! O conteúdo será publicado automaticamente quando todos os uploads terminarem.');
+                    toast.success('Upload iniciado! Acompanhe o progresso no modal de upload. O conteúdo será publicado automaticamente quando todos os uploads terminarem.');
 
-                    // Redirecionar para /admin
-                    console.log('[Finalizar Button] Redirecionando para /admin');
-                    router.push('/admin');
+                    // NÃO redirecionar automaticamente - deixar usuário ver progresso do upload
+                    console.log('[Finalizar Button] Upload iniciado. Usuário pode acompanhar o progresso no modal.');
                   }}
                   className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-green-900/50 flex items-center justify-center space-x-2"
                 >

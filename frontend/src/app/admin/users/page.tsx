@@ -32,7 +32,7 @@ export default function AdminUsersPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/v1/admin/users');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/users`);
 
       if (!response.ok) {
         throw new Error(`Erro ao buscar usuários: ${response.statusText}`);
@@ -51,7 +51,7 @@ export default function AdminUsersPage() {
   const handleDelete = async (id: string) => {
     try {
       setDeleting(true);
-      const response = await fetch(`http://localhost:3001/api/v1/admin/users/${id}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/users/${id}`, {
         method: 'DELETE',
       });
 
