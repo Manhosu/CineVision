@@ -552,7 +552,6 @@ export default function AdminContentCreatePage() {
         const extension = file.name.split('.').pop()?.toLowerCase();
         switch (extension) {
           case 'mp4': return 'video/mp4';
-          case 'mkv': return 'video/x-matroska';
           case 'mov': return 'video/quicktime';
           default: return 'video/mp4';
         }
@@ -1337,8 +1336,8 @@ export default function AdminContentCreatePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
                       </svg>
                       <div>
-                        <p className="text-xs text-gray-400">Formatos</p>
-                        <p className="text-sm font-semibold text-white">.mkv, .mp4</p>
+                        <p className="text-xs text-gray-400">Formato</p>
+                        <p className="text-sm font-semibold text-white">.mp4 apenas</p>
                       </div>
                     </div>
 

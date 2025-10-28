@@ -12,8 +12,8 @@ export interface UploadTask {
   cancelRequested?: boolean;
   uploadId?: string;
   languageId?: string;
-  conversionProgress?: number; // 0-100 para conversão
-  needsConversion?: boolean; // true se é MKV
+  conversionProgress?: number; // 0-100 para conversão (deprecated)
+  needsConversion?: boolean; // deprecated - only MP4 allowed now
   completedAt?: number; // timestamp quando a tarefa foi concluída
 
   // Episode-specific fields

@@ -362,11 +362,11 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
             {newLanguage.language_type && (
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-200">
-                  Arquivo de Vídeo (.mkv ou .mp4)
+                  Arquivo de Vídeo (.mp4 apenas)
                 </Label>
                 <Input
                   type="file"
-                  accept=".mkv,.mp4"
+                  accept=".mp4"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {

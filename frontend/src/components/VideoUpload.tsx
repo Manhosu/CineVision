@@ -164,7 +164,7 @@ export default function VideoUpload({ onUploadComplete }: VideoUploadProps) {
                   </span>
                 )}
                 <span className="text-sm text-gray-500 mt-2">
-                  Formatos suportados: MP4, AVI, MOV, MKV (máx. 5GB)
+                  Formato suportado: MP4 apenas (máx. 5GB)
                 </span>
               </label>
             </div>

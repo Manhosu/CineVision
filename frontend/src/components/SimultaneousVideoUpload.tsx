@@ -138,8 +138,15 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
     // Variable to track abort controller
     let abortController = new AbortController();
 
-    // Check if file needs conversion (MKV files)
-    const needsConversion = file.name.toLowerCase().endsWith('.mkv');
+    // Validate file format - only MP4 allowed
+    if (!file.name.toLowerCase().endsWith('.mp4')) {
+      toast.error('Apenas arquivos MP4 são aceitos');
+      setVideos((prev) => ({
+        ...prev,
+        [type]: { status: 'idle', file: null, progress: 0 },
+      }));
+      return;
+    }
 
     addTask({
       id: taskId,
@@ -148,7 +155,7 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       progress: 0,
       status: 'uploading',
       cancelRequested: false,
-      needsConversion,
+      needsConversion: false,
       conversionProgress: 0,
     });
 
@@ -210,8 +217,6 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         switch (extension) {
           case 'mp4':
             return 'video/mp4';
-          case 'mkv':
-            return 'video/x-matroska';
           case 'mov':
             return 'video/quicktime';
           default:
