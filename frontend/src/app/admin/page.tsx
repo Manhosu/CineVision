@@ -59,11 +59,21 @@ export default function AdminDashboard() {
 
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+        // Get token from localStorage
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
         // Buscar todas as estatísticas em paralelo
         const [contentRes, usersRes, requestsRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/admin/stats/content`),
-          fetch(`${API_URL}/api/v1/admin/stats/users`),
-          fetch(`${API_URL}/api/v1/admin/stats/requests`)
+          fetch(`${API_URL}/api/v1/admin/stats/content`, { headers }),
+          fetch(`${API_URL}/api/v1/admin/stats/users`, { headers }),
+          fetch(`${API_URL}/api/v1/admin/stats/requests`, { headers })
         ]);
 
         const contentData = await contentRes.json();
@@ -78,7 +88,7 @@ export default function AdminDashboard() {
         });
 
         // Buscar conteúdos recentes para a lista
-        const recentContentRes = await fetch(`${API_URL}/api/v1/admin/content?limit=5`);
+        const recentContentRes = await fetch(`${API_URL}/api/v1/admin/content?limit=5`, { headers });
         const recentContentData = await recentContentRes.json();
         setRecentContent(recentContentData.data || []);
       } catch (error) {
