@@ -63,30 +63,57 @@ export default function DashboardPage() {
         setIsLoading(true);
         const token = localStorage.getItem('auth_token');
 
+        console.log('[Dashboard] User data:', {
+          id: user.id,
+          telegram_id: user.telegram_id,
+          email: user.email,
+          name: user.name
+        });
+
         // Buscar conteúdo adquirido
-        const contentRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}/content`, {
+        const contentUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}/content`;
+        console.log('[Dashboard] Fetching content from:', contentUrl);
+
+        const contentRes = await fetch(contentUrl, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
+
+        console.log('[Dashboard] Response status:', contentRes.status);
+        console.log('[Dashboard] Response ok:', contentRes.ok);
 
         if (contentRes.ok) {
           const contentData = await contentRes.json();
           console.log('[Dashboard] Content data from API:', contentData);
+          console.log('[Dashboard] Content data length:', contentData?.length);
           console.log('[Dashboard] First item:', contentData[0]);
           setMyContent(contentData);
+        } else {
+          const errorText = await contentRes.text();
+          console.error('[Dashboard] Error fetching content:', errorText);
         }
 
         // Buscar histórico de compras
-        const purchasesRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}`, {
+        const purchasesUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}`;
+        console.log('[Dashboard] Fetching purchases from:', purchasesUrl);
+
+        const purchasesRes = await fetch(purchasesUrl, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
+        console.log('[Dashboard] Purchases response status:', purchasesRes.status);
+
         if (purchasesRes.ok) {
           const purchasesData = await purchasesRes.json();
+          console.log('[Dashboard] Purchases data:', purchasesData);
+          console.log('[Dashboard] Purchases count:', purchasesData?.length);
           setPurchases(purchasesData);
+        } else {
+          const errorText = await purchasesRes.text();
+          console.error('[Dashboard] Error fetching purchases:', errorText);
         }
 
         // Buscar solicitações do usuário
