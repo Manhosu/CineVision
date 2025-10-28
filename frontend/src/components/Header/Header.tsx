@@ -272,7 +272,7 @@ export function Header({ transparent = false }: HeaderProps) {
                   <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
                     Navegação
                   </div>
-                  navigationItems.map((item) => {
+                  {navigationItems.map((item) => {
                     const ItemIcon = item.icon;
                     return (
                       <Link
@@ -292,7 +292,7 @@ export function Header({ transparent = false }: HeaderProps) {
                         )}
                       </Link>
                     );
-                  })
+                  })}
                 </nav>
 
                 {/* Seção de Conta - Apenas Admin */}
