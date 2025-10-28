@@ -1172,7 +1172,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
           telegram_username: username,
           name: userName,
           email: `telegram_${telegramUserId}@cinevision.temp`, // Email temporário
-          password: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
+          password_hash: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
           role: 'user',
           status: 'active',
         })
