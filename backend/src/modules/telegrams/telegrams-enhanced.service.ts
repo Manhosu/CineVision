@@ -1969,12 +1969,15 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       this.logger.log('Production mode: Webhook mode enabled (polling disabled)');
       this.logger.log(`Webhook URL: ${webhookUrl}`);
       // Webhook should be configured manually via /setup-webhook endpoint
-    } else {
-      // In development OR production without webhook, use polling
-      const mode = nodeEnv === 'production' ? 'Production (no webhook configured)' : 'Development';
-      this.logger.log(`${mode}: Starting Telegram bot polling...`);
+    } else if (nodeEnv === 'development') {
+      // Only in development, use polling
+      this.logger.log('Development mode: Starting Telegram bot polling...');
       await this.deleteWebhook(); // Remove webhook if exists
       this.startPolling();
+    } else {
+      // Production without webhook - don't delete webhook or start polling
+      this.logger.warn('Production mode: No TELEGRAM_WEBHOOK_URL configured. Bot will not start.');
+      this.logger.warn('Please configure TELEGRAM_WEBHOOK_URL environment variable and use webhook mode.');
     }
   }
 
