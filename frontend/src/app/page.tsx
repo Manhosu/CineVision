@@ -123,12 +123,12 @@ function HomePageContent() {
         // Organize content sections with real data
         const sections: ContentSection[] = [
           {
-            title: 'Top 10 Filmes da Semana',
+            title: 'Brasil: Top 10 em Filmes Hoje',
             type: 'top10' as const,
             movies: Array.isArray(top10Films) ? top10Films : []
           },
           {
-            title: 'Top 10 Séries da Semana',
+            title: 'Brasil: Top 10 em Séries Hoje',
             type: 'top10' as const,
             movies: Array.isArray(top10Series) ? top10Series : []
           },
@@ -179,7 +179,7 @@ function HomePageContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-950">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
         <div className="text-center">
           <h2 className="text-2xl font-bold text-red-500 mb-4">Ops! Algo deu errado</h2>
           <p className="text-gray-400 mb-6">{error}</p>
@@ -195,7 +195,7 @@ function HomePageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-950">
+    <div className="min-h-screen" style={{ backgroundColor: '#0d0d0d' }}>
       {/* Header fixo */}
       <Header />
 
@@ -209,7 +209,7 @@ function HomePageContent() {
         )}
 
         {/* Seções de conteúdo */}
-        <div className="relative z-10 -mt-32 space-y-12 pb-20">
+        <div className="relative z-10 -mt-32 pb-20">
           {isLoading ? (
             // Skeleton das seções
             <>

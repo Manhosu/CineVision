@@ -153,14 +153,14 @@ const Top10MovieCard = memo(function Top10MovieCard({
         <div
           className="absolute bottom-0 left-0 pointer-events-none select-none z-0"
           style={{
-            fontSize: 'clamp(5rem, 12vw, 8rem)',
+            fontSize: 'clamp(8rem, 18vw, 12rem)',
             fontWeight: 900,
             lineHeight: 1,
             WebkitTextStroke: '2px rgba(255, 255, 255, 1)',
             textStroke: '2px rgba(255, 255, 255, 1)',
             color: 'rgba(0, 0, 0, 0.5)',
             fontFamily: 'system-ui, -apple-system, sans-serif',
-            opacity: 0.35,
+            opacity: 0.15,
             filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8))',
             transform: 'translateY(8%)'
           }}

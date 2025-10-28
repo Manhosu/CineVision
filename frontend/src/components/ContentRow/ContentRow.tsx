@@ -44,7 +44,7 @@ export function ContentRow({
 
     setIsScrolling(true);
 
-    const cardWidth = type === 'top10' ? 267 : 280; // Largura aproximada do card + gap
+    const cardWidth = 204; // 180px card + 24px gap
     const scrollAmount = direction === 'left' ? -cardWidth * 3 : cardWidth * 3;
 
     container.scrollBy({
@@ -57,7 +57,7 @@ export function ContentRow({
       updateScrollButtons();
       setIsScrolling(false);
     }, 300);
-  }, [isScrolling, updateScrollButtons]);
+  }, [isScrolling, updateScrollButtons, type]);
 
   const handleScroll = useCallback(() => {
     if (!isScrolling) {
@@ -67,7 +67,7 @@ export function ContentRow({
       const container = scrollContainerRef.current;
       if (container && type === 'top10') {
         const scrollPosition = container.scrollLeft;
-        const cardWidth = 267; // Largura dos cards menores
+        const cardWidth = 204; // 180px card + 24px gap
         const slideIndex = Math.round(scrollPosition / (cardWidth * 3));
         setActiveSlide(slideIndex);
       }
@@ -87,22 +87,20 @@ export function ContentRow({
 
   return (
     <section
-      className={`relative ${isTop10 ? 'py-16' : 'py-8'}`}
-      style={isTop10 ? {
-        background: 'linear-gradient(to bottom, #000000 0%, #1a1a1a 50%, #0a0a0a 100%)'
-      } : undefined}
+      className={`relative ${isTop10 ? 'py-16' : 'py-12'}`}
+      style={{
+        backgroundColor: '#0d0d0d'
+      }}
     >
       <div className="container mx-auto px-4 lg:px-6">
         {/* Título da seção */}
-        <div className={`${isTop10 ? 'text-center mb-12' : 'flex items-center justify-between mb-6'}`}>
+        <div className={`${isTop10 ? 'text-center mb-12' : 'flex items-center justify-between mb-8'}`}>
           <h2
             className="font-extrabold text-white"
-            style={isTop10 ? {
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
+            style={{
+              fontSize: isTop10 ? 'clamp(2rem, 4vw, 3rem)' : 'clamp(1.5rem, 3vw, 2rem)',
               textShadow: '0 4px 12px rgba(0,0,0,0.5)',
               letterSpacing: '-0.02em'
-            } : {
-              fontSize: 'clamp(1.5rem, 3vw, 2rem)'
             }}
           >
             {title}
@@ -145,7 +143,7 @@ export function ContentRow({
           {/* Container de scroll */}
           <div
             ref={scrollContainerRef}
-            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'gap-4 pb-6' : 'space-x-4 pb-4'}`}
+            className="flex overflow-x-auto scrollbar-hide scroll-smooth gap-6 pb-6"
             onScroll={handleScroll}
             style={{
               scrollSnapType: 'x mandatory',
@@ -155,11 +153,7 @@ export function ContentRow({
             {movies.map((movie, index) => (
               <div
                 key={movie.id}
-                className={`flex-none ${
-                  type === 'top10'
-                    ? 'w-[187px] sm:w-[220px] md:w-[240px] lg:w-[267px]'
-                    : 'w-48 sm:w-56 md:w-64'
-                }`}
+                className="flex-none w-[180px]"
                 style={{ scrollSnapAlign: 'start' }}
               >
                 {type === 'top10' ? (
@@ -176,6 +170,7 @@ export function ContentRow({
                     priority={priority && index < 3}
                     onClick={onMovieClick}
                     lazyLoad={!priority || index >= 3}
+                    isPurchased={purchasedMovieIds.has(movie.id)}
                   />
                 )}
               </div>
@@ -183,13 +178,13 @@ export function ContentRow({
 
             {/* Card "Ver mais" se houver muitos filmes */}
             {movies.length >= 12 && (
-              <div className="flex-none w-64 md:w-72">
-                <div className="h-full flex items-center justify-center card-hover rounded-lg border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-all cursor-pointer">
-                  <div className="text-center p-8">
-                    <ChevronRightIcon className="w-12 h-12 mx-auto mb-4" />
-                    <p className="font-medium">Ver todos os filmes</p>
-                    <p className="text-sm text-gray-400 mt-1">
-                      +{movies.length - 12} filmes
+              <div className="flex-none w-[180px]">
+                <div className="h-full flex items-center justify-center rounded-lg border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-all cursor-pointer aspect-[2/3]">
+                  <div className="text-center p-4">
+                    <ChevronRightIcon className="w-10 h-10 mx-auto mb-2" />
+                    <p className="font-medium text-sm">Ver todos</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      +{movies.length - 12}
                     </p>
                   </div>
                 </div>
@@ -206,7 +201,7 @@ export function ContentRow({
                   onClick={() => {
                     const container = scrollContainerRef.current;
                     if (container) {
-                      const cardWidth = 267; // Largura dos cards menores
+                      const cardWidth = 204; // 180px card + 24px gap
                       container.scrollTo({
                         left: index * cardWidth * 3,
                         behavior: 'smooth'

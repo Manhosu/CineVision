@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
 import {
   PlayIcon,
-  ClockIcon,
   HeartIcon,
   PlusIcon,
   CheckIcon,
@@ -22,7 +21,6 @@ interface MovieCardProps {
   priority?: boolean;
   lazyLoad?: boolean;
   onClick?: (movie: Movie) => void;
-  showFullInfo?: boolean;
   isPurchased?: boolean;
 }
 
@@ -47,13 +45,6 @@ const MovieCard = memo(function MovieCard({
       style: 'currency',
       currency: 'BRL'
     }).format(priceInCents / 100);
-  };
-
-  const formatDuration = (minutes?: number) => {
-    if (!minutes) return '';
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
   };
 
   const handleWatch = async (e: React.MouseEvent) => {
@@ -132,31 +123,6 @@ const MovieCard = memo(function MovieCard({
     }
   };
 
-  const availabilityBadge = () => {
-    switch (movie.availability) {
-      case 'TELEGRAM':
-        return (
-          <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-            📱 Telegram
-          </div>
-        );
-      case 'SITE':
-        return (
-          <div className="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-            🌐 Site
-          </div>
-        );
-      case 'BOTH':
-        return (
-          <div className="absolute top-2 right-2 bg-primary-600 text-white text-xs px-2 py-1 rounded-full font-medium">
-            ✨ Ambos
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div
       className="group relative cursor-pointer"
@@ -164,29 +130,84 @@ const MovieCard = memo(function MovieCard({
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
-      {/* Main Card */}
-      <div className="card-hover rounded-xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:border-white/20 hover:shadow-2xl">
+      {/* Main Card - Netflix Style */}
+      <div className="relative rounded-lg overflow-hidden transition-all duration-300 ease-in-out hover:scale-105 hover:brightness-110 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
 
         {/* Movie Poster */}
-        <div className="relative aspect-[2/3] min-h-[240px] overflow-hidden">
+        <div className="relative aspect-[2/3] overflow-hidden">
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}
             fill
             priority={priority}
-            className="object-cover transition-all duration-300 group-hover:scale-105"
+            className="object-cover transition-all duration-300"
             placeholder={movie.title}
             fallbackSrc="/images/placeholder-poster.svg"
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 180px"
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
           />
 
-          {/* Availability badge */}
-          {availabilityBadge()}
+          {/* Gradient overlay for title - Always visible */}
+          <div
+            className="absolute bottom-0 left-0 right-0 pointer-events-none z-10"
+            style={{
+              height: '50%',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 50%, transparent 100%)'
+            }}
+          />
+
+          {/* Title - Always visible at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 p-3 z-20">
+            <h3 className="font-semibold text-white text-sm line-clamp-2 leading-tight">
+              {movie.title}
+            </h3>
+          </div>
+
+          {/* Badges - Bottom left corner */}
+          <div className="absolute bottom-2 left-2 flex flex-col gap-1.5 z-20">
+            {/* Age Rating */}
+            {movie.age_rating && (
+              <div className="border-2 border-yellow-500 text-yellow-500 bg-black/70 text-xs px-1.5 py-0.5 rounded font-bold backdrop-blur-sm">
+                {movie.age_rating}
+              </div>
+            )}
+
+            {/* Purchased Badge */}
+            {isPurchased && (
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-500/90 text-white rounded text-xs font-medium backdrop-blur-sm">
+                <CheckIcon className="w-3 h-3" />
+                <span>Adquirido</span>
+              </div>
+            )}
+
+            {/* Series Badge */}
+            {(movie as any).content_type === 'series' && (
+              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/90 text-white rounded text-xs font-medium backdrop-blur-sm">
+                <span>📺</span>
+              </div>
+            )}
+
+            {/* Availability badge */}
+            {movie.availability === 'TELEGRAM' && (
+              <div className="bg-blue-600/90 text-white text-xs px-1.5 py-0.5 rounded font-medium backdrop-blur-sm">
+                📱
+              </div>
+            )}
+            {movie.availability === 'SITE' && (
+              <div className="bg-green-600/90 text-white text-xs px-1.5 py-0.5 rounded font-medium backdrop-blur-sm">
+                🌐
+              </div>
+            )}
+            {movie.availability === 'BOTH' && (
+              <div className="bg-primary-600/90 text-white text-xs px-1.5 py-0.5 rounded font-medium backdrop-blur-sm">
+                ✨
+              </div>
+            )}
+          </div>
 
           {/* Hover overlay */}
-          <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
+          <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 z-30 ${
             isHovered ? 'opacity-100' : 'opacity-0'
           }`}>
 
@@ -218,125 +239,31 @@ const MovieCard = memo(function MovieCard({
             }`}>
               <button
                 onClick={handleFavorite}
-                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110"
+                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110 w-8 h-8"
                 title={isFavorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
               >
                 {isFavorited ? (
-                  <HeartSolidIcon className="w-5 h-5 text-red-500" />
+                  <HeartSolidIcon className="w-4 h-4 text-red-500" />
                 ) : (
-                  <HeartIcon className="w-5 h-5" />
+                  <HeartIcon className="w-4 h-4" />
                 )}
               </button>
 
               <button
                 onClick={handleWatchlist}
-                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110"
+                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110 w-8 h-8"
                 title={isInWatchlist ? 'Remover da lista' : 'Adicionar à lista'}
               >
                 {isInWatchlist ? (
-                  <CheckSolidIcon className="w-5 h-5 text-green-500" />
+                  <CheckSolidIcon className="w-4 h-4 text-green-500" />
                 ) : (
-                  <PlusIcon className="w-5 h-5" />
+                  <PlusIcon className="w-4 h-4" />
                 )}
               </button>
             </div>
           </div>
         </div>
-
-        {/* Movie Info */}
-        <div className="p-4 space-y-3">
-
-          {/* Title */}
-          <h3 className="font-semibold text-white text-sm line-clamp-2 group-hover:text-primary-400 transition-colors">
-            {movie.title}
-          </h3>
-
-          {/* Series Badge */}
-          {(movie as any).content_type === 'series' && (
-            <div className="flex items-center space-x-2 text-xs text-blue-400 mb-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-              </svg>
-              <span className="font-semibold">
-                📺 {(movie as any).total_seasons || 1} {((movie as any).total_seasons || 1) > 1 ? 'Temporadas' : 'Temporada'}
-              </span>
-            </div>
-          )}
-
-          {/* Price or Purchased Badge */}
-          {isPurchased ? (
-            <div className="flex items-center space-x-2">
-              <CheckIcon className="w-4 h-4 text-green-500" />
-              <span className="text-green-500 font-medium text-sm">Adquirido</span>
-            </div>
-          ) : (
-            <div className="text-primary-500 font-extrabold text-2xl">
-              {formatPrice(movie.price_cents)}
-            </div>
-          )}
-
-          {/* Age Rating */}
-          {movie.age_rating && (
-            <div className="flex items-center space-x-2">
-              <div className="border-2 border-yellow-500 text-yellow-500 px-2 py-1 rounded text-xs font-bold">
-                {movie.age_rating}
-              </div>
-              <span className="text-xs text-gray-400">Anos</span>
-            </div>
-          )}
-
-          {/* Additional Info */}
-          {showFullInfo && (
-            <>
-              {/* Genres */}
-              {movie.genres && movie.genres.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {movie.genres.slice(0, 2).map((genre) => (
-                    <span
-                      key={genre}
-                      className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded-full"
-                    >
-                      {genre}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Year and Duration */}
-              <div className="flex items-center justify-between text-xs text-gray-400">
-                {movie.release_year && <span>{movie.release_year}</span>}
-                {movie.duration_minutes && (
-                  <div className="flex items-center space-x-1">
-                    <ClockIcon className="w-3 h-3" />
-                    <span>{formatDuration(movie.duration_minutes)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Description */}
-              <p className="text-xs text-gray-400 line-clamp-2">
-                {movie.description}
-              </p>
-            </>
-          )}
-
-          {/* Quick Actions */}
-          <div className="flex items-center justify-between pt-2">
-            <Link
-              href={(movie as any).content_type === 'series' ? `/series/${movie.id}` : `/movies/${movie.id}`}
-              className="text-xs text-gray-400 hover:text-white transition-colors focus-outline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Ver detalhes
-            </Link>
-          </div>
-        </div>
       </div>
-
-      {/* Enhanced hover effect */}
-      <div className={`absolute inset-0 -z-10 bg-primary-600/20 rounded-xl blur-xl transition-opacity duration-300 ${
-        isHovered ? 'opacity-100' : 'opacity-0'
-      }`} />
 
       {/* Language Selector Modal */}
       {isPurchased && (
