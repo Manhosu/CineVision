@@ -54,6 +54,78 @@ export default function DashboardPage() {
     }
   }, [authLoading, isAuthenticated, router]);
 
+  // Função para renovar token usando refresh_token
+  const refreshAccessToken = async (): Promise<string | null> => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        console.error('[Dashboard] No refresh token found');
+        return null;
+      }
+
+      console.log('[Dashboard] Refreshing access token...');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Dashboard] Token refreshed successfully');
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('auth_token', data.access_token);
+        if (data.refresh_token) {
+          localStorage.setItem('refresh_token', data.refresh_token);
+        }
+        return data.access_token;
+      } else {
+        console.error('[Dashboard] Failed to refresh token');
+        return null;
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error refreshing token:', error);
+      return null;
+    }
+  };
+
+  // Função para fazer fetch com auto-refresh
+  const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
+    let token = localStorage.getItem('auth_token');
+
+    const makeRequest = async (authToken: string) => {
+      return fetch(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          'Authorization': `Bearer ${authToken}`,
+        },
+      });
+    };
+
+    let response = await makeRequest(token!);
+
+    // Se recebeu 401, tenta renovar o token
+    if (response.status === 401) {
+      console.log('[Dashboard] Token expired, attempting refresh...');
+      const newToken = await refreshAccessToken();
+
+      if (newToken) {
+        // Tenta novamente com o novo token
+        response = await makeRequest(newToken);
+      } else {
+        // Se não conseguiu renovar, redireciona para login
+        console.error('[Dashboard] Could not refresh token, redirecting to login');
+        router.push('/auth/login');
+        throw new Error('Authentication failed');
+      }
+    }
+
+    return response;
+  };
+
   // Buscar dados do usuário
   useEffect(() => {
     if (!user) return;
@@ -61,7 +133,6 @@ export default function DashboardPage() {
     const fetchUserData = async () => {
       try {
         setIsLoading(true);
-        const token = localStorage.getItem('auth_token');
 
         console.log('[Dashboard] User data:', {
           id: user.id,
@@ -74,11 +145,7 @@ export default function DashboardPage() {
         const contentUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}/content`;
         console.log('[Dashboard] Fetching content from:', contentUrl);
 
-        const contentRes = await fetch(contentUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const contentRes = await fetchWithAuth(contentUrl);
 
         console.log('[Dashboard] Response status:', contentRes.status);
         console.log('[Dashboard] Response ok:', contentRes.ok);
@@ -98,11 +165,7 @@ export default function DashboardPage() {
         const purchasesUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/user/${user.id}`;
         console.log('[Dashboard] Fetching purchases from:', purchasesUrl);
 
-        const purchasesRes = await fetch(purchasesUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const purchasesRes = await fetchWithAuth(purchasesUrl);
 
         console.log('[Dashboard] Purchases response status:', purchasesRes.status);
 
@@ -117,15 +180,21 @@ export default function DashboardPage() {
         }
 
         // Buscar solicitações do usuário
-        const requestsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests/user/${user.id}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const requestsUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests/user/${user.id}`;
+        console.log('[Dashboard] Fetching requests from:', requestsUrl);
+
+        const requestsRes = await fetchWithAuth(requestsUrl);
+
+        console.log('[Dashboard] Requests response status:', requestsRes.status);
 
         if (requestsRes.ok) {
           const requestsData = await requestsRes.json();
+          console.log('[Dashboard] Requests data:', requestsData);
+          console.log('[Dashboard] Requests count:', requestsData?.length);
           setRequests(requestsData);
+        } else {
+          const errorText = await requestsRes.text();
+          console.error('[Dashboard] Error fetching requests:', errorText);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
