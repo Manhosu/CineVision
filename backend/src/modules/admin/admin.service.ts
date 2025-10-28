@@ -635,4 +635,37 @@ export class AdminService {
       refunded_amount: parseFloat(refundedResult.total || 0) / 100,
     };
   }
+
+  async getContentStats() {
+    const [total, totalViews] = await Promise.all([
+      this.contentRepository.count(),
+      this.contentRepository
+        .createQueryBuilder('content')
+        .select('SUM(content.views_count)', 'total')
+        .getRawOne(),
+    ]);
+
+    return {
+      total,
+      totalViews: parseInt(totalViews.total || 0),
+    };
+  }
+
+  async getUserStats() {
+    const total = await this.userRepository.count();
+
+    return {
+      total,
+    };
+  }
+
+  async getRequestsStats() {
+    const pending = await this.contentRequestRepository.count({
+      where: { status: 'pending' as any },
+    });
+
+    return {
+      pending,
+    };
+  }
 }

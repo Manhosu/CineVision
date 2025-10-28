@@ -57,32 +57,30 @@ export default function AdminDashboard() {
       try {
         setLoading(true);
 
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-        // Buscar conteúdos
-        const contentResponse = await fetch(`${API_URL}/api/v1/admin/content`, { headers });
-        const contentData = await contentResponse.json();
+        // Buscar todas as estatísticas em paralelo
+        const [contentRes, usersRes, requestsRes] = await Promise.all([
+          fetch(`${API_URL}/api/v1/admin/stats/content`),
+          fetch(`${API_URL}/api/v1/admin/stats/users`),
+          fetch(`${API_URL}/api/v1/admin/stats/requests`)
+        ]);
 
-        // Calcular visualizações totais
-        const totalViews = contentData.data?.reduce((sum: number, content: any) => sum + (content.views_count || 0), 0) || 0;
+        const contentData = await contentRes.json();
+        const usersData = await usersRes.json();
+        const requestsData = await requestsRes.json();
 
         setStats({
-          totalContent: contentData.data?.length || 0,
-          totalUsers: 0, // Endpoint não existe ainda
-          totalRequests: 0, // Endpoint não existe ainda
-          recentUploads: totalViews
+          totalContent: contentData.total || 0,
+          totalUsers: usersData.total || 0,
+          totalRequests: requestsData.pending || 0,
+          recentUploads: contentData.totalViews || 0
         });
 
-        setRecentContent(contentData.data || []);
+        // Buscar conteúdos recentes para a lista
+        const recentContentRes = await fetch(`${API_URL}/api/v1/admin/content?limit=5`);
+        const recentContentData = await recentContentRes.json();
+        setRecentContent(recentContentData.data || []);
       } catch (error) {
         console.error('Erro ao carregar estatísticas:', error);
       } finally {
@@ -91,6 +89,11 @@ export default function AdminDashboard() {
     };
 
     fetchStats();
+
+    // Atualizar a cada 30 segundos
+    const interval = setInterval(fetchStats, 30000);
+
+    return () => clearInterval(interval);
   }, [mounted]);
 
   const quickActions = [

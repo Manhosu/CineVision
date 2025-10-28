@@ -32,6 +32,27 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagg
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('stats/content')
+  @ApiOperation({ summary: 'Get content statistics' })
+  @ApiResponse({ status: 200, description: 'Content stats retrieved successfully' })
+  async getContentStats(@GetUser() user: User) {
+    return this.adminService.getContentStats();
+  }
+
+  @Get('stats/users')
+  @ApiOperation({ summary: 'Get users statistics' })
+  @ApiResponse({ status: 200, description: 'User stats retrieved successfully' })
+  async getUserStats(@GetUser() user: User) {
+    return this.adminService.getUserStats();
+  }
+
+  @Get('stats/requests')
+  @ApiOperation({ summary: 'Get content requests statistics' })
+  @ApiResponse({ status: 200, description: 'Requests stats retrieved successfully' })
+  async getRequestsStats(@GetUser() user: User) {
+    return this.adminService.getRequestsStats();
+  }
+
   @Get('metrics')
   @ApiOperation({ summary: 'Get admin dashboard metrics' })
   @ApiResponse({ status: 200, description: 'Metrics retrieved successfully', type: MetricsResponseDto })
