@@ -141,34 +141,37 @@ const Top10MovieCard = memo(function Top10MovieCard({
 
   return (
     <div
-      className="group relative cursor-pointer flex items-end gap-0"
+      className="group relative cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
-      {/* Netflix-style Large Number - Next to the card */}
-      <div className="relative flex-shrink-0 pointer-events-none self-end" style={{ width: '55px', marginRight: '-15px', zIndex: 1 }}>
+      {/* Main Card Container */}
+      <div className="relative rounded-2xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 ease-in-out hover:border-white/20 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:scale-105 hover:brightness-110">
+
+        {/* Netflix-style Large Number - Behind the card (bottom left) */}
         <div
-          className="text-[6rem] xs:text-[7.5rem] sm:text-[9.5rem] md:text-[11.5rem] font-black leading-none select-none"
+          className="absolute bottom-0 left-0 pointer-events-none select-none z-0"
           style={{
-            WebkitTextStroke: '3px rgba(255, 255, 255, 1)',
-            textStroke: '3px rgba(255, 255, 255, 1)',
-            color: 'rgba(15, 15, 15, 0.5)',
+            fontSize: 'clamp(6rem, 15vw, 10rem)',
+            fontWeight: 900,
+            lineHeight: 1,
+            WebkitTextStroke: '2px rgba(255, 255, 255, 1)',
+            textStroke: '2px rgba(255, 255, 255, 1)',
+            color: 'rgba(0, 0, 0, 0.5)',
             fontFamily: 'system-ui, -apple-system, sans-serif',
-            userSelect: 'none',
-            filter: 'drop-shadow(0 8px 16px rgba(0, 0, 0, 1))',
-            textShadow: '0 0 40px rgba(0, 0, 0, 1)'
+            opacity: 0.3,
+            filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8))',
+            transform: 'translateY(10%)'
           }}
         >
           {ranking}
         </div>
-      </div>
-
-      {/* Main Card */}
-      <div className="relative flex-1 card-hover rounded-xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:border-white/20 hover:shadow-2xl" style={{ zIndex: 2 }}>
 
         {/* Movie Poster */}
-        <div className="relative aspect-[3/4] min-h-[360px] overflow-hidden">
+        <div className="relative aspect-[2/3] overflow-hidden" style={{
+          minHeight: 'clamp(320px, 40vw, 480px)'
+        }}>
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={`#${ranking} - ${movie.title}`}
@@ -193,8 +196,14 @@ const Top10MovieCard = memo(function Top10MovieCard({
           )}
 
 
-          {/* Gradient overlay to prevent title/price overlap */}
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent pointer-events-none z-10"></div>
+          {/* Gradient overlay - Improved and extended */}
+          <div
+            className="absolute bottom-0 left-0 right-0 pointer-events-none z-10"
+            style={{
+              height: '40%',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 50%, transparent 100%)'
+            }}
+          ></div>
 
           {/* Hover overlay */}
           <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 z-20 ${
@@ -255,18 +264,20 @@ const Top10MovieCard = memo(function Top10MovieCard({
         </div>
 
         {/* Movie Info */}
-        <div className="relative p-2.5 xs:p-3 sm:p-4 space-y-1.5 xs:space-y-2 sm:space-y-3 z-20 bg-dark-900">
+        <div className="relative p-4 space-y-2 z-20 bg-dark-900">
 
           {/* Title */}
-          <h3 className="font-semibold text-white text-xs xs:text-sm sm:text-base line-clamp-2 group-hover:text-primary-400 transition-colors">
+          <h3 className="font-semibold text-white line-clamp-2 group-hover:text-primary-400 transition-colors" style={{
+            fontSize: 'clamp(0.875rem, 2vw, 1.125rem)'
+          }}>
             {movie.title}
           </h3>
 
           {/* Price or Purchased Badge */}
           {isPurchased ? (
-            <div className="flex items-center space-x-2">
-              <CheckIcon className="w-4 h-4 text-green-500" />
-              <span className="text-green-500 font-medium text-sm">Adquirido</span>
+            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/20 text-green-500 rounded-lg text-sm font-medium">
+              <CheckIcon className="w-4 h-4" />
+              <span>Adquirido</span>
             </div>
           ) : (
             <div className="text-primary-500 font-extrabold text-xl sm:text-2xl">
@@ -286,11 +297,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
           </div>
         </div>
       </div>
-
-      {/* Enhanced hover effect */}
-      <div className={`absolute inset-0 -z-10 bg-primary-600/20 rounded-xl blur-xl transition-opacity duration-300 ${
-        isHovered ? 'opacity-100' : 'opacity-0'
-      }`} />
 
       {/* Language Selector Modal */}
       {isPurchased && (

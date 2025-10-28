@@ -27,6 +27,7 @@ export function ContentRow({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   const updateScrollButtons = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -61,8 +62,17 @@ export function ContentRow({
   const handleScroll = useCallback(() => {
     if (!isScrolling) {
       updateScrollButtons();
+
+      // Calcular qual slide está ativo
+      const container = scrollContainerRef.current;
+      if (container && type === 'top10') {
+        const scrollPosition = container.scrollLeft;
+        const cardWidth = type === 'top10' ? 320 : 280;
+        const slideIndex = Math.round(scrollPosition / (cardWidth * 3));
+        setActiveSlide(slideIndex);
+      }
     }
-  }, [isScrolling, updateScrollButtons]);
+  }, [isScrolling, updateScrollButtons, type]);
 
   // Atualizar botões quando os filmes mudarem
   useState(() => {
@@ -76,11 +86,25 @@ export function ContentRow({
   const isTop10 = type === 'top10';
 
   return (
-    <section className={`relative ${isTop10 ? 'py-4 xs:py-6 sm:py-8 md:py-10' : 'py-8'}`}>
+    <section
+      className={`relative ${isTop10 ? 'py-16' : 'py-8'}`}
+      style={isTop10 ? {
+        background: 'linear-gradient(to bottom, #000000 0%, #1a1a1a 50%, #0a0a0a 100%)'
+      } : undefined}
+    >
       <div className="container mx-auto px-4 lg:px-6">
         {/* Título da seção */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className={`font-bold text-white ${isTop10 ? 'text-2xl sm:text-3xl md:text-4xl' : 'text-2xl md:text-3xl'}`}>
+        <div className={`${isTop10 ? 'text-center mb-12' : 'flex items-center justify-between mb-6'}`}>
+          <h2
+            className="font-extrabold text-white"
+            style={isTop10 ? {
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              textShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              letterSpacing: '-0.02em'
+            } : {
+              fontSize: 'clamp(1.5rem, 3vw, 2rem)'
+            }}
+          >
             {title}
           </h2>
 
@@ -121,7 +145,7 @@ export function ContentRow({
           {/* Container de scroll */}
           <div
             ref={scrollContainerRef}
-            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'space-x-2 xs:space-x-3 sm:space-x-4 md:space-x-6 pb-4 xs:pb-6' : 'space-x-4 pb-4'}`}
+            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'gap-4 pb-6' : 'space-x-4 pb-4'}`}
             onScroll={handleScroll}
             style={{
               scrollSnapType: 'x mandatory',
@@ -131,7 +155,11 @@ export function ContentRow({
             {movies.map((movie, index) => (
               <div
                 key={movie.id}
-                className={`flex-none ${type === 'top10' ? 'w-56 sm:w-64 md:w-72 lg:w-80' : 'w-48 sm:w-56 md:w-64'}` }
+                className={`flex-none ${
+                  type === 'top10'
+                    ? 'w-[240px] sm:w-[280px] md:w-[280px] lg:w-[320px]'
+                    : 'w-48 sm:w-56 md:w-64'
+                }`}
                 style={{ scrollSnapAlign: 'start' }}
               >
                 {type === 'top10' ? (
@@ -169,11 +197,41 @@ export function ContentRow({
             )}
           </div>
 
-          {/* Indicadores de scroll para mobile */}
-          <div className="flex justify-center mt-4 space-x-2 sm:hidden">
-            <div className={`h-1 bg-white/20 rounded-full flex-1 max-w-20 ${canScrollLeft ? '' : 'bg-white/40'}`} />
-            <div className={`h-1 bg-white/20 rounded-full flex-1 max-w-20 ${canScrollRight ? '' : 'bg-white/40'}`} />
-          </div>
+          {/* Dots de navegação - Apenas para Top 10 */}
+          {isTop10 && movies.length > 3 && (
+            <div className="flex justify-center gap-2 mt-6">
+              {Array.from({ length: Math.ceil(movies.length / 3) }).map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    const container = scrollContainerRef.current;
+                    if (container) {
+                      const cardWidth = 320;
+                      container.scrollTo({
+                        left: index * cardWidth * 3,
+                        behavior: 'smooth'
+                      });
+                      setActiveSlide(index);
+                    }
+                  }}
+                  className={`transition-all duration-300 ${
+                    activeSlide === index
+                      ? 'w-6 h-2 bg-white/90 rounded-sm'
+                      : 'w-2 h-2 bg-white/30 rounded-full hover:bg-white/50'
+                  }`}
+                  aria-label={`Ir para página ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Indicadores de scroll para mobile - Outras seções */}
+          {!isTop10 && (
+            <div className="flex justify-center mt-4 space-x-2 sm:hidden">
+              <div className={`h-1 bg-white/20 rounded-full flex-1 max-w-20 ${canScrollLeft ? '' : 'bg-white/40'}`} />
+              <div className={`h-1 bg-white/20 rounded-full flex-1 max-w-20 ${canScrollRight ? '' : 'bg-white/40'}`} />
+            </div>
+          )}
         </div>
 
         {/* Fallback para quando não há filmes */}
