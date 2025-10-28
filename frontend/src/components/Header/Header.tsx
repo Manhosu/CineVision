@@ -92,7 +92,7 @@ export function Header({ transparent = false }: HeaderProps) {
     { label: 'Filmes', href: '/movies' },
     { label: 'Categorias', href: '/categories' },
     ...(isTelegramUser ? [
-      { label: 'Minhas Compras', href: '/minha-lista', icon: ShoppingBagIcon },
+      { label: 'Minhas Compras', href: '/dashboard', icon: ShoppingBagIcon },
       { label: 'Fazer Pedido', onClick: () => setIsRequestModalOpen(true), icon: FilmIcon }
     ] : [])
   ];
