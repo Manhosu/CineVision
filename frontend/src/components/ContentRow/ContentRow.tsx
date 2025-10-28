@@ -12,6 +12,7 @@ interface ContentRowProps {
   priority?: boolean; // Para otimização de imagens
   onMovieClick?: (movie: Movie) => void;
   type?: 'featured' | 'latest' | 'popular' | 'top10'; // Section type
+  purchasedMovieIds?: Set<string>; // IDs dos filmes comprados pelo usuário
 }
 
 export function ContentRow({
@@ -19,7 +20,8 @@ export function ContentRow({
   movies,
   priority = false,
   onMovieClick,
-  type
+  type,
+  purchasedMovieIds = new Set()
 }: ContentRowProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -41,7 +43,7 @@ export function ContentRow({
 
     setIsScrolling(true);
 
-    const cardWidth = 280; // Largura aproximada do card + gap
+    const cardWidth = type === 'top10' ? 320 : 280; // Largura aproximada do card + gap
     const scrollAmount = direction === 'left' ? -cardWidth * 3 : cardWidth * 3;
 
     container.scrollBy({
@@ -74,7 +76,7 @@ export function ContentRow({
   const isTop10 = type === 'top10';
 
   return (
-    <section className={`relative ${isTop10 ? 'py-6 sm:py-8 md:py-10' : 'py-8'}`}>
+    <section className={`relative ${isTop10 ? 'py-4 xs:py-6 sm:py-8 md:py-10' : 'py-8'}`}>
       <div className="container mx-auto px-4 lg:px-6">
         {/* Título da seção */}
         <div className="flex items-center justify-between mb-6">
@@ -119,7 +121,7 @@ export function ContentRow({
           {/* Container de scroll */}
           <div
             ref={scrollContainerRef}
-            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'space-x-3 sm:space-x-4 md:space-x-6 pb-6' : 'space-x-4 pb-4'}`}
+            className={`flex overflow-x-auto scrollbar-hide scroll-smooth ${isTop10 ? 'space-x-2 xs:space-x-3 sm:space-x-4 md:space-x-6 pb-4 xs:pb-6' : 'space-x-4 pb-4'}`}
             onScroll={handleScroll}
             style={{
               scrollSnapType: 'x mandatory',
@@ -129,7 +131,7 @@ export function ContentRow({
             {movies.map((movie, index) => (
               <div
                 key={movie.id}
-                className="flex-none w-48 sm:w-56 md:w-64"
+                className={`flex-none ${type === 'top10' ? 'w-56 sm:w-64 md:w-72 lg:w-80' : 'w-48 sm:w-56 md:w-64'}` }
                 style={{ scrollSnapAlign: 'start' }}
               >
                 {type === 'top10' ? (
@@ -138,6 +140,7 @@ export function ContentRow({
                     ranking={index + 1}
                     priority={priority && index < 3}
                     onClick={onMovieClick}
+                    isPurchased={purchasedMovieIds.has(movie.id)}
                   />
                 ) : (
                   <MovieCard

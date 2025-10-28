@@ -147,12 +147,12 @@ const Top10MovieCard = memo(function Top10MovieCard({
       onClick={handleCardClick}
     >
       {/* Netflix-style Large Number - Next to the card */}
-      <div className="relative flex-shrink-0 pointer-events-none self-end" style={{ width: '70px', marginRight: '-20px', zIndex: 1 }}>
+      <div className="relative flex-shrink-0 pointer-events-none self-end" style={{ width: '55px', marginRight: '-15px', zIndex: 1 }}>
         <div
-          className="text-[9rem] sm:text-[11rem] md:text-[13rem] font-black leading-none select-none"
+          className="text-[6rem] xs:text-[7.5rem] sm:text-[9.5rem] md:text-[11.5rem] font-black leading-none select-none"
           style={{
-            WebkitTextStroke: '4px rgba(255, 255, 255, 1)',
-            textStroke: '4px rgba(255, 255, 255, 1)',
+            WebkitTextStroke: '3px rgba(255, 255, 255, 1)',
+            textStroke: '3px rgba(255, 255, 255, 1)',
             color: 'rgba(15, 15, 15, 0.5)',
             fontFamily: 'system-ui, -apple-system, sans-serif',
             userSelect: 'none',
@@ -168,7 +168,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
       <div className="relative flex-1 card-hover rounded-xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 hover:border-white/20 hover:shadow-2xl" style={{ zIndex: 2 }}>
 
         {/* Movie Poster */}
-        <div className="relative aspect-[2/3] min-h-[240px] overflow-hidden">
+        <div className="relative aspect-[3/4] min-h-[360px] overflow-hidden">
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={`#${ranking} - ${movie.title}`}
@@ -191,6 +191,10 @@ const Top10MovieCard = memo(function Top10MovieCard({
               {movie.age_rating}
             </div>
           )}
+
+
+          {/* Gradient overlay to prevent title/price overlap */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-dark-900 via-dark-900/80 to-transparent pointer-events-none z-10"></div>
 
           {/* Hover overlay */}
           <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 z-20 ${
@@ -251,10 +255,10 @@ const Top10MovieCard = memo(function Top10MovieCard({
         </div>
 
         {/* Movie Info */}
-        <div className="relative p-3 sm:p-4 space-y-2 sm:space-y-3 z-10 bg-gradient-to-t from-dark-900 to-transparent">
+        <div className="relative p-2.5 xs:p-3 sm:p-4 space-y-1.5 xs:space-y-2 sm:space-y-3 z-20 bg-dark-900">
 
           {/* Title */}
-          <h3 className="font-semibold text-white text-sm sm:text-base line-clamp-2 group-hover:text-primary-400 transition-colors">
+          <h3 className="font-semibold text-white text-xs xs:text-sm sm:text-base line-clamp-2 group-hover:text-primary-400 transition-colors">
             {movie.title}
           </h3>
 

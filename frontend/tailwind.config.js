@@ -133,7 +133,7 @@ module.exports = {
         'xs': '2px',
       },
       screens: {
-        'xs': '475px',
+        'xs': '375px',
         'tv': '1536px', // Smart TV breakpoint
         'tv-large': '1920px', // Large TV breakpoint
       },

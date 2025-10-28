@@ -11,7 +11,9 @@ import {
   XMarkIcon,
   UserIcon,
   ArrowRightOnRectangleIcon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  ShoppingBagIcon,
+  FilmIcon
 } from '@heroicons/react/24/outline';
 
 interface HeaderProps {
@@ -80,10 +82,17 @@ export function Header({ transparent = false }: HeaderProps) {
     }
   };
 
+  // Verificar se usuário tem telegram_id (autologin do Telegram)
+  const isTelegramUser = isAuthenticated && user?.telegram_id;
+
   const navigationItems = [
     { label: 'Início', href: '/' },
     { label: 'Filmes', href: '/movies' },
     { label: 'Categorias', href: '/categories' },
+    ...(isTelegramUser ? [
+      { label: 'Minhas Compras', href: '/minha-lista', icon: ShoppingBagIcon },
+      { label: 'Fazer Pedido', href: '/request', icon: FilmIcon }
+    ] : [])
   ];
 
   return (
@@ -120,19 +129,23 @@ export function Header({ transparent = false }: HeaderProps) {
 
             {/* Navegação estilo Netflix - Clean e Minimalista */}
             <nav className="hidden lg:flex items-center space-x-5">
-              {navigationItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-sm font-medium transition-colors duration-200 ${
-                    isActiveLink(item.href)
-                      ? 'text-white font-semibold'
-                      : 'text-gray-300 hover:text-gray-200'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {navigationItems.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
+                      isActiveLink(item.href)
+                        ? 'text-white font-semibold'
+                        : 'text-gray-300 hover:text-gray-200'
+                    }`}
+                  >
+                    {ItemIcon && <ItemIcon className="w-4 h-4" />}
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
 
             {/* Ações estilo Netflix - Simples e Clean */}
@@ -259,23 +272,27 @@ export function Header({ transparent = false }: HeaderProps) {
                   <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
                     Navegação
                   </div>
-                  {navigationItems.map((item) => (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center px-3 py-3 rounded-lg text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
-                        isActiveLink(item.href)
-                          ? 'bg-primary-600/20 text-primary-400 border-l-4 border-primary-500'
-                          : 'text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10'
-                      }`}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <span className="flex-1">{item.label}</span>
-                      {isActiveLink(item.href) && (
-                        <div className="w-2 h-2 bg-primary-500 rounded-full" />
-                      )}
-                    </Link>
-                  ))}
+                  navigationItems.map((item) => {
+                    const ItemIcon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 ${
+                          isActiveLink(item.href)
+                            ? 'bg-primary-600/20 text-primary-400 border-l-4 border-primary-500'
+                            : 'text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10'
+                        }`}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {ItemIcon && <ItemIcon className="w-5 h-5 flex-shrink-0" />}
+                        <span className="flex-1">{item.label}</span>
+                        {isActiveLink(item.href) && (
+                          <div className="w-2 h-2 bg-primary-500 rounded-full flex-shrink-0" />
+                        )}
+                      </Link>
+                    );
+                  })
                 </nav>
 
                 {/* Seção de Conta - Apenas Admin */}

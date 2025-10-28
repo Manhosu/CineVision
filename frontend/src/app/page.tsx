@@ -60,6 +60,7 @@ function HomePageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
+  const [purchasedMovies, setPurchasedMovies] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -144,6 +145,26 @@ function HomePageContent() {
         ].filter(section => section.movies.length > 0);
 
         setContentSections(sections);
+        // Fetch user purchases if authenticated
+        if (token) {
+          try {
+            const userStr = localStorage.getItem('user');
+            if (userStr) {
+              const user = JSON.parse(userStr);
+              const purchasesRes = await fetch(`${API_URL}/api/v1/purchases/user/${user.id}/content`, {
+                headers
+              });
+              
+              if (purchasesRes.ok) {
+                const purchasesData = await purchasesRes.json();
+                const purchasedIds = new Set(purchasesData.map((item: any) => item.content_id || item.id));
+                setPurchasedMovies(purchasedIds);
+              }
+            }
+          } catch (err) {
+            console.error('Erro ao carregar compras:', err);
+          }
+        }
         setError(null);
       } catch (err) {
         console.error('Erro ao carregar conteúdo:', err);
@@ -199,11 +220,12 @@ function HomePageContent() {
           ) : contentSections.length > 0 ? (
             contentSections.map((section, index) => (
               <ContentRow
-                key={section.type}
+                key={`${section.type}-${index}`}
                 title={section.title}
                 movies={section.movies}
                 type={section.type}
-                priority={index === 0} // Primeira seção tem prioridade para otimização
+                priority={index === 0}
+                purchasedMovieIds={purchasedMovies}
               />
             ))
           ) : (

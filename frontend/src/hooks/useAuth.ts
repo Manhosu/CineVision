@@ -9,6 +9,8 @@ export interface User {
   email: string;
   role: 'admin' | 'user';
   name?: string;
+  telegram_id?: string;
+  telegram_username?: string;
 }
 
 export interface AuthState {
