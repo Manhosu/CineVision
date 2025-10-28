@@ -9,9 +9,6 @@ import {
   MagnifyingGlassIcon,
   Bars3Icon,
   XMarkIcon,
-  UserIcon,
-  ArrowRightOnRectangleIcon,
-  ChevronDownIcon,
   ShoppingBagIcon,
   FilmIcon
 } from '@heroicons/react/24/outline';
@@ -26,8 +23,6 @@ export function Header({ transparent = false }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
@@ -42,22 +37,6 @@ export function Header({ transparent = false }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
-    };
-
-    if (isUserMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isUserMenuOpen]);
-
   const isActiveLink = (href: string) => {
     if (href === '/') {
       return pathname === '/';
@@ -71,16 +50,6 @@ export function Header({ transparent = false }: HeaderProps) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
       setIsSearchOpen(false);
       setSearchQuery('');
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setIsUserMenuOpen(false);
-      router.push('/');
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error);
     }
   };
 
@@ -216,47 +185,6 @@ export function Header({ transparent = false }: HeaderProps) {
                 <MagnifyingGlassIcon className="w-5 h-5" />
               </button>
 
-              {/* Menu de Usuário apenas para Admin */}
-              {isAuthenticated && user?.role === 'admin' && (
-                <div ref={userMenuRef} className="relative hidden sm:block">
-                  <button
-                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    className="flex items-center space-x-2 text-white hover:text-gray-300 transition-colors duration-200"
-                  >
-                    <div className="w-8 h-8 rounded bg-primary-600 flex items-center justify-center">
-                      <UserIcon className="w-4 h-4" />
-                    </div>
-                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {isUserMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-52 bg-black/95 border border-gray-800 shadow-2xl overflow-hidden z-50">
-                      <div className="p-3 border-b border-gray-800">
-                        <p className="text-sm text-white truncate">{user?.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">{user?.email}</p>
-                      </div>
-
-                      <div className="py-2">
-                        <Link
-                          href="/admin"
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          Painel Admin
-                        </Link>
-
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
-                        >
-                          Sair do Cine Vision
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Menu Mobile Toggle */}
               <button
                 onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -331,39 +259,6 @@ export function Header({ transparent = false }: HeaderProps) {
                     );
                   })}
                 </nav>
-
-                {/* Seção de Conta - Apenas Admin */}
-                {isAuthenticated && user?.role === 'admin' && (
-                  <div className="border-t border-white/10 pt-6">
-                    <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
-                      Admin
-                    </div>
-                    {user && (
-                      <div className="px-3 py-2 mb-2">
-                        <p className="text-sm font-medium text-white">{user.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
-                      </div>
-                    )}
-                    <Link
-                      href="/admin"
-                      className="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <UserIcon className="w-5 h-5 mr-3 text-primary-500" />
-                      <span className="flex-1">Painel Admin</span>
-                    </Link>
-                    <button
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        handleLogout();
-                      }}
-                      className="flex items-center w-full px-3 py-3 rounded-lg text-base font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 active:bg-red-500/20 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    >
-                      <ArrowRightOnRectangleIcon className="w-5 h-5 mr-3" />
-                      <span className="flex-1 text-left">Sair</span>
-                    </button>
-                  </div>
-                )}
 
                 {/* Seção de Busca Mobile */}
                 <div className="border-t border-white/10 pt-6 lg:hidden">
