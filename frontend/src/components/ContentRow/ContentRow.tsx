@@ -44,7 +44,7 @@ export function ContentRow({
 
     setIsScrolling(true);
 
-    const cardWidth = type === 'top10' ? 320 : 280; // Largura aproximada do card + gap
+    const cardWidth = type === 'top10' ? 267 : 280; // Largura aproximada do card + gap
     const scrollAmount = direction === 'left' ? -cardWidth * 3 : cardWidth * 3;
 
     container.scrollBy({
@@ -67,7 +67,7 @@ export function ContentRow({
       const container = scrollContainerRef.current;
       if (container && type === 'top10') {
         const scrollPosition = container.scrollLeft;
-        const cardWidth = type === 'top10' ? 320 : 280;
+        const cardWidth = 267; // Largura dos cards menores
         const slideIndex = Math.round(scrollPosition / (cardWidth * 3));
         setActiveSlide(slideIndex);
       }
@@ -157,7 +157,7 @@ export function ContentRow({
                 key={movie.id}
                 className={`flex-none ${
                   type === 'top10'
-                    ? 'w-[240px] sm:w-[280px] md:w-[280px] lg:w-[320px]'
+                    ? 'w-[187px] sm:w-[220px] md:w-[240px] lg:w-[267px]'
                     : 'w-48 sm:w-56 md:w-64'
                 }`}
                 style={{ scrollSnapAlign: 'start' }}
@@ -206,7 +206,7 @@ export function ContentRow({
                   onClick={() => {
                     const container = scrollContainerRef.current;
                     if (container) {
-                      const cardWidth = 320;
+                      const cardWidth = 267; // Largura dos cards menores
                       container.scrollTo({
                         left: index * cardWidth * 3,
                         behavior: 'smooth'
