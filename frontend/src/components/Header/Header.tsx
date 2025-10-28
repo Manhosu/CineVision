@@ -15,6 +15,7 @@ import {
   ShoppingBagIcon,
   FilmIcon
 } from '@heroicons/react/24/outline';
+import { RequestContentModal } from '@/components/RequestContentModal/RequestContentModal';
 
 interface HeaderProps {
   transparent?: boolean;
@@ -30,6 +31,7 @@ export function Header({ transparent = false }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -91,7 +93,7 @@ export function Header({ transparent = false }: HeaderProps) {
     { label: 'Categorias', href: '/categories' },
     ...(isTelegramUser ? [
       { label: 'Minhas Compras', href: '/minha-lista', icon: ShoppingBagIcon },
-      { label: 'Fazer Pedido', href: '/request', icon: FilmIcon }
+      { label: 'Fazer Pedido', onClick: () => setIsRequestModalOpen(true), icon: FilmIcon }
     ] : [])
   ];
 
@@ -129,8 +131,24 @@ export function Header({ transparent = false }: HeaderProps) {
 
             {/* Navegação estilo Netflix - Clean e Minimalista */}
             <nav className="hidden lg:flex items-center space-x-5">
-              {navigationItems.map((item) => {
+              {navigationItems.map((item, index) => {
                 const ItemIcon = item.icon;
+                
+                // Se tem onClick, renderizar como button
+                if (item.onClick) {
+                  return (
+                    <button
+                      key={`nav-item-${index}`}
+                      onClick={item.onClick}
+                      className="text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-gray-300 hover:text-gray-200"
+                    >
+                      {ItemIcon && <ItemIcon className="w-4 h-4" />}
+                      {item.label}
+                    </button>
+                  );
+                }
+                
+                // Se tem href, renderizar como Link
                 return (
                   <Link
                     key={item.href}
@@ -272,8 +290,27 @@ export function Header({ transparent = false }: HeaderProps) {
                   <div className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-3 px-3">
                     Navegação
                   </div>
-                  {navigationItems.map((item) => {
+                  {navigationItems.map((item, index) => {
                     const ItemIcon = item.icon;
+                    
+                    // Se tem onClick, renderizar como button
+                    if (item.onClick) {
+                      return (
+                        <button
+                          key={`mobile-nav-${index}`}
+                          onClick={() => {
+                            item.onClick();
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 text-gray-300 hover:bg-white/5 hover:text-white active:bg-white/10"
+                        >
+                          {ItemIcon && <ItemIcon className="w-5 h-5 flex-shrink-0" />}
+                          <span className="flex-1">{item.label}</span>
+                        </button>
+                      );
+                    }
+                    
+                    // Se tem href, renderizar como Link
                     return (
                       <Link
                         key={item.href}
