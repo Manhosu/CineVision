@@ -29,7 +29,6 @@ const MovieCard = memo(function MovieCard({
   priority = false,
   lazyLoad = true,
   onClick,
-  showFullInfo = false,
   isPurchased = false
 }: MovieCardProps) {
   const router = useRouter();
@@ -39,6 +38,11 @@ const MovieCard = memo(function MovieCard({
   const [isFavorited, setIsFavorited] = useState(false); // TODO: Integrar com estado global
   const [isInWatchlist, setIsInWatchlist] = useState(false); // TODO: Integrar com estado global
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+
+  // Debug log
+  if (isPurchased) {
+    console.log(`🎬 Card ${movie.title} (${movie.id}): isPurchased = true`);
+  }
 
   const formatPrice = (priceInCents: number) => {
     return new Intl.NumberFormat('pt-BR', {

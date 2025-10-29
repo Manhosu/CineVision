@@ -36,6 +36,11 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
 
+  // Debug log
+  if (isPurchased) {
+    console.log(`🏆 Top10 Card #${ranking}: ${movie.title} (${movie.id}): isPurchased = true`);
+  }
+
   const formatPrice = (priceInCents: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
