@@ -138,7 +138,7 @@ function HomePageContent() {
             movies: latestData.movies || []
           },
           {
-            title: 'Mais Assistidos',
+            title: 'Séries em Alta',
             type: 'popular' as const,
             movies: popularData.movies || []
           }

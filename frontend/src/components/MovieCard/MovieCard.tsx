@@ -131,10 +131,10 @@ const MovieCard = memo(function MovieCard({
       onClick={handleCardClick}
     >
       {/* Premium Minimalist Card */}
-      <div className="relative rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)]">
+      <div className="relative w-full rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)]">
 
         {/* Poster Container - Clean & Full */}
-        <div className="relative aspect-[2/3] overflow-hidden">
+        <div className="relative aspect-[2/3] overflow-hidden w-full">
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}
