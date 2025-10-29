@@ -63,7 +63,7 @@ export function GlobalUploadProgress() {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 border-2 border-blue-500/50 shadow-2xl backdrop-blur-xl animate-slide-in">
+    <div className="fixed bottom-[24rem] right-6 z-50 w-96 bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 border-2 border-blue-500/50 shadow-2xl backdrop-blur-xl animate-slide-in">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-lg font-bold text-white flex items-center">
           <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>

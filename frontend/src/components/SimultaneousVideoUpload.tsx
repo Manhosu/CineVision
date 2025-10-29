@@ -157,6 +157,7 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       cancelRequested: false,
       needsConversion: false,
       conversionProgress: 0,
+      type: 'movie', // Define tipo como filme para exibir no modal correto
     });
 
     try {
@@ -425,6 +426,9 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
       // Get languageId from complete response
       const completeData = await completeResponse.json();
       const languageId = completeData.languageId;
+
+      // Conversion is no longer needed - only MP4 files are accepted
+      const needsConversion = false;
 
       // Update UploadContext - marca como completed se não precisa conversão, ou converting se precisa
       const finalStatus = needsConversion ? 'converting' : 'ready';

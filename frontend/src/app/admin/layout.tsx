@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { UploadProvider } from '@/contexts/UploadContext';
 import { FloatingUploadProgress } from '@/components/FloatingUploadProgress';
+import { GlobalUploadProgress } from '@/components/GlobalUploadProgress';
 
 export default function AdminLayout({
   children,
@@ -73,8 +74,10 @@ export default function AdminLayout({
     return (
       <UploadProvider>
         {children}
-        {/* Floating Upload Progress - visible across all admin pages */}
+        {/* Floating Upload Progress for Episodes - visible across all admin pages */}
         <FloatingUploadProgress />
+        {/* Global Upload Progress for Movies - visible across all admin pages */}
+        <GlobalUploadProgress />
       </UploadProvider>
     );
   }
