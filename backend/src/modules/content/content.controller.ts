@@ -36,22 +36,6 @@ export class ContentController {
     return this.contentService.findAllMovies(Number(page), Number(limit), genre, sort);
   }
 
-  @Get('series')
-  @ApiOperation({ summary: 'Get all series' })
-  @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
-  @ApiQuery({ name: 'limit', description: 'Items per page', required: false, type: Number })
-  @ApiQuery({ name: 'genre', description: 'Filter by genre', required: false, type: String })
-  @ApiQuery({ name: 'sort', description: 'Sort order', required: false, enum: ['newest', 'popular', 'rating', 'price_low', 'price_high'] })
-  @ApiResponse({ status: 200, description: 'Series retrieved successfully' })
-  async getSeries(
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-    @Query('genre') genre?: string,
-    @Query('sort') sort = 'newest',
-  ) {
-    return this.contentService.findAllSeries(Number(page), Number(limit), genre, sort);
-  }
-
   @Get('movies/:id')
   @ApiOperation({ summary: 'Get movie by ID' })
   @ApiResponse({ status: 200, description: 'Movie retrieved successfully' })
@@ -64,8 +48,24 @@ export class ContentController {
   @ApiOperation({ summary: 'Get series by ID' })
   @ApiResponse({ status: 200, description: 'Series retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Series not found' })
-  async getSeries(@Param('id') id: string) {
+  async getSeriesById(@Param('id') id: string) {
     return this.contentService.findSeriesById(id);
+  }
+
+  @Get('series')
+  @ApiOperation({ summary: 'Get all series' })
+  @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Items per page', required: false, type: Number })
+  @ApiQuery({ name: 'genre', description: 'Filter by genre', required: false, type: String })
+  @ApiQuery({ name: 'sort', description: 'Sort order', required: false, enum: ['newest', 'popular', 'rating', 'price_low', 'price_high'] })
+  @ApiResponse({ status: 200, description: 'Series retrieved successfully' })
+  async getAllSeries(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('genre') genre?: string,
+    @Query('sort') sort = 'newest',
+  ) {
+    return this.contentService.findAllSeries(Number(page), Number(limit), genre, sort);
   }
 
   @Get('categories')
