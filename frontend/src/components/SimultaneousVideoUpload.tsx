@@ -474,16 +474,19 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
     // Aguardar um pequeno delay para garantir que o estado foi atualizado
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Pegar todas as tasks deste contentId
-    const contentTasks = tasks.filter(t => t.id.includes('upload-'));
+    // Pegar apenas as tasks deste upload específico usando taskIdsRef
+    const thisUploadTaskIds = Object.values(taskIdsRef.current).filter(Boolean);
+    const contentTasks = tasks.filter(t => thisUploadTaskIds.includes(t.id));
 
     // Verificar se TODAS as tasks estão ready ou error
     const allCompleted = contentTasks.every(t => t.status === 'ready' || t.status === 'error');
     const hasAtLeastOneReady = contentTasks.some(t => t.status === 'ready');
 
     console.log('[Auto-Publish] Verificando se pode publicar:', {
+      contentId,
       allCompleted,
       hasAtLeastOneReady,
+      taskIds: thisUploadTaskIds,
       tasks: contentTasks.map(t => ({ id: t.id, status: t.status }))
     });
 
@@ -501,12 +504,28 @@ export const SimultaneousVideoUpload = forwardRef<SimultaneousVideoUploadRef, Pr
         });
 
         if (response.ok) {
-          console.log('[Auto-Publish] ✅ Conteúdo publicado e notificações enviadas automaticamente!');
+          const result = await response.json();
+          console.log('[Auto-Publish] ✅ Conteúdo publicado e disponível no site!', result);
+          console.log('[Auto-Publish] 🎉 Seu conteúdo já está visível na homepage, /movies e categorias!');
         } else {
+          // Capturar detalhes do erro
+          const errorText = await response.text();
           console.error('[Auto-Publish] ❌ Erro ao publicar conteúdo');
+          console.error('[Auto-Publish] Status:', response.status, response.statusText);
+          console.error('[Auto-Publish] Resposta:', errorText);
+          console.error('[Auto-Publish] ⚠️  AÇÃO NECESSÁRIA: Publique manualmente em /admin/content/manage');
+
+          // Tentar parsear como JSON para mostrar erro estruturado
+          try {
+            const errorJson = JSON.parse(errorText);
+            console.error('[Auto-Publish] Erro detalhado:', errorJson);
+          } catch (e) {
+            // Não é JSON, já mostramos o texto acima
+          }
         }
       } catch (error) {
-        console.error('[Auto-Publish] ❌ Erro ao publicar:', error);
+        console.error('[Auto-Publish] ❌ Erro de rede ao publicar:', error);
+        console.error('[Auto-Publish] ⚠️  AÇÃO NECESSÁRIA: Publique manualmente em /admin/content/manage');
       }
     }
   };

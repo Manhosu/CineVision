@@ -371,10 +371,27 @@ export class AdminContentService {
       );
 
       if (!languages || languages.length === 0 || !languages.some(lang => lang.video_url)) {
-        throw new BadRequestException('Content does not have any video uploaded. Upload at least one language (DUBLADO or LEGENDADO).');
+        throw new BadRequestException('Filme não possui vídeos. Faça upload de pelo menos um idioma (DUBLADO ou LEGENDADO) antes de publicar.');
       }
 
-      this.logger.log(`Content has ${languages.length} language(s) with videos uploaded`);
+      this.logger.log(`Movie has ${languages.length} language(s) with videos uploaded`);
+    }
+
+    // For series, verify at least one episode has video uploaded
+    if (content.type === 'series') {
+      const episodes = await this.supabaseClient.select(
+        'episodes',
+        {
+          select: 'id,storage_path,season_number,episode_number',
+          where: { series_id: dto.content_id }
+        }
+      );
+
+      if (!episodes || episodes.length === 0 || !episodes.some(ep => ep.storage_path)) {
+        throw new BadRequestException('Série não possui episódios. Faça upload de pelo menos um episódio antes de publicar.');
+      }
+
+      this.logger.log(`Series has ${episodes.length} episode(s) with videos uploaded`);
     }
 
     // Update status to PUBLISHED
