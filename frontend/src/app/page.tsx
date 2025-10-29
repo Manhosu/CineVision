@@ -145,7 +145,7 @@ function HomePageContent() {
         ].filter(section => section.movies.length > 0);
 
         setContentSections(sections);
-        // Fetch user purchases if authenticated
+        // Fetch user purchases if authenticated (using same endpoint as dashboard)
         if (token) {
           try {
             const userStr = localStorage.getItem('user');
@@ -153,42 +153,29 @@ function HomePageContent() {
               const user = JSON.parse(userStr);
               console.log('👤 Usuário logado:', user);
 
-              // Use telegram_id if available (Telegram login), otherwise use id
-              const userId = user.telegram_id || user.id;
+              if (user.id) {
+                // Use the SAME endpoint as dashboard: returns content objects directly
+                const contentUrl = `${API_URL}/api/v1/purchases/user/${user.id}/content`;
+                console.log('🔍 Buscando conteúdos comprados:', contentUrl);
 
-              if (userId) {
-                // Try two endpoints - first by user ID, then by Telegram ID if needed
-                let purchasesRes;
+                const contentRes = await fetch(contentUrl, { headers });
 
-                // If user has telegram_id, use the telegram endpoint
-                if (user.telegram_id) {
-                  console.log('🔍 Buscando compras por Telegram ID:', user.telegram_id);
-                  purchasesRes = await fetch(`${API_URL}/api/v1/purchases/telegram/${user.telegram_id}`, {
-                    headers
-                  });
-                } else {
-                  console.log('🔍 Buscando compras por User ID:', user.id);
-                  purchasesRes = await fetch(`${API_URL}/api/v1/purchases/user/${user.id}/content`, {
-                    headers
-                  });
-                }
+                if (contentRes.ok) {
+                  const contentData = await contentRes.json();
+                  console.log('📦 Conteúdos comprados:', contentData);
+                  console.log('📊 Total:', contentData?.length);
 
-                if (purchasesRes.ok) {
-                  const purchasesData = await purchasesRes.json();
-                  console.log('📦 Compras carregadas:', purchasesData);
-
-                  // Extract content IDs from purchases (only completed purchases)
+                  // Extract content IDs directly (endpoint returns content objects, not purchases)
                   const purchasedIds = new Set(
-                    purchasesData
-                      .filter((item: any) => item.status === 'completed')
-                      .map((item: any) => item.content_id || item.content?.id)
-                      .filter(Boolean)
+                    contentData.map((content: any) => content.id).filter(Boolean)
                   );
 
                   console.log('✅ IDs de conteúdos comprados:', Array.from(purchasedIds));
                   setPurchasedMovies(purchasedIds);
                 } else {
-                  console.error('❌ Erro ao buscar compras:', purchasesRes.status, purchasesRes.statusText);
+                  console.error('❌ Erro ao buscar conteúdos:', contentRes.status, contentRes.statusText);
+                  const errorText = await contentRes.text();
+                  console.error('❌ Erro detalhado:', errorText);
                 }
               }
             }
