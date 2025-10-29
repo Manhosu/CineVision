@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, memo } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
 import {
   PlayIcon,
-  ClockIcon,
   HeartIcon,
   PlusIcon,
   CheckIcon,
@@ -33,8 +31,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
   isPurchased = false
 }: Top10MovieCardProps) {
   const router = useRouter();
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
@@ -45,13 +41,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
       style: 'currency',
       currency: 'BRL'
     }).format(priceInCents / 100);
-  };
-
-  const formatDuration = (minutes?: number) => {
-    if (!minutes) return '';
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
   };
 
   const handleWatch = async (e: React.MouseEvent) => {
@@ -85,27 +74,26 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const handlePurchase = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    // Redirecionar para página de detalhes do filme
-    router.push(`/movies/${movie.id}`);
+    const contentType = (movie as any).content_type || 'movie';
+    if (contentType === 'series') {
+      router.push(`/series/${movie.id}`);
+    } else {
+      router.push(`/movies/${movie.id}`);
+    }
   };
 
   const handleFavorite = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setIsFavorited(!isFavorited);
-    toast.success(
-      isFavorited ? 'Removido dos favoritos' : 'Adicionado aos favoritos'
-    );
+    toast.success(isFavorited ? 'Removido dos favoritos' : 'Adicionado aos favoritos');
   };
 
   const handleWatchlist = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setIsInWatchlist(!isInWatchlist);
-    toast.success(
-      isInWatchlist ? 'Removido da sua lista' : 'Adicionado à sua lista'
-    );
+    toast.success(isInWatchlist ? 'Removido da sua lista' : 'Adicionado à sua lista');
   };
 
   const handleCardClick = () => {
@@ -114,187 +102,151 @@ const Top10MovieCard = memo(function Top10MovieCard({
     }
   };
 
-  const availabilityBadge = () => {
-    switch (movie.availability) {
-      case 'TELEGRAM':
-        return (
-          <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-medium z-10">
-            📱 Telegram
-          </div>
-        );
-      case 'SITE':
-        return (
-          <div className="absolute top-2 right-2 bg-green-600 text-white text-xs px-2 py-1 rounded-full font-medium z-10">
-            🌐 Site
-          </div>
-        );
-      case 'BOTH':
-        return (
-          <div className="absolute top-2 right-2 bg-primary-600 text-white text-xs px-2 py-1 rounded-full font-medium z-10">
-            ✨ Ambos
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <div
-      className="group relative cursor-pointer"
+      className="group relative cursor-pointer flex items-end"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
-      {/* Main Card Container */}
-      <div className="relative rounded-2xl overflow-hidden bg-dark-900/50 backdrop-blur-sm border border-white/10 transition-all duration-300 ease-in-out hover:border-white/20 hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:scale-105 hover:brightness-110">
+      {/* HBO Max / Netflix Style - Number on LEFT side */}
+      <div className="flex items-end gap-0 relative">
 
-        {/* Netflix-style Large Number - Behind the card (bottom left) */}
+        {/* GIGANTIC Ranking Number - LEFT SIDE */}
         <div
-          className="absolute bottom-0 left-0 pointer-events-none select-none z-0"
+          className="relative flex items-end justify-center select-none pointer-events-none z-10"
           style={{
-            fontSize: 'clamp(8rem, 18vw, 12rem)',
-            fontWeight: 900,
-            lineHeight: 1,
-            WebkitTextStroke: '2px rgba(255, 255, 255, 1)',
-            textStroke: '2px rgba(255, 255, 255, 1)',
-            color: 'rgba(0, 0, 0, 0.5)',
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            opacity: 0.15,
-            filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.8))',
-            transform: 'translateY(8%)'
+            width: 'clamp(60px, 8vw, 100px)',
+            marginRight: '-20px'
           }}
         >
-          {ranking}
-        </div>
-
-        {/* Movie Poster */}
-        <div className="relative aspect-[2/3] overflow-hidden" style={{
-          minHeight: 'clamp(280px, 35vw, 400px)'
-        }}>
-          <LazyImage
-            src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
-            alt={`#${ranking} - ${movie.title}`}
-            fill
-            priority={priority}
-            className="object-cover transition-all duration-300 group-hover:scale-105"
-            placeholder={movie.title}
-            fallbackSrc="/images/placeholder-poster.svg"
-            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            onLoad={() => setImageLoaded(true)}
-            onError={() => setImageError(true)}
-          />
-
-          {/* Availability badge */}
-          {availabilityBadge()}
-
-          {/* Age Rating badge */}
-          {movie.age_rating && (
-            <div className="absolute top-2 left-2 border-2 border-yellow-500 text-yellow-500 bg-black/70 text-xs px-2 py-1 rounded font-bold backdrop-blur-sm z-10">
-              {movie.age_rating}
-            </div>
-          )}
-
-
-          {/* Gradient overlay - Improved and extended */}
           <div
-            className="absolute bottom-0 left-0 right-0 pointer-events-none z-10"
+            className="font-black leading-none transition-all duration-500"
             style={{
-              height: '40%',
-              background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 50%, transparent 100%)'
+              fontSize: 'clamp(100px, 15vw, 180px)',
+              fontFamily: 'Impact, system-ui, -apple-system, sans-serif',
+              background: 'linear-gradient(180deg, #ffffff 0%, #888888 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              textStroke: '3px rgba(255, 255, 255, 0.3)',
+              WebkitTextStroke: '3px rgba(255, 255, 255, 0.3)',
+              filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.9))',
+              transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+              letterSpacing: '-0.05em'
             }}
-          ></div>
-
-          {/* Hover overlay */}
-          <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 z-20 ${
-            isHovered ? 'opacity-100' : 'opacity-0'
-          }`}>
-
-            {/* Play/Purchase button */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <button
-                onClick={isPurchased ? handleWatch : handlePurchase}
-                className={`btn-primary text-sm sm:text-base px-4 py-2 sm:px-6 sm:py-3 transform transition-all duration-300 ${
-                  isHovered ? 'scale-100 opacity-100' : 'scale-75 opacity-0'
-                }`}
-              >
-                {isPurchased ? (
-                  <>
-                    <PlayIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                    Assistir
-                  </>
-                ) : (
-                  <>
-                    <ShoppingCartIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
-                    Comprar
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Action buttons */}
-            <div className={`absolute top-2 left-2 right-2 flex justify-between transition-all duration-300 ${
-              isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
-            }`}>
-              <button
-                onClick={handleFavorite}
-                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110 w-8 h-8 sm:w-10 sm:h-10"
-                title={isFavorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              >
-                {isFavorited ? (
-                  <HeartSolidIcon className="w-4 h-4 sm:w-5 sm:h-5 text-red-500" />
-                ) : (
-                  <HeartIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
-              </button>
-
-              <button
-                onClick={handleWatchlist}
-                className="btn-icon bg-black/50 text-white hover:bg-black/70 hover:scale-110 w-8 h-8 sm:w-10 sm:h-10"
-                title={isInWatchlist ? 'Remover da lista' : 'Adicionar à lista'}
-              >
-                {isInWatchlist ? (
-                  <CheckSolidIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                ) : (
-                  <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
-              </button>
-            </div>
+          >
+            {ranking}
           </div>
         </div>
 
-        {/* Movie Info */}
-        <div className="relative p-4 space-y-2 z-20 bg-dark-900">
+        {/* Movie Card - RIGHT SIDE */}
+        <div className="relative flex-1 rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)] z-20">
 
-          {/* Title */}
-          <h3 className="font-semibold text-white line-clamp-2 group-hover:text-primary-400 transition-colors" style={{
-            fontSize: 'clamp(0.875rem, 2vw, 1.125rem)'
-          }}>
-            {movie.title}
-          </h3>
+          {/* Poster Container */}
+          <div className="relative aspect-[2/3] overflow-hidden">
+            <LazyImage
+              src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
+              alt={`#${ranking} - ${movie.title}`}
+              fill
+              priority={priority}
+              className="object-cover transition-all duration-500 ease-out group-hover:scale-105"
+              placeholder={movie.title}
+              fallbackSrc="/images/placeholder-poster.svg"
+              sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
+            />
 
-          {/* Price or Purchased Badge */}
-          {isPurchased ? (
-            <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-500/20 text-green-500 rounded-lg text-sm font-medium">
-              <CheckIcon className="w-4 h-4" />
-              <span>Adquirido</span>
+            {/* Top Gradient for Badges */}
+            <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10" />
+
+            {/* Top Right Badges */}
+            <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
+              {isPurchased && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500 rounded-md shadow-lg">
+                  <CheckIcon className="w-3.5 h-3.5 text-white" />
+                </div>
+              )}
+              {movie.age_rating && (
+                <div className="px-2 py-0.5 bg-black/80 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded">
+                  {movie.age_rating}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-primary-500 font-extrabold text-xl sm:text-2xl">
-              {formatPrice(movie.price_cents)}
-            </div>
-          )}
 
-          {/* Quick Actions */}
-          <div className="flex items-center justify-between pt-2">
-            <Link
-              href={`/movies/${movie.id}`}
-              className="text-xs sm:text-sm text-gray-400 hover:text-white transition-colors focus-outline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Ver detalhes
-            </Link>
+            {/* Hover Overlay */}
+            <div className={`absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-30 ${
+              isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}>
+
+              {/* Info Section - Only on Hover */}
+              <div className={`absolute bottom-0 left-0 right-0 p-4 transform transition-all duration-500 ${
+                isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
+              }`}>
+                {/* Title */}
+                <h3 className="text-white font-bold text-base mb-2 line-clamp-2 leading-tight">
+                  {movie.title}
+                </h3>
+
+                {/* Meta Info */}
+                <div className="flex items-center gap-2 mb-3 text-xs text-gray-300">
+                  {movie.release_year && <span>{movie.release_year}</span>}
+                  {(movie as any).content_type === 'series' && (
+                    <span className="px-2 py-0.5 bg-blue-500/80 rounded text-white font-medium">Série</span>
+                  )}
+                  {movie.imdb_rating && (
+                    <span className="flex items-center gap-1">⭐ {movie.imdb_rating.toFixed(1)}</span>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={isPurchased ? handleWatch : handlePurchase}
+                    className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-2.5 px-4 rounded-lg hover:bg-gray-200 transition-colors"
+                  >
+                    {isPurchased ? (
+                      <>
+                        <PlayIcon className="w-4 h-4" />
+                        <span className="text-sm">Assistir</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCartIcon className="w-4 h-4" />
+                        <span className="text-sm">{formatPrice(movie.price_cents)}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleFavorite}
+                    className="p-2.5 bg-zinc-800/90 hover:bg-zinc-700 rounded-lg transition-colors"
+                  >
+                    {isFavorited ? (
+                      <HeartSolidIcon className="w-5 h-5 text-red-500" />
+                    ) : (
+                      <HeartIcon className="w-5 h-5 text-white" />
+                    )}
+                  </button>
+
+                  <button
+                    onClick={handleWatchlist}
+                    className="p-2.5 bg-zinc-800/90 hover:bg-zinc-700 rounded-lg transition-colors"
+                  >
+                    {isInWatchlist ? (
+                      <CheckSolidIcon className="w-5 h-5 text-green-500" />
+                    ) : (
+                      <PlusIcon className="w-5 h-5 text-white" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Bottom Glow Effect */}
+          <div className={`absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent transition-opacity duration-500 ${
+            isHovered ? 'opacity-100' : 'opacity-0'
+          }`} />
         </div>
       </div>
 

@@ -44,8 +44,9 @@ export function ContentRow({
 
     setIsScrolling(true);
 
-    const cardWidth = 204; // 180px card + 24px gap
-    const scrollAmount = direction === 'left' ? -cardWidth * 3 : cardWidth * 3;
+    // Calculate scroll amount based on card type
+    const cardWidth = type === 'top10' ? 288 : 224; // Top10: 280px + 8px gap / Normal: 200px + 24px gap
+    const scrollAmount = direction === 'left' ? -cardWidth * 2 : cardWidth * 2;
 
     container.scrollBy({
       left: scrollAmount,
@@ -67,8 +68,8 @@ export function ContentRow({
       const container = scrollContainerRef.current;
       if (container && type === 'top10') {
         const scrollPosition = container.scrollLeft;
-        const cardWidth = 204; // 180px card + 24px gap
-        const slideIndex = Math.round(scrollPosition / (cardWidth * 3));
+        const cardWidth = 288; // 280px card + 8px gap
+        const slideIndex = Math.round(scrollPosition / (cardWidth * 2));
         setActiveSlide(slideIndex);
       }
     }
@@ -143,7 +144,9 @@ export function ContentRow({
           {/* Container de scroll */}
           <div
             ref={scrollContainerRef}
-            className="flex overflow-x-auto scrollbar-hide scroll-smooth gap-6 pb-6"
+            className={`flex overflow-x-auto scrollbar-hide scroll-smooth pb-6 ${
+              isTop10 ? 'gap-8' : 'gap-6'
+            }`}
             onScroll={handleScroll}
             style={{
               scrollSnapType: 'x mandatory',
@@ -153,7 +156,11 @@ export function ContentRow({
             {movies.map((movie, index) => (
               <div
                 key={movie.id}
-                className="flex-none w-[180px]"
+                className={`flex-none ${
+                  type === 'top10'
+                    ? 'w-[clamp(220px, 25vw, 280px)]'
+                    : 'w-[clamp(160px, 20vw, 200px)]'
+                }`}
                 style={{ scrollSnapAlign: 'start' }}
               >
                 {type === 'top10' ? (
@@ -177,9 +184,9 @@ export function ContentRow({
             ))}
 
             {/* Card "Ver mais" se houver muitos filmes */}
-            {movies.length >= 12 && (
-              <div className="flex-none w-[180px]">
-                <div className="h-full flex items-center justify-center rounded-lg border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 transition-all cursor-pointer aspect-[2/3]">
+            {movies.length >= 12 && !isTop10 && (
+              <div className="flex-none w-[clamp(160px, 20vw, 200px)]">
+                <div className="h-full flex items-center justify-center rounded-xl border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer aspect-[2/3]">
                   <div className="text-center p-4">
                     <ChevronRightIcon className="w-10 h-10 mx-auto mb-2" />
                     <p className="font-medium text-sm">Ver todos</p>
@@ -193,17 +200,17 @@ export function ContentRow({
           </div>
 
           {/* Dots de navegação - Apenas para Top 10 */}
-          {isTop10 && movies.length > 3 && (
+          {isTop10 && movies.length > 2 && (
             <div className="flex justify-center gap-2 mt-6">
-              {Array.from({ length: Math.ceil(movies.length / 3) }).map((_, index) => (
+              {Array.from({ length: Math.ceil(movies.length / 2) }).map((_, index) => (
                 <button
                   key={index}
                   onClick={() => {
                     const container = scrollContainerRef.current;
                     if (container) {
-                      const cardWidth = 204; // 180px card + 24px gap
+                      const cardWidth = 288; // 280px card + 8px gap
                       container.scrollTo({
-                        left: index * cardWidth * 3,
+                        left: index * cardWidth * 2,
                         behavior: 'smooth'
                       });
                       setActiveSlide(index);
@@ -211,7 +218,7 @@ export function ContentRow({
                   }}
                   className={`transition-all duration-300 ${
                     activeSlide === index
-                      ? 'w-6 h-2 bg-white/90 rounded-sm'
+                      ? 'w-8 h-2 bg-white/90 rounded-sm'
                       : 'w-2 h-2 bg-white/30 rounded-full hover:bg-white/50'
                   }`}
                   aria-label={`Ir para página ${index + 1}`}
