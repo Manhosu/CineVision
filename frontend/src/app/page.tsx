@@ -80,7 +80,7 @@ function HomePageContent() {
         }
 
         // Fetch real data from API
-        const [featuredRes, top10Res, top10SeriesRes, latestRes, popularRes] = await Promise.all([
+        const [featuredRes, top10Res, top10SeriesRes, latestRes, popularSeriesRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, {
             cache: 'no-store',
             headers
@@ -97,13 +97,13 @@ function HomePageContent() {
             cache: 'no-store',
             headers
           }),
-          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=popular`, {
+          fetch(`${API_URL}/api/v1/content/series?limit=10&sort=popular`, {
             cache: 'no-store',
             headers
           })
         ]);
 
-        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !latestRes.ok || !popularRes.ok) {
+        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !latestRes.ok || !popularSeriesRes.ok) {
           throw new Error('Erro ao carregar dados da API');
         }
 
@@ -111,7 +111,7 @@ function HomePageContent() {
         const top10Films = await top10Res.json();
         const top10Series = await top10SeriesRes.json();
         const latestData = await latestRes.json();
-        const popularData = await popularRes.json();
+        const popularSeriesData = await popularSeriesRes.json();
 
         // Use featured movies or latest for hero banner
         const featuredMovies = featuredData.movies?.filter((m: Movie) => m.featured) || [];
@@ -140,7 +140,7 @@ function HomePageContent() {
           {
             title: 'Séries em Alta',
             type: 'popular' as const,
-            movies: popularData.movies || []
+            movies: popularSeriesData.movies || []
           }
         ].filter(section => section.movies.length > 0);
 

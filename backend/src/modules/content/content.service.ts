@@ -61,6 +61,55 @@ export class ContentService {
     };
   }
 
+  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at') {
+    const queryBuilder = this.contentRepository.createQueryBuilder('content')
+      .where('content.status = :status', { status: ContentStatus.PUBLISHED })
+      .andWhere('content.content_type = :type', { type: 'series' })
+      .leftJoinAndSelect('content.categories', 'categories')
+      .leftJoinAndSelect('content.languages', 'languages');
+
+    if (genre) {
+      queryBuilder.andWhere('categories.name = :genre', { genre });
+    }
+
+    switch (sort) {
+      case 'newest':
+        queryBuilder.orderBy('content.created_at', 'DESC');
+        break;
+      case 'popular':
+        queryBuilder.orderBy('content.views_count', 'DESC');
+        break;
+      case 'rating':
+        queryBuilder.orderBy('content.imdb_rating', 'DESC');
+        break;
+      case 'price_low':
+        queryBuilder.orderBy('content.price_cents', 'ASC');
+        break;
+      case 'price_high':
+        queryBuilder.orderBy('content.price_cents', 'DESC');
+        break;
+      default:
+        queryBuilder.orderBy('content.created_at', 'DESC');
+    }
+
+    const [series, total] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      movies: series, // Keep the same property name for compatibility with frontend
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1,
+      },
+    };
+  }
+
   async findMovieById(id: string) {
     const movie = await this.contentRepository.findOne({
       where: { id, status: ContentStatus.PUBLISHED },

@@ -165,79 +165,45 @@ const MovieCard = memo(function MovieCard({
             )}
           </div>
 
-          {/* Hover Overlay - Smooth & Elegant */}
-          <div className={`absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent transition-all duration-500 z-30 ${
-            isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}>
+          {/* Bottom Info - Always Visible */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/95 to-transparent p-3 z-30">
+            {/* Title */}
+            <h3 className="text-white font-bold text-sm mb-1.5 line-clamp-2 leading-tight">
+              {movie.title}
+            </h3>
 
-            {/* Info Section - Only on Hover */}
-            <div className={`absolute bottom-0 left-0 right-0 p-4 transform transition-all duration-500 ${
-              isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
-            }`}>
-              {/* Title */}
-              <h3 className="text-white font-bold text-base mb-2 line-clamp-2 leading-tight">
-                {movie.title}
-              </h3>
-
-              {/* Meta Info */}
-              <div className="flex items-center gap-2 mb-3 text-xs text-gray-300">
-                {movie.release_year && (
-                  <span>{movie.release_year}</span>
-                )}
-                {(movie as any).content_type === 'series' && (
-                  <span className="px-2 py-0.5 bg-blue-500/80 rounded text-white font-medium">Série</span>
-                )}
-                {movie.imdb_rating && (
-                  <span className="flex items-center gap-1">
-                    ⭐ {movie.imdb_rating.toFixed(1)}
-                  </span>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={isPurchased ? handleWatch : handlePurchase}
-                  className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-2.5 px-4 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  {isPurchased ? (
-                    <>
-                      <PlayIcon className="w-4 h-4" />
-                      <span className="text-sm">Assistir</span>
-                    </>
-                  ) : (
-                    <>
-                      <ShoppingCartIcon className="w-4 h-4" />
-                      <span className="text-sm">{formatPrice(movie.price_cents)}</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  onClick={handleFavorite}
-                  className="p-2.5 bg-zinc-800/90 hover:bg-zinc-700 rounded-lg transition-colors"
-                  title={isFavorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-                >
-                  {isFavorited ? (
-                    <HeartSolidIcon className="w-5 h-5 text-red-500" />
-                  ) : (
-                    <HeartIcon className="w-5 h-5 text-white" />
-                  )}
-                </button>
-
-                <button
-                  onClick={handleWatchlist}
-                  className="p-2.5 bg-zinc-800/90 hover:bg-zinc-700 rounded-lg transition-colors"
-                  title={isInWatchlist ? 'Remover da lista' : 'Adicionar à lista'}
-                >
-                  {isInWatchlist ? (
-                    <CheckSolidIcon className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <PlusIcon className="w-5 h-5 text-white" />
-                  )}
-                </button>
-              </div>
+            {/* Meta Info */}
+            <div className="flex items-center gap-2 mb-2 text-xs text-gray-300">
+              {movie.release_year && (
+                <span>{movie.release_year}</span>
+              )}
+              {(movie as any).content_type === 'series' && (
+                <span className="px-1.5 py-0.5 bg-blue-500/80 rounded text-white font-medium text-[10px]">Série</span>
+              )}
+              {movie.imdb_rating && (
+                <span className="flex items-center gap-1">
+                  ⭐ {movie.imdb_rating.toFixed(1)}
+                </span>
+              )}
             </div>
+
+            {/* Action Button */}
+            <button
+              onClick={isPurchased ? handleWatch : handlePurchase}
+              className="w-full flex items-center justify-center gap-2 bg-white text-black font-bold py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              {isPurchased ? (
+                <>
+                  <PlayIcon className="w-4 h-4" />
+                  <span className="text-xs">Assistir</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingCartIcon className="w-4 h-4" />
+                  <span className="text-xs">{formatPrice(movie.price_cents)}</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
