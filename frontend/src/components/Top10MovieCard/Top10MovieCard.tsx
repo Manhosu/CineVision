@@ -189,9 +189,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
                 {(movie as any).content_type === 'series' && (
                   <span className="px-1.5 py-0.5 bg-blue-500/80 rounded text-white font-medium text-[10px]">Série</span>
                 )}
-                {movie.imdb_rating && (
-                  <span className="flex items-center gap-1">⭐ {movie.imdb_rating.toFixed(1)}</span>
-                )}
               </div>
 
               {/* Action Button */}

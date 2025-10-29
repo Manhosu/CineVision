@@ -151,14 +151,45 @@ function HomePageContent() {
             const userStr = localStorage.getItem('user');
             if (userStr) {
               const user = JSON.parse(userStr);
-              const purchasesRes = await fetch(`${API_URL}/api/v1/purchases/user/${user.id}/content`, {
-                headers
-              });
-              
-              if (purchasesRes.ok) {
-                const purchasesData = await purchasesRes.json();
-                const purchasedIds = new Set(purchasesData.map((item: any) => item.content_id || item.id));
-                setPurchasedMovies(purchasedIds);
+              console.log('👤 Usuário logado:', user);
+
+              // Use telegram_id if available (Telegram login), otherwise use id
+              const userId = user.telegram_id || user.id;
+
+              if (userId) {
+                // Try two endpoints - first by user ID, then by Telegram ID if needed
+                let purchasesRes;
+
+                // If user has telegram_id, use the telegram endpoint
+                if (user.telegram_id) {
+                  console.log('🔍 Buscando compras por Telegram ID:', user.telegram_id);
+                  purchasesRes = await fetch(`${API_URL}/api/v1/purchases/telegram/${user.telegram_id}`, {
+                    headers
+                  });
+                } else {
+                  console.log('🔍 Buscando compras por User ID:', user.id);
+                  purchasesRes = await fetch(`${API_URL}/api/v1/purchases/user/${user.id}/content`, {
+                    headers
+                  });
+                }
+
+                if (purchasesRes.ok) {
+                  const purchasesData = await purchasesRes.json();
+                  console.log('📦 Compras carregadas:', purchasesData);
+
+                  // Extract content IDs from purchases (only completed purchases)
+                  const purchasedIds = new Set(
+                    purchasesData
+                      .filter((item: any) => item.status === 'completed')
+                      .map((item: any) => item.content_id || item.content?.id)
+                      .filter(Boolean)
+                  );
+
+                  console.log('✅ IDs de conteúdos comprados:', Array.from(purchasedIds));
+                  setPurchasedMovies(purchasedIds);
+                } else {
+                  console.error('❌ Erro ao buscar compras:', purchasesRes.status, purchasesRes.statusText);
+                }
               }
             }
           } catch (err) {
