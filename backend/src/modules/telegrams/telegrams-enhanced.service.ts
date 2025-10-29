@@ -336,13 +336,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
       this.logger.log(`Generating payment URL for purchase ${purchaseId}`);
 
       // Chamar endpoint do backend para criar payment intent no Stripe
+      // O backend já configura as URLs corretas de success e cancel com os tokens necessários
       const response = await axios.post(
         `${this.apiUrl}/api/v1/payments/create`,
         {
           purchase_id: purchaseId,
           payment_method: 'card', // Usar cartão como padrão
-          return_url: `https://cinevision.com/payment-success`,
-          cancel_url: `https://cinevision.com/payment-cancel`,
+          // return_url e cancel_url serão gerados automaticamente pelo backend
+          // com os tokens e IDs corretos
         },
         {
           headers: {

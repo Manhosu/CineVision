@@ -88,10 +88,13 @@ export class PaymentsSupabaseService {
       }
 
       // Create Stripe Checkout Session
+      const successUrl = dto.return_url || `${this.configService.get('FRONTEND_URL')}/purchase-success?token=${purchase.purchase_token}&purchase_id=${purchase.id}`;
+      const cancelUrl = dto.cancel_url || `${this.configService.get('FRONTEND_URL')}/`;
+
       const checkoutSession = await this.stripeService.createCheckoutSession(
         stripePriceId,
-        dto.return_url || `${this.configService.get('FRONTEND_URL')}/payment-success`,
-        dto.cancel_url || `${this.configService.get('FRONTEND_URL')}/payment-cancel`,
+        successUrl,
+        cancelUrl,
         {
           purchase_id: purchase.id,
           purchase_token: purchase.purchase_token,
