@@ -208,8 +208,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           // Keep uploading movie tasks that are making progress
           if (task.status === 'uploading') return true;
 
-          // Auto-remove completed, error, or cancelled movie tasks older than 5 seconds
-          return age < 5000; // Keep for 5 seconds
+          // Auto-remove completed, error, or cancelled movie tasks older than 2 minutes
+          return age < 120000; // Keep for 2 minutes so user can see upload result
         });
       });
     }, 1000);

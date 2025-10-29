@@ -168,6 +168,7 @@ export class MultipartUploadService {
       size,
       status: 'uploading',
       parts_count: partsCount,
+      audio_type: audioType || 'original', // Save audio type for content_languages creation
     };
 
     if (contentId) {
@@ -252,13 +253,66 @@ export class MultipartUploadService {
         })
         .eq('upload_id', uploadId);
 
-      // Update content record if contentId provided
-      if (contentId) {
+      // Create/Update content_languages record for movies
+      let languageId: string | undefined;
+      if (contentId && uploadRecord.audio_type) {
+        // Map audio_type to language_type
+        const languageTypeMap: Record<string, string> = {
+          'dublado': 'DUBLADO',
+          'legendado': 'LEGENDADO',
+          'original': 'ORIGINAL',
+        };
+
+        const languageType = languageTypeMap[uploadRecord.audio_type] || 'ORIGINAL';
+
+        // Check if content_language already exists for this content + language_type
+        const { data: existingLanguage } = await this.supabase
+          .from('content_languages')
+          .select('id')
+          .eq('content_id', contentId)
+          .eq('language_type', languageType)
+          .single();
+
+        if (existingLanguage) {
+          // Update existing language
+          languageId = existingLanguage.id;
+          await this.supabase
+            .from('content_languages')
+            .update({
+              video_url: key,
+              is_default: languageType === 'DUBLADO', // Dublado is default
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', languageId);
+
+          this.logger.log(`Updated content_language ${languageId} for content ${contentId}`);
+        } else {
+          // Create new content_language
+          const { data: newLanguage, error: languageError } = await this.supabase
+            .from('content_languages')
+            .insert({
+              content_id: contentId,
+              language_type: languageType,
+              video_url: key,
+              is_default: languageType === 'DUBLADO', // Dublado is default
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
+
+          if (languageError) {
+            this.logger.error(`Failed to create content_language: ${languageError.message}`);
+          } else {
+            languageId = newLanguage.id;
+            this.logger.log(`Created content_language ${languageId} for content ${contentId} (${languageType})`);
+          }
+        }
+
+        // Update content status
         await this.supabase
           .from('content')
           .update({
-            file_storage_key: key,
-            storage_path: key,
             processing_status: 'ready',
             updated_at: new Date().toISOString(),
           })
@@ -286,7 +340,8 @@ export class MultipartUploadService {
         success: true,
         location: result.Location,
         key,
-        status: 'processing',
+        status: 'ready', // Changed from 'processing' since we don't transcode anymore
+        languageId, // Return languageId for frontend to know which content_language was created
       };
     } catch (error) {
       this.logger.error(`Failed to complete upload: ${error.message}`);
