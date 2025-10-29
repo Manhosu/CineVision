@@ -16,18 +16,28 @@ export class WeeklyResetService {
   /**
    * Reset weekly sales counter every Monday at 00:00 (midnight)
    * Cron expression: '0 0 * * 1' = minute 0, hour 0, every Monday
-   * Note: Currently disabled as weekly_sales column doesn't exist
    */
-  // @Cron('0 0 * * 1', {
-  //   name: 'reset-weekly-sales',
-  //   timeZone: 'America/Sao_Paulo',
-  // })
+  @Cron('0 0 * * 1', {
+    name: 'reset-weekly-sales',
+    timeZone: 'America/Sao_Paulo',
+  })
   async resetWeeklySales() {
-    this.logger.log('🔄 Weekly sales reset is currently disabled (weekly_sales column not implemented)');
-    
-    // TODO: Implement weekly sales tracking if needed
-    // For now, we'll use purchases_count as the main metric
-    this.logger.log('✅ Weekly sales reset skipped - using purchases_count instead');
+    this.logger.log('🔄 Starting weekly sales reset...');
+
+    try {
+      // Reset all weekly_sales to 0
+      const result = await this.contentRepository
+        .createQueryBuilder()
+        .update()
+        .set({ weekly_sales: 0 })
+        .execute();
+
+      this.logger.log(`✅ Weekly sales reset completed! ${result.affected} records updated`);
+      return { success: true, affected: result.affected };
+    } catch (error) {
+      this.logger.error('❌ Error resetting weekly sales:', error);
+      throw error;
+    }
   }
 
   /**

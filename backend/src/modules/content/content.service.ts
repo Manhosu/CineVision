@@ -165,9 +165,9 @@ export class ContentService {
       .createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere("content.content_type = :type", { type: 'movie' })
-      .orderBy('content.views_count', 'DESC')
-      .addOrderBy('content.weekly_sales', 'DESC')
-      .addOrderBy('content.created_at', 'DESC')
+      .orderBy('content.weekly_sales', 'DESC') // Prioriza vendas semanais
+      .addOrderBy('content.views_count', 'DESC') // Depois visualizações
+      .addOrderBy('content.created_at', 'DESC') // Por último, mais recentes
       .take(10)
       .getMany();
 
@@ -179,9 +179,9 @@ export class ContentService {
       .createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere("content.content_type = :type", { type: 'series' })
-      .orderBy('content.views_count', 'DESC')
-      .addOrderBy('content.weekly_sales', 'DESC')
-      .addOrderBy('content.created_at', 'DESC')
+      .orderBy('content.weekly_sales', 'DESC') // Prioriza vendas semanais
+      .addOrderBy('content.views_count', 'DESC') // Depois visualizações
+      .addOrderBy('content.created_at', 'DESC') // Por último, mais recentes
       .take(10)
       .getMany();
 
