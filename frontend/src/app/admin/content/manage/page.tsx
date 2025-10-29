@@ -78,6 +78,9 @@ export default function ContentManagePage() {
 
     try {
       const token = localStorage.getItem('token');
+      console.log('[Delete Content] Deleting content:', deleteTarget.id, deleteTarget.title);
+      console.log('[Delete Content] API URL:', process.env.NEXT_PUBLIC_API_URL);
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${deleteTarget.id}`,
         {
@@ -88,16 +91,29 @@ export default function ContentManagePage() {
         }
       );
 
+      console.log('[Delete Content] Response status:', response.status, response.statusText);
+
       if (response.ok) {
+        const result = await response.json();
+        console.log('[Delete Content] Success:', result);
+        alert(`✅ ${deleteTarget.title} deletado com sucesso!`);
         await fetchContents();
         setShowDeleteConfirm(false);
         setDeleteTarget(null);
       } else {
-        alert('Erro ao deletar conteúdo');
+        const errorText = await response.text();
+        console.error('[Delete Content] Error response:', errorText);
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          alert(`❌ Erro ao deletar: ${errorJson.message || errorText}`);
+        } catch {
+          alert(`❌ Erro ao deletar: ${response.status} ${response.statusText}\n\n${errorText}`);
+        }
       }
     } catch (error) {
-      console.error('Error deleting content:', error);
-      alert('Erro ao deletar conteúdo');
+      console.error('[Delete Content] Network error:', error);
+      alert(`❌ Erro de rede ao deletar conteúdo: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     }
   };
 
