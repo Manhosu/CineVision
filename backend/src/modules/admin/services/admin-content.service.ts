@@ -361,11 +361,13 @@ export class AdminContentService {
 
     // For movies, verify at least one language has video uploaded
     // (Old system used hls_master_url, new system uses content_languages)
-    if (content.content_type === 'movie') {
+    if (content.type === 'movie') {
       const languages = await this.supabaseClient.select(
         'content_languages',
-        ['id', 'video_url'],
-        { content_id: dto.content_id }
+        {
+          select: 'id,video_url',
+          where: { content_id: dto.content_id }
+        }
       );
 
       if (!languages || languages.length === 0 || !languages.some(lang => lang.video_url)) {
