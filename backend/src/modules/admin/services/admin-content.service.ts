@@ -359,8 +359,20 @@ export class AdminContentService {
       );
     }
 
-    if (!content.hls_master_url) {
-      throw new BadRequestException('Content does not have HLS streaming URL');
+    // For movies, verify at least one language has video uploaded
+    // (Old system used hls_master_url, new system uses content_languages)
+    if (content.content_type === 'movie') {
+      const languages = await this.supabaseClient.select(
+        'content_languages',
+        ['id', 'video_url'],
+        { content_id: dto.content_id }
+      );
+
+      if (!languages || languages.length === 0 || !languages.some(lang => lang.video_url)) {
+        throw new BadRequestException('Content does not have any video uploaded. Upload at least one language (DUBLADO or LEGENDADO).');
+      }
+
+      this.logger.log(`Content has ${languages.length} language(s) with videos uploaded`);
     }
 
     // Update status to PUBLISHED
