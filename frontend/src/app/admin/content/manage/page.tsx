@@ -8,7 +8,8 @@ import {
   Search,
   AlertCircle,
   CheckCircle,
-  ArrowLeft
+  ArrowLeft,
+  Upload
 } from 'lucide-react';
 import { useUpload } from '@/contexts/UploadContext';
 
@@ -32,6 +33,7 @@ export default function ContentManagePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Content | null>(null);
+  const [publishingId, setPublishingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchContents();
@@ -96,6 +98,46 @@ export default function ContentManagePage() {
     } catch (error) {
       console.error('Error deleting content:', error);
       alert('Erro ao deletar conteúdo');
+    }
+  };
+
+  const handlePublish = async (content: Content) => {
+    if (!confirm(`Tem certeza que deseja publicar "${content.title}"? O conteúdo ficará visível no site.`)) {
+      return;
+    }
+
+    try {
+      setPublishingId(content.id);
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/publish`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        alert('✅ Conteúdo publicado com sucesso! Já está visível no site.');
+        await fetchContents();
+      } else {
+        const errorText = await response.text();
+        console.error('Erro ao publicar:', errorText);
+        try {
+          const errorJson = JSON.parse(errorText);
+          alert(`❌ Erro ao publicar: ${errorJson.message || errorText}`);
+        } catch {
+          alert(`❌ Erro ao publicar: ${errorText}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error publishing content:', error);
+      alert('❌ Erro ao publicar conteúdo');
+    } finally {
+      setPublishingId(null);
     }
   };
 
@@ -229,6 +271,21 @@ export default function ContentManagePage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Botão Publicar - só aparece se não estiver publicado */}
+                        {(content.status === 'DRAFT' || content.status === 'draft') && (
+                          <button
+                            onClick={() => handlePublish(content)}
+                            disabled={publishingId === content.id}
+                            className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Publicar conteúdo"
+                          >
+                            {publishingId === content.id ? (
+                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Upload className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(content)}
                           className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
