@@ -104,17 +104,17 @@ const Top10MovieCard = memo(function Top10MovieCard({
 
   return (
     <div
-      className="group relative cursor-pointer flex items-end"
+      className="group relative cursor-pointer"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
       {/* HBO Max / Netflix Style - Number on LEFT side */}
-      <div className="flex items-end gap-0 relative">
+      <div className="flex items-end gap-0 relative w-full">
 
         {/* GIGANTIC Ranking Number - LEFT SIDE */}
         <div
-          className="relative flex items-end justify-center select-none pointer-events-none z-10"
+          className="relative flex items-end justify-center select-none pointer-events-none z-10 flex-shrink-0"
           style={{
             width: 'clamp(60px, 8vw, 100px)',
             marginRight: '-20px'
@@ -141,7 +141,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
         </div>
 
         {/* Movie Card - RIGHT SIDE */}
-        <div className="relative flex-1 rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)] z-20">
+        <div className="relative flex-1 min-w-0 rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)] z-20">
 
           {/* Poster Container */}
           <div className="relative aspect-[2/3] overflow-hidden">
