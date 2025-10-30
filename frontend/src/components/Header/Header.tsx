@@ -312,7 +312,13 @@ export function Header({ transparent = false }: HeaderProps) {
                 autoFocus
                 className="w-full bg-transparent border-b border-white/20 px-12 py-4 text-white text-lg placeholder-gray-400 focus:outline-none focus:border-white"
               />
-              <MagnifyingGlassIcon className="absolute left-0 top-1/2 transform -translate-y-1/2 w-6 h-6 text-white" />
+              <button
+                type="submit"
+                className="absolute left-0 top-1/2 transform -translate-y-1/2 p-1 text-white hover:text-primary-500 transition-colors"
+                aria-label="Buscar"
+              >
+                <MagnifyingGlassIcon className="w-6 h-6" />
+              </button>
               <button
                 type="button"
                 onClick={() => {

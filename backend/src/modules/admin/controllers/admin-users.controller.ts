@@ -18,7 +18,13 @@ export class AdminUsersController {
     });
 
     // Filter only users with telegram_id
-    return users.filter(user => user.telegram_id);
+    const telegramUsers = users.filter(user => user.telegram_id);
+
+    // Return users list along with total count
+    return {
+      users: telegramUsers,
+      totalSystemUsers: users.length
+    };
   }
 
   @Delete(':id')

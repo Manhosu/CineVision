@@ -18,6 +18,7 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const { logout } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+  const [totalSystemUsers, setTotalSystemUsers] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -39,7 +40,16 @@ export default function AdminUsersPage() {
       }
 
       const data = await response.json();
-      setUsers(Array.isArray(data) ? data : []);
+
+      // Handle new format with users array and totalSystemUsers
+      if (data.users && Array.isArray(data.users)) {
+        setUsers(data.users);
+        setTotalSystemUsers(data.totalSystemUsers || data.users.length);
+      } else {
+        // Fallback for old format (if any)
+        setUsers(Array.isArray(data) ? data : []);
+        setTotalSystemUsers(Array.isArray(data) ? data.length : 0);
+      }
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
@@ -164,7 +174,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-purple-500 to-purple-600 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
             <div className="relative z-10">
@@ -210,6 +220,23 @@ export default function AdminUsersPage() {
               <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 shadow-lg">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500 to-yellow-500 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+            <div className="relative z-10">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm font-medium mb-1">Total de Acessos</p>
+                <p className="text-3xl font-bold text-orange-300">{totalSystemUsers}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-yellow-500 shadow-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
             </div>
