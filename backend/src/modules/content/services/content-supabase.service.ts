@@ -8,7 +8,7 @@ export class ContentSupabaseService {
 
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest') {
     const offset = (page - 1) * limit;
-    
+
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -20,9 +20,9 @@ export class ContentSupabaseService {
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.MOVIE);
 
-    // Filter by genre if provided
+    // Filter by genre if provided using category join filter
     if (genre) {
-      query = query.contains('categories.category.name', [genre]);
+      query = query.eq('categories.category.name', genre);
     }
 
     // Apply sorting
@@ -116,9 +116,9 @@ export class ContentSupabaseService {
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.SERIES);
 
-    // Filter by genre if provided
+    // Filter by genre if provided using category join filter
     if (genre) {
-      query = query.contains('categories.category.name', [genre]);
+      query = query.eq('categories.category.name', genre);
     }
 
     // Apply sorting
