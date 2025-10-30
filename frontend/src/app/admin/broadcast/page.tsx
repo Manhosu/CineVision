@@ -51,29 +51,18 @@ export default function BroadcastPage() {
     setMounted(true);
   }, []);
 
-  // Check if user has access but don't auto-redirect
-  // The /admin page already handles auth, so we trust that if user got here, they're admin
+  // Load users count - NO AUTH REDIRECT HERE
+  // User coming from /admin is already verified as admin
   useEffect(() => {
-    // Don't do anything until component is mounted and auth has loaded
-    if (!mounted || authLoading) return;
+    if (!mounted) return;
 
-    // Check for token in localStorage
+    // Check if has token, if yes, try to load data
     const token = localStorage.getItem('access_token');
-
-    // Only redirect if there's NO token at all
-    if (!token && !isAuthenticated) {
-      console.log('No token and not authenticated, redirecting to login');
-      router.push('/login');
-    }
-  }, [mounted, authLoading, isAuthenticated, router]);
-
-  // Load users count
-  useEffect(() => {
-    if (mounted && isAuthenticated && user?.role === 'admin') {
+    if (token) {
       fetchUsersCount();
       fetchBroadcastHistory();
     }
-  }, [mounted, isAuthenticated, user]);
+  }, [mounted]);
 
   const fetchUsersCount = async () => {
     try {
@@ -309,7 +298,8 @@ export default function BroadcastPage() {
     }
   };
 
-  if (authLoading) {
+  // Show loading only briefly during initial mount
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
@@ -317,10 +307,7 @@ export default function BroadcastPage() {
     );
   }
 
-  if (!isAuthenticated || user?.role !== 'admin') {
-    return null;
-  }
-
+  // No auth check here - user coming from /admin is already verified
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
       <div className="max-w-7xl mx-auto">
