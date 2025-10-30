@@ -45,19 +45,18 @@ export default function BroadcastPage() {
   // Targeted messaging - only specific IDs allowed
   const [telegramIds, setTelegramIds] = useState('');
 
-  // Redirect if not authenticated or not admin
+  // Check if user has access but don't auto-redirect
+  // The /admin page already handles auth, so we trust that if user got here, they're admin
   useEffect(() => {
-    // Only redirect after auth has finished loading AND user is confirmed not admin
-    if (!authLoading) {
-      if (!isAuthenticated) {
-        console.log('Not authenticated, redirecting to login');
+    if (!authLoading && !isAuthenticated) {
+      // Only check if there's a token in localStorage
+      const token = localStorage.getItem('access_token');
+      if (!token) {
+        console.log('No token found, redirecting to login');
         router.push('/login');
-      } else if (user && user.role !== 'admin') {
-        console.log('Not admin, redirecting to home');
-        router.push('/');
       }
     }
-  }, [isAuthenticated, user, authLoading, router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Load users count
   useEffect(() => {
