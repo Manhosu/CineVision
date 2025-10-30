@@ -96,7 +96,8 @@ export class SupabaseRestClient {
           if (value !== undefined && value !== null) {
             // Support for IN operator: { id: { in: [val1, val2, val3] } }
             if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
-              const values = value.in.map((v: any) => `"${v}"`).join(',');
+              // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
+              const values = value.in.join(',');
               config.params[key] = `in.(${values})`;
             } else {
               config.params[key] = `eq.${value}`;
@@ -278,7 +279,8 @@ export class SupabaseRestClient {
         if (value !== undefined && value !== null) {
           // Support for IN operator: { id: { in: [val1, val2, val3] } }
           if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
-            const values = value.in.map((v: any) => `"${v}"`).join(',');
+            // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
+            const values = value.in.join(',');
             config.params[key] = `in.(${values})`;
           } else {
             config.params[key] = `eq.${value}`;
