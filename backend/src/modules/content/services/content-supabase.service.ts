@@ -9,6 +9,48 @@ export class ContentSupabaseService {
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest') {
     const offset = (page - 1) * limit;
 
+    // Step 1: If genre filter is provided, get content IDs for this category
+    let contentIds: string[] | null = null;
+    if (genre) {
+      // Find the category by name
+      const { data: category } = await this.supabaseService.client
+        .from('categories')
+        .select('id')
+        .eq('name', genre)
+        .single();
+
+      if (category) {
+        // Get all content IDs associated with this category
+        const { data: associations } = await this.supabaseService.client
+          .from('content_categories')
+          .select('content_id')
+          .eq('category_id', category.id);
+
+        contentIds = associations?.map(a => a.content_id) || [];
+
+        // If no content found for this category, return empty result
+        if (contentIds.length === 0) {
+          return {
+            movies: [],
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+          };
+        }
+      } else {
+        // Category doesn't exist, return empty result
+        return {
+          movies: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+    }
+
+    // Step 2: Build the main query with optional ID filter
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -16,13 +58,13 @@ export class ContentSupabaseService {
         categories:content_categories(
           category:categories(*)
         )
-      `)
+      `, { count: 'exact' })
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.MOVIE);
 
-    // Filter by genre if provided using category join filter
-    if (genre) {
-      query = query.eq('categories.category.name', genre);
+    // Apply content ID filter if genre was specified
+    if (contentIds) {
+      query = query.in('id', contentIds);
     }
 
     // Apply sorting
@@ -105,6 +147,48 @@ export class ContentSupabaseService {
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest') {
     const offset = (page - 1) * limit;
 
+    // Step 1: If genre filter is provided, get content IDs for this category
+    let contentIds: string[] | null = null;
+    if (genre) {
+      // Find the category by name
+      const { data: category } = await this.supabaseService.client
+        .from('categories')
+        .select('id')
+        .eq('name', genre)
+        .single();
+
+      if (category) {
+        // Get all content IDs associated with this category
+        const { data: associations } = await this.supabaseService.client
+          .from('content_categories')
+          .select('content_id')
+          .eq('category_id', category.id);
+
+        contentIds = associations?.map(a => a.content_id) || [];
+
+        // If no content found for this category, return empty result
+        if (contentIds.length === 0) {
+          return {
+            data: [],
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+          };
+        }
+      } else {
+        // Category doesn't exist, return empty result
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+    }
+
+    // Step 2: Build the main query with optional ID filter
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -112,13 +196,13 @@ export class ContentSupabaseService {
         categories:content_categories(
           category:categories(*)
         )
-      `)
+      `, { count: 'exact' })
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.SERIES);
 
-    // Filter by genre if provided using category join filter
-    if (genre) {
-      query = query.eq('categories.category.name', genre);
+    // Apply content ID filter if genre was specified
+    if (contentIds) {
+      query = query.in('id', contentIds);
     }
 
     // Apply sorting
