@@ -51,25 +51,42 @@ export default function BroadcastPage() {
     setMounted(true);
   }, []);
 
+  // Debug localStorage tokens
+  useEffect(() => {
+    if (!mounted) return;
+
+    console.log('=== BROADCAST PAGE LOADED ===');
+    console.log('access_token:', localStorage.getItem('access_token') ? 'EXISTS' : 'NOT FOUND');
+    console.log('auth_token:', localStorage.getItem('auth_token') ? 'EXISTS' : 'NOT FOUND');
+    console.log('user:', localStorage.getItem('user') ? 'EXISTS' : 'NOT FOUND');
+    console.log('============================');
+  }, [mounted]);
+
   // Load users count - NO AUTH REDIRECT HERE
   // User coming from /admin is already verified as admin
   useEffect(() => {
     if (!mounted) return;
 
     // Check if has token, if yes, try to load data
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
     if (token) {
       fetchUsersCount();
       fetchBroadcastHistory();
+    } else {
+      console.error('No token found in localStorage - cannot load data');
     }
   }, [mounted]);
 
   const fetchUsersCount = async () => {
     try {
-      const token = localStorage.getItem('access_token');
+      // Try access_token first, then fallback to auth_token
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+
+      console.log('Fetching users count with token:', token ? 'Token exists' : 'NO TOKEN');
 
       if (!token) {
-        console.error('No access token found');
+        console.error('No access token found in localStorage');
+        toast.error('Token não encontrado. Por favor, faça login novamente.');
         return;
       }
 
@@ -82,6 +99,8 @@ export default function BroadcastPage() {
         }
       );
 
+      console.log('Users count response status:', response.status);
+
       if (response.status === 401) {
         toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
         return;
@@ -89,9 +108,12 @@ export default function BroadcastPage() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Users count data:', data);
         setUsersCount(data.total_users || 0);
       } else {
         console.error('Failed to fetch users count:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error data:', errorData);
       }
     } catch (error) {
       console.error('Error fetching users count:', error);
@@ -101,10 +123,12 @@ export default function BroadcastPage() {
   const fetchBroadcastHistory = async () => {
     try {
       setLoadingHistory(true);
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+
+      console.log('Fetching broadcast history with token:', token ? 'Token exists' : 'NO TOKEN');
 
       if (!token) {
-        console.error('No access token found');
+        console.error('No access token found in localStorage');
         return;
       }
 
@@ -117,6 +141,8 @@ export default function BroadcastPage() {
         }
       );
 
+      console.log('Broadcast history response status:', response.status);
+
       if (response.status === 401) {
         toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
         return;
@@ -124,9 +150,12 @@ export default function BroadcastPage() {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Broadcast history data:', data);
         setHistory(data.broadcasts || []);
       } else {
         console.error('Failed to fetch broadcast history:', response.status);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error data:', errorData);
       }
     } catch (error) {
       console.error('Error fetching broadcast history:', error);
@@ -200,7 +229,9 @@ export default function BroadcastPage() {
         const formData = new FormData();
         formData.append('image', imageFile);
 
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+
+        console.log('Uploading image with token:', token ? 'Token exists' : 'NO TOKEN');
 
         if (!token) {
           throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
@@ -217,22 +248,28 @@ export default function BroadcastPage() {
           }
         );
 
+        console.log('Image upload response status:', uploadResponse.status);
+
         if (uploadResponse.status === 401) {
           throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
         }
 
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json().catch(() => ({}));
+          console.error('Image upload error:', errorData);
           throw new Error(errorData.message || 'Falha ao fazer upload da imagem');
         }
 
         const uploadData = await uploadResponse.json();
+        console.log('Image upload success:', uploadData);
         imageUrl = uploadData.image_url;
         setIsUploading(false);
       }
 
       // Send broadcast
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+
+      console.log('Sending broadcast with token:', token ? 'Token exists' : 'NO TOKEN');
 
       if (!token) {
         throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
@@ -253,6 +290,8 @@ export default function BroadcastPage() {
         payload.button_url = buttonUrl.trim();
       }
 
+      console.log('Broadcast payload:', payload);
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/send`,
         {
@@ -265,16 +304,20 @@ export default function BroadcastPage() {
         }
       );
 
+      console.log('Broadcast response status:', response.status);
+
       if (response.status === 401) {
         throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
       }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
+        console.error('Broadcast error:', error);
         throw new Error(error.message || 'Falha ao enviar broadcast');
       }
 
       const result = await response.json();
+      console.log('Broadcast result:', result);
 
       toast.success(
         `Broadcast enviado! ${result.successful_sends} de ${result.total_users} mensagens enviadas com sucesso.`
