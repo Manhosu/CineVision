@@ -37,7 +37,7 @@ function SearchResults() {
       }
 
       const result = await response.json();
-      setMovies(result.data || []);
+      setMovies(result.movies || []);
     } catch (error) {
       console.error('Erro na busca:', error);
       toast.error('Erro ao buscar filmes');
