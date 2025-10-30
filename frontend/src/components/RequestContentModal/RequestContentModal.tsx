@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, FilmIcon } from '@heroicons/react/24/outline';
 
@@ -15,13 +15,25 @@ export function RequestContentModal({
   onClose,
   telegramBotUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevision_bot'
 }: RequestContentModalProps) {
+  const [contentRequest, setContentRequest] = useState('');
 
   const handleOpenTelegram = () => {
-    // Abre o Telegram com o bot usando deep linking para solicitar conteúdo
-    // O payload 'request_content' será processado pelo comando /start do bot
-    const telegramUrl = `https://t.me/${telegramBotUsername}?start=request_content`;
+    // Se o usuário digitou algo, enviar no payload
+    let telegramUrl = `https://t.me/${telegramBotUsername}`;
+
+    if (contentRequest.trim()) {
+      // Codificar o título em base64 para enviar ao bot
+      const payload = btoa(encodeURIComponent(contentRequest.trim())).replace(/=/g, '');
+      telegramUrl += `?start=request_${payload}`;
+    } else {
+      // Se não digitou nada, usar o comando padrão
+      telegramUrl += `?start=request_content`;
+    }
+
     window.open(telegramUrl, '_blank');
     onClose();
+    // Limpar o campo após fechar
+    setTimeout(() => setContentRequest(''), 300);
   };
 
   return (
@@ -76,6 +88,26 @@ export function RequestContentModal({
                 <Dialog.Description className="text-sm text-gray-400 text-center mb-6">
                   Solicite e receba uma notificação pelo Telegram assim que o conteúdo for adicionado à plataforma!
                 </Dialog.Description>
+
+                {/* Input Field */}
+                <div className="mb-6">
+                  <label htmlFor="content-request" className="block text-sm font-medium text-gray-300 mb-2">
+                    Qual conteúdo você procura?
+                  </label>
+                  <input
+                    type="text"
+                    id="content-request"
+                    value={contentRequest}
+                    onChange={(e) => setContentRequest(e.target.value)}
+                    placeholder="Ex: Superman, Matrix, Breaking Bad..."
+                    className="w-full px-4 py-3 bg-dark-800 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleOpenTelegram();
+                      }
+                    }}
+                  />
+                </div>
 
                 {/* Button */}
                 <button

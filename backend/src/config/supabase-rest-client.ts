@@ -50,7 +50,7 @@ export class SupabaseRestClient {
     // Interceptor para logs
     this.client.interceptors.request.use(
       (config) => {
-        this.logger.debug(`🔄 ${config.method?.toUpperCase()} ${config.url}`);
+        this.logger.log(`🔄 ${config.method?.toUpperCase()} ${config.url}`);
         return config;
       },
       (error) => {
@@ -61,7 +61,7 @@ export class SupabaseRestClient {
 
     this.client.interceptors.response.use(
       (response) => {
-        this.logger.debug(`✅ ${response.status} ${response.config.url}`);
+        this.logger.log(`✅ ${response.status} ${response.config.url}`);
         return response;
       },
       (error) => {
@@ -99,22 +99,22 @@ export class SupabaseRestClient {
               // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
               const values = value.in.join(',');
               config.params[key] = `in.(${values})`;
-              this.logger.debug(`[SupabaseRestClient] Added IN filter: ${key}=in.(${values})`);
+              this.logger.log(`[SupabaseRestClient] Added IN filter: ${key}=in.(${values})`);
             }
             // Support for ILIKE operator: { title: { ilike: '*search*' } }
             else if (typeof value === 'object' && value.ilike !== undefined) {
               // PostgREST ILIKE syntax: title=ilike.*search*
               config.params[key] = `ilike.${value.ilike}`;
-              this.logger.debug(`[SupabaseRestClient] Added ILIKE filter: ${key}=ilike.${value.ilike}`);
+              this.logger.log(`[SupabaseRestClient] Added ILIKE filter: ${key}=ilike.${value.ilike}`);
             } else {
               config.params[key] = `eq.${value}`;
-              this.logger.debug(`[SupabaseRestClient] Added EQ filter: ${key}=eq.${value}`);
+              this.logger.log(`[SupabaseRestClient] Added EQ filter: ${key}=eq.${value}`);
             }
           }
         });
       }
 
-      this.logger.debug(`[SupabaseRestClient] Final query params: ${JSON.stringify(config.params)}`);
+      this.logger.log(`[SupabaseRestClient] Final query params: ${JSON.stringify(config.params)}`);
 
       // Order by
       if (options.order) {

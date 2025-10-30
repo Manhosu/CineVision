@@ -20,8 +20,9 @@ export class ContentSupabaseService {
   constructor(private readonly supabaseClient: SupabaseRestClient) {}
 
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
+    console.log(`🔍 [SEARCH DEBUG] Finding movies with search="${search}"`);
     try {
-      this.logger.debug(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
+      this.logger.log(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
 
       // Filter by category if genre is provided
       let contentIds: string[] = [];
@@ -78,11 +79,11 @@ export class ContentSupabaseService {
         // Use ilike for case-insensitive pattern matching
         // %text% matches anywhere in the string (% is the wildcard for PostgREST ILIKE)
         const searchPattern = `%${search.trim()}%`;
-        this.logger.debug(`Adding search filter: title ilike '${searchPattern}'`);
+        this.logger.log(`Adding search filter: title ilike '${searchPattern}'`);
         queryOptions.where.title = { ilike: searchPattern };
       }
 
-      this.logger.debug(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
+      this.logger.log(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
 
       // Add sorting
       switch (sort) {
@@ -201,11 +202,11 @@ export class ContentSupabaseService {
         // Use ilike for case-insensitive pattern matching
         // %text% matches anywhere in the string (% is the wildcard for PostgREST ILIKE)
         const searchPattern = `%${search.trim()}%`;
-        this.logger.debug(`Adding search filter: title ilike '${searchPattern}'`);
+        this.logger.log(`Adding search filter: title ilike '${searchPattern}'`);
         queryOptions.where.title = { ilike: searchPattern };
       }
 
-      this.logger.debug(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
+      this.logger.log(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
 
       // Add sorting
       switch (sort) {
