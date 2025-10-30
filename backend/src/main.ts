@@ -56,18 +56,27 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps, Postman, etc.)
-      if (!origin) return callback(null, true);
+      if (!origin) {
+        console.log('✅ CORS: Request without origin - ALLOWED');
+        return callback(null, true);
+      }
 
       // Check if origin is allowed or matches Vercel pattern
       if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        console.log(`✅ CORS: Origin allowed - ${origin}`);
         callback(null, true);
       } else {
+        console.log(`❌ CORS: Origin blocked - ${origin}`);
+        console.log('Allowed origins:', allowedOrigins);
         callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Content-Length', 'Content-Type'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
 
   // Global validation pipe
