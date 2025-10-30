@@ -53,17 +53,18 @@ export class BroadcastService {
       buttonUrl?: string;
     },
   ): Promise<boolean> {
+    const endpoint = `${this.telegramApiUrl}/sendMessage`;
+
+    // Validate optional string fields
+    const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
+    const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
+
     try {
-      const endpoint = `${this.telegramApiUrl}/sendMessage`;
       const payload: any = {
         chat_id: chatId,
         text: messageText,
         parse_mode: 'Markdown',
       };
-
-      // Validate optional string fields
-      const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
-      const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
 
       // Add inline keyboard if button is provided
       if (buttonText && buttonUrl) {
@@ -114,6 +115,8 @@ export class BroadcastService {
     successful_sends: number;
     failed_sends: number;
     broadcast_id: string;
+    successful_telegram_ids: string[];
+    failed_telegram_ids: string[];
   }> {
     try {
       // Validate that telegram_ids is provided and not empty
