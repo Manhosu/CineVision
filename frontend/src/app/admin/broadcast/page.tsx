@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import {
   PaperAirplaneIcon,
-  PhotoIcon,
   LinkIcon,
   UsersIcon,
   ClockIcon,
   CheckCircleIcon,
-  TrashIcon,
   ArrowLeftIcon,
   HomeIcon,
 } from '@heroicons/react/24/outline';
@@ -29,17 +27,13 @@ interface BroadcastHistory {
 export default function BroadcastPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [mounted, setMounted] = useState(false);
 
   const [messageText, setMessageText] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>('');
   const [buttonText, setButtonText] = useState('Acessar site');
   const [buttonUrl, setButtonUrl] = useState('');
   const [usersCount, setUsersCount] = useState(0);
   const [isSending, setIsSending] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -164,39 +158,6 @@ export default function BroadcastPage() {
     }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error('Por favor, selecione apenas imagens');
-        return;
-      }
-
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Imagem muito grande. Máximo 5MB');
-        return;
-      }
-
-      setImageFile(file);
-
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setImageFile(null);
-    setImagePreview('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,52 +182,8 @@ export default function BroadcastPage() {
 
     try {
       setIsSending(true);
-      let imageUrl = '';
 
-      // Upload image if provided
-      if (imageFile) {
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append('image', imageFile);
-
-        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-
-        console.log('Uploading image with token:', token ? 'Token exists' : 'NO TOKEN');
-
-        if (!token) {
-          throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
-        }
-
-        const uploadResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/upload-image`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            body: formData,
-          }
-        );
-
-        console.log('Image upload response status:', uploadResponse.status);
-
-        if (uploadResponse.status === 401) {
-          throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
-        }
-
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}));
-          console.error('Image upload error:', errorData);
-          throw new Error(errorData.message || 'Falha ao fazer upload da imagem');
-        }
-
-        const uploadData = await uploadResponse.json();
-        console.log('Image upload success:', uploadData);
-        imageUrl = uploadData.image_url;
-        setIsUploading(false);
-      }
-
-      // Send broadcast
+      // Get auth token
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
 
       console.log('Sending broadcast with token:', token ? 'Token exists' : 'NO TOKEN');
@@ -280,10 +197,7 @@ export default function BroadcastPage() {
         telegram_ids: telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id),
       };
 
-      // Only add optional fields if they have values
-      if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) {
-        payload.image_url = imageUrl.trim();
-      }
+      // Add button if both text and URL are provided
       if (buttonText && typeof buttonText === 'string' && buttonText.trim() &&
           buttonUrl && typeof buttonUrl === 'string' && buttonUrl.trim()) {
         payload.button_text = buttonText.trim();
@@ -325,7 +239,6 @@ export default function BroadcastPage() {
 
       // Clear form
       setMessageText('');
-      handleRemoveImage();
       setButtonText('Acessar site');
       setButtonUrl('');
       setTelegramIds('');
@@ -337,7 +250,6 @@ export default function BroadcastPage() {
       toast.error(error.message || 'Erro ao enviar broadcast');
     } finally {
       setIsSending(false);
-      setIsUploading(false);
     }
   };
 
@@ -458,48 +370,6 @@ export default function BroadcastPage() {
                 </p>
               </div>
 
-              {/* Image Upload */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
-                  <PhotoIcon className="w-4 h-4 mr-2" />
-                  Imagem (opcional)
-                </label>
-
-                {imagePreview ? (
-                  <div className="relative">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="w-full h-48 object-cover rounded-lg border border-gray-700"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRemoveImage}
-                      className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-lg"
-                    >
-                      <TrashIcon className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-48 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-500 hover:bg-red-500/5 transition-all"
-                  >
-                    <PhotoIcon className="w-12 h-12 text-gray-600 mb-2" />
-                    <p className="text-sm text-gray-500">Clique para selecionar imagem</p>
-                    <p className="text-xs text-gray-600 mt-1">PNG, JPG até 5MB</p>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-              </div>
-
               {/* Button Configuration */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -541,13 +411,13 @@ export default function BroadcastPage() {
                 </p>
                 <button
                   type="submit"
-                  disabled={isSending || isUploading || !telegramIds.trim()}
+                  disabled={isSending || !telegramIds.trim()}
                   className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300 shadow-lg hover:shadow-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center space-x-2"
                 >
-                  {isSending || isUploading ? (
+                  {isSending ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      <span>{isUploading ? 'Enviando imagem...' : 'Enviando...'}</span>
+                      <span>Enviando...</span>
                     </>
                   ) : (
                     <>
