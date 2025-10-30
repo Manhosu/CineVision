@@ -17,8 +17,9 @@ export function RequestContentModal({
 }: RequestContentModalProps) {
 
   const handleOpenTelegram = () => {
-    // Abre o Telegram com o bot
-    const telegramUrl = `https://t.me/${telegramBotUsername}`;
+    // Abre o Telegram com o bot usando deep linking para solicitar conteúdo
+    // O payload 'request_content' será processado pelo comando /start do bot
+    const telegramUrl = `https://t.me/${telegramBotUsername}?start=request_content`;
     window.open(telegramUrl, '_blank');
     onClose();
   };

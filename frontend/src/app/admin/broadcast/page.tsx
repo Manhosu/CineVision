@@ -41,8 +41,7 @@ export default function BroadcastPage() {
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Targeted messaging
-  const [sendMode, setSendMode] = useState<'all' | 'targeted'>('all');
+  // Targeted messaging - only specific IDs allowed
   const [telegramIds, setTelegramIds] = useState('');
 
   // Redirect if not authenticated or not admin
@@ -156,18 +155,15 @@ export default function BroadcastPage() {
       return;
     }
 
-    // Validate targeted mode
-    if (sendMode === 'targeted') {
-      const ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
-      if (ids.length === 0) {
-        toast.error('Adicione pelo menos um Telegram ID');
-        return;
-      }
+    // Validate telegram IDs
+    const ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
+    if (ids.length === 0) {
+      toast.error('Adicione pelo menos um Telegram ID');
+      return;
     }
 
     // Confirm before sending
-    const targetCount = sendMode === 'all' ? usersCount : telegramIds.split(',').filter(id => id.trim()).length;
-    const confirmMessage = `Tem certeza que deseja enviar esta mensagem para ${targetCount} usuário(s)?`;
+    const confirmMessage = `Tem certeza que deseja enviar esta mensagem para ${ids.length} usuário(s)?`;
     if (!confirm(confirmMessage)) {
       return;
     }
@@ -212,10 +208,8 @@ export default function BroadcastPage() {
         button_url: buttonText && buttonUrl ? buttonUrl : undefined,
       };
 
-      // Add telegram_ids if in targeted mode
-      if (sendMode === 'targeted') {
-        payload.telegram_ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
-      }
+      // Add telegram_ids (required)
+      payload.telegram_ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/send`,
@@ -246,7 +240,6 @@ export default function BroadcastPage() {
       setButtonText('Acessar site');
       setButtonUrl('');
       setTelegramIds('');
-      setSendMode('all');
 
       // Refresh history
       fetchBroadcastHistory();
@@ -277,10 +270,10 @@ export default function BroadcastPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">
-            Notificações em Massa
+            Marketing
           </h1>
           <p className="text-gray-400">
-            Envie mensagens para todos os usuários ou para IDs específicos que iniciaram conversa com o bot
+            Envie mensagens para IDs específicos de usuários que iniciaram conversa com o bot
           </p>
         </div>
 
@@ -310,62 +303,23 @@ export default function BroadcastPage() {
             <form onSubmit={handleSendBroadcast} className="bg-dark-800 rounded-lg border border-white/10 p-6 space-y-6">
               <h2 className="text-xl font-semibold text-white">Compor Mensagem</h2>
 
-              {/* Send Mode Toggle */}
+              {/* Telegram IDs Input */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Modo de Envio
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Telegram IDs *
                 </label>
-                <div className="flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setSendMode('all')}
-                    className={`flex-1 px-4 py-3 rounded-lg border transition-colors ${
-                      sendMode === 'all'
-                        ? 'bg-primary-500/20 border-primary-500 text-white'
-                        : 'bg-dark-900 border-white/10 text-gray-400 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center space-x-2">
-                      <UsersIcon className="w-5 h-5" />
-                      <span>Todos os Usuários</span>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSendMode('targeted')}
-                    className={`flex-1 px-4 py-3 rounded-lg border transition-colors ${
-                      sendMode === 'targeted'
-                        ? 'bg-primary-500/20 border-primary-500 text-white'
-                        : 'bg-dark-900 border-white/10 text-gray-400 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center space-x-2">
-                      <UsersIcon className="w-5 h-5" />
-                      <span>IDs Específicos</span>
-                    </div>
-                  </button>
-                </div>
+                <textarea
+                  value={telegramIds}
+                  onChange={(e) => setTelegramIds(e.target.value)}
+                  placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
+                  rows={3}
+                  className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  Separe múltiplos IDs com vírgula
+                </p>
               </div>
-
-              {/* Telegram IDs Input (only for targeted mode) */}
-              {sendMode === 'targeted' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Telegram IDs *
-                  </label>
-                  <textarea
-                    value={telegramIds}
-                    onChange={(e) => setTelegramIds(e.target.value)}
-                    placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
-                    rows={3}
-                    className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    required={sendMode === 'targeted'}
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Separe múltiplos IDs com vírgula
-                  </p>
-                </div>
-              )}
 
               {/* Message Text */}
               <div>
@@ -461,19 +415,15 @@ export default function BroadcastPage() {
               {/* Send Button */}
               <div className="flex items-center justify-between pt-4 border-t border-white/10">
                 <p className="text-sm text-gray-400">
-                  {sendMode === 'all' ? (
-                    usersCount > 0 ? (
-                      <>Será enviado para <strong>{usersCount}</strong> usuário(s)</>
-                    ) : (
-                      <>Nenhum usuário para enviar</>
-                    )
-                  ) : (
+                  {telegramIds.trim() ? (
                     <>Enviando para <strong>{telegramIds.split(',').filter(id => id.trim()).length}</strong> ID(s) específico(s)</>
+                  ) : (
+                    <>Nenhum ID especificado</>
                   )}
                 </p>
                 <button
                   type="submit"
-                  disabled={isSending || isUploading || (sendMode === 'all' && usersCount === 0)}
+                  disabled={isSending || isUploading || !telegramIds.trim()}
                   className="btn-primary px-6 py-3 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSending || isUploading ? (
@@ -484,7 +434,7 @@ export default function BroadcastPage() {
                   ) : (
                     <>
                       <PaperAirplaneIcon className="w-5 h-5" />
-                      <span>Enviar Broadcast</span>
+                      <span>Enviar Marketing</span>
                     </>
                   )}
                 </button>

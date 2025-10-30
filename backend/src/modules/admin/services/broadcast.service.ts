@@ -101,7 +101,7 @@ export class BroadcastService {
   }
 
   /**
-   * Send broadcast to all users or specific telegram IDs with rate limiting
+   * Send broadcast to specific telegram IDs with rate limiting
    * Telegram allows ~30 messages per second, we'll use 25 to be safe
    */
   async sendBroadcast(
@@ -115,31 +115,36 @@ export class BroadcastService {
     broadcast_id: string;
   }> {
     try {
-      let users: any[];
-
-      // If telegram_ids is provided, filter users by those IDs
-      if (broadcastData.telegram_ids && broadcastData.telegram_ids.length > 0) {
-        this.logger.log(`Fetching users with specific telegram IDs: ${broadcastData.telegram_ids.join(', ')}`);
-
-        const { data, error } = await this.supabase
-          .from('users')
-          .select('id, telegram_id, telegram_chat_id, telegram_username, name')
-          .in('telegram_id', broadcastData.telegram_ids)
-          .not('telegram_chat_id', 'is', null);
-
-        if (error) {
-          this.logger.error('Error fetching specific users:', error);
-          throw new Error('Failed to fetch specific users');
-        }
-
-        users = data || [];
-      } else {
-        // Get all users who have started the bot
-        users = await this.getAllBotUsers();
+      // Validate that telegram_ids is provided and not empty
+      if (!broadcastData.telegram_ids || broadcastData.telegram_ids.length === 0) {
+        throw new BadRequestException('telegram_ids é obrigatório e deve conter pelo menos um ID');
       }
 
+      this.logger.log(`Fetching users with specific telegram IDs: ${broadcastData.telegram_ids.join(', ')}`);
+
+      // Fetch users by telegram IDs
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('id, telegram_id, telegram_chat_id, telegram_username, name')
+        .in('telegram_id', broadcastData.telegram_ids)
+        .not('telegram_chat_id', 'is', null);
+
+      if (error) {
+        this.logger.error('Error fetching specific users:', error);
+        throw new Error('Falha ao buscar usuários específicos');
+      }
+
+      const users = data || [];
+
       if (users.length === 0) {
-        throw new BadRequestException('Nenhum usuário encontrado para enviar a mensagem');
+        throw new BadRequestException('Nenhum usuário encontrado com os IDs fornecidos. Certifique-se de que os usuários iniciaram conversa com o bot.');
+      }
+
+      // Log found users vs requested IDs
+      const foundIds = users.map(u => u.telegram_id);
+      const notFoundIds = broadcastData.telegram_ids.filter(id => !foundIds.includes(id));
+      if (notFoundIds.length > 0) {
+        this.logger.warn(`Telegram IDs not found or without chat_id: ${notFoundIds.join(', ')}`);
       }
 
       this.logger.log(`Starting broadcast to ${users.length} users`);

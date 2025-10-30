@@ -19,7 +19,7 @@ import { SendBroadcastDto } from '../dto/broadcast.dto';
 import { ImageUploadService } from '../services/image-upload.service';
 import { UserRole } from '../../users/entities/user.entity';
 
-@Controller('api/v1/admin/broadcast')
+@Controller('admin/broadcast')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
 export class BroadcastController {

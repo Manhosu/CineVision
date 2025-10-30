@@ -19,8 +19,7 @@ export class SendBroadcastDto {
   @IsUrl({}, { message: 'URL do botão inválida' })
   button_url?: string;
 
-  @IsOptional()
   @IsArray({ message: 'telegram_ids deve ser um array' })
   @IsString({ each: true, message: 'Cada telegram_id deve ser uma string' })
-  telegram_ids?: string[];
+  telegram_ids: string[];
 }

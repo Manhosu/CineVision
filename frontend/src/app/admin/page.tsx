@@ -180,8 +180,8 @@ export default function AdminDashboard() {
       shadow: 'shadow-emerald-500/50'
     },
     {
-      title: 'Notificações em Massa',
-      description: 'Enviar mensagens para usuários do bot',
+      title: 'Marketing',
+      description: 'Enviar mensagens para IDs específicos',
       href: '/admin/broadcast',
       icon: (
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
