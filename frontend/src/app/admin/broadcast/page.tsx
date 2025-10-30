@@ -11,8 +11,9 @@ import {
   UsersIcon,
   ClockIcon,
   CheckCircleIcon,
-  XMarkIcon,
   TrashIcon,
+  ArrowLeftIcon,
+  HomeIcon,
 } from '@heroicons/react/24/outline';
 
 interface BroadcastHistory {
@@ -46,16 +47,7 @@ export default function BroadcastPage() {
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
-    console.log('[Broadcast Debug]', {
-      authLoading,
-      isAuthenticated,
-      userRole: user?.role,
-      userEmail: user?.email,
-      shouldRedirect: !authLoading && (!isAuthenticated || user?.role !== 'admin')
-    });
-
     if (!authLoading && (!isAuthenticated || user?.role !== 'admin')) {
-      console.log('[Broadcast] Redirecting to home - not authenticated or not admin');
       router.push('/');
     }
   }, [isAuthenticated, user, authLoading, router]);
@@ -259,8 +251,8 @@ export default function BroadcastPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
       </div>
     );
   }
@@ -270,43 +262,74 @@ export default function BroadcastPage() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-900 py-8">
-      <div className="container mx-auto px-4 max-w-6xl">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Marketing
-          </h1>
-          <p className="text-gray-400">
-            Envie mensagens para IDs específicos de usuários que iniciaram conversa com o bot
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
+                Marketing
+              </h1>
+              <p className="text-gray-400 text-lg">
+                Envie mensagens para IDs específicos de usuários que iniciaram conversa com o bot
+              </p>
+            </div>
+
+            {/* Navigation Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/admin')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                <ArrowLeftIcon className="w-5 h-5" />
+                Voltar
+              </button>
+
+              <button
+                onClick={() => router.push('/')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
+              >
+                <HomeIcon className="w-5 h-5" />
+                Home
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Users Count Card */}
+        <div className="mb-6">
+          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 group overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-700 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-700 shadow-lg">
+                  <UsersIcon className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-400">Usuários cadastrados</p>
+                  <p className="text-3xl font-bold text-white">{usersCount}</p>
+                </div>
+              </div>
+              <button
+                onClick={fetchUsersCount}
+                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 rounded-lg transition-colors text-sm font-medium"
+              >
+                Atualizar
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Users Count Card */}
-            <div className="bg-dark-800 rounded-lg border border-white/10 p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <UsersIcon className="w-8 h-8 text-primary-500" />
-                  <div>
-                    <p className="text-sm text-gray-400">Usuários cadastrados</p>
-                    <p className="text-2xl font-bold text-white">{usersCount}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={fetchUsersCount}
-                  className="text-sm text-primary-500 hover:text-primary-400"
-                >
-                  Atualizar
-                </button>
-              </div>
-            </div>
-
-            {/* Broadcast Form */}
-            <form onSubmit={handleSendBroadcast} className="bg-dark-800 rounded-lg border border-white/10 p-6 space-y-6">
-              <h2 className="text-xl font-semibold text-white">Compor Mensagem</h2>
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSendBroadcast} className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 space-y-6">
+              <h2 className="text-2xl font-bold text-white flex items-center">
+                <PaperAirplaneIcon className="w-6 h-6 mr-2 text-red-500" />
+                Compor Mensagem
+              </h2>
 
               {/* Telegram IDs Input */}
               <div>
@@ -318,10 +341,10 @@ export default function BroadcastPage() {
                   onChange={(e) => setTelegramIds(e.target.value)}
                   placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
                   rows={3}
-                  className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500">
                   Separe múltiplos IDs com vírgula
                 </p>
               </div>
@@ -337,10 +360,10 @@ export default function BroadcastPage() {
                   placeholder="Digite a mensagem que será enviada aos usuários..."
                   rows={6}
                   maxLength={4000}
-                  className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                   required
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-2 text-xs text-gray-500">
                   {messageText.length}/4000 caracteres • Suporta Markdown
                 </p>
               </div>
@@ -357,12 +380,12 @@ export default function BroadcastPage() {
                     <img
                       src={imagePreview}
                       alt="Preview"
-                      className="w-full h-48 object-cover rounded-lg border border-white/10"
+                      className="w-full h-48 object-cover rounded-lg border border-gray-700"
                     />
                     <button
                       type="button"
                       onClick={handleRemoveImage}
-                      className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 rounded-full transition-colors"
+                      className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-lg"
                     >
                       <TrashIcon className="w-4 h-4 text-white" />
                     </button>
@@ -370,7 +393,7 @@ export default function BroadcastPage() {
                 ) : (
                   <div
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-48 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 hover:bg-primary-500/5 transition-colors"
+                    className="w-full h-48 border-2 border-dashed border-gray-700 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-red-500 hover:bg-red-500/5 transition-all"
                   >
                     <PhotoIcon className="w-12 h-12 text-gray-600 mb-2" />
                     <p className="text-sm text-gray-500">Clique para selecionar imagem</p>
@@ -399,7 +422,7 @@ export default function BroadcastPage() {
                     onChange={(e) => setButtonText(e.target.value)}
                     placeholder="Ex: Acessar site"
                     maxLength={100}
-                    className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                   />
                 </div>
                 <div>
@@ -412,16 +435,16 @@ export default function BroadcastPage() {
                     value={buttonUrl}
                     onChange={(e) => setButtonUrl(e.target.value)}
                     placeholder="https://cine-vision-murex.vercel.app"
-                    className="w-full bg-dark-900 border border-white/10 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                   />
                 </div>
               </div>
 
               {/* Send Button */}
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between pt-4 border-t border-gray-700">
                 <p className="text-sm text-gray-400">
                   {telegramIds.trim() ? (
-                    <>Enviando para <strong>{telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id).length}</strong> ID(s) específico(s)</>
+                    <>Enviando para <strong className="text-white">{telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id).length}</strong> ID(s) específico(s)</>
                   ) : (
                     <>Nenhum ID especificado</>
                   )}
@@ -429,7 +452,7 @@ export default function BroadcastPage() {
                 <button
                   type="submit"
                   disabled={isSending || isUploading || !telegramIds.trim()}
-                  className="btn-primary px-6 py-3 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300 shadow-lg hover:shadow-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center space-x-2"
                 >
                   {isSending || isUploading ? (
                     <>
@@ -449,39 +472,42 @@ export default function BroadcastPage() {
 
           {/* Sidebar - History */}
           <div className="lg:col-span-1">
-            <div className="bg-dark-800 rounded-lg border border-white/10 p-6 sticky top-8">
+            <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 sticky top-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white flex items-center">
-                  <ClockIcon className="w-5 h-5 mr-2" />
+                <h2 className="text-xl font-bold text-white flex items-center">
+                  <ClockIcon className="w-5 h-5 mr-2 text-red-500" />
                   Histórico
                 </h2>
                 <button
                   onClick={fetchBroadcastHistory}
-                  className="text-xs text-primary-500 hover:text-primary-400"
+                  className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
                 >
                   Atualizar
                 </button>
               </div>
 
-              <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
                 {loadingHistory ? (
                   <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
                   </div>
                 ) : history.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8">
-                    Nenhum broadcast enviado ainda
-                  </p>
+                  <div className="text-center py-8">
+                    <ClockIcon className="w-12 h-12 text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">
+                      Nenhum broadcast enviado ainda
+                    </p>
+                  </div>
                 ) : (
                   history.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-dark-900 rounded-lg p-3 border border-white/5 hover:border-white/10 transition-colors"
+                      className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105"
                     >
-                      <p className="text-sm text-gray-300 line-clamp-2 mb-2">
+                      <p className="text-sm text-gray-300 line-clamp-2 mb-3">
                         {item.message_text}
                       </p>
-                      <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
                         <span className="flex items-center">
                           <CheckCircleIcon className="w-3 h-3 mr-1 text-green-500" />
                           {item.recipients_count} enviados
@@ -496,13 +522,13 @@ export default function BroadcastPage() {
                         </span>
                       </div>
                       {item.image_url && (
-                        <div className="mt-2 flex items-center text-xs text-gray-600">
+                        <div className="flex items-center text-xs text-gray-600 mb-1">
                           <PhotoIcon className="w-3 h-3 mr-1" />
                           Com imagem
                         </div>
                       )}
                       {item.button_text && (
-                        <div className="mt-2 flex items-center text-xs text-gray-600">
+                        <div className="flex items-center text-xs text-gray-600">
                           <LinkIcon className="w-3 h-3 mr-1" />
                           {item.button_text}
                         </div>
