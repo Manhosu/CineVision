@@ -62,26 +62,31 @@ export class BroadcastService {
         parse_mode: 'Markdown',
       };
 
+      // Validate optional string fields
+      const imageUrl = options?.imageUrl && typeof options.imageUrl === 'string' ? options.imageUrl.trim() : '';
+      const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
+      const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
+
       // Add inline keyboard if button is provided
-      if (options?.buttonText && options?.buttonUrl) {
+      if (buttonText && buttonUrl) {
         payload.reply_markup = {
-          inline_keyboard: [[{ text: options.buttonText, url: options.buttonUrl }]],
+          inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
         };
       }
 
       // If image is provided, use sendPhoto
-      if (options?.imageUrl) {
+      if (imageUrl) {
         endpoint = `${this.telegramApiUrl}/sendPhoto`;
         payload = {
           chat_id: chatId,
-          photo: options.imageUrl,
+          photo: imageUrl,
           caption: messageText,
           parse_mode: 'Markdown',
         };
 
-        if (options?.buttonText && options?.buttonUrl) {
+        if (buttonText && buttonUrl) {
           payload.reply_markup = {
-            inline_keyboard: [[{ text: options.buttonText, url: options.buttonUrl }]],
+            inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
           };
         }
       }
@@ -116,17 +121,26 @@ export class BroadcastService {
   }> {
     try {
       // Validate that telegram_ids is provided and not empty
-      if (!broadcastData.telegram_ids || broadcastData.telegram_ids.length === 0) {
+      if (!broadcastData.telegram_ids || !Array.isArray(broadcastData.telegram_ids) || broadcastData.telegram_ids.length === 0) {
         throw new BadRequestException('telegram_ids é obrigatório e deve conter pelo menos um ID');
       }
 
-      this.logger.log(`Fetching users with specific telegram IDs: ${broadcastData.telegram_ids.join(', ')}`);
+      // Ensure all telegram_ids are strings and trim them
+      const cleanedIds = broadcastData.telegram_ids
+        .map(id => String(id || '').trim())
+        .filter(id => id);
+
+      if (cleanedIds.length === 0) {
+        throw new BadRequestException('Nenhum telegram_id válido foi fornecido');
+      }
+
+      this.logger.log(`Fetching users with specific telegram IDs: ${cleanedIds.join(', ')}`);
 
       // Fetch users by telegram IDs
       const { data, error } = await this.supabase
         .from('users')
         .select('id, telegram_id, telegram_chat_id, telegram_username, name')
-        .in('telegram_id', broadcastData.telegram_ids)
+        .in('telegram_id', cleanedIds)
         .not('telegram_chat_id', 'is', null);
 
       if (error) {
@@ -141,8 +155,8 @@ export class BroadcastService {
       }
 
       // Log found users vs requested IDs
-      const foundIds = users.map(u => u.telegram_id);
-      const notFoundIds = broadcastData.telegram_ids.filter(id => !foundIds.includes(id));
+      const foundIds = users.map(u => String(u.telegram_id || ''));
+      const notFoundIds = cleanedIds.filter(id => !foundIds.includes(id));
       if (notFoundIds.length > 0) {
         this.logger.warn(`Telegram IDs not found or without chat_id: ${notFoundIds.join(', ')}`);
       }
