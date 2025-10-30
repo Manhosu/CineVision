@@ -94,7 +94,13 @@ export class SupabaseRestClient {
       if (options.where) {
         Object.entries(options.where).forEach(([key, value]) => {
           if (value !== undefined && value !== null) {
-            config.params[key] = `eq.${value}`;
+            // Support for IN operator: { id: { in: [val1, val2, val3] } }
+            if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
+              const values = value.in.map((v: any) => `"${v}"`).join(',');
+              config.params[key] = `in.(${values})`;
+            } else {
+              config.params[key] = `eq.${value}`;
+            }
           }
         });
       }
@@ -254,7 +260,7 @@ export class SupabaseRestClient {
    * Contar registros
    */
   async count(
-    table: string, 
+    table: string,
     where: Record<string, any> = {}
   ): Promise<number> {
     try {
@@ -270,7 +276,13 @@ export class SupabaseRestClient {
       // Where conditions
       Object.entries(where).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          config.params[key] = `eq.${value}`;
+          // Support for IN operator: { id: { in: [val1, val2, val3] } }
+          if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
+            const values = value.in.map((v: any) => `"${v}"`).join(',');
+            config.params[key] = `in.(${values})`;
+          } else {
+            config.params[key] = `eq.${value}`;
+          }
         }
       });
 
