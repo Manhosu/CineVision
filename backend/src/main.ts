@@ -61,8 +61,17 @@ async function bootstrap() {
         return callback(null, true);
       }
 
-      // Check if origin is allowed or matches Vercel pattern
-      if (allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+      // Check if origin is allowed or matches allowed patterns
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('cinevisionapp.com.br') ||
+        origin === 'https://www.cinevisionapp.com.br' ||
+        origin === 'https://cinevisionapp.com.br' ||
+        origin === 'http://www.cinevisionapp.com.br' ||
+        origin === 'http://cinevisionapp.com.br';
+
+      if (isAllowed) {
         console.log(`✅ CORS: Origin allowed - ${origin}`);
         callback(null, true);
       } else {
