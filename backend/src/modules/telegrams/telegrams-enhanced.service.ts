@@ -1322,7 +1322,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
 👇 Clique no botão abaixo para ver nosso catálogo:`;
 
-    const siteUrl = process.env.FRONTEND_URL || 'https://cine-vision-murex.vercel.app';
+    const siteUrl = process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br';
 
     await this.sendMessage(chatId, welcomeMessage, {
       parse_mode: 'Markdown',
@@ -1378,7 +1378,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
   private async handleMyPurchasesCommand(chatId: number, telegramUserId: number) {
     try {
       // Gerar link da dashboard com autologin baseado no telegram_id
-      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://cine-vision-murex.vercel.app';
+      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
       const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${telegramUserId}&redirect=/dashboard`;
 
       const message = `📱 *Minhas Compras*
