@@ -6,6 +6,7 @@ interface Movie {
   price_cents: number;
   poster_url?: string;
   thumbnail_url?: string;
+  trailer_url?: string;
   description?: string;
   synopsis?: string;
   release_year?: number;

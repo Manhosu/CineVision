@@ -1,4 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
+export declare const notificationsHandler: (bot: TelegramBot, msg: TelegramBot.Message) => Promise<void>;
+export declare const showNotificationSettings: (bot: TelegramBot, chatId: number) => Promise<void>;
+export declare const handleNotificationCallback: (bot: TelegramBot, query: TelegramBot.CallbackQuery) => Promise<void>;
 interface NewRelease {
     id: string;
     title: string;

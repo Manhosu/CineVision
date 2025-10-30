@@ -15,6 +15,7 @@ interface Movie {
     title: string;
     description: string;
     poster_url?: string;
+    trailer_url?: string;
     price_cents: number;
     currency: string;
     genre?: string;

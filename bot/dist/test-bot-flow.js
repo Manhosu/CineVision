@@ -45,7 +45,7 @@ async function testBotFlow() {
         console.log('6. Testando confirmação de pagamento...');
         const mockPurchaseData = {
             id: 'purchase_123',
-            content: { title: 'Filme Teste', id: 'movie_123' },
+            content: { title: 'Filme de Teste', id: 'movie_123' },
             amount: 15.99,
             status: 'paid'
         };
@@ -53,11 +53,11 @@ async function testBotFlow() {
         console.log('7. Testando notificação de novo lançamento...');
         const mockMovieData = {
             id: 'movie_456',
-            title: 'Novo Filme 2024',
+            title: 'Novo Filme de Teste',
             rating: 8.5,
             genre: 'Ação',
             duration: 120,
-            description: 'Um filme incrível de ação.',
+            description: 'Um filme de teste para validação.',
             price_cents: 1999,
             currency: 'BRL'
         };

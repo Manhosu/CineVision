@@ -354,7 +354,7 @@ Você ainda não fez nenhuma compra.
         const telegramId = msg.from?.id;
         const movieTitle = match?.[1]?.trim();
         if (!movieTitle) {
-            await bot.sendMessage(chatId, `❌ Por favor, especifique o título do filme.\n\nExemplo: /pedir Vingadores Ultimato`);
+            await bot.sendMessage(chatId, `❌ Por favor, especifique o título do filme.\n\nExemplo: /pedir Nome do Filme`);
             return;
         }
         try {

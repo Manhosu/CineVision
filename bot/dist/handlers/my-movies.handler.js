@@ -1,76 +1,57 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleMyMoviesCallback = exports.showMyMovies = exports.myMoviesHandler = void 0;
-const mockUserMovies = [
-    {
-        id: '1',
-        title: 'Vingadores: Ultimato',
-        purchaseDate: '2024-01-15',
-        downloadLink: 'https://download.cinevision.com/avengers-endgame',
-        streamingLink: 'https://cinevision.com/watch/abc123',
-        status: 'active',
-        thumbnail: 'https://example.com/avengers-thumb.jpg'
-    },
-    {
-        id: '2',
-        title: 'Pantera Negra 2',
-        purchaseDate: '2024-01-10',
-        downloadLink: 'https://download.cinevision.com/black-panther-2',
-        streamingLink: 'https://cinevision.com/watch/def456',
-        status: 'active'
-    },
-    {
-        id: '3',
-        title: 'Avatar 2',
-        purchaseDate: '2024-01-05',
-        downloadLink: 'https://download.cinevision.com/avatar-2',
-        streamingLink: 'https://cinevision.com/watch/ghi789',
-        status: 'active'
-    }
-];
+const axios_1 = __importDefault(require("axios"));
 const myMoviesHandler = async (bot, msg) => {
     const chatId = msg.chat.id;
     await (0, exports.showMyMovies)(bot, chatId);
 };
 exports.myMoviesHandler = myMoviesHandler;
 const showMyMovies = async (bot, chatId) => {
-    if (mockUserMovies.length === 0) {
-        const message = `📱 **MEUS FILMES**
+    try {
+        const response = await axios_1.default.get(`${process.env.BACKEND_URL}/api/v1/purchases/user/${chatId}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
+            }
+        });
+        const userMovies = response.data.purchases || [];
+        if (userMovies.length === 0) {
+            await bot.sendMessage(chatId, `🎬 **Meus Filmes**
 
-😔 Você ainda não tem filmes.
+📭 Você ainda não possui filmes comprados.
 
-🎬 Que tal comprar seu primeiro filme?`;
+🛒 Para comprar filmes, use o comando /catalogo`, {
+                parse_mode: 'Markdown'
+            });
+            return;
+        }
+        const message = `🎬 **Meus Filmes**
+
+🎬 Você tem ${userMovies.length} filmes:`;
         const keyboard = {
-            inline_keyboard: [
-                [
-                    { text: '🎬 Ver Catálogo', callback_data: 'catalog_menu' }
-                ]
-            ]
+            inline_keyboard: []
         };
+        for (const movie of userMovies) {
+            const statusEmoji = movie.status === 'active' ? '✅' :
+                movie.status === 'expired' ? '⏰' : '⏳';
+            const movieButton = [{
+                    text: `${statusEmoji} ${movie.title}`,
+                    callback_data: `movie_details_${movie.id}`
+                }];
+            keyboard.inline_keyboard.push(movieButton);
+        }
         await bot.sendMessage(chatId, message, {
             parse_mode: 'Markdown',
             reply_markup: keyboard
         });
-        return;
     }
-    const message = `📱 **MEUS FILMES**
-
-🎬 Você tem ${mockUserMovies.length} filmes:`;
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    for (const movie of mockUserMovies) {
-        await sendMovieCard(bot, chatId, movie);
+    catch (error) {
+        console.error('Erro ao buscar filmes do usuário:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao carregar seus filmes. Tente novamente mais tarde.');
     }
-    const finalKeyboard = {
-        inline_keyboard: [
-            [
-                { text: '🎬 Comprar Mais', callback_data: 'catalog_menu' },
-                { text: '📊 Histórico Completo', callback_data: 'purchase_history' }
-            ]
-        ]
-    };
-    await bot.sendMessage(chatId, '👆 Seus filmes acima', {
-        reply_markup: finalKeyboard
-    });
 };
 exports.showMyMovies = showMyMovies;
 const sendMovieCard = async (bot, chatId, movie) => {
@@ -129,31 +110,38 @@ const handleMyMoviesCallback = async (bot, callbackQuery) => {
 };
 exports.handleMyMoviesCallback = handleMyMoviesCallback;
 const handleDownload = async (bot, chatId, movieId) => {
-    const movie = mockUserMovies.find(m => m.id === movieId);
-    if (!movie) {
-        await bot.sendMessage(chatId, '❌ Filme não encontrado.');
-        return;
-    }
-    if (movie.status !== 'active') {
-        await bot.sendMessage(chatId, `❌ **DOWNLOAD INDISPONÍVEL**
+    try {
+        const response = await axios_1.default.get(`${process.env.BACKEND_URL}/api/v1/purchases/user/${chatId}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
+            }
+        });
+        const userMovies = response.data.purchases || [];
+        const movie = userMovies.find(m => m.id === movieId);
+        if (!movie) {
+            await bot.sendMessage(chatId, '❌ Filme não encontrado.');
+            return;
+        }
+        if (movie.status !== 'active') {
+            await bot.sendMessage(chatId, `❌ **DOWNLOAD INDISPONÍVEL**
 
 🎬 **${movie.title}**
 
 ⏰ Este filme expirou ou não está mais disponível.
 
 💬 Entre em contato com o suporte se precisar de ajuda.`, {
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '💬 Suporte', callback_data: 'help_support' }
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '💬 Suporte', callback_data: 'help_support' }
+                        ]
                     ]
-                ]
-            }
-        });
-        return;
-    }
-    const message = `📥 **DOWNLOAD INICIADO**
+                }
+            });
+            return;
+        }
+        const message = `📥 **DOWNLOAD INICIADO**
 
 🎬 **${movie.title}**
 
@@ -167,54 +155,66 @@ Tamanho: ~2.1 GB
 • Link válido por 48 horas
 • Filme é seu para sempre
 • Pode assistir offline`;
-    await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown'
-    });
-    setTimeout(async () => {
-        await bot.sendMessage(chatId, `🎬 **${movie.title}** - Download Completo!
+        await bot.sendMessage(chatId, message, {
+            parse_mode: 'Markdown'
+        });
+        setTimeout(async () => {
+            await bot.sendMessage(chatId, `🎬 **${movie.title}** - Download Completo!
 
 *[Arquivo do filme seria enviado aqui]*
 
 ✅ **Download concluído!**
 Bom filme! 🍿`, {
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '⭐ Avaliar Filme', callback_data: `rate_${movieId}` },
-                        { text: '🎬 Ver Mais Filmes', callback_data: 'catalog_menu' }
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '⭐ Avaliar Filme', callback_data: `rate_${movieId}` },
+                            { text: '🎬 Ver Mais Filmes', callback_data: 'catalog_menu' }
+                        ]
                     ]
-                ]
-            }
-        });
-    }, 3000);
+                }
+            });
+        }, 3000);
+    }
+    catch (error) {
+        console.error('Erro ao buscar filme para download:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao processar download. Tente novamente mais tarde.');
+    }
 };
 const handleWatch = async (bot, chatId, movieId) => {
-    const movie = mockUserMovies.find(m => m.id === movieId);
-    if (!movie) {
-        await bot.sendMessage(chatId, '❌ Filme não encontrado.');
-        return;
-    }
-    if (movie.status !== 'active') {
-        await bot.sendMessage(chatId, `❌ **ACESSO EXPIRADO**
+    try {
+        const response = await axios_1.default.get(`${process.env.BACKEND_URL}/api/v1/purchases/user/${chatId}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
+            }
+        });
+        const userMovies = response.data.purchases || [];
+        const movie = userMovies.find(m => m.id === movieId);
+        if (!movie) {
+            await bot.sendMessage(chatId, '❌ Filme não encontrado.');
+            return;
+        }
+        if (movie.status !== 'active') {
+            await bot.sendMessage(chatId, `❌ **ACESSO EXPIRADO**
 
 🎬 **${movie.title}**
 
 ⏰ Seu acesso a este filme expirou.
 
 💬 Entre em contato com o suporte para renovar.`, {
-            parse_mode: 'Markdown',
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '💬 Suporte', callback_data: 'help_support' }
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '💬 Suporte', callback_data: 'help_support' }
+                        ]
                     ]
-                ]
-            }
-        });
-        return;
-    }
-    const message = `▶️ **ASSISTIR AGORA**
+                }
+            });
+            return;
+        }
+        const message = `▶️ **ASSISTIR AGORA**
 
 🎬 **${movie.title}**
 
@@ -227,28 +227,40 @@ ${movie.streamingLink}
 • Qualidade até 4K
 
 🍿 Bom filme!`;
-    const keyboard = {
-        inline_keyboard: [
-            [
-                { text: '▶️ ASSISTIR AGORA', url: movie.streamingLink || 'https://cinevision.com' }
-            ],
-            [
-                { text: '📱 Ver no App', callback_data: `app_${movieId}` },
-                { text: '⭐ Avaliar', callback_data: `rate_${movieId}` }
+        const keyboard = {
+            inline_keyboard: [
+                [
+                    { text: '▶️ ASSISTIR AGORA', url: movie.streamingLink || 'https://cinevision.com' }
+                ],
+                [
+                    { text: '📱 Ver no App', callback_data: `app_${movieId}` },
+                    { text: '⭐ Avaliar', callback_data: `rate_${movieId}` }
+                ]
             ]
-        ]
-    };
-    await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+        };
+        await bot.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard
+        });
+    }
+    catch (error) {
+        console.error('Erro ao buscar filme para assistir:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao carregar filme. Tente novamente mais tarde.');
+    }
 };
 const showPurchaseHistory = async (bot, chatId) => {
-    const message = `📊 **HISTÓRICO COMPLETO**
+    try {
+        const response = await axios_1.default.get(`${process.env.BACKEND_URL}/api/v1/purchases/user/${chatId}`, {
+            headers: {
+                'Authorization': `Bearer ${process.env.API_TOKEN || ''}`
+            }
+        });
+        const userMovies = response.data.purchases || [];
+        const message = `📊 **HISTÓRICO COMPLETO**
 
 📱 **Resumo da sua conta:**
 
-🎬 **Total de filmes:** ${mockUserMovies.length}
+🎬 **Total de filmes:** ${userMovies.length}
 💰 **Total gasto:** R$ 56,70
 📅 **Cliente desde:** Janeiro 2024
 
@@ -260,19 +272,24 @@ const showPurchaseHistory = async (bot, chatId) => {
 🎯 **Conquistas:**
 🥉 Primeira compra
 🎬 Colecionador (3+ filmes)`;
-    const keyboard = {
-        inline_keyboard: [
-            [
-                { text: '🎬 Comprar Mais', callback_data: 'catalog_menu' }
-            ],
-            [
-                { text: '⬅️ Voltar', callback_data: 'my_movies' }
+        const keyboard = {
+            inline_keyboard: [
+                [
+                    { text: '🎬 Comprar Mais', callback_data: 'catalog_menu' }
+                ],
+                [
+                    { text: '⬅️ Voltar', callback_data: 'my_movies' }
+                ]
             ]
-        ]
-    };
-    await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+        };
+        await bot.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard
+        });
+    }
+    catch (error) {
+        console.error('Erro ao buscar histórico de compras:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao carregar histórico. Tente novamente mais tarde.');
+    }
 };
 //# sourceMappingURL=my-movies.handler.js.map

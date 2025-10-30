@@ -5,11 +5,43 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.startHandler = void 0;
 const axios_1 = __importDefault(require("axios"));
+async function handleContentRequest(bot, chatId, firstName) {
+    const requestMessage = `🎬 Olá ${firstName}!
+
+📝 **Solicitar Conteúdo**
+
+Não encontrou o filme ou série que procura? Sem problemas!
+
+Para solicitar um conteúdo, use o comando:
+
+\`/pedir Nome do Filme\`
+
+**Exemplos:**
+• \`/pedir Vingadores: Ultimato\`
+• \`/pedir Breaking Bad\`
+• \`/pedir Interestelar\`
+
+Nossa equipe irá analisar seu pedido e você receberá uma notificação quando o conteúdo estiver disponível! 🔔`;
+    const keyboard = {
+        inline_keyboard: [
+            [
+                { text: '🎬 Ver Catálogo', callback_data: 'catalog_menu' }
+            ]
+        ]
+    };
+    await bot.sendMessage(chatId, requestMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+    });
+}
 const startHandler = async (bot, msg, match) => {
     const chatId = msg.chat.id;
     const firstName = msg.from?.first_name || 'Usuário';
     const startParam = match?.[1]?.trim();
-    if (startParam && startParam.length > 10) {
+    if (startParam === 'request_content') {
+        await handleContentRequest(bot, chatId, firstName);
+    }
+    else if (startParam && startParam.length > 10) {
         await handlePurchaseFlow(bot, chatId, firstName, startParam);
     }
     else {

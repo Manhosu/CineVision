@@ -1,6 +1,129 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.broadcastNewRelease = exports.handleNotificationsCallback = exports.sendFlashPromotion = exports.sendNewReleaseNotification = void 0;
+exports.broadcastNewRelease = exports.handleNotificationsCallback = exports.sendFlashPromotion = exports.sendNewReleaseNotification = exports.handleNotificationCallback = exports.showNotificationSettings = exports.notificationsHandler = void 0;
+const notificationsHandler = async (bot, msg) => {
+    const chatId = msg.chat.id;
+    await (0, exports.showNotificationSettings)(bot, chatId);
+};
+exports.notificationsHandler = notificationsHandler;
+const showNotificationSettings = async (bot, chatId) => {
+    const message = `🔔 **CONFIGURAÇÕES DE NOTIFICAÇÃO**
+
+📱 **Suas preferências atuais:**
+
+✅ Novos lançamentos
+✅ Promoções especiais
+❌ Lembretes de filmes salvos
+✅ Atualizações de conta
+
+🎯 **Tipos de notificação:**`;
+    const keyboard = {
+        inline_keyboard: [
+            [
+                { text: '🎬 Novos Lançamentos', callback_data: 'toggle_new_releases' },
+                { text: '🔥 Promoções', callback_data: 'toggle_promotions' }
+            ],
+            [
+                { text: '💾 Lembretes', callback_data: 'toggle_reminders' },
+                { text: '👤 Conta', callback_data: 'toggle_account' }
+            ],
+            [
+                { text: '🔕 Desativar Todas', callback_data: 'disable_all_notifications' }
+            ],
+            [
+                { text: '⬅️ Voltar', callback_data: 'main_menu' }
+            ]
+        ]
+    };
+    await bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+    });
+};
+exports.showNotificationSettings = showNotificationSettings;
+const handleNotificationCallback = async (bot, query) => {
+    const chatId = query.message?.chat.id;
+    const data = query.data;
+    if (!chatId || !data)
+        return;
+    try {
+        switch (data) {
+            case 'flash_promo':
+                await bot.sendMessage(chatId, `🔥 **PROMOÇÃO RELÂMPAGO!**
+
+🔥 24 HORAS APENAS!
+
+🎬 **Filmes em Promoção**
+(Consulte nosso catálogo para ofertas atuais)
+
+⏰ Promoções limitadas disponíveis`, {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '🔥 VER PROMOÇÕES', callback_data: 'catalog_menu' }
+                            ],
+                            [
+                                { text: '⏰ Lembrar mais tarde', callback_data: 'flash_promo_remind' }
+                            ]
+                        ]
+                    }
+                });
+                break;
+            case 'flash_promo_buy':
+                await bot.sendMessage(chatId, `🔥 **PROMOÇÃO CONFIRMADA!**
+
+🎬 **Filmes Selecionados:**
+(Consulte o catálogo para filmes disponíveis)
+
+💰 **Ofertas especiais disponíveis**
+
+📦 Como você quer receber?`, {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '📱 Pelo App/Site', callback_data: 'delivery_app' },
+                                { text: '📧 Por Email', callback_data: 'delivery_email' }
+                            ]
+                        ]
+                    }
+                });
+                break;
+            case 'flash_promo_remind':
+                await bot.sendMessage(chatId, `⏰ **LEMBRETE CONFIGURADO!**
+
+Vou te avisar 1 hora antes da promoção acabar.
+
+🔔 Você receberá uma notificação às 22:00`, {
+                    parse_mode: 'Markdown'
+                });
+                break;
+            case 'toggle_new_releases':
+            case 'toggle_promotions':
+            case 'toggle_reminders':
+            case 'toggle_account':
+                await bot.sendMessage(chatId, '✅ Configuração atualizada!');
+                await (0, exports.showNotificationSettings)(bot, chatId);
+                break;
+            case 'disable_all_notifications':
+                await bot.sendMessage(chatId, `🔕 **NOTIFICAÇÕES DESATIVADAS**
+
+Todas as notificações foram desativadas.
+
+Você pode reativá-las a qualquer momento usando /notificacoes`, {
+                    parse_mode: 'Markdown'
+                });
+                break;
+        }
+    }
+    catch (error) {
+        console.error('Erro ao processar callback de notificação:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao processar solicitação. Tente novamente.');
+    }
+    await bot.answerCallbackQuery(query.id);
+};
+exports.handleNotificationCallback = handleNotificationCallback;
 const sendNewReleaseNotification = async (bot, chatId, movie) => {
     const message = `🔥 **NOVO LANÇAMENTO!**
 

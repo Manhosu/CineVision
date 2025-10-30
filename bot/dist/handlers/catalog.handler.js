@@ -1,39 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleCatalogCallback = exports.showMovieDetails = exports.showMoviesList = exports.showCatalogMenu = exports.catalogHandler = void 0;
-const mockMovies = [
-    {
-        id: '1',
-        title: 'Vingadores: Ultimato',
-        price: 19.90,
-        poster_url: 'https://example.com/avengers.jpg',
-        description: 'O confronto final entre os Vingadores e Thanos.',
-        year: 2019,
-        genre: 'Ação, Aventura',
-        rating: 9.2,
-        duration: '3h 1min'
-    },
-    {
-        id: '2',
-        title: 'Pantera Negra 2',
-        price: 16.90,
-        description: 'O reino de Wakanda enfrenta novos desafios.',
-        year: 2022,
-        genre: 'Ação, Drama',
-        rating: 8.5,
-        duration: '2h 41min'
-    },
-    {
-        id: '3',
-        title: 'Avatar: O Caminho da Água',
-        price: 21.90,
-        description: 'Jake Sully e sua família enfrentam novos perigos.',
-        year: 2022,
-        genre: 'Aventura, Ficção',
-        rating: 8.8,
-        duration: '3h 12min'
-    }
-];
+exports.toggleFavorite = exports.catalogService = exports.handleCatalogCallback = exports.showMovieDetails = exports.showMoviesList = exports.showCatalogMenu = exports.catalogHandler = void 0;
+const catalog_service_1 = require("../services/catalog.service");
+const catalogService = new catalog_service_1.CatalogService();
+exports.catalogService = catalogService;
 const catalogHandler = async (bot, msg) => {
     const chatId = msg.chat.id;
     await (0, exports.showCatalogMenu)(bot, chatId);
@@ -69,87 +39,117 @@ const showCatalogMenu = async (bot, chatId) => {
 };
 exports.showCatalogMenu = showCatalogMenu;
 const showMoviesList = async (bot, chatId, category, page = 1) => {
-    const itemsPerPage = 3;
-    const startIndex = (page - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const moviesPage = mockMovies.slice(startIndex, endIndex);
-    const totalPages = Math.ceil(mockMovies.length / itemsPerPage);
-    const categoryNames = {
-        'new_releases': '🔥 LANÇAMENTOS 2024',
-        'popular': '⭐ MAIS ASSISTIDOS',
-        'action': '🎭 FILMES DE AÇÃO',
-        'comedy': '😂 COMÉDIAS',
-        'romance': '❤️ ROMANCES',
-        'horror': '👻 FILMES DE TERROR'
-    };
-    const message = `${categoryNames[category] || '🎬 FILMES'}
+    try {
+        const itemsPerPage = 5;
+        const result = await catalogService.fetchMovies(category, page, itemsPerPage);
+        if (result.movies.length === 0) {
+            await bot.sendMessage(chatId, `📭 Nenhum filme encontrado nesta categoria.
 
-Página ${page} de ${totalPages}`;
-    const keyboard = {
-        inline_keyboard: [
-            ...moviesPage.map(movie => [
-                {
-                    text: `🎬 ${movie.title} - R$ ${movie.price.toFixed(2).replace('.', ',')}`,
-                    callback_data: `movie_details_${movie.id}`
+Tente outra categoria ou volte mais tarde!`, {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '⬅️ Menu', callback_data: 'catalog_menu' }]
+                    ]
                 }
-            ]),
-            [
-                ...(page > 1 ? [{ text: '⬅️ Anterior', callback_data: `catalog_${category}_${page - 1}` }] : []),
-                ...(page < totalPages ? [{ text: '➡️ Próxima', callback_data: `catalog_${category}_${page + 1}` }] : [])
-            ],
-            [
-                { text: '⬅️ Menu', callback_data: 'catalog_menu' }
+            });
+            return;
+        }
+        const categoryName = catalogService.getCategoryName(category);
+        const message = `${categoryName}
+
+📄 Página ${page} de ${result.totalPages}
+📊 Total: ${result.total} filmes`;
+        const keyboard = {
+            inline_keyboard: [
+                ...result.movies.map(movie => {
+                    const formatted = catalogService.formatMovieForDisplay(movie);
+                    return [{
+                            text: `🎬 ${movie.title} - ${formatted.price}`,
+                            callback_data: `movie_details_${movie.id}`
+                        }];
+                }),
+                [
+                    ...(page > 1 ? [{ text: '⬅️ Anterior', callback_data: `catalog_${category}_${page - 1}` }] : []),
+                    ...(page < result.totalPages ? [{ text: '➡️ Próxima', callback_data: `catalog_${category}_${page + 1}` }] : [])
+                ],
+                [
+                    { text: '⬅️ Menu', callback_data: 'catalog_menu' }
+                ]
             ]
-        ]
-    };
-    await bot.sendMessage(chatId, message, {
-        reply_markup: keyboard
-    });
+        };
+        await bot.sendMessage(chatId, message, {
+            reply_markup: keyboard
+        });
+    }
+    catch (error) {
+        console.error('Error showing movies list:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao carregar filmes. Tente novamente.');
+    }
 };
 exports.showMoviesList = showMoviesList;
 const showMovieDetails = async (bot, chatId, movieId) => {
-    const movie = mockMovies.find(m => m.id === movieId);
-    if (!movie) {
-        await bot.sendMessage(chatId, '❌ Filme não encontrado.');
-        return;
-    }
-    const message = `🎬 **${movie.title.toUpperCase()}**
+    try {
+        const movie = await catalogService.fetchMovieById(movieId);
+        if (!movie) {
+            await bot.sendMessage(chatId, '❌ Filme não encontrado.');
+            return;
+        }
+        const formatted = catalogService.formatMovieForDisplay(movie);
+        const genres = Array.isArray(movie.genres) ? movie.genres.join(', ') : (movie.genres || 'N/A');
+        const rating = movie.imdb_rating ? `⭐ ${movie.imdb_rating}/10` : '';
+        const duration = movie.duration_minutes ? `🕐 ${movie.duration_minutes} min` : '';
+        const year = movie.release_year ? `📅 ${movie.release_year}` : '';
+        const message = `🎬 **${movie.title.toUpperCase()}**
 
-⭐ ${movie.rating}/10 | 🕐 ${movie.duration} | 📅 ${movie.year}
-🎭 ${movie.genre}
+${[rating, duration, year].filter(Boolean).join(' | ')}
+🎭 ${genres}
 
 📝 **Sinopse:**
-${movie.description}
+${formatted.description}
 
-💰 **Preço:** R$ ${movie.price.toFixed(2).replace('.', ',')}
+💰 **Preço:** ${formatted.price}
 
 👀 **Disponível em:**
-• 📱 Download Telegram
-• 💻 Streaming no site`;
-    const keyboard = {
-        inline_keyboard: [
-            [
-                { text: '💳 Comprar Agora', callback_data: `purchase_${movieId}` },
-                { text: '🎬 Trailer', callback_data: `trailer_${movieId}` }
-            ],
-            [
-                { text: '⬅️ Voltar', callback_data: 'catalog_new_releases' },
-                { text: '❤️ Favoritar', callback_data: `favorite_${movieId}` }
+${movie.availability === 'telegram' ? '• 📱 Download Telegram' : ''}
+${movie.availability === 'site' ? '• 💻 Streaming no site' : ''}
+${movie.availability === 'both' || !movie.availability ? '• 📱 Download Telegram\n• 💻 Streaming no site' : ''}`;
+        const keyboard = {
+            inline_keyboard: [
+                [
+                    { text: '💳 Comprar Agora', callback_data: `purchase_${movieId}` },
+                    ...(movie.trailer_url ? [{ text: '🎬 Trailer', callback_data: `trailer_${movieId}` }] : [])
+                ],
+                [
+                    { text: '⬅️ Voltar', callback_data: 'catalog_new_releases' },
+                    { text: '❤️ Favoritar', callback_data: `favorite_${movieId}` }
+                ]
             ]
-        ]
-    };
-    if (movie.poster_url) {
-        await bot.sendPhoto(chatId, movie.poster_url, {
-            caption: message,
-            parse_mode: 'Markdown',
-            reply_markup: keyboard
-        });
+        };
+        if (formatted.poster) {
+            try {
+                await bot.sendPhoto(chatId, formatted.poster, {
+                    caption: message,
+                    parse_mode: 'Markdown',
+                    reply_markup: keyboard
+                });
+            }
+            catch (photoError) {
+                await bot.sendMessage(chatId, message, {
+                    parse_mode: 'Markdown',
+                    reply_markup: keyboard
+                });
+            }
+        }
+        else {
+            await bot.sendMessage(chatId, message, {
+                parse_mode: 'Markdown',
+                reply_markup: keyboard
+            });
+        }
     }
-    else {
-        await bot.sendMessage(chatId, message, {
-            parse_mode: 'Markdown',
-            reply_markup: keyboard
-        });
+    catch (error) {
+        console.error('Error showing movie details:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao carregar detalhes do filme.');
     }
 };
 exports.showMovieDetails = showMovieDetails;
@@ -184,6 +184,21 @@ const handleCatalogCallback = async (bot, callbackQuery) => {
             const movieId = data.replace('favorite_', '');
             await toggleFavorite(bot, chatId, movieId);
         }
+        else if (data === 'catalog_search') {
+            await bot.sendMessage(chatId, `🔍 **Buscar Filmes**
+
+Para buscar um filme, use o comando:
+/buscar <nome do filme>
+
+Exemplo: /buscar Vingadores`, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '⬅️ Menu', callback_data: 'catalog_menu' }]
+                    ]
+                }
+            });
+        }
         await bot.answerCallbackQuery(callbackQuery.id);
     }
     catch (error) {
@@ -196,73 +211,101 @@ const handleCatalogCallback = async (bot, callbackQuery) => {
 };
 exports.handleCatalogCallback = handleCatalogCallback;
 const startPurchaseFlow = async (bot, chatId, movieId) => {
-    const movie = mockMovies.find(m => m.id === movieId);
-    if (!movie) {
-        await bot.sendMessage(chatId, '❌ Filme não encontrado.');
-        return;
-    }
-    const message = `🛒 **CONFIRMAÇÃO DA COMPRA**
+    try {
+        const movie = await catalogService.fetchMovieById(movieId);
+        if (!movie) {
+            await bot.sendMessage(chatId, '❌ Filme não encontrado.');
+            return;
+        }
+        const formatted = catalogService.formatMovieForDisplay(movie);
+        const message = `🛒 **CONFIRMAÇÃO DA COMPRA**
 
 🎬 ${movie.title}
-💰 R$ ${movie.price.toFixed(2).replace('.', ',')}
+💰 ${formatted.price}
 
 📦 Como você quer receber?`;
-    const keyboard = {
-        inline_keyboard: [
-            [
-                { text: '📱 Download Telegram', callback_data: `delivery_telegram_${movieId}` }
-            ],
-            [
-                { text: '💻 Assistir Online', callback_data: `delivery_streaming_${movieId}` }
-            ],
-            [
-                { text: '❌ Cancelar', callback_data: 'catalog_menu' }
+        const keyboard = {
+            inline_keyboard: [
+                ...(movie.availability === 'telegram' || movie.availability === 'both' || !movie.availability
+                    ? [[{ text: '📱 Download Telegram', callback_data: `delivery_telegram_${movieId}` }]]
+                    : []),
+                ...(movie.availability === 'site' || movie.availability === 'both' || !movie.availability
+                    ? [[{ text: '💻 Assistir Online', callback_data: `delivery_streaming_${movieId}` }]]
+                    : []),
+                [
+                    { text: '❌ Cancelar', callback_data: 'catalog_menu' }
+                ]
             ]
-        ]
-    };
-    await bot.sendMessage(chatId, message, {
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-    });
+        };
+        await bot.sendMessage(chatId, message, {
+            parse_mode: 'Markdown',
+            reply_markup: keyboard
+        });
+    }
+    catch (error) {
+        console.error('Error starting purchase flow:', error);
+        await bot.sendMessage(chatId, '❌ Erro ao processar compra. Tente novamente.');
+    }
 };
 const showTrailer = async (bot, chatId, movieId) => {
-    const movie = mockMovies.find(m => m.id === movieId);
-    if (!movie)
-        return;
-    await bot.sendMessage(chatId, `🎬 **Trailer: ${movie.title}**
+    try {
+        const movie = await catalogService.fetchMovieById(movieId);
+        if (!movie)
+            return;
+        if (movie.trailer_url) {
+            await bot.sendMessage(chatId, `🎬 **Trailer: ${movie.title}**
 
-🎥 Aqui está o trailer do filme!
-
-*[Vídeo do trailer seria enviado aqui]*
+🎥 Assista ao trailer:
+${movie.trailer_url}
 
 Gostou? Que tal assistir o filme completo?`, {
-        parse_mode: 'Markdown',
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: '💳 Comprar Filme', callback_data: `purchase_${movieId}` }
-                ],
-                [
-                    { text: '⬅️ Voltar', callback_data: `movie_details_${movieId}` }
-                ]
-            ]
+                parse_mode: 'Markdown',
+                reply_markup: {
+                    inline_keyboard: [
+                        [
+                            { text: '💳 Comprar Filme', callback_data: `purchase_${movieId}` }
+                        ],
+                        [
+                            { text: '⬅️ Voltar', callback_data: `movie_details_${movieId}` }
+                        ]
+                    ]
+                }
+            });
         }
-    });
+        else {
+            await bot.sendMessage(chatId, '❌ Trailer não disponível para este filme.', {
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '⬅️ Voltar', callback_data: `movie_details_${movieId}` }]
+                    ]
+                }
+            });
+        }
+    }
+    catch (error) {
+        console.error('Error showing trailer:', error);
+    }
 };
 const toggleFavorite = async (bot, chatId, movieId) => {
-    const movie = mockMovies.find(m => m.id === movieId);
-    if (!movie)
-        return;
-    await bot.sendMessage(chatId, `❤️ **${movie.title}** foi adicionado aos seus favoritos!
+    try {
+        const movie = await catalogService.fetchMovieById(movieId);
+        if (!movie)
+            return;
+        await bot.sendMessage(chatId, `❤️ **${movie.title}** foi adicionado aos seus favoritos!
 
 Use /meus_filmes para ver todos os seus favoritos.`, {
-        reply_markup: {
-            inline_keyboard: [
-                [
-                    { text: '⬅️ Voltar', callback_data: `movie_details_${movieId}` }
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '⬅️ Voltar', callback_data: `movie_details_${movieId}` }
+                    ]
                 ]
-            ]
-        }
-    });
+            }
+        });
+    }
+    catch (error) {
+        console.error('Error toggling favorite:', error);
+    }
 };
+exports.toggleFavorite = toggleFavorite;
 //# sourceMappingURL=catalog.handler.js.map
