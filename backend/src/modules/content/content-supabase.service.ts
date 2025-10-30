@@ -23,6 +23,41 @@ export class ContentSupabaseService {
     try {
       this.logger.debug(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}`);
 
+      // Filter by category if genre is provided
+      let contentIds: string[] = [];
+      if (genre) {
+        // Find category by name
+        const category = await this.supabaseClient.selectOne('categories', {
+          where: { name: genre }
+        });
+
+        if (category) {
+          // Get content IDs for this category
+          const associations = await this.supabaseClient.select('content_categories', {
+            where: { category_id: category.id },
+            select: 'content_id'
+          });
+
+          contentIds = associations.map((assoc: any) => assoc.content_id);
+          this.logger.debug(`Found ${contentIds.length} content items for category ${genre}`);
+        }
+
+        // If no content found for this category, return empty result
+        if (contentIds.length === 0) {
+          return {
+            movies: [],
+            pagination: {
+              page,
+              limit,
+              total: 0,
+              totalPages: 0,
+              hasNext: false,
+              hasPrev: false,
+            },
+          };
+        }
+      }
+
       // Build query options
       const queryOptions: any = {
         where: {
@@ -32,6 +67,11 @@ export class ContentSupabaseService {
         limit,
         offset: (page - 1) * limit
       };
+
+      // Add category filter if genre was specified
+      if (genre && contentIds.length > 0) {
+        queryOptions.where.id = { in: contentIds };
+      }
 
       // Add sorting
       switch (sort) {
@@ -57,10 +97,16 @@ export class ContentSupabaseService {
       const movies = await this.supabaseClient.select('content', queryOptions);
 
       // Get total count for pagination
-      const countWhere = {
+      const countWhere: any = {
         status: ContentStatus.PUBLISHED,
         content_type: ContentType.MOVIE
       };
+
+      // Add category filter to count if genre was specified
+      if (genre && contentIds.length > 0) {
+        countWhere.id = { in: contentIds };
+      }
+
       const totalCount = await this.supabaseClient.count('content', countWhere);
 
       return {
