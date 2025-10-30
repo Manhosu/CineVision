@@ -755,4 +755,151 @@ export class AdminContentSimpleService {
       },
     };
   }
+
+  /**
+   * Sync/create all categories based on AVAILABLE_GENRES
+   */
+  async syncCategories() {
+    this.logger.log('Syncing categories...');
+
+    const AVAILABLE_GENRES = [
+      'Ação',
+      'Aventura',
+      'Animação',
+      'Comédia',
+      'Crime',
+      'Documentário',
+      'Drama',
+      'Fantasia',
+      'Ficção Científica',
+      'Guerra',
+      'História',
+      'Horror',
+      'Musical',
+      'Mistério',
+      'Romance',
+      'Suspense',
+      'Terror',
+      'Thriller',
+      'Western',
+      'Séries', // Special category for all series
+    ];
+
+    const createdCategories = [];
+    const skippedCategories = [];
+
+    for (const genreName of AVAILABLE_GENRES) {
+      // Generate slug
+      const slug = genreName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '');
+
+      // Check if category exists
+      const { data: existingCategory } = await this.supabaseService.client
+        .from('categories')
+        .select('id, name')
+        .eq('slug', slug)
+        .single();
+
+      if (existingCategory) {
+        skippedCategories.push(genreName);
+        continue;
+      }
+
+      // Create category
+      const { data: newCategory, error } = await this.supabaseService.client
+        .from('categories')
+        .insert({
+          name: genreName,
+          slug: slug,
+          description: `Filmes e séries de ${genreName}`,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        this.logger.error(`Error creating category ${genreName}:`, error);
+      } else {
+        createdCategories.push(genreName);
+        this.logger.log(`Created category: ${genreName}`);
+      }
+    }
+
+    return {
+      success: true,
+      created: createdCategories,
+      skipped: skippedCategories,
+      message: `Synced ${createdCategories.length} categories, ${skippedCategories.length} already existed`,
+    };
+  }
+
+  /**
+   * Populate content_categories for all existing content based on their genres column
+   */
+  async populateContentCategories() {
+    this.logger.log('Populating content categories...');
+
+    // Fetch all content
+    const { data: allContent, error: contentError } = await this.supabaseService.client
+      .from('content')
+      .select('id, title, content_type, genres, status');
+
+    if (contentError) {
+      this.logger.error('Error fetching content:', contentError);
+      throw new Error(`Failed to fetch content: ${contentError.message}`);
+    }
+
+    if (!allContent || allContent.length === 0) {
+      return {
+        success: true,
+        message: 'No content found',
+        populated: 0,
+      };
+    }
+
+    let populatedCount = 0;
+
+    for (const content of allContent) {
+      try {
+        // Clear existing associations
+        await this.supabaseService.client
+          .from('content_categories')
+          .delete()
+          .eq('content_id', content.id);
+
+        const categoriesToAssociate: string[] = [];
+
+        // Add genre-based categories
+        if (content.genres && Array.isArray(content.genres) && content.genres.length > 0) {
+          categoriesToAssociate.push(...content.genres);
+        }
+
+        // Add "Séries" category for all series
+        if (content.content_type === 'series') {
+          categoriesToAssociate.push('Séries');
+        }
+
+        // Associate categories
+        if (categoriesToAssociate.length > 0) {
+          await this.associateCategories(content.id, categoriesToAssociate);
+          populatedCount++;
+          this.logger.log(`Populated categories for: ${content.title}`);
+        }
+      } catch (error) {
+        this.logger.error(`Error populating categories for ${content.title}:`, error);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Populated categories for ${populatedCount} content items`,
+      total: allContent.length,
+      populated: populatedCount,
+    };
+  }
 }

@@ -394,6 +394,40 @@ export class AdminContentService {
       this.logger.log(`Series has ${episodes.length} episode(s) with videos uploaded`);
     }
 
+    // Associate categories before publishing
+    try {
+      const genresToAssociate: string[] = [];
+
+      // Add genres from content
+      if (content.genres && Array.isArray(content.genres) && content.genres.length > 0) {
+        genresToAssociate.push(...content.genres);
+      }
+
+      // Add "Séries" category for series
+      if (content.type === 'series') {
+        genresToAssociate.push('Séries');
+      }
+
+      if (genresToAssociate.length > 0) {
+        // Find matching categories
+        const categories = await this.categoryRepository.find({
+          where: {
+            name: In(genresToAssociate),
+          },
+        });
+
+        if (categories.length > 0) {
+          // Associate categories with content
+          content.categories = categories;
+          await this.contentRepository.save(content);
+          this.logger.log(`Associated ${categories.length} categories with content ${dto.content_id}`);
+        }
+      }
+    } catch (categoryError) {
+      this.logger.error(`Failed to associate categories: ${categoryError.message}`);
+      // Don't fail the publish operation if category association fails
+    }
+
     // Update status to PUBLISHED
     await this.contentRepository.update(dto.content_id, {
       status: ContentStatus.PUBLISHED,

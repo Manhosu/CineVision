@@ -307,4 +307,32 @@ export class AdminContentController {
   async deleteEpisode(@Param('episodeId') episodeId: string) {
     return this.adminContentService.deleteEpisode(episodeId);
   }
+
+  @Post('categories/sync')
+  @ApiOperation({
+    summary: 'Sync categories',
+    description: 'Creates all standard categories in the database if they don\'t exist',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories synced successfully',
+  })
+  @HttpCode(HttpStatus.OK)
+  async syncCategories() {
+    return this.adminContentService.syncCategories();
+  }
+
+  @Post('categories/populate')
+  @ApiOperation({
+    summary: 'Populate content categories',
+    description: 'Associates all existing content with their respective categories based on genres',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Content categories populated successfully',
+  })
+  @HttpCode(HttpStatus.OK)
+  async populateContentCategories() {
+    return this.adminContentService.populateContentCategories();
+  }
 }
