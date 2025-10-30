@@ -156,7 +156,7 @@ export default function BroadcastPage() {
     }
 
     // Validate telegram IDs
-    const ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
+    const ids = telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id);
     if (ids.length === 0) {
       toast.error('Adicione pelo menos um Telegram ID');
       return;
@@ -203,14 +203,15 @@ export default function BroadcastPage() {
       const token = localStorage.getItem('access_token');
       const payload: any = {
         message_text: messageText,
-        telegram_ids: telegramIds.split(',').map(id => id.trim()).filter(id => id),
+        telegram_ids: telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id),
       };
 
       // Only add optional fields if they have values
-      if (imageUrl && imageUrl.trim()) {
+      if (imageUrl && typeof imageUrl === 'string' && imageUrl.trim()) {
         payload.image_url = imageUrl.trim();
       }
-      if (buttonText && buttonText.trim() && buttonUrl && buttonUrl.trim()) {
+      if (buttonText && typeof buttonText === 'string' && buttonText.trim() &&
+          buttonUrl && typeof buttonUrl === 'string' && buttonUrl.trim()) {
         payload.button_text = buttonText.trim();
         payload.button_url = buttonUrl.trim();
       }
@@ -420,7 +421,7 @@ export default function BroadcastPage() {
               <div className="flex items-center justify-between pt-4 border-t border-white/10">
                 <p className="text-sm text-gray-400">
                   {telegramIds.trim() ? (
-                    <>Enviando para <strong>{telegramIds.split(',').filter(id => id.trim()).length}</strong> ID(s) específico(s)</>
+                    <>Enviando para <strong>{telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id).length}</strong> ID(s) específico(s)</>
                   ) : (
                     <>Nenhum ID especificado</>
                   )}
