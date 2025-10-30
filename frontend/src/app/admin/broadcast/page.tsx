@@ -611,6 +611,14 @@ export default function BroadcastPage() {
                           })}
                         </span>
                       </div>
+                      {item.recipient_telegram_ids && (
+                        <div className="text-xs text-gray-600 mb-2 bg-gray-800/50 rounded px-2 py-1">
+                          <span className="text-gray-500">IDs: </span>
+                          <span className="text-gray-400 font-mono">
+                            {item.recipient_telegram_ids}
+                          </span>
+                        </div>
+                      )}
                       {item.image_url && (
                         <div className="flex items-center text-xs text-gray-600 mb-1">
                           <PhotoIcon className="w-3 h-3 mr-1" />
