@@ -67,6 +67,10 @@ export class BroadcastService {
       const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
       const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
 
+      if (imageUrl) {
+        this.logger.log(`Sending message with image: ${imageUrl}`);
+      }
+
       // Add inline keyboard if button is provided
       if (buttonText && buttonUrl) {
         payload.reply_markup = {

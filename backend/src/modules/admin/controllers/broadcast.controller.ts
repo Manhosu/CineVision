@@ -107,14 +107,17 @@ export class BroadcastController {
         throw new Error('No file provided');
       }
 
-      const imageUrl = await this.imageUploadService.uploadImage({
+      const imageUploadResult = await this.imageUploadService.uploadImage({
         file,
         imageType: 'cover',
       });
 
+      this.logger.log(`Image uploaded successfully. Public URL: ${imageUploadResult.publicUrl}`);
+
+      // Return the public URL that Telegram can access
       return {
         success: true,
-        image_url: imageUrl,
+        image_url: imageUploadResult.publicUrl,
       };
     } catch (error) {
       this.logger.error('Error uploading broadcast image:', error);
