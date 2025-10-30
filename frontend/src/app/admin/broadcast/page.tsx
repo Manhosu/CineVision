@@ -30,6 +30,7 @@ export default function BroadcastPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mounted, setMounted] = useState(false);
 
   const [messageText, setMessageText] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -45,26 +46,34 @@ export default function BroadcastPage() {
   // Targeted messaging - only specific IDs allowed
   const [telegramIds, setTelegramIds] = useState('');
 
+  // Mark component as mounted
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Check if user has access but don't auto-redirect
   // The /admin page already handles auth, so we trust that if user got here, they're admin
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      // Only check if there's a token in localStorage
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        console.log('No token found, redirecting to login');
-        router.push('/login');
-      }
+    // Don't do anything until component is mounted and auth has loaded
+    if (!mounted || authLoading) return;
+
+    // Check for token in localStorage
+    const token = localStorage.getItem('access_token');
+
+    // Only redirect if there's NO token at all
+    if (!token && !isAuthenticated) {
+      console.log('No token and not authenticated, redirecting to login');
+      router.push('/login');
     }
-  }, [authLoading, isAuthenticated, router]);
+  }, [mounted, authLoading, isAuthenticated, router]);
 
   // Load users count
   useEffect(() => {
-    if (isAuthenticated && user?.role === 'admin') {
+    if (mounted && isAuthenticated && user?.role === 'admin') {
       fetchUsersCount();
       fetchBroadcastHistory();
     }
-  }, [isAuthenticated, user]);
+  }, [mounted, isAuthenticated, user]);
 
   const fetchUsersCount = async () => {
     try {
