@@ -105,6 +105,21 @@ export class BroadcastService {
       }
     } catch (error) {
       this.logger.error(`Error sending message to ${chatId}:`, error.message);
+
+      // Log full error details from Telegram API
+      if (error.response?.data) {
+        this.logger.error(`Telegram API error response:`, JSON.stringify(error.response.data));
+      }
+
+      // Log the payload that failed
+      this.logger.error(`Failed payload:`, JSON.stringify({
+        endpoint,
+        chat_id: chatId,
+        has_image: !!imageUrl,
+        image_url: imageUrl || 'none',
+        message_length: messageText?.length || 0,
+      }));
+
       return false;
     }
   }
@@ -167,6 +182,11 @@ export class BroadcastService {
 
       this.logger.log(`Starting broadcast to ${users.length} users`);
       this.logger.log(`Users with telegram_chat_id: ${users.filter(u => u.telegram_chat_id).length}`);
+
+      // Log user details for debugging
+      users.forEach(user => {
+        this.logger.log(`User ${user.telegram_id}: chat_id=${user.telegram_chat_id || 'MISSING'}, username=${user.telegram_username || 'none'}`);
+      });
 
       let successCount = 0;
       let failCount = 0;
