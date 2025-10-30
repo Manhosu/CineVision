@@ -65,8 +65,7 @@ export default function BroadcastPage() {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        router.push('/login');
+        console.error('No access token found');
         return;
       }
 
@@ -80,16 +79,15 @@ export default function BroadcastPage() {
       );
 
       if (response.status === 401) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        router.push('/login');
+        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
         return;
       }
 
       if (response.ok) {
         const data = await response.json();
         setUsersCount(data.total_users || 0);
+      } else {
+        console.error('Failed to fetch users count:', response.status);
       }
     } catch (error) {
       console.error('Error fetching users count:', error);
@@ -102,8 +100,7 @@ export default function BroadcastPage() {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        router.push('/login');
+        console.error('No access token found');
         return;
       }
 
@@ -117,16 +114,15 @@ export default function BroadcastPage() {
       );
 
       if (response.status === 401) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        router.push('/login');
+        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
         return;
       }
 
       if (response.ok) {
         const data = await response.json();
         setHistory(data.broadcasts || []);
+      } else {
+        console.error('Failed to fetch broadcast history:', response.status);
       }
     } catch (error) {
       console.error('Error fetching broadcast history:', error);
@@ -203,9 +199,7 @@ export default function BroadcastPage() {
         const token = localStorage.getItem('access_token');
 
         if (!token) {
-          toast.error('Sessão expirada. Faça login novamente.');
-          router.push('/login');
-          return;
+          throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
         }
 
         const uploadResponse = await fetch(
@@ -220,11 +214,7 @@ export default function BroadcastPage() {
         );
 
         if (uploadResponse.status === 401) {
-          toast.error('Sessão expirada. Faça login novamente.');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('user');
-          router.push('/login');
-          return;
+          throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
         }
 
         if (!uploadResponse.ok) {
@@ -241,9 +231,7 @@ export default function BroadcastPage() {
       const token = localStorage.getItem('access_token');
 
       if (!token) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        router.push('/login');
-        return;
+        throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
       }
 
       const payload: any = {
@@ -274,11 +262,7 @@ export default function BroadcastPage() {
       );
 
       if (response.status === 401) {
-        toast.error('Sessão expirada. Faça login novamente.');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        router.push('/login');
-        return;
+        throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
       }
 
       if (!response.ok) {
