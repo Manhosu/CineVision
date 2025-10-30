@@ -4,6 +4,8 @@ import { AdminService } from './admin.service';
 import { AdminContentController } from './controllers/admin-content.controller';
 import { AdminContentService } from './services/admin-content.service';
 import { AdminContentSimpleService } from './services/admin-content-simple.service';
+import { AdminStatsController } from './controllers/admin-stats.controller';
+import { AdminStatsService } from './services/admin-stats.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsSupabaseService } from './services/admin-settings-supabase.service';
@@ -50,6 +52,7 @@ import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-o
 const conditionalControllers = isTypeOrmEnabled() ? [
   AdminController,
   AdminContentController,
+  AdminStatsController,
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
@@ -61,6 +64,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   BroadcastController,
 ] : [
   AdminContentController,
+  AdminStatsController,
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
@@ -78,6 +82,7 @@ console.log('Admin controllers:', conditionalControllers.map(c => c.name));
 const conditionalProviders = isTypeOrmEnabled() ? [
   AdminService,
   AdminContentService,
+  AdminStatsService,
   AdminSettingsService,
   StripeService,
   VideoUploadService,
@@ -92,6 +97,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   BroadcastService,
 ] : [
   AdminContentSimpleService,
+  AdminStatsService,
   AdminSettingsSupabaseService,
   ImageUploadService,
   AdminPurchasesSimpleService,
