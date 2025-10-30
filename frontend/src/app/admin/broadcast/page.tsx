@@ -203,13 +203,17 @@ export default function BroadcastPage() {
       const token = localStorage.getItem('access_token');
       const payload: any = {
         message_text: messageText,
-        image_url: imageUrl || undefined,
-        button_text: buttonText && buttonUrl ? buttonText : undefined,
-        button_url: buttonText && buttonUrl ? buttonUrl : undefined,
+        telegram_ids: telegramIds.split(',').map(id => id.trim()).filter(id => id),
       };
 
-      // Add telegram_ids (required)
-      payload.telegram_ids = telegramIds.split(',').map(id => id.trim()).filter(id => id);
+      // Only add optional fields if they have values
+      if (imageUrl && imageUrl.trim()) {
+        payload.image_url = imageUrl.trim();
+      }
+      if (buttonText && buttonText.trim() && buttonUrl && buttonUrl.trim()) {
+        payload.button_text = buttonText.trim();
+        payload.button_url = buttonUrl.trim();
+      }
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/send`,

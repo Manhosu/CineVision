@@ -7,7 +7,7 @@ export class SendBroadcastDto {
   message_text: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'URL da imagem inválida' })
+  @IsUrl({ require_protocol: true }, { message: 'URL da imagem inválida' })
   image_url?: string;
 
   @IsOptional()
@@ -16,7 +16,7 @@ export class SendBroadcastDto {
   button_text?: string;
 
   @IsOptional()
-  @IsUrl({}, { message: 'URL do botão inválida' })
+  @IsUrl({ require_protocol: true }, { message: 'URL do botão inválida' })
   button_url?: string;
 
   @IsArray({ message: 'telegram_ids deve ser um array' })

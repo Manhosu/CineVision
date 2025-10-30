@@ -39,7 +39,7 @@ export class BroadcastController {
       this.logger.log(`Admin ${req.user.email} is sending a broadcast`);
 
       const result = await this.broadcastService.sendBroadcast(
-        req.user.userId,
+        req.user.id,
         broadcastData,
       );
 
@@ -62,7 +62,7 @@ export class BroadcastController {
     try {
       const limitNum = limit ? parseInt(limit, 10) : 20;
       const history = await this.broadcastService.getBroadcastHistory(
-        req.user.userId,
+        req.user.id,
         limitNum,
       );
 
