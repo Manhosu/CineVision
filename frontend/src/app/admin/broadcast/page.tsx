@@ -63,6 +63,13 @@ export default function BroadcastPage() {
   const fetchUsersCount = async () => {
     try {
       const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        router.push('/login');
+        return;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/users-count`,
         {
@@ -71,6 +78,14 @@ export default function BroadcastPage() {
           },
         }
       );
+
+      if (response.status === 401) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -85,6 +100,13 @@ export default function BroadcastPage() {
     try {
       setLoadingHistory(true);
       const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        router.push('/login');
+        return;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/history?limit=10`,
         {
@@ -93,6 +115,14 @@ export default function BroadcastPage() {
           },
         }
       );
+
+      if (response.status === 401) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -171,6 +201,13 @@ export default function BroadcastPage() {
         formData.append('image', imageFile);
 
         const token = localStorage.getItem('access_token');
+
+        if (!token) {
+          toast.error('Sessão expirada. Faça login novamente.');
+          router.push('/login');
+          return;
+        }
+
         const uploadResponse = await fetch(
           `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/upload-image`,
           {
@@ -182,8 +219,17 @@ export default function BroadcastPage() {
           }
         );
 
+        if (uploadResponse.status === 401) {
+          toast.error('Sessão expirada. Faça login novamente.');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          router.push('/login');
+          return;
+        }
+
         if (!uploadResponse.ok) {
-          throw new Error('Falha ao fazer upload da imagem');
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Falha ao fazer upload da imagem');
         }
 
         const uploadData = await uploadResponse.json();
@@ -193,6 +239,13 @@ export default function BroadcastPage() {
 
       // Send broadcast
       const token = localStorage.getItem('access_token');
+
+      if (!token) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        router.push('/login');
+        return;
+      }
+
       const payload: any = {
         message_text: messageText,
         telegram_ids: telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id),
@@ -220,8 +273,16 @@ export default function BroadcastPage() {
         }
       );
 
+      if (response.status === 401) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        router.push('/login');
+        return;
+      }
+
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         throw new Error(error.message || 'Falha ao enviar broadcast');
       }
 
