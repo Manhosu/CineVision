@@ -166,9 +166,12 @@ export class BroadcastService {
       }
 
       this.logger.log(`Starting broadcast to ${users.length} users`);
+      this.logger.log(`Users with telegram_chat_id: ${users.filter(u => u.telegram_chat_id).length}`);
 
       let successCount = 0;
       let failCount = 0;
+      const successfulTelegramIds: string[] = [];
+      const failedTelegramIds: string[] = [];
 
       // Rate limiting: 25 messages per second
       const messagesPerSecond = 25;
@@ -177,9 +180,13 @@ export class BroadcastService {
       // Send messages with rate limiting
       for (const user of users) {
         if (!user.telegram_chat_id) {
+          this.logger.warn(`User ${user.telegram_id} has no telegram_chat_id`);
           failCount++;
+          failedTelegramIds.push(String(user.telegram_id || 'unknown'));
           continue;
         }
+
+        this.logger.log(`Sending message to user ${user.telegram_id} (chat_id: ${user.telegram_chat_id})`);
 
         const success = await this.sendMessageToUser(
           user.telegram_chat_id,
@@ -193,8 +200,12 @@ export class BroadcastService {
 
         if (success) {
           successCount++;
+          successfulTelegramIds.push(String(user.telegram_id));
+          this.logger.log(`✅ Message sent successfully to ${user.telegram_id}`);
         } else {
           failCount++;
+          failedTelegramIds.push(String(user.telegram_id));
+          this.logger.error(`❌ Failed to send message to ${user.telegram_id}`);
         }
 
         // Wait before sending next message (rate limiting)
@@ -212,6 +223,7 @@ export class BroadcastService {
           button_text: broadcastData.button_text || null,
           button_url: broadcastData.button_url || null,
           recipients_count: successCount,
+          recipient_telegram_ids: successfulTelegramIds.length > 0 ? successfulTelegramIds.join(',') : null,
         })
         .select()
         .single();
@@ -223,6 +235,8 @@ export class BroadcastService {
       this.logger.log(
         `Broadcast completed: ${successCount} successful, ${failCount} failed out of ${users.length} users`,
       );
+      this.logger.log(`Successful IDs: ${successfulTelegramIds.join(', ')}`);
+      this.logger.log(`Failed IDs: ${failedTelegramIds.join(', ')}`);
 
       return {
         success: true,
@@ -230,6 +244,8 @@ export class BroadcastService {
         successful_sends: successCount,
         failed_sends: failCount,
         broadcast_id: broadcast?.id || '',
+        successful_telegram_ids: successfulTelegramIds,
+        failed_telegram_ids: failedTelegramIds,
       };
     } catch (error) {
       this.logger.error('Error in sendBroadcast:', error);
