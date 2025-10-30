@@ -25,15 +25,17 @@ export class ContentController {
   @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
   @ApiQuery({ name: 'limit', description: 'Items per page', required: false, type: Number })
   @ApiQuery({ name: 'genre', description: 'Filter by genre', required: false, type: String })
+  @ApiQuery({ name: 'search', description: 'Search movies by title', required: false, type: String })
   @ApiQuery({ name: 'sort', description: 'Sort order', required: false, enum: ['newest', 'popular', 'rating', 'price_low', 'price_high'] })
   @ApiResponse({ status: 200, description: 'Movies retrieved successfully' })
   async getMovies(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
     @Query('genre') genre?: string,
+    @Query('search') search?: string,
     @Query('sort') sort = 'newest',
   ) {
-    return this.contentService.findAllMovies(Number(page), Number(limit), genre, sort);
+    return this.contentService.findAllMovies(Number(page), Number(limit), genre, sort, search);
   }
 
   @Get('movies/:id')

@@ -19,9 +19,9 @@ export class ContentSupabaseService {
 
   constructor(private readonly supabaseClient: SupabaseRestClient) {}
 
-  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at') {
+  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
     try {
-      this.logger.debug(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}`);
+      this.logger.debug(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
 
       // Filter by category if genre is provided
       let contentIds: string[] = [];
@@ -73,6 +73,13 @@ export class ContentSupabaseService {
         queryOptions.where.id = { in: contentIds };
       }
 
+      // Add search filter if search term is provided (case-insensitive)
+      if (search && search.trim()) {
+        // Use ilike for case-insensitive pattern matching
+        // *text* matches anywhere in the string
+        queryOptions.where.title = { ilike: `*${search.trim()}*` };
+      }
+
       // Add sorting
       switch (sort) {
         case 'newest':
@@ -105,6 +112,11 @@ export class ContentSupabaseService {
       // Add category filter to count if genre was specified
       if (genre && contentIds.length > 0) {
         countWhere.id = { in: contentIds };
+      }
+
+      // Add search filter to count if search term is provided
+      if (search && search.trim()) {
+        countWhere.title = { ilike: `*${search.trim()}*` };
       }
 
       const totalCount = await this.supabaseClient.count('content', countWhere);

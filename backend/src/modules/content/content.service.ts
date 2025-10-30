@@ -13,7 +13,7 @@ export class ContentService {
     private categoryRepository: Repository<Category>,
   ) {}
 
-  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at') {
+  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .leftJoinAndSelect('content.categories', 'categories')
@@ -21,6 +21,12 @@ export class ContentService {
 
     if (genre) {
       queryBuilder.andWhere('categories.name = :genre', { genre });
+    }
+
+    if (search && search.trim()) {
+      queryBuilder.andWhere('LOWER(content.title) LIKE LOWER(:search)', {
+        search: `%${search.trim()}%`
+      });
     }
 
     switch (sort) {

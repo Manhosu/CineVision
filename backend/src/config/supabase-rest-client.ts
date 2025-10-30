@@ -99,6 +99,11 @@ export class SupabaseRestClient {
               // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
               const values = value.in.join(',');
               config.params[key] = `in.(${values})`;
+            }
+            // Support for ILIKE operator: { title: { ilike: '*search*' } }
+            else if (typeof value === 'object' && value.ilike !== undefined) {
+              // PostgREST ILIKE syntax: title=ilike.*search*
+              config.params[key] = `ilike.${value.ilike}`;
             } else {
               config.params[key] = `eq.${value}`;
             }
@@ -282,6 +287,11 @@ export class SupabaseRestClient {
             // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
             const values = value.in.join(',');
             config.params[key] = `in.(${values})`;
+          }
+          // Support for ILIKE operator: { title: { ilike: '*search*' } }
+          else if (typeof value === 'object' && value.ilike !== undefined) {
+            // PostgREST ILIKE syntax: title=ilike.*search*
+            config.params[key] = `ilike.${value.ilike}`;
           } else {
             config.params[key] = `eq.${value}`;
           }
