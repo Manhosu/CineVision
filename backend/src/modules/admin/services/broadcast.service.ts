@@ -49,50 +49,28 @@ export class BroadcastService {
     chatId: string,
     messageText: string,
     options?: {
-      imageUrl?: string;
       buttonText?: string;
       buttonUrl?: string;
     },
   ): Promise<boolean> {
     try {
-      let endpoint = `${this.telegramApiUrl}/sendMessage`;
-      let payload: any = {
+      const endpoint = `${this.telegramApiUrl}/sendMessage`;
+      const payload: any = {
         chat_id: chatId,
         text: messageText,
         parse_mode: 'Markdown',
       };
 
       // Validate optional string fields
-      const imageUrl = options?.imageUrl && typeof options.imageUrl === 'string' ? options.imageUrl.trim() : '';
       const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
       const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
-
-      if (imageUrl) {
-        this.logger.log(`Sending message with image: ${imageUrl}`);
-      }
 
       // Add inline keyboard if button is provided
       if (buttonText && buttonUrl) {
         payload.reply_markup = {
           inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
         };
-      }
-
-      // If image is provided, use sendPhoto
-      if (imageUrl) {
-        endpoint = `${this.telegramApiUrl}/sendPhoto`;
-        payload = {
-          chat_id: chatId,
-          photo: imageUrl,
-          caption: messageText,
-          parse_mode: 'Markdown',
-        };
-
-        if (buttonText && buttonUrl) {
-          payload.reply_markup = {
-            inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
-          };
-        }
+        this.logger.log(`Sending message with button: ${buttonText} -> ${buttonUrl}`);
       }
 
       const response = await axios.post(endpoint, payload);
@@ -115,9 +93,8 @@ export class BroadcastService {
       this.logger.error(`Failed payload:`, JSON.stringify({
         endpoint,
         chat_id: chatId,
-        has_image: !!imageUrl,
-        image_url: imageUrl || 'none',
         message_length: messageText?.length || 0,
+        has_button: !!(buttonText && buttonUrl),
       }));
 
       return false;
@@ -212,7 +189,6 @@ export class BroadcastService {
           user.telegram_chat_id,
           broadcastData.message_text,
           {
-            imageUrl: broadcastData.image_url,
             buttonText: broadcastData.button_text,
             buttonUrl: broadcastData.button_url,
           },
