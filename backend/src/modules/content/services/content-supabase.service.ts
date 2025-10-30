@@ -6,7 +6,7 @@ import { ContentStatus, ContentType } from '../entities/content.entity';
 export class ContentSupabaseService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
-  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest') {
+  async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
     const offset = (page - 1) * limit;
 
     // Step 1: If genre filter is provided, get content IDs for this category
@@ -65,6 +65,11 @@ export class ContentSupabaseService {
     // Apply content ID filter if genre was specified
     if (contentIds) {
       query = query.in('id', contentIds);
+    }
+
+    // Apply search filter if search term is provided
+    if (search && search.trim()) {
+      query = query.ilike('title', `%${search.trim()}%`);
     }
 
     // Apply sorting
@@ -144,7 +149,7 @@ export class ContentSupabaseService {
     return categories || [];
   }
 
-  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest') {
+  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
     const offset = (page - 1) * limit;
 
     // Step 1: If genre filter is provided, get content IDs for this category
@@ -203,6 +208,11 @@ export class ContentSupabaseService {
     // Apply content ID filter if genre was specified
     if (contentIds) {
       query = query.in('id', contentIds);
+    }
+
+    // Apply search filter if search term is provided
+    if (search && search.trim()) {
+      query = query.ilike('title', `%${search.trim()}%`);
     }
 
     // Apply sorting
