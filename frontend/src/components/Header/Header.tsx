@@ -37,17 +37,6 @@ export function Header({ transparent = false }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Real-time search with debouncing
-  useEffect(() => {
-    if (!searchQuery.trim()) return;
-
-    const debounceTimer = setTimeout(() => {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }, 500); // Wait 500ms after user stops typing
-
-    return () => clearTimeout(debounceTimer);
-  }, [searchQuery, router]);
-
   const isActiveLink = (href: string) => {
     if (href === '/') {
       return pathname === '/';
