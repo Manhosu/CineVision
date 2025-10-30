@@ -67,7 +67,7 @@ export class ContentService {
     };
   }
 
-  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at') {
+  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere('content.content_type = :type', { type: 'series' })
@@ -76,6 +76,12 @@ export class ContentService {
 
     if (genre) {
       queryBuilder.andWhere('categories.name = :genre', { genre });
+    }
+
+    if (search && search.trim()) {
+      queryBuilder.andWhere('LOWER(content.title) LIKE LOWER(:search)', {
+        search: `%${search.trim()}%`
+      });
     }
 
     switch (sort) {

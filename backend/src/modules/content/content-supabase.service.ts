@@ -76,9 +76,13 @@ export class ContentSupabaseService {
       // Add search filter if search term is provided (case-insensitive)
       if (search && search.trim()) {
         // Use ilike for case-insensitive pattern matching
-        // *text* matches anywhere in the string
-        queryOptions.where.title = { ilike: `*${search.trim()}*` };
+        // %text% matches anywhere in the string (% is the wildcard for PostgREST ILIKE)
+        const searchPattern = `%${search.trim()}%`;
+        this.logger.debug(`Adding search filter: title ilike '${searchPattern}'`);
+        queryOptions.where.title = { ilike: searchPattern };
       }
+
+      this.logger.debug(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
 
       // Add sorting
       switch (sort) {
@@ -116,7 +120,7 @@ export class ContentSupabaseService {
 
       // Add search filter to count if search term is provided
       if (search && search.trim()) {
-        countWhere.title = { ilike: `*${search.trim()}*` };
+        countWhere.title = { ilike: `%${search.trim()}%` };
       }
 
       const totalCount = await this.supabaseClient.count('content', countWhere);
@@ -134,6 +138,129 @@ export class ContentSupabaseService {
       };
     } catch (error) {
       this.logger.error('Error finding movies:', error);
+      throw error;
+    }
+  }
+
+  async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
+    try {
+      this.logger.debug(`Finding series: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
+
+      // Filter by category if genre is provided
+      let contentIds: string[] = [];
+      if (genre) {
+        // Find category by name
+        const category = await this.supabaseClient.selectOne('categories', {
+          where: { name: genre }
+        });
+
+        if (category) {
+          // Get content IDs for this category
+          const associations = await this.supabaseClient.select('content_categories', {
+            where: { category_id: category.id },
+            select: 'content_id'
+          });
+
+          contentIds = associations.map((assoc: any) => assoc.content_id);
+          this.logger.debug(`Found ${contentIds.length} content items for category ${genre}`);
+        }
+
+        // If no content found for this category, return empty result
+        if (contentIds.length === 0) {
+          return {
+            movies: [], // Keep the same property name for compatibility with frontend
+            pagination: {
+              page,
+              limit,
+              total: 0,
+              totalPages: 0,
+              hasNext: false,
+              hasPrev: false,
+            },
+          };
+        }
+      }
+
+      // Build query options
+      const queryOptions: any = {
+        where: {
+          status: ContentStatus.PUBLISHED,
+          content_type: ContentType.SERIES
+        },
+        limit,
+        offset: (page - 1) * limit
+      };
+
+      // Add category filter if genre was specified
+      if (genre && contentIds.length > 0) {
+        queryOptions.where.id = { in: contentIds };
+      }
+
+      // Add search filter if search term is provided (case-insensitive)
+      if (search && search.trim()) {
+        // Use ilike for case-insensitive pattern matching
+        // %text% matches anywhere in the string (% is the wildcard for PostgREST ILIKE)
+        const searchPattern = `%${search.trim()}%`;
+        this.logger.debug(`Adding search filter: title ilike '${searchPattern}'`);
+        queryOptions.where.title = { ilike: searchPattern };
+      }
+
+      this.logger.debug(`Query options: ${JSON.stringify(queryOptions, null, 2)}`);
+
+      // Add sorting
+      switch (sort) {
+        case 'newest':
+          queryOptions.order = { column: 'created_at', ascending: false };
+          break;
+        case 'popular':
+          queryOptions.order = { column: 'views_count', ascending: false };
+          break;
+        case 'rating':
+          queryOptions.order = { column: 'imdb_rating', ascending: false };
+          break;
+        case 'price_low':
+          queryOptions.order = { column: 'price_cents', ascending: true };
+          break;
+        case 'price_high':
+          queryOptions.order = { column: 'price_cents', ascending: false };
+          break;
+        default:
+          queryOptions.order = { column: 'created_at', ascending: false };
+      }
+
+      const series = await this.supabaseClient.select('content', queryOptions);
+
+      // Get total count for pagination
+      const countWhere: any = {
+        status: ContentStatus.PUBLISHED,
+        content_type: ContentType.SERIES
+      };
+
+      // Add category filter to count if genre was specified
+      if (genre && contentIds.length > 0) {
+        countWhere.id = { in: contentIds };
+      }
+
+      // Add search filter to count if search term is provided
+      if (search && search.trim()) {
+        countWhere.title = { ilike: `%${search.trim()}%` };
+      }
+
+      const totalCount = await this.supabaseClient.count('content', countWhere);
+
+      return {
+        movies: series, // Keep the same property name for compatibility with frontend
+        pagination: {
+          page,
+          limit,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasNext: page < Math.ceil(totalCount / limit),
+          hasPrev: page > 1,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error finding series:', error);
       throw error;
     }
   }
