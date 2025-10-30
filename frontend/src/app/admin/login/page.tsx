@@ -39,9 +39,12 @@ export default function AdminLogin() {
       }
 
       // Salvar tokens e dados do usuário no localStorage
-      localStorage.setItem('token', access_token);
+      localStorage.setItem('access_token', access_token);
+      localStorage.setItem('auth_token', access_token); // Compatibilidade
       localStorage.setItem('refresh_token', refresh_token);
       localStorage.setItem('user', JSON.stringify(user));
+
+      console.log('✅ Admin login successful - tokens saved to localStorage');
 
       // Redirecionar para o dashboard admin
       router.push('/admin');
