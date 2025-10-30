@@ -394,7 +394,7 @@ export default function BroadcastPage() {
                     type="url"
                     value={buttonUrl}
                     onChange={(e) => setButtonUrl(e.target.value)}
-                    placeholder="https://cine-vision-murex.vercel.app"
+                    placeholder="https://www.cinevisionapp.com.br"
                     className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                   />
                 </div>
