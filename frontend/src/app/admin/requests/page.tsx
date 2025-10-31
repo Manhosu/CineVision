@@ -46,7 +46,14 @@ export default function AdminRequestsPage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/v1/admin/requests?page=1&limit=100');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+      const response = await fetch(`${apiUrl}/api/v1/admin/requests?page=1&limit=100`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`Erro ao buscar pedidos: ${response.statusText}`);
@@ -64,7 +71,15 @@ export default function AdminRequestsPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/v1/admin/requests?page=1&limit=1');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+      const response = await fetch(`${apiUrl}/api/v1/admin/requests?page=1&limit=1`, {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+      });
+
       if (response.ok) {
         const data = await response.json();
         setStats({ total: data.pagination?.total || 0 });
@@ -79,9 +94,17 @@ export default function AdminRequestsPage() {
 
     try {
       setUpdating(true);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
       const response = await fetch(
-        `http://localhost:3001/api/v1/admin/requests/${selectedRequest.id}?status=${newStatus}&admin_notes=${encodeURIComponent(adminNotes)}`,
-        { method: 'PUT' }
+        `${apiUrl}/api/v1/admin/requests/${selectedRequest.id}?status=${newStatus}&admin_notes=${encodeURIComponent(adminNotes)}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': token ? `Bearer ${token}` : '',
+          },
+        }
       );
 
       if (!response.ok) {
