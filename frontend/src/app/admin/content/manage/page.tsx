@@ -51,7 +51,7 @@ export default function ContentManagePage() {
   const fetchContents = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -77,7 +77,7 @@ export default function ContentManagePage() {
     if (!deleteTarget) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
       console.log('[Delete Content] Deleting content:', deleteTarget.id, deleteTarget.title);
       console.log('[Delete Content] API URL:', process.env.NEXT_PUBLIC_API_URL);
 
@@ -124,7 +124,7 @@ export default function ContentManagePage() {
 
     try {
       setPublishingId(content.id);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/publish`,
         {

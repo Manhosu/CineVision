@@ -44,7 +44,7 @@ export default function AdminContentEditPage() {
   const loadContent = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}`, {
         headers: {
           'Authorization': `Bearer ${token}`,

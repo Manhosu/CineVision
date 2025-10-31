@@ -59,8 +59,10 @@ export default function AdminDashboard() {
 
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-        // Get token from localStorage
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        // Get token from localStorage (access_token or auth_token for compatibility)
+        const token = typeof window !== 'undefined'
+          ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+          : null;
         const headers: Record<string, string> = {
           'Content-Type': 'application/json'
         };

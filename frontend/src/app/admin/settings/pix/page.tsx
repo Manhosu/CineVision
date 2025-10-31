@@ -21,8 +21,8 @@ export default function PixSettingsPage() {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      // Obter token do localStorage
-      const token = localStorage.getItem('token');
+      // Obter token do localStorage (access_token ou auth_token para compatibilidade)
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
 
       if (!token) {
         toast.error('Sessão expirada. Faça login novamente.');
@@ -72,8 +72,8 @@ export default function PixSettingsPage() {
 
     setSaving(true);
     try {
-      // Obter token do localStorage
-      const token = localStorage.getItem('token');
+      // Obter token do localStorage (access_token ou auth_token para compatibilidade)
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
 
       if (!token) {
         toast.error('Sessão expirada. Faça login novamente.');

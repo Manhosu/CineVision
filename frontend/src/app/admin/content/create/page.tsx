@@ -766,7 +766,7 @@ export default function AdminContentCreatePage() {
 
         // Todos os uploads completaram - publicar automaticamente
         try {
-          const token = localStorage.getItem('token');
+          const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
             {
@@ -1386,7 +1386,7 @@ export default function AdminContentCreatePage() {
                     // Publicar conteúdo e notificar usuários
                     const publishContent = async () => {
                       try {
-                        const token = localStorage.getItem('token');
+                        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
                         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`, {
                           method: 'PUT',
                           headers: {
