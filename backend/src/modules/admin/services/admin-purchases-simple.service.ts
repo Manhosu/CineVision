@@ -24,16 +24,24 @@ export class AdminPurchasesSimpleService {
         offset,
       };
 
-      // Add status filter if provided
-      if (status) {
+      // Add status filter ONLY if provided and not 'all'
+      if (status && status !== 'all') {
         queryOptions.where = { status };
+        this.logger.log(`Filtering by status: ${status}`);
+      } else {
+        this.logger.log('Fetching ALL purchases (no status filter)');
       }
 
       // Fetch purchases
+      this.logger.log(`Query options: ${JSON.stringify(queryOptions)}`);
       const purchases = await this.supabaseClient.select('purchases', queryOptions);
+      this.logger.log(`Found ${purchases.length} purchases`);
 
-      // Get total count for pagination
-      const totalCount = await this.supabaseClient.count('purchases', status ? { status } : {});
+      // Get total count for pagination (only filter if status is provided and not 'all')
+      const totalCount = await this.supabaseClient.count('purchases',
+        (status && status !== 'all') ? { status } : {}
+      );
+      this.logger.log(`Total count: ${totalCount}`);
 
       // Extract unique user IDs and content IDs
       const userIds = [...new Set(purchases.map((p: any) => p.user_id).filter(Boolean))];
@@ -42,7 +50,7 @@ export class AdminPurchasesSimpleService {
       // Fetch users and content separately
       const users = userIds.length > 0
         ? await this.supabaseClient.select('users', {
-            select: 'id,telegram_id,telegram_username,name',
+            select: 'id,email,telegram_id,telegram_username,name',
           })
         : [];
 
@@ -72,18 +80,13 @@ export class AdminPurchasesSimpleService {
         content: contentMap.get(purchase.content_id) || null,
       }));
 
+      // Return in format expected by frontend
       return {
-        success: true,
-        data: {
-          orders: transformedOrders,
-          pagination: {
-            page,
-            limit,
-            total: totalCount,
-            totalPages: Math.ceil(totalCount / limit),
-          },
-        },
-        message: 'Orders retrieved successfully',
+        purchases: transformedOrders,
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        total: totalCount,
+        limit,
       };
     } catch (error) {
       this.logger.error('Error fetching orders:', error);
@@ -112,7 +115,7 @@ export class AdminPurchasesSimpleService {
       // Fetch related user and content
       const user = purchase.user_id
         ? await this.supabaseClient.selectOne('users', {
-            select: 'id,telegram_id,telegram_username,name',
+            select: 'id,email,telegram_id,telegram_username,name',
             where: { id: purchase.user_id },
           })
         : null;
@@ -192,17 +195,18 @@ export class AdminPurchasesSimpleService {
       const paidOrders = ordersByStatus.paid || 0;
       const conversionRate = totalOrders > 0 ? paidOrders / totalOrders : 0;
 
+      // Return in format expected by frontend
       return {
-        success: true,
-        data: {
-          total_orders: totalOrders,
-          total_revenue_cents: totalRevenueCents,
-          orders_by_status: ordersByStatus,
-          orders_by_payment_method: ordersByPaymentMethod,
-          recent_orders_count: recentOrdersCount,
-          conversion_rate: parseFloat(conversionRate.toFixed(2)),
-        },
-        message: 'Order statistics retrieved successfully',
+        total_purchases: totalOrders,
+        total_revenue_cents: totalRevenueCents,
+        pending_purchases: ordersByStatus.pending || 0,
+        paid_purchases: ordersByStatus.paid || 0,
+        failed_purchases: ordersByStatus.failed || 0,
+        refunded_purchases: ordersByStatus.refunded || 0,
+        // Additional stats for reference
+        orders_by_payment_method: ordersByPaymentMethod,
+        recent_orders_count: recentOrdersCount,
+        conversion_rate: parseFloat(conversionRate.toFixed(2)),
       };
     } catch (error) {
       this.logger.error('Error calculating statistics:', error);
