@@ -88,8 +88,10 @@ export class PaymentsSupabaseService {
       }
 
       // Create Stripe Checkout Session
-      const successUrl = dto.return_url || `${this.configService.get('FRONTEND_URL')}/purchase-success?token=${purchase.purchase_token}&purchase_id=${purchase.id}`;
-      const cancelUrl = dto.cancel_url || `${this.configService.get('FRONTEND_URL')}/`;
+      // Redirect to Telegram bot instead of frontend to avoid errors
+      const botUsername = this.configService.get('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+      const successUrl = dto.return_url || `https://t.me/${botUsername}?start=payment_success_${purchase.id}`;
+      const cancelUrl = dto.cancel_url || `https://t.me/${botUsername}`;
 
       const checkoutSession = await this.stripeService.createCheckoutSession(
         stripePriceId,

@@ -1786,6 +1786,92 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    * - Se compra SEM CONTA: Envia apenas no Telegram
    * - Envia TODOS os idiomas disponíveis (dublado, legendado, etc.)
    */
+  /**
+   * Helper to send video content based on file size
+   * Files ≤2GB: Send directly via Telegram
+   * Files >2GB: Send only presigned link
+   */
+  private async sendVideoContent(chatId: string, options: {
+    title: string;
+    language: any;
+    fileSize: number;
+    TWO_GB_IN_BYTES: number;
+  }): Promise<void> {
+    try {
+      const { title, language, fileSize, TWO_GB_IN_BYTES } = options;
+
+      const langLabel = language.language_type === 'dubbed' ? '🎙️ Dublado' :
+                       language.language_type === 'subtitled' ? '📝 Legendado' :
+                       '🎬 Original';
+
+      const sizeGB = fileSize ? (fileSize / (1024 * 1024 * 1024)).toFixed(2) : 'Desconhecido';
+
+      // Generate presigned URL
+      const videoUrl = await this.generateSignedVideoUrl(language.video_storage_key);
+
+      if (fileSize && fileSize <= TWO_GB_IN_BYTES) {
+        // File is ≤2GB - send directly via Telegram
+        this.logger.log(`Sending file directly (${sizeGB} GB): ${title} - ${langLabel}`);
+
+        await this.sendMessage(parseInt(chatId),
+          `📥 **${title}**\n${langLabel} - ${language.language_name}\n📊 Tamanho: ${sizeGB} GB\n\n⏬ Enviando arquivo...`,
+          { parse_mode: 'Markdown' }
+        );
+
+        try {
+          // Send document using Telegram Bot API
+          const response = await axios.post(`${this.botApiUrl}/sendDocument`, {
+            chat_id: parseInt(chatId),
+            document: videoUrl,
+            caption: `🎬 ${title}\n${langLabel} - ${language.language_name}\n📊 ${sizeGB} GB`,
+            parse_mode: 'Markdown'
+          });
+
+          if (response.data.ok) {
+            this.logger.log(`File sent successfully: ${title}`);
+          } else {
+            throw new Error(response.data.description || 'Failed to send document');
+          }
+        } catch (sendError) {
+          this.logger.error(`Failed to send file directly, sending link instead: ${sendError.message}`);
+          // Fallback to link if direct send fails
+          await this.sendVideoLink(chatId, title, langLabel, language.language_name, sizeGB, videoUrl);
+        }
+      } else {
+        // File is >2GB - send only link
+        this.logger.log(`File too large (${sizeGB} GB), sending link only: ${title} - ${langLabel}`);
+        await this.sendVideoLink(chatId, title, langLabel, language.language_name, sizeGB, videoUrl);
+      }
+    } catch (error) {
+      this.logger.error(`Error sending video content: ${error.message}`);
+      await this.sendMessage(parseInt(chatId), `❌ Erro ao enviar: ${options.title}`);
+    }
+  }
+
+  /**
+   * Send video as link with button
+   */
+  private async sendVideoLink(
+    chatId: string,
+    title: string,
+    langLabel: string,
+    langName: string,
+    sizeGB: string,
+    videoUrl: string
+  ): Promise<void> {
+    await this.sendMessage(parseInt(chatId),
+      `🎬 **${title}**\n${langLabel} - ${langName}\n📊 Tamanho: ${sizeGB} GB\n⏱️  Link válido por: 4 horas`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '▶️ Assistir/Baixar', url: videoUrl }]
+          ]
+        }
+      }
+    );
+  }
+
   async deliverContentAfterPayment(purchase: any): Promise<void> {
     try {
       const chatId = purchase.provider_meta?.telegram_chat_id;
@@ -1837,7 +1923,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       }
 
       await this.sendMessage(parseInt(chatId),
-        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **O filme foi adicionado ao seu dashboard!**\nAcesse em: ${dashboardUrl}\n\n📺 Escolha o idioma para assistir:`,
+        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Dashboard Auto-Login:**\n${dashboardUrl}\n\n📥 **Enviando conteúdo...**`,
         { parse_mode: 'Markdown' }
       );
 
@@ -1852,27 +1938,53 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         return;
       }
 
-      // Criar botões para TODOS os idiomas disponíveis
-      const buttons = [];
-      for (const lang of activeLanguages) {
-        const langLabel = lang.language_type === 'dubbed' ? '🎙️ Dublado' :
-                         lang.language_type === 'subtitled' ? '📝 Legendado' :
-                         '🎬 Original';
+      // NOVO: Enviar arquivos automaticamente baseado no tamanho
+      const TWO_GB_IN_BYTES = 2 * 1024 * 1024 * 1024;
 
-        buttons.push([{
-          text: `${langLabel} - ${lang.language_name || lang.language_code}`,
-          callback_data: `watch_${purchase.id}_${lang.id}`
-        }]);
+      // Check if content is series or movie
+      if (content.content_type === 'series') {
+        // For series, fetch all episodes
+        const { data: episodes, error: episodesError } = await this.supabase
+          .from('series_episodes')
+          .select('*, episode_languages(*)')
+          .eq('series_id', content.id)
+          .order('season_number', { ascending: true })
+          .order('episode_number', { ascending: true });
+
+        if (episodesError || !episodes || episodes.length === 0) {
+          this.logger.error('No episodes found for series:', episodesError);
+          await this.sendMessage(parseInt(chatId), '❌ Nenhum episódio disponível. Entre em contato com suporte.');
+          return;
+        }
+
+        await this.sendMessage(parseInt(chatId), `📺 Enviando ${episodes.length} episódio(s)...`);
+
+        // Send each episode
+        for (const episode of episodes) {
+          const episodeLanguages = episode.episode_languages?.filter(
+            (lang: any) => lang.is_active && lang.video_storage_key && lang.upload_status === 'completed'
+          ) || [];
+
+          for (const lang of episodeLanguages) {
+            await this.sendVideoContent(chatId, {
+              title: `${content.title} - T${episode.season_number}E${episode.episode_number} - ${episode.title}`,
+              language: lang,
+              fileSize: lang.file_size_bytes,
+              TWO_GB_IN_BYTES
+            });
+          }
+        }
+      } else {
+        // For movies, send all language versions
+        for (const lang of activeLanguages) {
+          await this.sendVideoContent(chatId, {
+            title: content.title,
+            language: lang,
+            fileSize: lang.file_size_bytes,
+            TWO_GB_IN_BYTES
+          });
+        }
       }
-
-      // NOVO FLUXO: Sempre adicionar botão de dashboard (todas compras têm conta)
-      buttons.push([{ text: '🌐 Ver no Dashboard (Auto-Login)', url: dashboardUrl }]);
-
-      await this.sendMessage(parseInt(chatId), `🎬 **${activeLanguages.length} idioma(s) disponível(is):**`, {
-        reply_markup: {
-          inline_keyboard: buttons,
-        },
-      });
 
       // Log de entrega
       this.logger.log(`Content delivered: ${activeLanguages.length} language(s) to purchase ${purchase.id}`);
