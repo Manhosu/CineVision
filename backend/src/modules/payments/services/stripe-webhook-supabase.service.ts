@@ -1,0 +1,308 @@
+import { Injectable, Logger } from '@nestjs/common';
+import Stripe from 'stripe';
+import { SupabaseService } from '../../../config/supabase.service';
+import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
+
+@Injectable()
+export class StripeWebhookSupabaseService {
+  private readonly logger = new Logger(StripeWebhookSupabaseService.name);
+
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly telegramsService: TelegramsEnhancedService,
+  ) {}
+
+  private get supabase() {
+    return this.supabaseService.client;
+  }
+
+  async handleWebhookEvent(event: Stripe.Event): Promise<void> {
+    this.logger.log(`Processing webhook event: ${event.type}`);
+
+    try {
+      switch (event.type) {
+        case 'payment_intent.succeeded':
+          await this.handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+          break;
+
+        case 'payment_intent.payment_failed':
+          await this.handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+          break;
+
+        case 'checkout.session.completed':
+          await this.handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session);
+          break;
+
+        case 'charge.refunded':
+          await this.handleChargeRefunded(event.data.object as Stripe.Charge);
+          break;
+
+        default:
+          this.logger.log(`Unhandled event type: ${event.type}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error processing webhook event ${event.type}: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private async handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+    this.logger.log(`Payment intent succeeded: ${paymentIntent.id}`);
+
+    const metadata = paymentIntent.metadata;
+    const purchaseId = metadata?.purchase_id;
+    const purchaseToken = metadata?.purchase_token;
+
+    if (!purchaseId && !purchaseToken) {
+      this.logger.warn(`No purchase_id or purchase_token in payment intent metadata: ${paymentIntent.id}`);
+      return;
+    }
+
+    try {
+      // Find purchase by ID or token
+      let query = this.supabase
+        .from('purchases')
+        .select('*, content(*)');
+
+      if (purchaseId) {
+        query = query.eq('id', purchaseId);
+      } else if (purchaseToken) {
+        query = query.eq('purchase_token', purchaseToken);
+      }
+
+      const { data: purchase, error: purchaseError } = await query.single();
+
+      if (purchaseError || !purchase) {
+        this.logger.error(`Purchase not found for payment intent ${paymentIntent.id}`);
+        return;
+      }
+
+      // Update purchase to PAID status
+      const { error: updateError } = await this.supabase
+        .from('purchases')
+        .update({
+          status: 'paid',
+          payment_provider_id: paymentIntent.id,
+          provider_meta: metadata,
+          access_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id);
+
+      if (updateError) {
+        this.logger.error(`Failed to update purchase ${purchase.id}: ${updateError.message}`);
+        return;
+      }
+
+      // Increment sales counters for content
+      if (purchase.content_id) {
+        // Try to use RPC, fall back to manual update if it fails
+        const { error: rpcError } = await this.supabase.rpc('increment_content_sales', {
+          content_id: purchase.content_id,
+        });
+
+        if (rpcError) {
+          // If RPC doesn't exist, manually increment
+          this.logger.warn('RPC increment_content_sales not found, using manual update');
+          await this.supabase
+            .from('content')
+            .update({
+              weekly_sales: (purchase.content?.weekly_sales || 0) + 1,
+              total_sales: (purchase.content?.total_sales || 0) + 1,
+              purchases_count: (purchase.content?.purchases_count || 0) + 1,
+            })
+            .eq('id', purchase.content_id);
+        }
+      }
+
+      // Log successful payment
+      await this.supabase
+        .from('system_logs')
+        .insert({
+          type: 'payment',
+          level: 'info',
+          message: `Payment succeeded for purchase ${purchase.id}`,
+          meta: {
+            purchase_id: purchase.id,
+            payment_intent_id: paymentIntent.id,
+            amount: paymentIntent.amount,
+            currency: paymentIntent.currency,
+          },
+        });
+
+      this.logger.log(`Purchase ${purchase.id} marked as PAID`);
+
+      // Send Telegram notification if user has telegram_id
+      try {
+        if (purchase.user_id) {
+          const { data: user } = await this.supabase
+            .from('users')
+            .select('telegram_chat_id, telegram_id, name, email')
+            .eq('id', purchase.user_id)
+            .single();
+
+          if (user?.telegram_chat_id && purchase.content) {
+            const message = `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${purchase.content.title}" foi aprovada!\n💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n\n🎬 O conteúdo foi adicionado à sua conta!\n\nAcesse seu dashboard para assistir! 🍿`;
+
+            await this.telegramsService['sendMessage'](parseInt(user.telegram_chat_id), message, {
+              parse_mode: 'Markdown',
+            });
+            this.logger.log(`Telegram notification sent for purchase ${purchase.id}`);
+          }
+        }
+      } catch (error) {
+        this.logger.error(`Failed to send Telegram notification: ${error.message}`);
+        // Don't fail the webhook if notification fails
+      }
+    } catch (error) {
+      this.logger.error(`Error handling payment intent succeeded: ${error.message}`, error.stack);
+      throw error;
+    }
+  }
+
+  private async handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
+    this.logger.log(`Payment intent failed: ${paymentIntent.id}`);
+
+    const metadata = paymentIntent.metadata;
+    const purchaseId = metadata?.purchase_id;
+
+    if (!purchaseId) {
+      return;
+    }
+
+    try {
+      // Update purchase to FAILED status
+      await this.supabase
+        .from('purchases')
+        .update({
+          status: 'failed',
+          payment_provider_id: paymentIntent.id,
+          provider_meta: {
+            ...metadata,
+            failure_message: paymentIntent.last_payment_error?.message,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchaseId);
+
+      // Log failed payment
+      await this.supabase
+        .from('system_logs')
+        .insert({
+          type: 'payment',
+          level: 'error',
+          message: `Payment failed for purchase ${purchaseId}`,
+          meta: {
+            purchase_id: purchaseId,
+            payment_intent_id: paymentIntent.id,
+            error: paymentIntent.last_payment_error?.message,
+          },
+        });
+
+      this.logger.log(`Purchase ${purchaseId} marked as FAILED`);
+    } catch (error) {
+      this.logger.error(`Error handling payment intent failed: ${error.message}`, error.stack);
+    }
+  }
+
+  private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+    this.logger.log(`Checkout session completed: ${session.id}`);
+
+    const metadata = session.metadata;
+    const purchaseId = metadata?.purchase_id;
+    const purchaseToken = metadata?.purchase_token;
+
+    if (!purchaseId && !purchaseToken) {
+      this.logger.warn(`No purchase info in checkout session metadata: ${session.id}`);
+      return;
+    }
+
+    try {
+      // Find purchase
+      let query = this.supabase
+        .from('purchases')
+        .select('*, content(*)');
+
+      if (purchaseId) {
+        query = query.eq('id', purchaseId);
+      } else if (purchaseToken) {
+        query = query.eq('purchase_token', purchaseToken);
+      }
+
+      const { data: purchase, error: purchaseError } = await query.single();
+
+      if (purchaseError || !purchase) {
+        this.logger.error(`Purchase not found for checkout session ${session.id}`);
+        return;
+      }
+
+      // Update purchase with session info
+      await this.supabase
+        .from('purchases')
+        .update({
+          provider_meta: {
+            ...purchase.provider_meta,
+            checkout_session_id: session.id,
+            payment_status: session.payment_status,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id);
+
+      this.logger.log(`Checkout session info saved for purchase ${purchase.id}`);
+    } catch (error) {
+      this.logger.error(`Error handling checkout session completed: ${error.message}`, error.stack);
+    }
+  }
+
+  private async handleChargeRefunded(charge: Stripe.Charge) {
+    this.logger.log(`Charge refunded: ${charge.id}`);
+
+    try {
+      // Find purchase by payment_provider_id
+      const { data: purchase, error } = await this.supabase
+        .from('purchases')
+        .select('*')
+        .eq('payment_provider_id', charge.payment_intent as string)
+        .single();
+
+      if (error || !purchase) {
+        this.logger.warn(`Purchase not found for charge ${charge.id}`);
+        return;
+      }
+
+      // Update purchase to REFUNDED status
+      await this.supabase
+        .from('purchases')
+        .update({
+          status: 'refunded',
+          access_expires_at: new Date().toISOString(), // Immediately expire access
+          provider_meta: {
+            ...purchase.provider_meta,
+            refund_id: charge.refunds?.data[0]?.id,
+            refund_reason: charge.refunds?.data[0]?.reason,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id);
+
+      // Log refund
+      await this.supabase
+        .from('system_logs')
+        .insert({
+          type: 'payment',
+          level: 'warn',
+          message: `Payment refunded for purchase ${purchase.id}`,
+          meta: {
+            purchase_id: purchase.id,
+            charge_id: charge.id,
+            refund_amount: charge.amount_refunded,
+          },
+        });
+
+      this.logger.log(`Purchase ${purchase.id} marked as REFUNDED`);
+    } catch (error) {
+      this.logger.error(`Error handling charge refunded: ${error.message}`, error.stack);
+    }
+  }
+}

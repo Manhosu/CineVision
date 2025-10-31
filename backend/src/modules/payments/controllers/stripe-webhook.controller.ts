@@ -7,21 +7,35 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Inject,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request } from 'express';
 import { StripeService } from '../services/stripe.service';
 import { StripeWebhookService } from '../services/stripe-webhook.service';
+import { StripeWebhookSupabaseService } from '../services/stripe-webhook-supabase.service';
 
 @ApiTags('Webhooks')
 @Controller('webhooks/stripe')
 export class StripeWebhookController {
   private readonly logger = new Logger(StripeWebhookController.name);
+  private readonly webhookService: any;
 
   constructor(
     private stripeService: StripeService,
-    private webhookService: StripeWebhookService,
-  ) {}
+    @Optional() private typeormWebhookService?: StripeWebhookService,
+    @Optional() private supabaseWebhookService?: StripeWebhookSupabaseService,
+  ) {
+    // Use Supabase service if available, otherwise fall back to TypeORM
+    this.webhookService = this.supabaseWebhookService || this.typeormWebhookService;
+
+    if (!this.webhookService) {
+      this.logger.error('No webhook service available!');
+    } else {
+      this.logger.log(`Using ${this.supabaseWebhookService ? 'Supabase' : 'TypeORM'} webhook service`);
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: 'Stripe webhook endpoint' })

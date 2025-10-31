@@ -5,7 +5,10 @@ import { PaymentsSupabaseService } from './payments-supabase.service';
 import { PixService } from './services/pix.service';
 import { StripeService } from './services/stripe.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
+import { StripeWebhookService } from './services/stripe-webhook.service';
+import { StripeWebhookSupabaseService } from './services/stripe-webhook-supabase.service';
 import { StripeTestController } from './controllers/stripe-test.controller';
+import { StripeWebhookController } from './controllers/stripe-webhook.controller';
 import { Payment } from './entities/payment.entity';
 import { Purchase } from '../purchases/entities/purchase.entity';
 import { AdminModule } from '../admin/admin.module';
@@ -14,15 +17,15 @@ import { SupabaseModule } from '../../config/supabase.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 // Always load PaymentsController and required services since Telegram bot needs them
-const conditionalControllers = [PaymentsController, StripeTestController];
+const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController];
 
 // When TypeORM is disabled, use PaymentsSupabaseService instead of PaymentsService
 const conditionalProviders = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService, PixQRCodeService, {
+  ? [PaymentsService, PixService, StripeService, PixQRCodeService, StripeWebhookService, {
       provide: 'IPaymentsService',
       useClass: PaymentsService,
     }]
-  : [PaymentsSupabaseService, StripeService, PixQRCodeService, {
+  : [PaymentsSupabaseService, StripeService, PixQRCodeService, StripeWebhookSupabaseService, {
       provide: PaymentsService,
       useClass: PaymentsSupabaseService,
     }];
