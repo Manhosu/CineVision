@@ -132,27 +132,43 @@ export class StripeWebhookSupabaseService {
 
       this.logger.log(`Purchase ${purchase.id} marked as PAID`);
 
-      // Send Telegram notification if user has telegram_id
+      // Deliver content via Telegram bot automatically
       try {
-        if (purchase.user_id) {
+        // Re-fetch purchase with content
+        const { data: purchaseWithContent } = await this.supabase
+          .from('purchases')
+          .select('*, content(*)')
+          .eq('id', purchase.id)
+          .single();
+
+        if (purchaseWithContent && purchaseWithContent.user_id) {
+          // Get user's telegram_chat_id
           const { data: user } = await this.supabase
             .from('users')
-            .select('telegram_chat_id, telegram_id, name, email')
-            .eq('id', purchase.user_id)
+            .select('telegram_chat_id')
+            .eq('id', purchaseWithContent.user_id)
             .single();
 
-          if (user?.telegram_chat_id && purchase.content) {
-            const message = `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${purchase.content.title}" foi aprovada!\n💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n\n🎬 O conteúdo foi adicionado à sua conta!\n\nAcesse seu dashboard para assistir! 🍿`;
+          if (user?.telegram_chat_id) {
+            // Ensure provider_meta has telegram_chat_id for delivery function
+            const purchaseWithTelegramId = {
+              ...purchaseWithContent,
+              provider_meta: {
+                ...purchaseWithContent.provider_meta,
+                telegram_chat_id: user.telegram_chat_id,
+              },
+            };
 
-            await this.telegramsService['sendMessage'](parseInt(user.telegram_chat_id), message, {
-              parse_mode: 'Markdown',
-            });
-            this.logger.log(`Telegram notification sent for purchase ${purchase.id}`);
+            // Call the function that sends video links and options to user
+            await this.telegramsService['deliverContentAfterPayment'](purchaseWithTelegramId);
+            this.logger.log(`Content delivery initiated for purchase ${purchase.id} to chat ${user.telegram_chat_id}`);
+          } else {
+            this.logger.warn(`No telegram_chat_id found for user ${purchaseWithContent.user_id}`);
           }
         }
       } catch (error) {
-        this.logger.error(`Failed to send Telegram notification: ${error.message}`);
-        // Don't fail the webhook if notification fails
+        this.logger.error(`Failed to deliver content via Telegram: ${error.message}`);
+        // Don't fail the webhook if content delivery fails
       }
     } catch (error) {
       this.logger.error(`Error handling payment intent succeeded: ${error.message}`, error.stack);
