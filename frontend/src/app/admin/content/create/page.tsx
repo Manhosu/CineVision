@@ -20,6 +20,7 @@ interface ContentFormData {
   director: string;
   cast: string;
   trailer_url: string;
+  telegram_group_link: string;
   poster_url: string;
   backdrop_url: string;
   content_type: 'movie' | 'series';
@@ -92,6 +93,7 @@ export default function AdminContentCreatePage() {
     director: '',
     cast: '',
     trailer_url: '',
+    telegram_group_link: '',
     poster_url: '',
     backdrop_url: '',
     content_type: 'movie',
@@ -167,6 +169,7 @@ export default function AdminContentCreatePage() {
         poster_url: formData.poster_url,
         backdrop_url: formData.backdrop_url || undefined,
         trailer_url: formData.trailer_url || undefined,
+        telegram_group_link: formData.telegram_group_link || undefined,
         content_type: formData.content_type, // Manter content_type
         type: formData.content_type, // Também enviar type para compatibilidade
         availability: 'site', // Padrão
@@ -1138,6 +1141,29 @@ export default function AdminContentCreatePage() {
                   placeholder="https://youtube.com/watch?v=..."
                   className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Link do Grupo do Telegram (Opcional)
+                </label>
+                <input
+                  type="text"
+                  name="telegram_group_link"
+                  value={formData.telegram_group_link}
+                  onChange={handleChange}
+                  placeholder="https://t.me/+AbCdEfGhIjK ou -1001234567890"
+                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                />
+                <p className="mt-2 text-xs text-yellow-400 bg-yellow-900/20 px-3 py-2 rounded-lg border border-yellow-600/30">
+                  ⚠️ <strong>IMPORTANTE:</strong> O bot DEVE estar neste grupo como <strong>administrador</strong> com permissão para <strong>criar links de convite</strong>.
+                  Você pode fornecer o link de convite (https://t.me/+...) ou o Chat ID numérico do grupo (-1001234567890).
+                </p>
+                {formData.telegram_group_link && (
+                  <p className="mt-2 text-xs text-blue-400 bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-600/30">
+                    📱 Após a compra, o usuário receberá um link de convite de uso único para entrar neste grupo.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

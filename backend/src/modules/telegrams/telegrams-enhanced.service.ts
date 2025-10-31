@@ -504,6 +504,145 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     }
   }
 
+  /**
+   * Creates a single-use invite link for a Telegram group
+   * @param groupLink - The group's invite link (e.g., https://t.me/+AbCdEfGhIjK)
+   * @param userId - User ID for logging purposes
+   * @returns Single-use invite link or null if failed
+   */
+  private async createInviteLinkForUser(groupLink: string, userId: string): Promise<string | null> {
+    try {
+      // Extract chat ID from the group link
+      // Telegram group links format: https://t.me/+AbCdEfGhIjK or https://t.me/joinchat/AbCdEfGhIjK
+      // We need the chat ID to create an invite link
+      // For private groups, we'll use the link as-is since we can't get chat_id directly
+
+      this.logger.log(`Creating invite link for user ${userId} to group: ${groupLink}`);
+
+      // Try to get chat from the link
+      // Note: This requires the bot to already be in the group
+      const chatId = await this.getChatIdFromLink(groupLink);
+
+      if (!chatId) {
+        this.logger.error(`Could not extract chat ID from link: ${groupLink}`);
+
+        await this.supabase.from('system_logs').insert({
+          type: 'telegram_group',
+          level: 'error',
+          message: `Failed to extract chat ID from group link for user ${userId}. Link: ${groupLink}`,
+        });
+
+        return null;
+      }
+
+      // Create invite link with member limit = 1 and expire date = 24 hours
+      const expireDate = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours from now
+
+      const response = await axios.post(`${this.botApiUrl}/createChatInviteLink`, {
+        chat_id: chatId,
+        member_limit: 1, // Only one user can use this link
+        expire_date: expireDate,
+        name: `Compra - User ${userId.substring(0, 8)}`, // Optional name for the link
+      });
+
+      if (response.data.ok) {
+        const inviteLink = response.data.result.invite_link;
+        this.logger.log(`Created invite link for user ${userId}: ${inviteLink}`);
+
+        await this.supabase.from('system_logs').insert({
+          type: 'telegram_group',
+          level: 'info',
+          message: `Created single-use invite link for user ${userId} to chat ${chatId}`,
+        });
+
+        return inviteLink;
+      } else {
+        this.logger.error(`Failed to create invite link: ${response.data.description}`);
+
+        await this.supabase.from('system_logs').insert({
+          type: 'telegram_group',
+          level: 'error',
+          message: `Failed to create invite link for user ${userId}: ${response.data.description}`,
+        });
+
+        return null;
+      }
+    } catch (error) {
+      this.logger.error(`Error creating invite link for user ${userId}:`, error);
+
+      await this.supabase.from('system_logs').insert({
+        type: 'telegram_group',
+        level: 'error',
+        message: `Exception creating invite link for user ${userId}: ${error.message}`,
+      });
+
+      return null;
+    }
+  }
+
+  /**
+   * Extracts chat ID from a Telegram group link or ID
+   * @param groupLink - The group's invite link, username, or chat ID
+   * @returns Chat ID or null if not found
+   */
+  private async getChatIdFromLink(groupLink: string): Promise<string | null> {
+    try {
+      // Check if it's already a numeric Chat ID (e.g., -1001234567890)
+      if (/^-?\d+$/.test(groupLink.trim())) {
+        this.logger.log(`Detected numeric Chat ID: ${groupLink}`);
+        return groupLink.trim();
+      }
+
+      // For public groups with username (e.g., https://t.me/groupname or @groupname)
+      let username: string | null = null;
+
+      // Extract from URL
+      const urlMatch = groupLink.match(/https:\/\/t\.me\/([^\/\?+]+)/);
+      if (urlMatch && !groupLink.includes('+') && !groupLink.includes('joinchat')) {
+        username = urlMatch[1];
+      }
+
+      // Extract from @username format
+      const atMatch = groupLink.match(/^@?([a-zA-Z0-9_]+)$/);
+      if (atMatch) {
+        username = atMatch[1];
+      }
+
+      if (username) {
+        this.logger.log(`Extracted username: ${username}`);
+
+        // Get chat info using username
+        const response = await axios.post(`${this.botApiUrl}/getChat`, {
+          chat_id: `@${username}`
+        });
+
+        if (response.data.ok) {
+          const chatId = response.data.result.id.toString();
+          this.logger.log(`Retrieved Chat ID from username: ${chatId}`);
+          return chatId;
+        }
+      }
+
+      // For private groups with invite links (https://t.me/+AbCdEfGhIjK)
+      // We cannot get chat_id directly from invite links due to Telegram API limitations
+      // The admin MUST provide the numeric Chat ID instead
+      this.logger.warn(`Cannot extract Chat ID from private group invite link: ${groupLink}`);
+      this.logger.warn(`Admin should provide the numeric Chat ID (e.g., -1001234567890) instead of the invite link.`);
+
+      await this.supabase.from('system_logs').insert({
+        type: 'telegram_group',
+        level: 'warn',
+        message: `Failed to extract Chat ID from link: ${groupLink}. Admin should provide numeric Chat ID for private groups.`,
+      });
+
+      return null;
+
+    } catch (error) {
+      this.logger.error('Error extracting chat ID from link:', error);
+      return null;
+    }
+  }
+
   // ==================== CALLBACKS DO BOT ====================
 
   async handleWebhook(webhookData: any, signature?: string) {
@@ -1921,10 +2060,10 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       this.logger.log(`Delivering content to Telegram chat ${chatId} for purchase ${purchase.id}`);
 
-      // Buscar content e languages
+      // Buscar content e languages (including telegram_group_link)
       const { data: content, error: contentError } = await this.supabase
         .from('content')
-        .select('*, content_languages(*)')
+        .select('*, content_languages(*), telegram_group_link')
         .eq('id', purchase.content_id)
         .single();
 
@@ -2025,72 +2164,71 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         }
       );
 
-      await this.sendMessage(parseInt(chatId),
-        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📥 **Enviando conteúdo...**`,
-        { parse_mode: 'Markdown' }
-      );
+      // Check if content has Telegram group configured
+      let telegramInviteLink: string | null = null;
+      let telegramGroupAvailable = false;
 
-      // Filtrar apenas idiomas ativos com vídeo
-      const activeLanguages = content.content_languages.filter(
-        (lang: any) => lang.is_active && lang.video_storage_key && lang.upload_status === 'completed'
-      );
+      if (content.telegram_group_link) {
+        this.logger.log(`Content has Telegram group: ${content.telegram_group_link}`);
+        telegramGroupAvailable = true;
 
-      if (activeLanguages.length === 0) {
-        this.logger.error('No active languages with video_storage_key found');
-        await this.sendMessage(parseInt(chatId), '❌ Nenhum vídeo disponível no momento. Entre em contato com suporte.');
-        return;
-      }
+        // Try to create single-use invite link
+        const { data: user } = await this.supabase
+          .from('users')
+          .select('id')
+          .eq('id', purchase.user_id)
+          .single();
 
-      // NOVO: Enviar arquivos automaticamente baseado no tamanho
-      const TWO_GB_IN_BYTES = 2 * 1024 * 1024 * 1024;
+        if (user) {
+          telegramInviteLink = await this.createInviteLinkForUser(content.telegram_group_link, user.id);
 
-      // Check if content is series or movie
-      if (content.content_type === 'series') {
-        // For series, fetch all episodes
-        const { data: episodes, error: episodesError } = await this.supabase
-          .from('series_episodes')
-          .select('*, episode_languages(*)')
-          .eq('series_id', content.id)
-          .order('season_number', { ascending: true })
-          .order('episode_number', { ascending: true });
-
-        if (episodesError || !episodes || episodes.length === 0) {
-          this.logger.error('No episodes found for series:', episodesError);
-          await this.sendMessage(parseInt(chatId), '❌ Nenhum episódio disponível. Entre em contato com suporte.');
-          return;
-        }
-
-        await this.sendMessage(parseInt(chatId), `📺 Enviando ${episodes.length} episódio(s)...`);
-
-        // Send each episode
-        for (const episode of episodes) {
-          const episodeLanguages = episode.episode_languages?.filter(
-            (lang: any) => lang.is_active && lang.video_storage_key && lang.upload_status === 'completed'
-          ) || [];
-
-          for (const lang of episodeLanguages) {
-            await this.sendVideoContent(chatId, {
-              title: `${content.title} - T${episode.season_number}E${episode.episode_number} - ${episode.title}`,
-              language: lang,
-              fileSize: lang.file_size_bytes,
-              TWO_GB_IN_BYTES
-            });
+          if (telegramInviteLink) {
+            this.logger.log(`Created invite link for purchase ${purchase.id}: ${telegramInviteLink}`);
+          } else {
+            // Fallback to original group link if we couldn't create a custom one
+            this.logger.warn(`Could not create custom invite link, using original: ${content.telegram_group_link}`);
+            telegramInviteLink = content.telegram_group_link;
           }
         }
+      }
+
+      // Send appropriate confirmation message based on whether Telegram group is available
+      if (telegramGroupAvailable && telegramInviteLink) {
+        await this.sendMessage(parseInt(chatId),
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Acesso ao Telegram:**\nClique no botão abaixo para entrar automaticamente no grupo privado e baixar o filme:\n\n🌐 **Assistir Online:**\nAcesse seu dashboard: ${dashboardUrl}\n\n⚠️ O link de entrada expira em 24 horas e só pode ser usado uma vez.`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📱 Entrar no Grupo do Telegram', url: telegramInviteLink }],
+                [{ text: '🌐 Acessar Dashboard', url: dashboardUrl }]
+              ]
+            }
+          }
+        );
+
+        // Log successful delivery with Telegram group
+        await this.supabase.from('system_logs').insert({
+          type: 'delivery',
+          level: 'info',
+          message: `Delivered content ${content.id} to user ${purchase.user_id} with Telegram group invite for purchase ${purchase.id}`,
+        });
       } else {
-        // For movies, send all language versions
-        for (const lang of activeLanguages) {
-          await this.sendVideoContent(chatId, {
-            title: content.title,
-            language: lang,
-            fileSize: lang.file_size_bytes,
-            TWO_GB_IN_BYTES
-          });
-        }
+        await this.sendMessage(parseInt(chatId),
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora no seu dashboard:**\n${dashboardUrl}`,
+          { parse_mode: 'Markdown' }
+        );
+
+        // Log successful delivery without Telegram group
+        await this.supabase.from('system_logs').insert({
+          type: 'delivery',
+          level: 'info',
+          message: `Delivered content ${content.id} to user ${purchase.user_id} (dashboard only) for purchase ${purchase.id}`,
+        });
       }
 
       // Log de entrega
-      this.logger.log(`Content delivered: ${activeLanguages.length} language(s) to purchase ${purchase.id}`);
+      this.logger.log(`Content delivered to purchase ${purchase.id}: dashboard=${dashboardUrl}, telegram=${telegramGroupAvailable ? 'yes' : 'no'}`);
     } catch (error) {
       this.logger.error('Error delivering content to Telegram:', error);
       // Não fazer throw para não quebrar o webhook do Stripe

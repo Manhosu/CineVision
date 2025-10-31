@@ -55,6 +55,11 @@ export class CreateContentDto {
   @IsUrl()
   trailer_url?: string;
 
+  @ApiPropertyOptional({ description: 'Telegram group invite link (e.g., https://t.me/+AbCdEfGhIjK). Bot must be admin with invite permission.' })
+  @IsOptional()
+  @IsString()
+  telegram_group_link?: string;
+
   @ApiPropertyOptional({ description: 'Cover image URL or upload key' })
   @IsOptional()
   @IsString()

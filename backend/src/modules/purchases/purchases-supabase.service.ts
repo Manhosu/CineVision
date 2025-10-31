@@ -340,6 +340,7 @@ export class PurchasesSupabaseService {
           release_year: purchase.content.release_year,
           imdb_rating: purchase.content.imdb_rating,
           price_cents: purchase.content.price_cents,
+          telegram_group_link: purchase.content.telegram_group_link, // Add telegram group link for viewing options modal
           total_seasons: purchase.content.total_seasons || purchase.content.seasons, // Add season count for series
           total_episodes: purchase.content.total_episodes || purchase.content.episodes, // Add episode count for series
           genres: Array.isArray(purchase.content.genres)

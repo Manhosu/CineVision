@@ -15,6 +15,7 @@ import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroi
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import { LanguageSelector } from '@/components/LanguageSelector/LanguageSelector';
+import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
 
 interface MovieCardProps {
   movie: Movie;
@@ -38,6 +39,7 @@ const MovieCard = memo(function MovieCard({
   const [isFavorited, setIsFavorited] = useState(false); // TODO: Integrar com estado global
   const [isInWatchlist, setIsInWatchlist] = useState(false); // TODO: Integrar com estado global
   const [showLanguageSelector, setShowLanguageSelector] = useState(false);
+  const [showViewingOptions, setShowViewingOptions] = useState(false);
 
   // Debug log
   if (isPurchased) {
@@ -55,6 +57,20 @@ const MovieCard = memo(function MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
+    // Check if content has Telegram group link
+    const telegramGroupLink = (movie as any).telegram_group_link;
+
+    if (telegramGroupLink) {
+      // Show viewing options modal (Site or Telegram)
+      setShowViewingOptions(true);
+      return;
+    }
+
+    // No Telegram group, proceed with normal flow
+    proceedToWatch();
+  };
+
+  const proceedToWatch = async () => {
     // Buscar idiomas disponíveis
     try {
       const response = await fetch(
@@ -219,6 +235,20 @@ const MovieCard = memo(function MovieCard({
           onClose={() => setShowLanguageSelector(false)}
           contentId={movie.id}
           movieTitle={movie.title}
+        />
+      )}
+
+      {/* Viewing Options Modal (Site or Telegram) */}
+      {isPurchased && (movie as any).telegram_group_link && (
+        <ViewingOptionsModal
+          isOpen={showViewingOptions}
+          onClose={() => setShowViewingOptions(false)}
+          movieTitle={movie.title}
+          telegramGroupLink={(movie as any).telegram_group_link}
+          onChooseSite={() => {
+            setShowViewingOptions(false);
+            proceedToWatch();
+          }}
         />
       )}
     </div>
