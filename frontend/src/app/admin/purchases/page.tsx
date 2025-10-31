@@ -56,15 +56,26 @@ export default function AdminPurchasesPage() {
         ...(statusFilter !== 'all' && { status: statusFilter })
       });
 
+      // Get token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/purchases/orders?${params}`,
         {
+          headers,
           credentials: 'include',
         }
       );
 
       if (response.status === 401) {
-        router.push('/login');
+        router.push('/admin/login');
         return;
       }
 
@@ -85,9 +96,20 @@ export default function AdminPurchasesPage() {
 
   const fetchStats = async () => {
     try {
+      // Get token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/purchases/stats`,
         {
+          headers,
           credentials: 'include',
         }
       );
