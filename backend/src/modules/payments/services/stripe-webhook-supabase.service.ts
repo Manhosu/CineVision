@@ -145,36 +145,117 @@ export class StripeWebhookSupabaseService {
 
       // Deliver content via Telegram bot automatically
       try {
+        this.logger.log(`Initiating content delivery for purchase ${purchase.id}`);
+
         // Re-fetch purchase with content
-        const { data: purchaseWithContent } = await this.supabase
+        const { data: purchaseWithContent, error: fetchError } = await this.supabase
           .from('purchases')
           .select('*, content(*)')
           .eq('id', purchase.id)
           .single();
 
-        if (purchaseWithContent && purchaseWithContent.user_id) {
-          // Get user's telegram_chat_id
-          const { data: user } = await this.supabase
-            .from('users')
-            .select('telegram_chat_id')
-            .eq('id', purchaseWithContent.user_id)
-            .single();
+        if (fetchError) {
+          this.logger.error(`Failed to fetch purchase ${purchase.id} for delivery:`, fetchError);
 
-          if (user?.telegram_chat_id) {
-            // Ensure provider_meta has telegram_chat_id for delivery function
-            const purchaseWithTelegramId = {
-              ...purchaseWithContent,
-              provider_meta: {
-                ...purchaseWithContent.provider_meta,
-                telegram_chat_id: user.telegram_chat_id,
-              },
-            };
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `Failed to fetch purchase ${purchase.id} for delivery: ${fetchError.message}`,
+          });
 
-            // Call the function that sends video links and options to user
-            await this.telegramsService['deliverContentAfterPayment'](purchaseWithTelegramId);
-            this.logger.log(`Content delivery initiated for purchase ${purchase.id} to chat ${user.telegram_chat_id}`);
-          } else {
-            this.logger.warn(`No telegram_chat_id found for user ${purchaseWithContent.user_id}`);
+          return;
+        }
+
+        if (!purchaseWithContent) {
+          this.logger.error(`Purchase ${purchase.id} not found after payment succeeded`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `Purchase ${purchase.id} not found after payment succeeded`,
+          });
+
+          return;
+        }
+
+        if (!purchaseWithContent.user_id) {
+          this.logger.error(`Purchase ${purchase.id} has no user_id`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `Purchase ${purchase.id} has no user_id, cannot deliver content`,
+          });
+
+          return;
+        }
+
+        // Get user's telegram_chat_id and telegram_id
+        const { data: user, error: userError } = await this.supabase
+          .from('users')
+          .select('id, telegram_chat_id, telegram_id, name, email')
+          .eq('id', purchaseWithContent.user_id)
+          .single();
+
+        if (userError || !user) {
+          this.logger.error(`Failed to fetch user ${purchaseWithContent.user_id} for purchase ${purchase.id}:`, userError);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `Failed to fetch user ${purchaseWithContent.user_id} for purchase ${purchase.id}: ${userError?.message || 'User not found'}`,
+          });
+
+          return;
+        }
+
+        // VALIDATION: Check if user has telegram_chat_id
+        if (!user.telegram_chat_id) {
+          this.logger.error(`User ${user.id} (${user.name}) has no telegram_chat_id for purchase ${purchase.id}`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `User ${purchaseWithContent.user_id} (${user.name}) has no telegram_chat_id for purchase ${purchase.id}`,
+          });
+
+          // Continue to notify failure but don't return
+        }
+
+        // VALIDATION: Check if user has telegram_id (for auto-login token)
+        if (!user.telegram_id) {
+          this.logger.warn(`User ${user.id} (${user.name}) has no telegram_id, auto-login token will not be created`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'warn',
+            message: `User ${purchaseWithContent.user_id} (${user.name}) has no telegram_id for purchase ${purchase.id}, auto-login disabled`,
+          });
+        }
+
+        if (user.telegram_chat_id) {
+          this.logger.log(`Delivering content to user ${user.id} (${user.name}) via chat ${user.telegram_chat_id}`);
+
+          // Ensure provider_meta has telegram_chat_id for delivery function
+          const purchaseWithTelegramId = {
+            ...purchaseWithContent,
+            provider_meta: {
+              ...purchaseWithContent.provider_meta,
+              telegram_chat_id: user.telegram_chat_id,
+            },
+          };
+
+          // Call the function that sends video links and options to user
+          await this.telegramsService['deliverContentAfterPayment'](purchaseWithTelegramId);
+          this.logger.log(`Content delivery initiated successfully for purchase ${purchase.id} to chat ${user.telegram_chat_id}`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'info',
+            message: `Content delivery initiated for purchase ${purchase.id} to user ${user.id} (${user.name})`,
+          });
+        } else {
+          this.logger.error(`Cannot deliver content: user ${user.id} has no telegram_chat_id`);
 
             // Notify admin about missing telegram_chat_id
             await this.telegramsService['notifyDeliveryFailure'](
@@ -199,14 +280,14 @@ export class StripeWebhookSupabaseService {
           }
         }
       } catch (error) {
-        this.logger.error(`Failed to deliver content via Telegram: ${error.message}`);
+        this.logger.error(`Failed to deliver content via Telegram for purchase ${purchaseId}: ${error.message}`);
 
         // Notify admin about delivery failure
         try {
           const { data: purchaseData } = await this.supabase
             .from('purchases')
             .select('*, content(*)')
-            .eq('id', purchase.id)
+            .eq('id', purchaseId)
             .single();
 
           if (purchaseData) {
@@ -219,9 +300,9 @@ export class StripeWebhookSupabaseService {
             .insert({
               type: 'delivery_failed',
               level: 'error',
-              message: `Content delivery failed: ${error.message}`,
+              message: `Content delivery failed for purchase ${purchaseId}: ${error.message}`,
               meta: {
-                purchase_id: purchase.id,
+                purchase_id: purchaseId,
                 error: error.message,
                 stack: error.stack,
                 reason: 'delivery_exception',

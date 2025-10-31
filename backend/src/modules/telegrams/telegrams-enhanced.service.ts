@@ -1945,20 +1945,64 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       // Gerar link autenticado do dashboard com a compra
       let dashboardUrl = 'https://cinevision.com/dashboard';
+      let tokenGenerated = false;
+
       try {
         // Buscar usuário para gerar link autenticado
-        const { data: user } = await this.supabase
+        const { data: user, error: userError } = await this.supabase
           .from('users')
           .select('*')
           .eq('id', purchase.user_id)
           .single();
 
-        if (user && user.telegram_id) {
-          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
-          dashboardUrl = `${frontendUrl}/auth/auto-login?token=${await this.generatePermanentToken(user.telegram_id)}`;
+        if (userError || !user) {
+          this.logger.error(`Failed to fetch user ${purchase.user_id} for auto-login token generation:`, userError?.message);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `Failed to fetch user ${purchase.user_id} for purchase ${purchase.id}: ${userError?.message || 'User not found'}`,
+          });
+        } else if (!user.telegram_id) {
+          this.logger.error(`User ${user.id} has no telegram_id, cannot generate auto-login token`);
+
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery',
+            level: 'error',
+            message: `User ${user.id} (${user.name}) has no telegram_id for purchase ${purchase.id}, auto-login disabled`,
+          });
+        } else {
+          // User found with telegram_id, try to generate token
+          this.logger.log(`Generating auto-login token for user ${user.id} (telegram_id: ${user.telegram_id})`);
+
+          try {
+            const token = await this.generatePermanentToken(user.telegram_id);
+            const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+            dashboardUrl = `${frontendUrl}/auth/auto-login?token=${token}`;
+            tokenGenerated = true;
+
+            this.logger.log(`Auto-login token generated successfully for user ${user.id}`);
+          } catch (tokenError) {
+            this.logger.error(`Failed to generate auto-login token for user ${user.id}:`, tokenError);
+
+            await this.supabase.from('system_logs').insert({
+              type: 'delivery',
+              level: 'error',
+              message: `Failed to generate auto-login token for user ${user.id} (telegram_id: ${user.telegram_id}): ${tokenError.message}`,
+            });
+
+            // Continue with fallback URL
+            this.logger.warn('Continuing with fallback dashboard URL (no auto-login)');
+          }
         }
       } catch (error) {
-        this.logger.warn('Failed to generate auto-login URL, using default:', error);
+        this.logger.error('Unexpected error in auto-login token generation:', error);
+
+        await this.supabase.from('system_logs').insert({
+          type: 'delivery',
+          level: 'error',
+          message: `Unexpected error generating auto-login for purchase ${purchase.id}: ${error.message}`,
+        });
       }
 
       await this.sendMessage(parseInt(chatId),
@@ -2330,44 +2374,78 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    */
   private async generatePermanentToken(telegramId: string): Promise<string> {
     try {
+      this.logger.log(`Generating permanent token for telegram_id: ${telegramId}`);
+
       // Buscar ou criar token permanente para este usuário
-      const { data: user } = await this.supabase
+      const { data: user, error: userError } = await this.supabase
         .from('users')
         .select('id')
         .eq('telegram_id', telegramId)
         .single();
 
-      if (!user) {
-        this.logger.error(`User not found for telegram_id: ${telegramId}`);
-        return '';
+      if (userError || !user) {
+        this.logger.error(`User not found for telegram_id: ${telegramId}`, userError?.message);
+
+        // Log to system_logs for monitoring
+        await this.supabase.from('system_logs').insert({
+          type: 'auto_login',
+          level: 'error',
+          message: `Failed to find user for telegram_id ${telegramId}: ${userError?.message || 'User not found'}`,
+        });
+
+        throw new Error(`User not found for telegram_id: ${telegramId}`);
       }
 
+      this.logger.log(`Found user ${user.id}, checking for existing token`);
+
       // Buscar token existente que ainda é válido
-      const { data: existingToken } = await this.supabase
+      // IMPORTANTE: Não usar .single() aqui pois pode não existir token ainda
+      const { data: existingTokens, error: tokenError } = await this.supabase
         .from('auto_login_tokens')
         .select('token')
         .eq('user_id', user.id)
         .eq('telegram_id', telegramId)
         .gte('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
 
-      if (existingToken) {
-        return existingToken.token;
+      // Se encontrou token válido, retornar
+      if (existingTokens && existingTokens.length > 0) {
+        this.logger.log(`Found existing valid token for user ${user.id}`);
+        return existingTokens[0].token;
       }
 
       // Se não existe, criar novo token permanente
+      this.logger.log(`No existing token found, creating new one for user ${user.id}`);
+
       const { token } = await this.autoLoginService.generateAutoLoginToken(
         user.id,
         telegramId,
         '/dashboard'
       );
 
+      this.logger.log(`Successfully created new token for user ${user.id}`);
+
+      // Log success to system_logs
+      await this.supabase.from('system_logs').insert({
+        type: 'auto_login',
+        level: 'info',
+        message: `Auto-login token created for telegram_id ${telegramId}, user ${user.id}`,
+      });
+
       return token;
     } catch (error) {
       this.logger.error('Error generating permanent token:', error);
-      return '';
+
+      // Log to system_logs for monitoring
+      await this.supabase.from('system_logs').insert({
+        type: 'auto_login',
+        level: 'error',
+        message: `Failed to generate permanent token for telegram_id ${telegramId}: ${error.message}`,
+      });
+
+      // Re-throw the error instead of silently returning empty string
+      throw error;
     }
   }
 
