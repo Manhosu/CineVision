@@ -50,6 +50,7 @@ import { TranscodeService } from '../content/services/transcode.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { RequestsModule } from '../requests/requests.module';
+import { AuthModule } from '../auth/auth.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [
@@ -145,6 +146,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     JwtModule.register({}),
     ConfigModule,
     SupabaseModule,
+    AuthModule,
     // RequestsModule, // Temporarily disabled - causing startup issues
   ],
   controllers: conditionalControllers,
