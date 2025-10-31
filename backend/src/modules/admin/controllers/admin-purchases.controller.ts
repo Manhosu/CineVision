@@ -31,16 +31,19 @@ export class AdminPurchasesController {
   @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by order status (paid, pending, failed)' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by user email, name, telegram username, or content title' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
   async getAllOrders(
     @Query('page') page = '1',
     @Query('limit') limit = '20',
     @Query('status') status?: string,
+    @Query('search') search?: string,
   ) {
     return this.adminPurchasesService.getAllOrders(
       parseInt(page),
       parseInt(limit),
       status,
+      search,
     );
   }
 
