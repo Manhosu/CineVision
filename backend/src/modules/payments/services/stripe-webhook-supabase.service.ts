@@ -77,14 +77,24 @@ export class StripeWebhookSupabaseService {
         return;
       }
 
+      // Detect payment method (card or PIX)
+      const paymentMethodType = paymentIntent.payment_method_types?.[0] || 'card';
+      const isPix = paymentMethodType === 'pix';
+
+      this.logger.log(`Payment method detected: ${paymentMethodType} (isPix: ${isPix})`);
+
       // Update purchase to PAID status
       const { error: updateError } = await this.supabase
         .from('purchases')
         .update({
           status: 'paid',
           payment_provider_id: paymentIntent.id,
-          payment_method: 'card', // Stripe PaymentIntent is always card payment
-          provider_meta: metadata,
+          payment_method: isPix ? 'pix' : 'card', // Detect if PIX or card
+          provider_meta: {
+            ...metadata,
+            payment_method_type: paymentMethodType,
+            stripe_payment_method: paymentIntent.payment_method,
+          },
           access_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
           updated_at: new Date().toISOString(),
         })

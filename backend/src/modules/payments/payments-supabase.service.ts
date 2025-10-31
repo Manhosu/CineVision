@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../config/supabase.service';
 import { StripeService } from './services/stripe.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
+import { PaymentMethod } from './providers/interfaces';
 import {
   CreatePaymentDto,
   CreatePaymentResponseDto,
@@ -275,191 +276,19 @@ export class PaymentsSupabaseService {
   }
 
   /**
-   * Create PIX payment with QR Code
+   * Create PIX payment with Stripe
+   * DEPRECATED: Use createPayment() instead - Stripe now supports both PIX and card
+   * This method now redirects to Stripe Checkout which supports both payment methods
    */
   async createPixPayment(purchaseId: string): Promise<any> {
-    try {
-      this.logger.log(`Creating PIX payment for purchase ${purchaseId}`);
+    this.logger.log(`PIX payment request for purchase ${purchaseId} - redirecting to Stripe Checkout`);
 
-      // Find purchase in Supabase
-      const { data: purchase, error: purchaseError } = await this.supabaseService.client
-        .from('purchases')
-        .select('*, content(*)')
-        .eq('id', purchaseId)
-        .single();
-
-      if (purchaseError || !purchase) {
-        throw new NotFoundException(`Purchase with ID ${purchaseId} not found`);
-      }
-
-      if (purchase.status === 'COMPLETED' || purchase.status === 'paid') {
-        throw new BadRequestException('Purchase is already paid');
-      }
-
-      // Get PIX settings from admin_settings
-      const { data: pixKeyData } = await this.supabaseService.client
-        .from('admin_settings')
-        .select('value')
-        .eq('key', 'pix_key')
-        .single();
-
-      const { data: merchantNameData } = await this.supabaseService.client
-        .from('admin_settings')
-        .select('value')
-        .eq('key', 'merchant_name')
-        .single();
-
-      const { data: merchantCityData } = await this.supabaseService.client
-        .from('admin_settings')
-        .select('value')
-        .eq('key', 'merchant_city')
-        .single();
-
-      const pixKey = pixKeyData?.value;
-      if (!pixKey) {
-        throw new BadRequestException('PIX key not configured. Please configure it in admin settings.');
-      }
-
-      const merchantName = merchantNameData?.value || 'Cine Vision';
-      const merchantCity = merchantCityData?.value || 'SAO PAULO';
-
-      // Validate PIX key
-      const validation = this.pixQRCodeService.validatePixKey(pixKey);
-      if (!validation.valid) {
-        throw new BadRequestException(`Invalid PIX key: ${validation.error}`);
-      }
-
-      // Generate unique transaction ID
-      const transactionId = `CIN${Date.now()}${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-      // Generate PIX QR Code
-      const qrCodeData = this.pixQRCodeService.generatePixQRCode({
-        pixKey,
-        merchantName,
-        merchantCity,
-        amount: purchase.amount_cents / 100, // Convert cents to reais
-        transactionId,
-        description: `${purchase.content.title}`,
-      });
-
-      // Generate QR Code image
-      let qrCodeImage: string | undefined;
-      try {
-        qrCodeImage = await this.pixQRCodeService.generateQRCodeImage(qrCodeData.qrCodeText);
-      } catch (error) {
-        this.logger.warn('Could not generate QR Code image:', error.message);
-      }
-
-      // Create payment record in Supabase
-      // Prepare user_id - convert to UUID or use a default for guest purchases
-      let paymentUserId = purchase.user_id;
-      if (!paymentUserId) {
-        // For guest purchases, create a temporary UUID to satisfy NOT NULL constraint
-        // This will be associated with the purchase via purchase_id in provider_meta
-        paymentUserId = '00000000-0000-0000-0000-000000000000';
-      }
-
-      const { data: payment, error: paymentError } = await this.supabaseService.client
-        .from('payments')
-        .insert({
-          user_id: paymentUserId,
-          movie_id: purchase.content_id,
-          amount: (purchase.amount_cents / 100).toString(),
-          currency: purchase.currency,
-          payment_method: 'pix',
-          payment_status: 'pending',
-          stripe_payment_intent_id: transactionId,
-          provider_meta: {
-            purchase_id: purchase.id,
-            transaction_id: transactionId,
-            pix_key: pixKey,
-            qr_code_emv: qrCodeData.qrCodeText,
-            qr_code_image: qrCodeImage,
-            amount_cents: purchase.amount_cents,
-            currency: purchase.currency,
-            payment_method: 'pix',
-          },
-        })
-        .select()
-        .single();
-
-      if (paymentError) {
-        this.logger.error('Error creating PIX payment record:', paymentError);
-        throw new BadRequestException('Failed to create PIX payment');
-      }
-
-      // Update purchase with payment_method
-      await this.supabaseService.client
-        .from('purchases')
-        .update({
-          payment_method: 'pix',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', purchase.id);
-
-      this.logger.log(`PIX payment created successfully: ${transactionId}`);
-
-      // Notify admin about new PIX payment pending verification
-      try {
-        const adminNotificationMessage =
-          `🔔 *Novo Pagamento PIX Pendente*\n\n` +
-          `💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n` +
-          `🎬 Conteúdo: ${purchase.content.title}\n` +
-          `📱 Transaction ID: \`${transactionId}\`\n` +
-          `🆔 Purchase ID: \`${purchase.id}\`\n\n` +
-          `⏰ *Aguardando verificação manual*\n\n` +
-          `💡 Acesse o painel admin para aprovar ou rejeitar o pagamento:\n` +
-          `GET /api/v1/admin/pix/pending\n` +
-          `POST /api/v1/admin/pix/${payment.id}/approve`;
-
-        // Import TelegramsEnhancedService dynamically to avoid circular dependency
-        const telegramsModule = await import('../telegrams/telegrams-enhanced.service');
-        if (telegramsModule && this.configService.get('ADMIN_TELEGRAM_CHAT_ID')) {
-          // Note: This is a simplified approach - in production, inject TelegramsEnhancedService properly
-          this.logger.log('Admin notification for new PIX payment logged (Telegram service integration needed)');
-        }
-
-        // Log to system for admin to check
-        await this.supabaseService.client
-          .from('system_logs')
-          .insert({
-            type: 'payment',
-            level: 'info',
-            message: `New PIX payment pending verification`,
-            meta: {
-              payment_id: payment.id,
-              purchase_id: purchase.id,
-              transaction_id: transactionId,
-              amount_cents: purchase.amount_cents,
-              content_title: purchase.content.title,
-              user_id: purchase.user_id,
-            },
-          });
-      } catch (notifyError) {
-        this.logger.warn('Failed to send admin notification for new PIX:', notifyError.message);
-        // Don't fail the payment creation if notification fails
-      }
-
-      return {
-        provider_payment_id: transactionId,
-        payment_method: 'pix',
-        qr_code_text: qrCodeData.qrCodeText,
-        qr_code_image: qrCodeImage,
-        copy_paste_code: qrCodeData.copyPasteCode,
-        amount_cents: purchase.amount_cents,
-        amount_brl: (purchase.amount_cents / 100).toFixed(2),
-        currency: purchase.currency,
-        purchase_id: purchase.id,
-        provider: 'pix',
-        payment_id: payment.id,
-        expires_in: 3600, // 1 hour
-        created_at: new Date(),
-        payment_instructions: 'Abra seu aplicativo bancário, escaneie o QR Code ou copie e cole o código PIX para efetuar o pagamento.',
-      };
-    } catch (error) {
-      this.logger.error(`Error creating PIX payment for purchase ${purchaseId}:`, error);
-      throw error;
-    }
+    // Stripe Checkout now supports both PIX and card payments
+    // The user will choose the payment method on the Stripe page
+    return this.createPayment({
+      purchase_id: purchaseId,
+      payment_method: PaymentMethod.PIX, // This is just for tracking preference
+    });
   }
 
   /**

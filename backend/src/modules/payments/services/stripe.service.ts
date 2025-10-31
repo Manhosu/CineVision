@@ -96,6 +96,7 @@ export class StripeService {
 
   /**
    * Create a checkout session for payment
+   * Supports both PIX and Card payments in Brazil
    */
   async createCheckoutSession(
     priceId: string,
@@ -106,6 +107,7 @@ export class StripeService {
     try {
       const session = await this.stripe.checkout.sessions.create({
         mode: 'payment',
+        payment_method_types: ['card', 'pix'], // Enable both card and PIX payments
         line_items: [
           {
             price: priceId,
@@ -120,7 +122,7 @@ export class StripeService {
         },
       });
 
-      this.logger.log(`Checkout session created: ${session.id}`);
+      this.logger.log(`Checkout session created: ${session.id} with payment methods: card, pix`);
       return session;
     } catch (error) {
       this.logger.error(`Failed to create checkout session: ${error.message}`);

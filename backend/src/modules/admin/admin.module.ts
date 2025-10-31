@@ -13,8 +13,6 @@ import { AdminImageUploadController } from './controllers/admin-image-upload.con
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
-import { AdminPixController } from './controllers/admin-pix.controller';
-import { AdminPixService } from './services/admin-pix.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
@@ -60,7 +58,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
-  AdminPixController,
   AdminUsersController,
   AdminRequestsPublicController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
@@ -73,7 +70,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
-  AdminPixController,
   AdminUsersController,
   AdminRequestsPublicController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
@@ -102,7 +98,6 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   MultipartUploadService,
   ContentLanguageService,
   BroadcastService,
-  AdminPixService,
 ] : [
   AdminContentSimpleService,
   AdminStatsService,
@@ -114,7 +109,6 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ContentLanguageSupabaseService,
   BroadcastService,
   TelegramsEnhancedService,
-  AdminPixService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];
