@@ -489,12 +489,6 @@ export default function BroadcastPage() {
                           </span>
                         </div>
                       )}
-                      {item.image_url && (
-                        <div className="flex items-center text-xs text-gray-600 mb-1">
-                          <PhotoIcon className="w-3 h-3 mr-1" />
-                          Com imagem
-                        </div>
-                      )}
                       {item.button_text && (
                         <div className="flex items-center text-xs text-gray-600">
                           <LinkIcon className="w-3 h-3 mr-1" />
