@@ -15,7 +15,16 @@ async function bootstrap() {
   });
 
   // Configure Express body parser with increased limits for video uploads
-  app.use(require('express').json({ limit: '50mb' }));
+  // IMPORTANT: Stripe webhook needs raw body for signature verification
+  app.use(
+    require('express').json({
+      limit: '50mb',
+      verify: (req: any, res: any, buf: Buffer) => {
+        // Store raw body for Stripe webhook signature verification
+        req.rawBody = buf;
+      },
+    }),
+  );
   app.use(require('express').urlencoded({ limit: '50mb', extended: true }));
 
   // Security - Configure helmet to allow frontend connections
