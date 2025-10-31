@@ -2005,8 +2005,28 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         });
       }
 
+      // Enviar mensagem de confirmação com botões inline
+      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+      const catalogUrl = tokenGenerated
+        ? dashboardUrl.replace('/dashboard', '/catalog')
+        : `${frontendUrl}/catalog`;
+
       await this.sendMessage(parseInt(chatId),
-        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Dashboard Auto-Login:**\n${dashboardUrl}\n\n📥 **Enviando conteúdo...**`,
+        `👇 Clique no botão abaixo para ver nosso catálogo:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🌐 Ver Catálogo Completo', url: catalogUrl }],
+              [{ text: '📱 Minhas Compras', url: dashboardUrl }],
+              [{ text: '❓ Ajuda', callback_data: 'help' }]
+            ]
+          }
+        }
+      );
+
+      await this.sendMessage(parseInt(chatId),
+        `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📥 **Enviando conteúdo...**`,
         { parse_mode: 'Markdown' }
       );
 

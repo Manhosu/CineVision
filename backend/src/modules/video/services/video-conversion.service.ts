@@ -48,7 +48,7 @@ export class VideoConversionService extends EventEmitter {
       },
     });
 
-    this.bucketName = this.configService.get('AWS_S3_BUCKET') || 'cinevision-filmes';
+    this.bucketName = this.configService.get('S3_VIDEO_BUCKET') || this.configService.get('AWS_S3_BUCKET') || 'cinevision-video';
 
     // Diretório temporário para conversões
     this.tempDir = path.join(process.cwd(), 'temp', 'conversions');

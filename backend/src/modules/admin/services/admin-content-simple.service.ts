@@ -22,7 +22,7 @@ export class AdminContentSimpleService {
         secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
       },
     });
-    this.bucketName = this.configService.get('AWS_S3_BUCKET') || 'cinevision-filmes';
+    this.bucketName = this.configService.get('S3_VIDEO_BUCKET') || this.configService.get('AWS_S3_BUCKET') || 'cinevision-video';
   }
 
   async getAllContent() {
