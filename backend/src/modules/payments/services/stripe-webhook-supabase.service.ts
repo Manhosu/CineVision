@@ -277,7 +277,6 @@ export class StripeWebhookSupabaseService {
                   reason: 'missing_telegram_chat_id',
                 },
               });
-          }
         }
       } catch (error) {
         this.logger.error(`Failed to deliver content via Telegram for purchase ${purchaseId}: ${error.message}`);
