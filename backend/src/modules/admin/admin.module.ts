@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminContentController } from './controllers/admin-content.controller';
@@ -146,7 +146,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     JwtModule.register({}),
     ConfigModule,
     SupabaseModule,
-    AuthModule,
+    forwardRef(() => AuthModule),
     // RequestsModule, // Temporarily disabled - causing startup issues
   ],
   controllers: conditionalControllers,
