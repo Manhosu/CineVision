@@ -102,6 +102,8 @@ export class PaymentsSupabaseService {
           purchase_token: purchase.purchase_token,
           content_id: content.id,
           user_id: purchase.user_id || 'anonymous',
+          telegram_chat_id: purchase.provider_meta?.telegram_chat_id || '',
+          telegram_user_id: purchase.provider_meta?.telegram_user_id || '',
         },
       );
 
@@ -397,6 +399,47 @@ export class PaymentsSupabaseService {
 
       this.logger.log(`PIX payment created successfully: ${transactionId}`);
 
+      // Notify admin about new PIX payment pending verification
+      try {
+        const adminNotificationMessage =
+          `🔔 *Novo Pagamento PIX Pendente*\n\n` +
+          `💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n` +
+          `🎬 Conteúdo: ${purchase.content.title}\n` +
+          `📱 Transaction ID: \`${transactionId}\`\n` +
+          `🆔 Purchase ID: \`${purchase.id}\`\n\n` +
+          `⏰ *Aguardando verificação manual*\n\n` +
+          `💡 Acesse o painel admin para aprovar ou rejeitar o pagamento:\n` +
+          `GET /api/v1/admin/pix/pending\n` +
+          `POST /api/v1/admin/pix/${payment.id}/approve`;
+
+        // Import TelegramsEnhancedService dynamically to avoid circular dependency
+        const telegramsModule = await import('../telegrams/telegrams-enhanced.service');
+        if (telegramsModule && this.configService.get('ADMIN_TELEGRAM_CHAT_ID')) {
+          // Note: This is a simplified approach - in production, inject TelegramsEnhancedService properly
+          this.logger.log('Admin notification for new PIX payment logged (Telegram service integration needed)');
+        }
+
+        // Log to system for admin to check
+        await this.supabaseService.client
+          .from('system_logs')
+          .insert({
+            type: 'payment',
+            level: 'info',
+            message: `New PIX payment pending verification`,
+            meta: {
+              payment_id: payment.id,
+              purchase_id: purchase.id,
+              transaction_id: transactionId,
+              amount_cents: purchase.amount_cents,
+              content_title: purchase.content.title,
+              user_id: purchase.user_id,
+            },
+          });
+      } catch (notifyError) {
+        this.logger.warn('Failed to send admin notification for new PIX:', notifyError.message);
+        // Don't fail the payment creation if notification fails
+      }
+
       return {
         provider_payment_id: transactionId,
         payment_method: 'pix',
@@ -408,6 +451,7 @@ export class PaymentsSupabaseService {
         currency: purchase.currency,
         purchase_id: purchase.id,
         provider: 'pix',
+        payment_id: payment.id,
         expires_in: 3600, // 1 hour
         created_at: new Date(),
         payment_instructions: 'Abra seu aplicativo bancário, escaneie o QR Code ou copie e cole o código PIX para efetuar o pagamento.',

@@ -165,10 +165,62 @@ export class StripeWebhookSupabaseService {
             this.logger.log(`Content delivery initiated for purchase ${purchase.id} to chat ${user.telegram_chat_id}`);
           } else {
             this.logger.warn(`No telegram_chat_id found for user ${purchaseWithContent.user_id}`);
+
+            // Notify admin about missing telegram_chat_id
+            await this.telegramsService['notifyDeliveryFailure'](
+              purchaseWithContent,
+              new Error('No telegram_chat_id found for user')
+            );
+
+            // Log to failed_deliveries for manual retry
+            await this.supabase
+              .from('system_logs')
+              .insert({
+                type: 'delivery_failed',
+                level: 'error',
+                message: `No telegram_chat_id found for user ${purchaseWithContent.user_id}`,
+                meta: {
+                  purchase_id: purchase.id,
+                  user_id: purchaseWithContent.user_id,
+                  content_id: purchaseWithContent.content_id,
+                  reason: 'missing_telegram_chat_id',
+                },
+              });
           }
         }
       } catch (error) {
         this.logger.error(`Failed to deliver content via Telegram: ${error.message}`);
+
+        // Notify admin about delivery failure
+        try {
+          const { data: purchaseData } = await this.supabase
+            .from('purchases')
+            .select('*, content(*)')
+            .eq('id', purchase.id)
+            .single();
+
+          if (purchaseData) {
+            await this.telegramsService['notifyDeliveryFailure'](purchaseData, error);
+          }
+
+          // Log to failed_deliveries for manual retry
+          await this.supabase
+            .from('system_logs')
+            .insert({
+              type: 'delivery_failed',
+              level: 'error',
+              message: `Content delivery failed: ${error.message}`,
+              meta: {
+                purchase_id: purchase.id,
+                error: error.message,
+                stack: error.stack,
+                reason: 'delivery_exception',
+              },
+            });
+        } catch (notifyError) {
+          this.logger.error(`Failed to send admin notification: ${notifyError.message}`);
+        }
+
         // Don't fail the webhook if content delivery fails
       }
     } catch (error) {

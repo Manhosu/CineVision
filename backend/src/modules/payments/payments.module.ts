@@ -9,6 +9,7 @@ import { StripeWebhookService } from './services/stripe-webhook.service';
 import { StripeWebhookSupabaseService } from './services/stripe-webhook-supabase.service';
 import { StripeTestController } from './controllers/stripe-test.controller';
 import { StripeWebhookController } from './controllers/stripe-webhook.controller';
+import { TestPaymentController } from './test-payment.controller';
 import { Payment } from './entities/payment.entity';
 import { Purchase } from '../purchases/entities/purchase.entity';
 import { AdminModule } from '../admin/admin.module';
@@ -17,7 +18,7 @@ import { SupabaseModule } from '../../config/supabase.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 // Always load PaymentsController and required services since Telegram bot needs them
-const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController];
+const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController, TestPaymentController];
 
 // When TypeORM is disabled, use PaymentsSupabaseService instead of PaymentsService
 const conditionalProviders = isTypeOrmEnabled()

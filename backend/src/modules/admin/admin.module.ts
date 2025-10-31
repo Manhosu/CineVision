@@ -13,6 +13,8 @@ import { AdminImageUploadController } from './controllers/admin-image-upload.con
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
+import { AdminPixController } from './controllers/admin-pix.controller';
+import { AdminPixService } from './services/admin-pix.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
@@ -41,6 +43,7 @@ import { StripeService } from '../payments/services/stripe.service';
 import { VideoUploadService } from '../video/video-upload.service';
 import { BotNotificationService } from '../telegrams/services/bot-notification.service';
 import { TelegramsService } from '../telegrams/telegrams.service';
+import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 import { CDNService } from '../cdn/services/cdn.service';
 import { QueueService } from '../queue/services/queue.service';
 import { TranscodeService } from '../content/services/transcode.service';
@@ -56,6 +59,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
+  AdminPixController,
   AdminUsersController,
   AdminRequestsPublicController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
@@ -68,6 +72,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
+  AdminPixController,
   AdminUsersController,
   AdminRequestsPublicController,
   // AdminRequestsController, // Temporarily disabled - requires RequestsModule
@@ -88,6 +93,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   VideoUploadService,
   BotNotificationService,
   TelegramsService,
+  TelegramsEnhancedService,
   CDNService,
   QueueService,
   TranscodeService,
@@ -95,6 +101,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   MultipartUploadService,
   ContentLanguageService,
   BroadcastService,
+  AdminPixService,
 ] : [
   AdminContentSimpleService,
   AdminStatsService,
@@ -105,6 +112,8 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   MultipartUploadService,
   ContentLanguageSupabaseService,
   BroadcastService,
+  TelegramsEnhancedService,
+  AdminPixService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];

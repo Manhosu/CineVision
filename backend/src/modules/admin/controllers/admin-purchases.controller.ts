@@ -4,12 +4,20 @@ import {
   Query,
   Param,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { AdminPurchasesSimpleService } from '../services/admin-purchases-simple.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../users/entities/user.entity';
 
 @ApiTags('Admin Purchases')
+@ApiBearerAuth()
 @Controller('admin/purchases')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 export class AdminPurchasesController {
   private readonly logger = new Logger(AdminPurchasesController.name);
 
@@ -17,8 +25,8 @@ export class AdminPurchasesController {
 
   @Get('orders')
   @ApiOperation({
-    summary: 'List all purchase orders (Admin endpoint - no auth required)',
-    description: 'Retrieve paginated list of purchase orders with user and content information'
+    summary: 'List all purchase orders (Admin only)',
+    description: 'Retrieve paginated list of purchase orders with user and content information. Requires admin authentication.'
   })
   @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)' })
@@ -38,8 +46,8 @@ export class AdminPurchasesController {
 
   @Get('orders/:id')
   @ApiOperation({
-    summary: 'Get order by ID (Admin endpoint - no auth required)',
-    description: 'Retrieve detailed information about a specific order'
+    summary: 'Get order by ID (Admin only)',
+    description: 'Retrieve detailed information about a specific order. Requires admin authentication.'
   })
   @ApiParam({ name: 'id', description: 'Order ID' })
   @ApiResponse({ status: 200, description: 'Order retrieved successfully' })
@@ -52,8 +60,8 @@ export class AdminPurchasesController {
 
   @Get('stats')
   @ApiOperation({
-    summary: 'Get purchase statistics (Admin endpoint - no auth required)',
-    description: 'Retrieve overall statistics about purchases and revenue'
+    summary: 'Get purchase statistics (Admin only)',
+    description: 'Retrieve overall statistics about purchases and revenue. Requires admin authentication.'
   })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getOrderStats() {

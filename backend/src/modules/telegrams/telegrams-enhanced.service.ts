@@ -221,6 +221,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
         currency: content.currency || 'BRL',
         status: 'pending',
         preferred_delivery: 'telegram',
+        provider_meta: {
+          telegram_chat_id: dto.chat_id,
+          telegram_user_id: dto.telegram_user_id,
+        },
       })
       .select()
       .single();
@@ -1293,8 +1297,43 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
           this.logger.error(`Error decoding request payload: ${error.message}`);
           await this.sendMessage(chatId, '❌ Erro ao processar solicitação. Por favor, use /solicitar para fazer seu pedido.');
         }
+      }
+      // Handle payment success redirect from Stripe
+      else if (param.startsWith('payment_success_')) {
+        const purchaseId = param.replace('payment_success_', '');
+        this.logger.log(`✅ Payment success redirect for purchase ${purchaseId}`);
+
+        await this.sendMessage(chatId,
+          '✅ *Pagamento Confirmado!*\n\n' +
+          '🎬 Seu conteúdo está sendo preparado...\n' +
+          'Você receberá os vídeos em instantes!\n\n' +
+          '💡 O processamento pode demorar alguns segundos.',
+          { parse_mode: 'Markdown' }
+        );
+        return;
+      }
+      // Handle payment cancellation redirect from Stripe
+      else if (param.startsWith('payment_cancel_')) {
+        const purchaseId = param.replace('payment_cancel_', '');
+        this.logger.log(`❌ Payment cancelled for purchase ${purchaseId}`);
+
+        await this.sendMessage(chatId,
+          '❌ *Pagamento Cancelado*\n\n' +
+          'Não se preocupe! Você pode tentar novamente quando quiser.\n\n' +
+          'Use /catalogo para ver os filmes disponíveis ou clique no botão abaixo:',
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🎬 Ver Catálogo', callback_data: 'catalog' }],
+                [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
+              ],
+            },
+          }
+        );
+        return;
       } else {
-        this.logger.warn(`Parameter "${param}" does not start with "buy_" or "request_"`);
+        this.logger.warn(`Parameter "${param}" does not start with "buy_", "request_", "payment_success_" or "payment_cancel_"`);
       }
     } else {
       this.logger.log('No deep link parameter - showing welcome message');
@@ -2330,6 +2369,82 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       this.logger.error('Error generating permanent token:', error);
       return '';
     }
+  }
+
+  // ==================== ADMIN NOTIFICATIONS ====================
+
+  /**
+   * Send notification to admin Telegram chat
+   * Used for critical system alerts like failed content deliveries
+   */
+  async sendAdminNotification(message: string, additionalData?: any): Promise<void> {
+    try {
+      // Get admin telegram chat ID from environment or admin_settings
+      const adminChatId = this.configService.get<string>('ADMIN_TELEGRAM_CHAT_ID');
+
+      if (!adminChatId) {
+        this.logger.warn('ADMIN_TELEGRAM_CHAT_ID not configured - cannot send admin notification');
+        this.logger.warn('Admin notification message:', message);
+        if (additionalData) {
+          this.logger.warn('Additional data:', JSON.stringify(additionalData, null, 2));
+        }
+        return;
+      }
+
+      // Format message with timestamp
+      const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      let formattedMessage = `🚨 *ADMIN ALERT*\n\n`;
+      formattedMessage += `⏰ ${timestamp}\n\n`;
+      formattedMessage += message;
+
+      if (additionalData) {
+        formattedMessage += `\n\n📊 *Dados Adicionais:*\n`;
+        formattedMessage += '```\n';
+        formattedMessage += JSON.stringify(additionalData, null, 2);
+        formattedMessage += '\n```';
+      }
+
+      // Send message to admin
+      await this.sendMessage(parseInt(adminChatId), formattedMessage, {
+        parse_mode: 'Markdown',
+      });
+
+      this.logger.log(`Admin notification sent to chat ${adminChatId}`);
+    } catch (error) {
+      this.logger.error('Failed to send admin notification:', error.message);
+      // Don't throw - notification failure shouldn't break main flow
+    }
+  }
+
+  /**
+   * Send notification about failed content delivery
+   */
+  async notifyDeliveryFailure(purchase: any, error: any): Promise<void> {
+    const errorMessage = error?.message || 'Unknown error';
+    const errorStack = error?.stack || 'No stack trace';
+
+    const message = `❌ *Falha na Entrega de Conteúdo*\n\n` +
+      `🆔 Purchase ID: \`${purchase.id}\`\n` +
+      `👤 User ID: \`${purchase.user_id || 'anonymous'}\`\n` +
+      `🎬 Content ID: \`${purchase.content_id}\`\n` +
+      `💬 Telegram Chat ID: \`${purchase.provider_meta?.telegram_chat_id || 'N/A'}\`\n\n` +
+      `⚠️ *Erro:* ${errorMessage}\n\n` +
+      `📋 *Ação Necessária:*\n` +
+      `1. Verificar logs do sistema\n` +
+      `2. Verificar se o conteúdo existe no S3\n` +
+      `3. Tentar reenvio manual se necessário`;
+
+    const additionalData = {
+      purchase_id: purchase.id,
+      user_id: purchase.user_id,
+      content_id: purchase.content_id,
+      telegram_chat_id: purchase.provider_meta?.telegram_chat_id,
+      error: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString(),
+    };
+
+    await this.sendAdminNotification(message, additionalData);
   }
 
 }
