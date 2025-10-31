@@ -56,8 +56,10 @@ export default function AdminPurchasesPage() {
         ...(statusFilter !== 'all' && { status: statusFilter })
       });
 
-      // Get token from localStorage
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      // Get token from localStorage (access_token or auth_token for compatibility)
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+        : null;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
@@ -96,8 +98,10 @@ export default function AdminPurchasesPage() {
 
   const fetchStats = async () => {
     try {
-      // Get token from localStorage
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      // Get token from localStorage (access_token or auth_token for compatibility)
+      const token = typeof window !== 'undefined'
+        ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+        : null;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };

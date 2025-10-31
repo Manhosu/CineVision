@@ -27,7 +27,8 @@ export default function AdminLayout({
     const checkAuth = () => {
       try {
         // Verificar autenticação via localStorage (sistema do backend)
-        const token = localStorage.getItem('token');
+        // Suporta tanto 'access_token' quanto 'auth_token' para compatibilidade
+        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
         const userStr = localStorage.getItem('user');
 
         if (!token || !userStr) {
@@ -38,7 +39,25 @@ export default function AdminLayout({
           return;
         }
 
-        // Autenticado (assumindo que apenas admins têm acesso ao login)
+        // Verificar se é admin
+        try {
+          const user = JSON.parse(userStr);
+          if (user.role !== 'admin') {
+            // Não é admin, redirecionar para login
+            setIsChecking(false);
+            setIsAuthenticated(false);
+            router.replace('/admin/login');
+            return;
+          }
+        } catch (parseError) {
+          console.error('Erro ao parsear usuário:', parseError);
+          setIsChecking(false);
+          setIsAuthenticated(false);
+          router.replace('/admin/login');
+          return;
+        }
+
+        // Autenticado como admin
         setIsAuthenticated(true);
         setIsChecking(false);
       } catch (error) {
