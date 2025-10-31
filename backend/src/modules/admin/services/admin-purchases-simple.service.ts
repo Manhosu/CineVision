@@ -64,7 +64,7 @@ export class AdminPurchasesSimpleService {
         amount_cents: purchase.amount_cents,
         currency: purchase.currency || 'BRL',
         status: purchase.status,
-        payment_method: purchase.preferred_delivery || 'pix',
+        payment_method: purchase.payment_method || 'unknown',
         created_at: purchase.created_at,
         updated_at: purchase.updated_at,
         // Include nested user and content data
@@ -132,7 +132,7 @@ export class AdminPurchasesSimpleService {
         amount_cents: purchase.amount_cents,
         currency: purchase.currency || 'BRL',
         status: purchase.status,
-        payment_method: purchase.preferred_delivery || 'pix',
+        payment_method: purchase.payment_method || 'unknown',
         payment_details: purchase.provider_meta || {},
         created_at: purchase.created_at,
         updated_at: purchase.updated_at,

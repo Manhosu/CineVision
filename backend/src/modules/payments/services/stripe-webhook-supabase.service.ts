@@ -83,6 +83,7 @@ export class StripeWebhookSupabaseService {
         .update({
           status: 'paid',
           payment_provider_id: paymentIntent.id,
+          payment_method: 'card', // Stripe PaymentIntent is always card payment
           provider_meta: metadata,
           access_expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1 year from now
           updated_at: new Date().toISOString(),

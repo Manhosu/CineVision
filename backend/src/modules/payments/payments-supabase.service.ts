@@ -126,6 +126,15 @@ export class PaymentsSupabaseService {
         this.logger.error('Error creating payment record:', paymentError);
       }
 
+      // Update purchase with payment_method
+      await this.supabaseService.client
+        .from('purchases')
+        .update({
+          payment_method: dto.payment_method || 'card',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id);
+
       this.logger.log(`Payment created successfully: ${checkoutSession.id}`);
 
       return {
@@ -374,6 +383,15 @@ export class PaymentsSupabaseService {
         this.logger.error('Error creating PIX payment record:', paymentError);
         throw new BadRequestException('Failed to create PIX payment');
       }
+
+      // Update purchase with payment_method
+      await this.supabaseService.client
+        .from('purchases')
+        .update({
+          payment_method: 'pix',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', purchase.id);
 
       this.logger.log(`PIX payment created successfully: ${transactionId}`);
 
