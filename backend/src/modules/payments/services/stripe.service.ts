@@ -107,7 +107,7 @@ export class StripeService {
     try {
       const session = await this.stripe.checkout.sessions.create({
         mode: 'payment',
-        payment_method_types: ['card', 'pix'], // Enable both card and PIX payments
+        payment_method_types: ['card'], // Card only - PIX uses Payment Intent API
         line_items: [
           {
             price: priceId,
@@ -122,7 +122,7 @@ export class StripeService {
         },
       });
 
-      this.logger.log(`Checkout session created: ${session.id} with payment methods: card, pix`);
+      this.logger.log(`Checkout session created: ${session.id} with payment method: card`);
       return session;
     } catch (error) {
       this.logger.error(`Failed to create checkout session: ${error.message}`);
