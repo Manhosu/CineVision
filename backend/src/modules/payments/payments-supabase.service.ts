@@ -10,6 +10,7 @@ import {
   PaymentStatusDto,
   PaymentStatusResponseDto
 } from './dto';
+import axios from 'axios';
 
 @Injectable()
 export class PaymentsSupabaseService {
@@ -277,18 +278,90 @@ export class PaymentsSupabaseService {
 
   /**
    * Create PIX payment with Stripe
-   * DEPRECATED: Use createPayment() instead - Stripe now supports both PIX and card
-   * This method now redirects to Stripe Checkout which supports both payment methods
+   * Generates PIX QR Code for direct payment in Telegram
    */
   async createPixPayment(purchaseId: string): Promise<any> {
-    this.logger.log(`PIX payment request for purchase ${purchaseId} - redirecting to Stripe Checkout`);
+    this.logger.log(`Creating PIX payment with QR code for purchase ${purchaseId}`);
 
-    // Stripe Checkout now supports both PIX and card payments
-    // The user will choose the payment method on the Stripe page
-    return this.createPayment({
-      purchase_id: purchaseId,
-      payment_method: PaymentMethod.PIX, // This is just for tracking preference
-    });
+    try {
+      // Get purchase details
+      const { data: purchase, error: purchaseError } = await this.supabaseService.client
+        .from('purchases')
+        .select('*, content(*)')
+        .eq('id', purchaseId)
+        .single();
+
+      if (purchaseError || !purchase) {
+        throw new NotFoundException('Purchase not found');
+      }
+
+      if (purchase.status === 'paid') {
+        throw new BadRequestException('Purchase is already paid');
+      }
+
+      const content = purchase.content;
+      const amountCents = content.price_cents;
+
+      this.logger.log(`Creating PIX payment intent for ${content.title} - R$ ${amountCents / 100}`);
+
+      // Create PIX Payment Intent with Stripe
+      const pixResult = await this.stripeService.createPixPaymentIntent(
+        amountCents,
+        {
+          purchase_id: purchaseId,
+          content_id: content.id,
+          content_title: content.title,
+        }
+      );
+
+      if (!pixResult.qrCodeData || !pixResult.qrCodeImageUrl) {
+        throw new BadRequestException('Failed to generate PIX QR code from Stripe');
+      }
+
+      // Download QR code image and convert to base64
+      let qrCodeBase64: string | null = null;
+      try {
+        const imageResponse = await axios.get(pixResult.qrCodeImageUrl, {
+          responseType: 'arraybuffer',
+        });
+        qrCodeBase64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
+        this.logger.log('QR code image downloaded and converted to base64');
+      } catch (imageError) {
+        this.logger.warn(`Failed to download QR code image: ${imageError.message}`);
+      }
+
+      // Create payment record in database
+      const { data: payment } = await this.supabaseService.client
+        .from('payments')
+        .insert({
+          purchase_id: purchaseId,
+          amount_cents: amountCents,
+          payment_method: 'pix',
+          provider: 'stripe',
+          provider_payment_id: pixResult.paymentIntent.id,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      this.logger.log(`PIX payment record created: ${payment.id}`);
+
+      // Return data in format expected by Telegram bot
+      return {
+        provider_payment_id: pixResult.paymentIntent.id,
+        payment_method: 'pix',
+        qr_code_text: pixResult.qrCodeData, // EMV QR code string
+        qr_code_image: qrCodeBase64, // Base64 image for Telegram
+        copy_paste_code: pixResult.qrCodeData, // Same as qr_code_text, for PIX copy-paste
+        amount_cents: amountCents,
+        amount_brl: (amountCents / 100).toFixed(2),
+        expires_in: 3600, // 1 hour
+        payment_instructions: 'Escaneie o QR Code ou use o código PIX Copia e Cola para pagar.',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create PIX payment: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   /**

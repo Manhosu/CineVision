@@ -278,6 +278,67 @@ export class StripeService {
   }
 
   /**
+   * Create a PIX Payment Intent with QR Code
+   * Returns the payment intent with PIX QR code data
+   */
+  async createPixPaymentIntent(
+    amount: number,
+    metadata?: Record<string, string>,
+  ): Promise<{
+    paymentIntent: Stripe.PaymentIntent;
+    qrCodeData: string | null;
+    qrCodeImageUrl: string | null;
+  }> {
+    try {
+      this.logger.log(`Creating PIX payment intent for amount: ${amount} cents`);
+
+      const paymentIntent = await this.stripe.paymentIntents.create({
+        amount,
+        currency: 'brl',
+        payment_method_types: ['pix'],
+        payment_method_options: {
+          pix: {
+            expires_after_seconds: 3600, // 1 hour expiration
+          },
+        },
+        metadata: {
+          ...metadata,
+          source: 'cine-vision',
+          payment_method: 'pix',
+        },
+      });
+
+      this.logger.log(`PIX payment intent created: ${paymentIntent.id}`);
+
+      // Confirm the payment intent to generate QR code
+      const confirmedIntent = await this.stripe.paymentIntents.confirm(paymentIntent.id);
+
+      // Extract QR code data from next_action
+      let qrCodeData: string | null = null;
+      let qrCodeImageUrl: string | null = null;
+
+      if (confirmedIntent.next_action?.type === 'pix_display_qr_code') {
+        const pixData = confirmedIntent.next_action.pix_display_qr_code;
+        qrCodeData = pixData.data || null;
+        qrCodeImageUrl = pixData.image_url_png || pixData.image_url_svg || null;
+
+        this.logger.log(`PIX QR code generated for payment intent: ${paymentIntent.id}`);
+      } else {
+        this.logger.warn(`PIX payment intent confirmed but no QR code in next_action: ${paymentIntent.id}`);
+      }
+
+      return {
+        paymentIntent: confirmedIntent,
+        qrCodeData,
+        qrCodeImageUrl,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create PIX payment intent: ${error.message}`);
+      throw new BadRequestException(`Failed to create PIX payment: ${error.message}`);
+    }
+  }
+
+  /**
    * Get checkout session details
    */
   async getCheckoutSession(sessionId: string): Promise<Stripe.Checkout.Session> {
