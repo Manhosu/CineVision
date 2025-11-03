@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../../config/supabase.service';
 import { MercadoPagoService } from './mercado-pago.service';
+import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
 
 @Injectable()
 export class MercadoPagoWebhookService {
@@ -11,6 +12,8 @@ export class MercadoPagoWebhookService {
     private readonly configService: ConfigService,
     private readonly supabaseService: SupabaseService,
     private readonly mercadoPagoService: MercadoPagoService,
+    @Inject(forwardRef(() => TelegramsEnhancedService))
+    private readonly telegramsService: TelegramsEnhancedService,
   ) {
     this.logger.log('MercadoPagoWebhookService initialized');
   }
@@ -118,7 +121,44 @@ export class MercadoPagoWebhookService {
 
       this.logger.log(`✅ Payment ${dbPayment.id} successfully processed - Purchase ${dbPayment.purchase_id} is now PAID`);
 
-      // The Telegram bot will automatically deliver the content when it detects the purchase is paid
+      // Deliver content to user via Telegram
+      try {
+        this.logger.log(`Delivering content for purchase ${dbPayment.purchase_id} to user...`);
+
+        // Get purchase with content details for delivery
+        const { data: fullPurchase, error: purchaseError } = await this.supabaseService.client
+          .from('purchases')
+          .select('*, content(*)')
+          .eq('id', dbPayment.purchase_id)
+          .single();
+
+        if (purchaseError || !fullPurchase) {
+          throw new Error(`Failed to fetch purchase details: ${purchaseError?.message}`);
+        }
+
+        // Call Telegram service to deliver content
+        await this.telegramsService.deliverContentAfterPayment(fullPurchase);
+
+        this.logger.log(`✅ Content successfully delivered for purchase ${dbPayment.purchase_id}`);
+      } catch (deliveryError) {
+        this.logger.error(`❌ Failed to deliver content for purchase ${dbPayment.purchase_id}: ${deliveryError.message}`);
+
+        // Log to system_logs for manual intervention
+        await this.supabaseService.client.from('system_logs').insert({
+          type: 'delivery_failed',
+          level: 'error',
+          message: `Failed to deliver content for purchase ${dbPayment.purchase_id} after payment approval: ${deliveryError.message}`,
+          metadata: {
+            purchase_id: dbPayment.purchase_id,
+            payment_id: dbPayment.id,
+            error: deliveryError.message,
+          },
+          created_at: new Date().toISOString(),
+        });
+
+        // Don't throw - payment is already processed, we just failed to deliver
+        // Admin can manually trigger delivery later using system_logs
+      }
     } catch (error) {
       this.logger.error(`Error handling approved payment: ${error.message}`, error.stack);
       throw error;
