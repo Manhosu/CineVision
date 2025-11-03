@@ -2050,7 +2050,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     );
   }
 
-  async deliverContentAfterPayment(purchase: any): Promise<void> {
+  /**
+   * PUBLIC API: Deliver content to user after successful payment
+   * Called by webhook services (Stripe, Mercado Pago) after payment confirmation
+   * @param purchase - Purchase object with content_id and provider_meta.telegram_chat_id
+   */
+  public async deliverContentAfterPayment(purchase: any): Promise<void> {
     try {
       const chatId = purchase.provider_meta?.telegram_chat_id;
       if (!chatId) {

@@ -26,11 +26,12 @@ export class MercadoPagoWebhookController {
     this.logger.debug(`Webhook body: ${JSON.stringify(body)}`);
 
     try {
-      // Verify signature (optional but recommended)
-      // if (signature && !this.webhookService.verifySignature(signature, JSON.stringify(body))) {
-      //   this.logger.warn('Invalid webhook signature');
-      //   return { received: false };
-      // }
+      // Verify signature (IMPORTANT for production security)
+      if (!this.webhookService.verifySignature(signature, requestId, body)) {
+        this.logger.warn('❌ Invalid webhook signature - rejecting request');
+        this.logger.warn('This could be a fraudulent webhook attempt');
+        return { received: false };
+      }
 
       // Process webhook asynchronously
       // Don't await - return 200 immediately to Mercado Pago

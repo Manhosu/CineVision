@@ -55,6 +55,17 @@ export class MercadoPagoWebhookService {
           return;
         }
 
+        // IDEMPOTENCY CHECK: If payment already processed, skip
+        if (dbPayment.status === 'paid' && payment.status === 'approved') {
+          this.logger.log(`Payment ${paymentId} already processed as paid - skipping (idempotency)`);
+          return;
+        }
+
+        if (dbPayment.status === 'failed' && (payment.status === 'cancelled' || payment.status === 'rejected')) {
+          this.logger.log(`Payment ${paymentId} already processed as failed - skipping (idempotency)`);
+          return;
+        }
+
         // Check if payment is approved
         if (payment.status === 'approved') {
           await this.handlePaymentApproved(dbPayment, payment);
@@ -172,15 +183,71 @@ export class MercadoPagoWebhookService {
   /**
    * Verify webhook signature (recommended for production)
    * Documentation: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/additional-info
+   *
+   * Mercado Pago sends x-signature header with format: "ts=<timestamp>,v1=<signature>"
+   * Signature is HMAC-SHA256 of: id + request-id + timestamp + body
    */
-  verifySignature(signature: string, body: string): boolean {
+  verifySignature(xSignature: string, xRequestId: string, body: any): boolean {
     try {
-      // TODO: Implement signature verification
-      // For now, we'll accept all webhooks
-      // In production, you should verify the x-signature header
-      return true;
+      const webhookSecret = this.configService.get('MERCADO_PAGO_WEBHOOK_SECRET');
+
+      // If no webhook secret configured, log warning but allow (for development)
+      if (!webhookSecret) {
+        this.logger.warn('MERCADO_PAGO_WEBHOOK_SECRET not configured - skipping signature validation');
+        this.logger.warn('⚠️ THIS IS INSECURE! Configure webhook secret for production');
+        return true;
+      }
+
+      if (!xSignature || !xRequestId) {
+        this.logger.error('Missing x-signature or x-request-id headers');
+        return false;
+      }
+
+      // Parse x-signature header: "ts=1234567890,v1=abc123..."
+      const parts = xSignature.split(',');
+      let timestamp: string | null = null;
+      let hash: string | null = null;
+
+      for (const part of parts) {
+        const [key, value] = part.split('=');
+        if (key === 'ts') {
+          timestamp = value;
+        } else if (key === 'v1') {
+          hash = value;
+        }
+      }
+
+      if (!timestamp || !hash) {
+        this.logger.error('Invalid x-signature format');
+        return false;
+      }
+
+      // Build manifest: id + request_id + ts + body
+      // Extract payment ID from body
+      const paymentId = body?.data?.id || body?.id || '';
+      const manifest = `id:${paymentId};request-id:${xRequestId};ts:${timestamp};`;
+
+      // Calculate HMAC-SHA256
+      const crypto = require('crypto');
+      const hmac = crypto.createHmac('sha256', webhookSecret);
+      hmac.update(manifest);
+      const calculatedHash = hmac.digest('hex');
+
+      // Compare signatures
+      const isValid = calculatedHash === hash;
+
+      if (!isValid) {
+        this.logger.error(`Signature verification failed`);
+        this.logger.error(`Expected: ${calculatedHash}`);
+        this.logger.error(`Received: ${hash}`);
+        this.logger.error(`Manifest: ${manifest}`);
+      } else {
+        this.logger.log('✅ Webhook signature verified successfully');
+      }
+
+      return isValid;
     } catch (error) {
-      this.logger.error(`Signature verification failed: ${error.message}`);
+      this.logger.error(`Signature verification error: ${error.message}`);
       return false;
     }
   }

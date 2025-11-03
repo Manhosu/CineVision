@@ -77,6 +77,13 @@ export class StripeWebhookSupabaseService {
         return;
       }
 
+      // IDEMPOTENCY CHECK: If purchase already paid, skip processing
+      if (purchase.status === 'paid') {
+        this.logger.log(`Purchase ${purchase.id} already paid - skipping (idempotency)`);
+        this.logger.log(`This is likely a duplicate webhook from Stripe`);
+        return;
+      }
+
       // Detect payment method (card or PIX)
       const paymentMethodType = paymentIntent.payment_method_types?.[0] || 'card';
       const isPix = paymentMethodType === 'pix';
