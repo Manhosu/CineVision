@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, Inject, Opt
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../config/supabase.service';
 import { StripeService } from './services/stripe.service';
+import { MercadoPagoService } from './services/mercado-pago.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
 import { PaymentMethod } from './providers/interfaces';
 import {
@@ -19,6 +20,7 @@ export class PaymentsSupabaseService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
+    private readonly mercadoPagoService: MercadoPagoService,
     private readonly pixQRCodeService: PixQRCodeService,
     private readonly configService: ConfigService,
   ) {
@@ -277,11 +279,11 @@ export class PaymentsSupabaseService {
   }
 
   /**
-   * Create PIX payment with Stripe
+   * Create PIX payment with Mercado Pago
    * Generates PIX QR Code for direct payment in Telegram
    */
   async createPixPayment(purchaseId: string): Promise<any> {
-    this.logger.log(`Creating PIX payment with QR code for purchase ${purchaseId}`);
+    this.logger.log(`Creating PIX payment with Mercado Pago QR code for purchase ${purchaseId}`);
 
     try {
       // Get purchase details
@@ -302,33 +304,21 @@ export class PaymentsSupabaseService {
       const content = purchase.content;
       const amountCents = content.price_cents;
 
-      this.logger.log(`Creating PIX payment intent for ${content.title} - R$ ${amountCents / 100}`);
+      this.logger.log(`Creating PIX payment with Mercado Pago for ${content.title} - R$ ${amountCents / 100}`);
 
-      // Create PIX Payment Intent with Stripe
-      const pixResult = await this.stripeService.createPixPaymentIntent(
-        amountCents,
-        {
+      // Create PIX Payment with Mercado Pago
+      const pixResult = await this.mercadoPagoService.createPixPayment({
+        amount: amountCents,
+        description: `CineVision - ${content.title}`,
+        email: purchase.user_email || 'cliente@cinevision.com',
+        metadata: {
           purchase_id: purchaseId,
           content_id: content.id,
           content_title: content.title,
-        }
-      );
+        },
+      });
 
-      if (!pixResult.qrCodeData || !pixResult.qrCodeImageUrl) {
-        throw new BadRequestException('Failed to generate PIX QR code from Stripe');
-      }
-
-      // Download QR code image and convert to base64
-      let qrCodeBase64: string | null = null;
-      try {
-        const imageResponse = await axios.get(pixResult.qrCodeImageUrl, {
-          responseType: 'arraybuffer',
-        });
-        qrCodeBase64 = Buffer.from(imageResponse.data, 'binary').toString('base64');
-        this.logger.log('QR code image downloaded and converted to base64');
-      } catch (imageError) {
-        this.logger.warn(`Failed to download QR code image: ${imageError.message}`);
-      }
+      this.logger.log(`Mercado Pago PIX payment created: ${pixResult.paymentId}`);
 
       // Create payment record in database
       const { data: payment } = await this.supabaseService.client
@@ -337,8 +327,8 @@ export class PaymentsSupabaseService {
           purchase_id: purchaseId,
           amount_cents: amountCents,
           payment_method: 'pix',
-          provider: 'stripe',
-          provider_payment_id: pixResult.paymentIntent.id,
+          provider: 'mercadopago',
+          provider_payment_id: pixResult.paymentId,
           status: 'pending',
         })
         .select()
@@ -348,15 +338,15 @@ export class PaymentsSupabaseService {
 
       // Return data in format expected by Telegram bot
       return {
-        provider_payment_id: pixResult.paymentIntent.id,
+        provider_payment_id: pixResult.paymentId,
         payment_method: 'pix',
-        qr_code_text: pixResult.qrCodeData, // EMV QR code string
-        qr_code_image: qrCodeBase64, // Base64 image for Telegram
-        copy_paste_code: pixResult.qrCodeData, // Same as qr_code_text, for PIX copy-paste
+        qr_code_text: pixResult.qrCode, // PIX code for copy-paste
+        qr_code_image: pixResult.qrCodeBase64, // Base64 image for Telegram (already in base64!)
+        copy_paste_code: pixResult.qrCode, // Same as qr_code_text, for PIX copy-paste
         amount_cents: amountCents,
         amount_brl: (amountCents / 100).toFixed(2),
-        expires_in: 3600, // 1 hour
-        payment_instructions: 'Escaneie o QR Code ou use o código PIX Copia e Cola para pagar.',
+        expires_in: 1800, // 30 minutes (Mercado Pago default)
+        payment_instructions: 'Escaneie o QR Code ou use o código PIX Copia e Cola para pagar. Pagamento aprovado automaticamente!',
       };
     } catch (error) {
       this.logger.error(`Failed to create PIX payment: ${error.message}`, error.stack);
