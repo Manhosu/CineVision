@@ -120,6 +120,13 @@ export class StripeService {
           ...metadata,
           source: 'cine-vision',
         },
+        // CRITICAL FIX: Pass metadata to payment intent so webhook can find purchase
+        payment_intent_data: {
+          metadata: {
+            ...metadata,
+            source: 'cine-vision',
+          },
+        },
       });
 
       this.logger.log(`Checkout session created: ${session.id} with payment method: card`);
