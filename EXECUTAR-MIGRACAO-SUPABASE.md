@@ -24,10 +24,13 @@
 
 ### 3️⃣ Cole o SQL Abaixo
 
-Copie TODO o SQL abaixo e cole no editor:
+⚠️ **IMPORTANTE:** Use o SQL do arquivo [MIGRACAO-SUPABASE-COMPLETA.sql](MIGRACAO-SUPABASE-COMPLETA.sql)
+
+Ou copie TODO o SQL abaixo e cole no editor:
 
 ```sql
--- Migration: Fix payment_provider_enum to support Stripe and Mercado Pago
+-- ============================================================
+-- MIGRAÇÃO COMPLETA: Payment Provider Enum + Índices
 -- Date: 2025-01-11
 -- Description:
 --   1. Add 'stripe' and 'mercadopago' values to payment_provider_enum
