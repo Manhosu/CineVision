@@ -22,15 +22,19 @@ export interface PixPaymentResult {
 @Injectable()
 export class MercadoPagoService {
   private readonly logger = new Logger(MercadoPagoService.name);
-  private readonly client: MercadoPagoConfig;
-  private readonly payment: Payment;
-  private readonly accessToken: string;
+  private readonly client: MercadoPagoConfig | null;
+  private readonly payment: Payment | null;
+  private readonly accessToken: string | null;
 
   constructor(private configService: ConfigService) {
     this.accessToken = this.configService.get('MERCADO_PAGO_ACCESS_TOKEN');
 
     if (!this.accessToken) {
-      throw new Error('MERCADO_PAGO_ACCESS_TOKEN is not configured');
+      this.logger.warn('MERCADO_PAGO_ACCESS_TOKEN is not configured - Mercado Pago payments will not work');
+      this.logger.warn('Add MERCADO_PAGO_ACCESS_TOKEN to environment variables to enable PIX payments');
+      this.client = null;
+      this.payment = null;
+      return;
     }
 
     // Initialize Mercado Pago client
@@ -43,7 +47,7 @@ export class MercadoPagoService {
 
     this.payment = new Payment(this.client);
 
-    this.logger.log('Mercado Pago service initialized');
+    this.logger.log('Mercado Pago service initialized successfully');
   }
 
   /**
@@ -51,6 +55,10 @@ export class MercadoPagoService {
    * Returns the payment ID, QR code data, and QR code image in base64
    */
   async createPixPayment(dto: CreatePixPaymentDto): Promise<PixPaymentResult> {
+    if (!this.payment || !this.accessToken) {
+      throw new BadRequestException('Mercado Pago is not configured. Please add MERCADO_PAGO_ACCESS_TOKEN to environment variables.');
+    }
+
     try {
       this.logger.log(`Creating PIX payment for amount: R$ ${dto.amount / 100}`);
 
@@ -113,6 +121,10 @@ export class MercadoPagoService {
    * Get payment details by ID
    */
   async getPayment(paymentId: string): Promise<any> {
+    if (!this.payment || !this.accessToken) {
+      throw new BadRequestException('Mercado Pago is not configured');
+    }
+
     try {
       const payment = await this.payment.get({ id: paymentId });
       this.logger.log(`Retrieved payment: ${paymentId} - Status: ${payment.status}`);
@@ -140,6 +152,10 @@ export class MercadoPagoService {
    * Cancel a payment
    */
   async cancelPayment(paymentId: string): Promise<any> {
+    if (!this.payment || !this.accessToken) {
+      throw new BadRequestException('Mercado Pago is not configured');
+    }
+
     try {
       const response = await this.payment.cancel({ id: paymentId });
       this.logger.log(`Payment cancelled: ${paymentId}`);
@@ -154,6 +170,10 @@ export class MercadoPagoService {
    * Create a refund for a payment
    */
   async createRefund(paymentId: string, amount?: number): Promise<any> {
+    if (!this.payment || !this.accessToken) {
+      throw new BadRequestException('Mercado Pago is not configured');
+    }
+
     try {
       const refundData: any = {
         payment_id: paymentId,
@@ -187,6 +207,14 @@ export class MercadoPagoService {
    * Health check for Mercado Pago connection
    */
   async healthCheck(): Promise<{ status: string; timestamp: Date }> {
+    if (!this.accessToken) {
+      this.logger.warn('Mercado Pago health check: not configured');
+      return {
+        status: 'not_configured',
+        timestamp: new Date(),
+      };
+    }
+
     try {
       // Try to get account info to verify connection
       const response = await axios.get(
