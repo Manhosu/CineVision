@@ -231,11 +231,11 @@ export class MercadoPagoWebhookService {
     try {
       const webhookSecret = this.configService.get('MERCADO_PAGO_WEBHOOK_SECRET');
 
-      // If no webhook secret configured, log warning but allow (for development)
+      // Webhook secret is required for security
       if (!webhookSecret) {
-        this.logger.warn('MERCADO_PAGO_WEBHOOK_SECRET not configured - skipping signature validation');
-        this.logger.warn('⚠️ THIS IS INSECURE! Configure webhook secret for production');
-        return true;
+        this.logger.error('❌ MERCADO_PAGO_WEBHOOK_SECRET not configured - rejecting webhook');
+        this.logger.error('❌ Configure MERCADO_PAGO_WEBHOOK_SECRET in environment variables for security');
+        return false;
       }
 
       if (!xSignature || !xRequestId) {

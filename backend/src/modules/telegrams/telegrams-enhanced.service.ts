@@ -1127,7 +1127,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
             await this.supabase
               .from('payments')
               .update({
-                status: 'completed',
+                status: 'paid',
                 processed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
@@ -1136,7 +1136,7 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
             await this.supabase
               .from('purchases')
               .update({
-                status: 'COMPLETED',
+                status: 'paid',
                 updated_at: new Date().toISOString()
               })
               .eq('id', purchaseId);
@@ -2176,15 +2176,18 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           });
         } else {
           // User found with telegram_id, try to generate token
-          this.logger.log(`Generating auto-login token for user ${user.id} (telegram_id: ${user.telegram_id})`);
+          this.logger.log(`Generating auto-login token for user ${user.id} (telegram_id: ${user.telegram_id}) pointing to movie ${purchase.content_id}`);
 
           try {
-            const token = await this.generatePermanentToken(user.telegram_id);
-            const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
-            dashboardUrl = `${frontendUrl}/auth/auto-login?token=${token}`;
+            // Generate direct link to the purchased movie
+            dashboardUrl = await this.autoLoginService.generateMovieUrl(
+              user.id,
+              user.telegram_id,
+              purchase.content_id
+            );
             tokenGenerated = true;
 
-            this.logger.log(`Auto-login token generated successfully for user ${user.id}`);
+            this.logger.log(`Auto-login token generated successfully for user ${user.id} - redirects to movie ${purchase.content_id}`);
           } catch (tokenError) {
             this.logger.error(`Failed to generate auto-login token for user ${user.id}:`, tokenError);
 
