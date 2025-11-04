@@ -2176,18 +2176,16 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           });
         } else {
           // User found with telegram_id, try to generate token
-          this.logger.log(`Generating auto-login token for user ${user.id} (telegram_id: ${user.telegram_id}) pointing to movie ${purchase.content_id}`);
+          this.logger.log(`Generating auto-login token for user ${user.id} (telegram_id: ${user.telegram_id})`);
 
           try {
-            // Generate direct link to the purchased movie
-            dashboardUrl = await this.autoLoginService.generateMovieUrl(
-              user.id,
-              user.telegram_id,
-              purchase.content_id
-            );
+            // Generate auto-login link to dashboard
+            const token = await this.generatePermanentToken(user.telegram_id);
+            const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+            dashboardUrl = `${frontendUrl}/auth/auto-login?token=${token}`;
             tokenGenerated = true;
 
-            this.logger.log(`Auto-login token generated successfully for user ${user.id} - redirects to movie ${purchase.content_id}`);
+            this.logger.log(`Auto-login token generated successfully for user ${user.id}`);
           } catch (tokenError) {
             this.logger.error(`Failed to generate auto-login token for user ${user.id}:`, tokenError);
 
