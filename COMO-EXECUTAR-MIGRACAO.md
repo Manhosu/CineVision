@@ -18,21 +18,26 @@ https://supabase.com/dashboard
 
 ---
 
-### Passo 2: Cole o SQL
+### Passo 2: Cole o SQL CORRIGIDO
 
-Copie o SQL do arquivo: **[MIGRACAO-SUPABASE-COMPLETA.sql](MIGRACAO-SUPABASE-COMPLETA.sql)**
+⚠️ **ATENÇÃO:** Use o SQL CORRIGIDO do arquivo: **[MIGRACAO-COMPLETA-FINAL.sql](MIGRACAO-COMPLETA-FINAL.sql)**
 
-Ou cole diretamente este SQL:
+Este SQL é muito mais robusto e:
+- ✅ Cria ENUMs se não existirem
+- ✅ Cria tabela payments se não existir
+- ✅ Adiciona colunas faltantes se a tabela já existir
+- ✅ Cria índices de performance
+- ✅ Mostra resumo completo
 
 <details>
 <summary>👉 Clique para ver o SQL (COPIE TUDO)</summary>
 
 ```sql
 -- ============================================================
--- MIGRAÇÃO COMPLETA: Payment Provider Enum + Índices
+-- MIGRAÇÃO COMPLETA FINAL: Payment System
 -- Data: 2025-11-03
--- Descrição: Cria ou atualiza payment_provider_enum para
---            suportar Stripe e Mercado Pago
+-- Descrição: Migração completa e segura que verifica e cria
+--            tudo que é necessário para o sistema de pagamentos
 -- ============================================================
 
 -- PASSO 1: Criar o enum se não existir
