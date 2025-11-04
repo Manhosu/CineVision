@@ -49,6 +49,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { RequestsModule } from '../requests/requests.module';
 import { AuthModule } from '../auth/auth.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [
@@ -141,6 +142,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     ConfigModule,
     SupabaseModule,
     forwardRef(() => AuthModule),
+    forwardRef(() => PaymentsModule),
     // RequestsModule, // Temporarily disabled - causing startup issues
   ],
   controllers: conditionalControllers,
