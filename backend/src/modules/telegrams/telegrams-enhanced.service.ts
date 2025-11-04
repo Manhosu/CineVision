@@ -2294,6 +2294,11 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         });
       }
 
+      // Send message to prompt user to use /start for new purchases
+      await this.sendMessage(parseInt(chatId),
+        '🛍 Para realizar novas compras no aplicativo, digite /start'
+      );
+
       // Log de entrega
       this.logger.log(`Content delivered to purchase ${purchase.id}: dashboard=${dashboardUrl}, telegram=${telegramGroupAvailable ? 'yes' : 'no'}`);
     } catch (error) {
