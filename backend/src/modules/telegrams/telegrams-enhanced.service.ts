@@ -7,6 +7,7 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as bcrypt from 'bcrypt';
 import { AutoLoginService } from '../auth/services/auto-login.service';
+import { MercadoPagoService } from '../payments/services/mercado-pago.service';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -80,6 +81,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private autoLoginService: AutoLoginService,
+    private mercadoPagoService: MercadoPagoService,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.webhookSecret = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
@@ -1111,13 +1113,69 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         this.pendingPixPayments.delete(purchaseId);
 
       } else if (payment.status === 'pending') {
+        // Consultar o Mercado Pago para ver o status atualizado
+        this.logger.log(`Checking payment status in Mercado Pago: ${payment.provider_payment_id}`);
+
+        try {
+          const mpPayment = await this.mercadoPagoService.getPayment(payment.provider_payment_id);
+          this.logger.log(`Mercado Pago status for ${payment.provider_payment_id}: ${mpPayment.status}`);
+
+          if (mpPayment.status === 'approved') {
+            // Pagamento foi aprovado! Atualizar banco
+            this.logger.log(`Payment ${payment.provider_payment_id} approved in Mercado Pago. Updating database...`);
+
+            await this.supabase
+              .from('payments')
+              .update({
+                status: 'completed',
+                processed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', payment.id);
+
+            await this.supabase
+              .from('purchases')
+              .update({
+                status: 'COMPLETED',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', purchaseId);
+
+            // Enviar mensagem de confirmação
+            await this.sendMessage(chatId, '🎉 *PAGAMENTO CONFIRMADO!*\n\n✅ Seu pagamento PIX foi aprovado com sucesso!\n\n⏳ Preparando seu conteúdo...', {
+              parse_mode: 'Markdown'
+            });
+
+            // Entregar conteúdo
+            const { data: purchase } = await this.supabase
+              .from('purchases')
+              .select('*, content(*)')
+              .eq('id', purchaseId)
+              .single();
+
+            if (purchase) {
+              await this.deliverContentAfterPayment({
+                ...purchase,
+                provider_meta: { telegram_chat_id: chatId.toString() }
+              });
+            }
+
+            // Limpar cache
+            this.pendingPixPayments.delete(purchaseId);
+            return;
+          }
+        } catch (error) {
+          this.logger.error(`Error checking Mercado Pago status: ${error.message}`);
+          // Continue com a mensagem de pendente se houver erro na consulta
+        }
+
         // Pagamento ainda não confirmado
         await this.sendMessage(chatId, `⏳ *Pagamento Pendente*\n\n⚠️ Ainda não identificamos seu pagamento.\n\n*Possíveis motivos:*\n• O pagamento ainda está sendo processado\n• Você ainda não finalizou o pagamento no app bancário\n\n💡 *O que fazer:*\n• Aguarde alguns minutos e clique em "Já paguei" novamente\n• Certifique-se de ter confirmado o pagamento no app\n• Se o problema persistir, entre em contato com o suporte\n\n📱 ID da transação: \`${payment.provider_payment_id}\``, {
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [{ text: '🔄 Verificar Novamente', callback_data: `check_pix_${purchaseId}` }],
-              [{ text: '📞 Suporte', url: 'https://wa.me/seunumero' }],
+              [{ text: '📞 Suporte', url: 'https://t.me/CineVisionOfc' }],
               [{ text: '🔙 Voltar', callback_data: 'catalog' }],
             ],
           },

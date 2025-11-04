@@ -14,6 +14,7 @@ import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-o
 import { UsersModule } from '../users/users.module';
 import { ContentModule } from '../content/content.module';
 import { PurchasesModule } from '../purchases/purchases.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { SupabaseModule } from '../../config/supabase.module';
 import { AuthModule } from '../auth/auth.module';
 
@@ -34,6 +35,7 @@ const conditionalExports = isTypeOrmEnabled()
     UsersModule,
     forwardRef(() => ContentModule),
     forwardRef(() => PurchasesModule),
+    forwardRef(() => PaymentsModule),
     forwardRef(() => AuthModule),
   ],
   providers: conditionalProviders,
