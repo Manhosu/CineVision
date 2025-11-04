@@ -1069,7 +1069,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
         .from('payments')
         .select('*')
         .eq('purchase_id', purchaseId)
-        .eq('provider', 'pix')
+        .eq('provider', 'mercadopago')
+        .eq('payment_method', 'pix')
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
