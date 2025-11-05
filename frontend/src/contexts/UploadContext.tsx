@@ -2,6 +2,16 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+export interface PendingUpload {
+  id: string;
+  file: File;
+  episodeId: string;
+  episodeTitle: string;
+  seasonNumber: number;
+  episodeNumber: number;
+  contentId: string;
+}
+
 export interface UploadTask {
   id: string;
   fileName: string;
@@ -26,12 +36,17 @@ export interface UploadTask {
 
 interface UploadContextType {
   tasks: UploadTask[];
+  pendingUploads: PendingUpload[];
   addTask: (task: UploadTask) => void;
   updateTask: (id: string, updates: Partial<UploadTask>) => void;
   removeTask: (id: string) => void;
   cancelTask: (id: string) => void;
   clearAllTasks: () => void;
   clearStuckTasks: () => void;
+  addPendingUpload: (upload: PendingUpload) => void;
+  removePendingUpload: (id: string) => void;
+  clearPendingUploads: () => void;
+  getPendingUploadByEpisode: (episodeId: string) => PendingUpload | undefined;
 }
 
 const UploadContext = createContext<UploadContextType | undefined>(undefined);
@@ -40,6 +55,7 @@ const STORAGE_KEY = 'cinevision_upload_tasks';
 
 export function UploadProvider({ children }: { children: React.ReactNode }) {
   const [tasks, setTasks] = useState<UploadTask[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
   const [mounted, setMounted] = useState(false);
 
   // Load tasks from localStorage on mount
@@ -184,6 +200,27 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     console.log(`[UploadContext] ✅ Cleared ${uploadingTasks.length} stuck upload(s)`);
   }, [tasks]);
 
+  // Pending upload functions
+  const addPendingUpload = useCallback((upload: PendingUpload) => {
+    setPendingUploads(prev => {
+      // Replace if already exists for this episode
+      const filtered = prev.filter(p => p.episodeId !== upload.episodeId);
+      return [...filtered, upload];
+    });
+  }, []);
+
+  const removePendingUpload = useCallback((id: string) => {
+    setPendingUploads(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  const clearPendingUploads = useCallback(() => {
+    setPendingUploads([]);
+  }, []);
+
+  const getPendingUploadByEpisode = useCallback((episodeId: string) => {
+    return pendingUploads.find(p => p.episodeId === episodeId);
+  }, [pendingUploads]);
+
   // Auto-remove completed, error, and cancelled tasks after 5 seconds (ONLY for movies, NOT episodes)
   // Episodes persist until manually cleared
   useEffect(() => {
@@ -218,7 +255,20 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <UploadContext.Provider value={{ tasks, addTask, updateTask, removeTask, cancelTask, clearAllTasks, clearStuckTasks }}>
+    <UploadContext.Provider value={{
+      tasks,
+      pendingUploads,
+      addTask,
+      updateTask,
+      removeTask,
+      cancelTask,
+      clearAllTasks,
+      clearStuckTasks,
+      addPendingUpload,
+      removePendingUpload,
+      clearPendingUploads,
+      getPendingUploadByEpisode
+    }}>
       {children}
     </UploadContext.Provider>
   );
