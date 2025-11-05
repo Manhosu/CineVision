@@ -97,13 +97,16 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
         });
 
         // 1. Initialize multipart upload
-        const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/episodes/${episodeId}/upload/init`, {
+        const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
+            contentId: episodeId,
             filename: file.name,
             contentType,
             size: file.size,
+            audioType: 'original', // Episodes don't have dubbing variants
+            isEpisode: true,
           }),
         });
 
@@ -155,7 +158,7 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
 
         // 3. Complete upload
         const completeResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/episodes/${episodeId}/upload/complete`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/complete`,
           {
             method: 'POST',
             headers,
@@ -163,6 +166,7 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
               uploadId,
               key,
               parts: uploadedParts,
+              contentId: episodeId,
             }),
           }
         );
