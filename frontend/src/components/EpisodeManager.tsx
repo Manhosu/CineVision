@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { Plus, Edit2, Trash2, Save, X, Film, Upload as UploadIcon } from 'lucide-react';
-import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
+import { EpisodeVideoUpload, EpisodeVideoUploadRef } from '@/components/EpisodeVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 
 interface Episode {
@@ -34,7 +34,7 @@ interface NewEpisode {
 }
 
 export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: EpisodeManagerProps) {
-  const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
+  const videoUploadRef = useRef<EpisodeVideoUploadRef>(null);
 
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,7 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
   const [showVideoUpload, setShowVideoUpload] = useState(false);
-  const [selectedEpisodeForUpload, setSelectedEpisodeForUpload] = useState<string | null>(null);
+  const [selectedEpisodeForUpload, setSelectedEpisodeForUpload] = useState<Episode | null>(null);
 
   // New episode form
   const [newEpisode, setNewEpisode] = useState<NewEpisode>({
@@ -233,8 +233,8 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
     setEditThumbnail(episode.thumbnail_url || '');
   };
 
-  const openVideoUpload = (episodeId: string) => {
-    setSelectedEpisodeForUpload(episodeId);
+  const openVideoUpload = (episode: Episode) => {
+    setSelectedEpisodeForUpload(episode);
     setShowVideoUpload(true);
   };
 
@@ -407,7 +407,7 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
 
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => openVideoUpload(episode.id)}
+                      onClick={() => openVideoUpload(episode)}
                       className="p-2 bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 rounded-lg transition-colors"
                       title="Upload vídeo"
                     >
@@ -528,9 +528,9 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
       {/* Video Upload Modal */}
       {showVideoUpload && selectedEpisodeForUpload && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-800 border border-white/10 rounded-xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-dark-800 border border-white/10 rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">Upload de Vídeo</h3>
+              <h3 className="text-xl font-bold">Upload de Vídeo - {selectedEpisodeForUpload.title}</h3>
               <button
                 onClick={() => {
                   setShowVideoUpload(false);
@@ -542,10 +542,12 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
               </button>
             </div>
 
-            <SimultaneousVideoUpload
+            <EpisodeVideoUpload
               ref={videoUploadRef}
               contentId={seriesId}
-              episodeId={selectedEpisodeForUpload}
+              episodeId={selectedEpisodeForUpload.id}
+              seasonNumber={selectedEpisodeForUpload.season_number}
+              episodeNumber={selectedEpisodeForUpload.episode_number}
               onUploadComplete={() => {
                 toast.success('Vídeo carregado com sucesso!');
                 setShowVideoUpload(false);
@@ -553,6 +555,35 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
                 loadEpisodes();
               }}
             />
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={async () => {
+                  try {
+                    if (!videoUploadRef.current?.hasFile()) {
+                      toast.error('Selecione um arquivo antes de iniciar o upload');
+                      return;
+                    }
+                    await videoUploadRef.current?.startUpload();
+                  } catch (error: any) {
+                    console.error('Erro ao iniciar upload:', error);
+                    toast.error(error.message || 'Erro ao iniciar upload');
+                  }
+                }}
+                className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-semibold"
+              >
+                Salvar e Iniciar Upload
+              </button>
+              <button
+                onClick={() => {
+                  setShowVideoUpload(false);
+                  setSelectedEpisodeForUpload(null);
+                }}
+                className="px-4 py-3 bg-dark-600 hover:bg-dark-500 rounded-lg transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
