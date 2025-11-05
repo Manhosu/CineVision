@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { Plus, Edit2, Trash2, Save, X, Film, Upload as UploadIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, Film, Upload as UploadIcon, Clock } from 'lucide-react';
 import { EpisodeVideoUpload, EpisodeVideoUploadRef } from '@/components/EpisodeVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import { useUpload } from '@/contexts/UploadContext';
 
 interface Episode {
   id: string;
@@ -35,6 +36,7 @@ interface NewEpisode {
 
 export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: EpisodeManagerProps) {
   const videoUploadRef = useRef<EpisodeVideoUploadRef>(null);
+  const { getPendingUploadByEpisode } = useUpload();
 
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -394,8 +396,14 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
                       />
                     )}
                     <div className="flex-1">
-                      <h4 className="font-semibold text-lg">
+                      <h4 className="font-semibold text-lg flex items-center gap-2">
                         S{episode.season_number}E{episode.episode_number}: {episode.title}
+                        {getPendingUploadByEpisode(episode.id) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full border border-yellow-500/30">
+                            <Clock className="w-3 h-3" />
+                            Upload Pendente
+                          </span>
+                        )}
                       </h4>
                       <p className="text-sm text-gray-400 mt-1">{episode.description}</p>
                       <p className="text-xs text-gray-500 mt-2">
@@ -558,21 +566,23 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
 
             <div className="mt-6 flex gap-3">
               <button
-                onClick={async () => {
-                  try {
-                    if (!videoUploadRef.current?.hasFile()) {
-                      toast.error('Selecione um arquivo antes de iniciar o upload');
-                      return;
-                    }
-                    await videoUploadRef.current?.startUpload();
-                  } catch (error: any) {
-                    console.error('Erro ao iniciar upload:', error);
-                    toast.error(error.message || 'Erro ao iniciar upload');
+                onClick={() => {
+                  if (!videoUploadRef.current?.hasFile()) {
+                    toast.error('Selecione um arquivo antes de salvar');
+                    return;
+                  }
+
+                  const saved = videoUploadRef.current?.saveFile();
+                  if (saved) {
+                    toast.success('Arquivo salvo! Clique em "Salvar Alterações" para iniciar o upload');
+                    setShowVideoUpload(false);
+                    setSelectedEpisodeForUpload(null);
+                    loadEpisodes(); // Reload to show pending indicator
                   }
                 }}
                 className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg transition-colors font-semibold"
               >
-                Salvar e Iniciar Upload
+                Salvar
               </button>
               <button
                 onClick={() => {
@@ -581,7 +591,7 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
                 }}
                 className="px-4 py-3 bg-dark-600 hover:bg-dark-500 rounded-lg transition-colors"
               >
-                Fechar
+                Cancelar
               </button>
             </div>
           </div>

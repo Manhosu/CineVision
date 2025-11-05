@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useUpload } from '@/contexts/UploadContext';
-import { supabase } from '@/lib/supabase';
 import { Upload, FileVideo, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -14,15 +13,23 @@ interface Props {
 }
 
 export interface EpisodeVideoUploadRef {
-  startUpload: () => Promise<void>;
+  saveFile: () => boolean;
   hasFile: () => boolean;
+  getFile: () => File | null;
 }
 
 export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
   ({ contentId, episodeId, seasonNumber, episodeNumber, onUploadComplete }, ref) => {
-    const { addTask, updateTask } = useUpload();
+    const { addPendingUpload, getPendingUploadByEpisode } = useUpload();
     const [file, setFile] = useState<File | null>(null);
-    const [uploading, setUploading] = useState(false);
+
+    // Load pending file if exists
+    useEffect(() => {
+      const pendingUpload = getPendingUploadByEpisode(episodeId);
+      if (pendingUpload) {
+        setFile(pendingUpload.file);
+      }
+    }, [episodeId, getPendingUploadByEpisode]);
 
     const handleFileSelect = (selectedFile: File) => {
       // Validate MP4 format
@@ -34,174 +41,29 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
       setFile(selectedFile);
     };
 
-    const startUpload = async () => {
+    const saveFile = () => {
       if (!file) {
-        alert('Selecione um arquivo para upload');
-        return;
+        return false;
       }
 
-      setUploading(true);
-
-      // Create unique task ID
-      const taskId = `episode-${episodeId}-${Date.now()}`;
-
-      // Add task to upload context
-      addTask({
-        id: taskId,
-        fileName: file.name,
-        contentTitle: `T${seasonNumber}E${episodeNumber}`,
-        progress: 0,
-        status: 'uploading',
-        type: 'episode',
+      // Add to pending uploads
+      addPendingUpload({
+        id: `pending-${episodeId}`,
+        file,
         episodeId,
+        episodeTitle: `T${seasonNumber}E${episodeNumber}`,
         seasonNumber,
         episodeNumber,
+        contentId,
       });
 
-      try {
-        // Get auth token
-        let token: string | null = null;
+      console.log('[EpisodeVideoUpload] Arquivo salvo como pendente:', {
+        episodeId,
+        fileName: file.name,
+        size: file.size
+      });
 
-        if (typeof window !== 'undefined') {
-          const backendToken = localStorage.getItem('access_token');
-          if (backendToken) {
-            token = backendToken;
-          } else {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.access_token) {
-              token = session.access_token;
-              localStorage.setItem('auth_token', token);
-            } else {
-              token = localStorage.getItem('token') || localStorage.getItem('auth_token');
-            }
-          }
-        }
-
-        if (!token) {
-          throw new Error('Não foi possível obter token de autenticação');
-        }
-
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        };
-
-        // Detect content type
-        const contentType = file.type || 'video/mp4';
-
-        console.log('[EpisodeVideoUpload] Iniciando upload:', {
-          episodeId,
-          fileName: file.name,
-          size: file.size,
-          contentType
-        });
-
-        // 1. Initialize multipart upload
-        const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            contentId: episodeId,
-            filename: file.name,
-            contentType,
-            size: file.size,
-            audioType: 'original', // Episodes don't have dubbing variants
-            isEpisode: true,
-          }),
-        });
-
-        if (!initResponse.ok) {
-          const errorData = await initResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
-          throw new Error(errorData.message || 'Erro ao iniciar upload');
-        }
-
-        const { uploadId, key, partSize, partsCount, presignedUrls } = await initResponse.json();
-        const uploadedParts: { ETag: string; PartNumber: number }[] = [];
-
-        console.log('[EpisodeVideoUpload] Upload iniciado:', { uploadId, partsCount });
-
-        // Update task with uploadId
-        updateTask(taskId, { uploadId });
-
-        // 2. Upload chunks
-        for (let i = 0; i < presignedUrls.length; i++) {
-          const { partNumber, url: presignedUrl } = presignedUrls[i];
-          const start = (partNumber - 1) * partSize;
-          const end = Math.min(start + partSize, file.size);
-          const chunk = file.slice(start, end);
-
-          const partResponse = await fetch(presignedUrl, {
-            method: 'PUT',
-            body: chunk,
-          });
-
-          if (!partResponse.ok) {
-            throw new Error(`Erro ao fazer upload da parte ${partNumber}`);
-          }
-
-          const etag = partResponse.headers.get('ETag');
-          if (!etag) {
-            throw new Error(`ETag não retornado para parte ${partNumber}`);
-          }
-
-          uploadedParts.push({
-            ETag: etag.replace(/"/g, ''),
-            PartNumber: partNumber
-          });
-
-          // Update progress
-          const progress = Math.round(((i + 1) / partsCount) * 100);
-          updateTask(taskId, { progress });
-        }
-
-        console.log('[EpisodeVideoUpload] Upload de partes concluído');
-
-        // 3. Complete upload
-        const completeResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/complete`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              uploadId,
-              key,
-              parts: uploadedParts,
-              contentId: episodeId,
-            }),
-          }
-        );
-
-        if (!completeResponse.ok) {
-          const errorData = await completeResponse.json();
-          throw new Error(errorData.message || 'Erro ao finalizar upload');
-        }
-
-        console.log('[EpisodeVideoUpload] Upload concluído com sucesso!');
-
-        // Mark as completed
-        updateTask(taskId, {
-          status: 'ready',
-          progress: 100,
-          processingStatus: 'ready',
-          completedAt: Date.now(),
-        });
-
-        // Clear file after successful upload
-        setFile(null);
-        setUploading(false);
-
-        onUploadComplete?.();
-      } catch (error: any) {
-        console.error('[EpisodeVideoUpload] Erro no upload:', error);
-
-        updateTask(taskId, {
-          status: 'error',
-          error: error.message || 'Erro no upload',
-        });
-
-        setUploading(false);
-        throw error;
-      }
+      return true;
     };
 
     const formatBytes = (bytes: number) => {
@@ -214,8 +76,9 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
 
     // Expose methods to parent
     useImperativeHandle(ref, () => ({
-      startUpload,
+      saveFile,
       hasFile: () => Boolean(file),
+      getFile: () => file,
     }));
 
     return (
@@ -237,16 +100,11 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
             onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
             className="hidden"
             id="episode-video-file"
-            disabled={uploading}
           />
 
           <label
             htmlFor="episode-video-file"
-            className={`block w-full text-center px-4 py-3 rounded-lg cursor-pointer transition-all font-medium ${
-              uploading
-                ? 'bg-gray-600 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-            }`}
+            className="block w-full text-center px-4 py-3 rounded-lg cursor-pointer transition-all font-medium bg-blue-600 hover:bg-blue-700 text-white"
           >
             {file ? (
               <div className="flex items-center justify-center space-x-2">
@@ -267,15 +125,7 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
                 Tamanho: {formatBytes(file.size)}
               </p>
               <p className="text-xs text-green-400 text-center font-medium">
-                ✓ Arquivo pronto para upload
-              </p>
-            </div>
-          )}
-
-          {uploading && (
-            <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-              <p className="text-xs text-yellow-400 text-center">
-                Upload em andamento... Não feche esta janela!
+                ✓ Arquivo salvo
               </p>
             </div>
           )}
@@ -287,11 +137,13 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             <div className="text-xs text-blue-300">
-              <p className="font-medium mb-1">Importante:</p>
+              <p className="font-medium mb-1">Novo Fluxo de Upload:</p>
               <ul className="space-y-1 list-disc list-inside">
-                <li>Apenas arquivos MP4 são aceitos</li>
-                <li>O arquivo ficará salvo mesmo ao fechar este modal</li>
-                <li>Clique em "Salvar e Iniciar Upload" para começar</li>
+                <li>Selecione o arquivo MP4</li>
+                <li>Clique em "Salvar" para guardar o arquivo</li>
+                <li>O arquivo fica salvo mesmo ao fechar este modal</li>
+                <li>Após adicionar todos os episódios, clique em "Salvar Alterações"</li>
+                <li>Os uploads começarão automaticamente</li>
               </ul>
             </div>
           </div>
