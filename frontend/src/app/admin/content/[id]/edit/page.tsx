@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { ContentLanguageManager } from '@/components/ContentLanguageManager';
+import { EpisodeManager } from '@/components/EpisodeManager';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Upload, Save, X, Image as ImageIcon } from 'lucide-react';
 
@@ -719,17 +720,13 @@ export default function AdminContentEditPage() {
 
           {activeTab === 'episodes' && content.content_type === 'series' && (
             <div>
-              <div className="text-center py-12 bg-dark-900/30 rounded-lg border border-white/10">
-                <Film className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-                <h3 className="text-xl font-semibold mb-2">Gerenciador de Episódios</h3>
-                <p className="text-gray-400 mb-4">
-                  Esta funcionalidade será implementada em breve.
-                </p>
-                <p className="text-sm text-gray-500">
-                  Total de temporadas: {content.total_seasons || 0}<br />
-                  Total de episódios: {content.total_episodes || 0}
-                </p>
-              </div>
+              <EpisodeManager
+                seriesId={contentId}
+                totalSeasons={content.total_seasons || 1}
+                onEpisodesChange={(episodes) => {
+                  console.log('Episódios atualizados:', episodes);
+                }}
+              />
             </div>
           )}
         </div>
