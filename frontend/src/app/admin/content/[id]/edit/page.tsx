@@ -273,14 +273,30 @@ export default function AdminContentEditPage() {
   const hasChanges = () => {
     if (!originalContent) return false;
 
+    // Compare arrays
+    const originalGenres = originalContent.genres
+      ? (Array.isArray(originalContent.genres) ? originalContent.genres : originalContent.genres.split(',').map((g: string) => g.trim()))
+      : [];
+    const genresChanged = JSON.stringify(selectedGenres.sort()) !== JSON.stringify(originalGenres.sort());
+
     return (
       title !== (originalContent.title || '') ||
       description !== (originalContent.description || '') ||
       synopsis !== (originalContent.synopsis || '') ||
+      releaseDate !== (originalContent.release_date ? originalContent.release_date.split('T')[0] : '') ||
+      durationMinutes !== (originalContent.duration_minutes || 0) ||
+      genresChanged ||
+      rating !== (originalContent.rating || '') ||
+      director !== (originalContent.director || '') ||
+      cast !== (Array.isArray(originalContent.cast) ? originalContent.cast.join(', ') : (originalContent.cast || '')) ||
+      trailerUrl !== (originalContent.trailer_url || '') ||
+      telegramGroupLink !== (originalContent.telegram_group_link || '') ||
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
-      priceInput !== ((originalContent.price_cents / 100).toFixed(2))
-      // Add more comparisons as needed
+      isFeatured !== (originalContent.is_featured || false) ||
+      priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
+      imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
+      releaseYear !== (originalContent.release_year?.toString() || '')
     );
   };
 
@@ -369,19 +385,21 @@ export default function AdminContentEditPage() {
                 Detalhes do Conteúdo
               </div>
             </button>
-            <button
-              onClick={() => setActiveTab('languages')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                activeTab === 'languages'
-                  ? 'text-primary-400 border-b-2 border-primary-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                Idiomas e Vídeos
-              </div>
-            </button>
+            {content.content_type === 'movie' && (
+              <button
+                onClick={() => setActiveTab('languages')}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeTab === 'languages'
+                    ? 'text-primary-400 border-b-2 border-primary-400'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Idiomas e Vídeos
+                </div>
+              </button>
+            )}
             {content.content_type === 'series' && (
               <button
                 onClick={() => setActiveTab('episodes')}
@@ -707,7 +725,7 @@ export default function AdminContentEditPage() {
             </div>
           )}
 
-          {activeTab === 'languages' && (
+          {activeTab === 'languages' && content.content_type === 'movie' && (
             <div>
               <ContentLanguageManager
                 contentId={contentId}
