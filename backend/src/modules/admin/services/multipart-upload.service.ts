@@ -75,6 +75,13 @@ export class MultipartUploadService {
     this.logger.log(`Multipart Upload Service initialized`);
     this.logger.log(`S3 Bucket: ${this.videoBucket}`);
     this.logger.log(`Region: ${this.region}`);
+
+    // Temporary debug logs for AWS credentials verification
+    const accessKeyId = this.configService.get<string>('AWS_ACCESS_KEY_ID');
+    const secretKey = this.configService.get<string>('AWS_SECRET_ACCESS_KEY');
+    this.logger.log(`AWS Credentials Check:`);
+    this.logger.log(`  ACCESS_KEY_ID: ${accessKeyId ? accessKeyId.substring(0, 8) + '...' + accessKeyId.substring(accessKeyId.length - 4) : 'NOT SET'}`);
+    this.logger.log(`  SECRET_KEY: ${secretKey ? secretKey.substring(0, 4) + '...' + secretKey.substring(secretKey.length - 4) : 'NOT SET'}`);
   }
 
   /**
