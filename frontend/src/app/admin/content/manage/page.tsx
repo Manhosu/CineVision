@@ -9,7 +9,8 @@ import {
   AlertCircle,
   CheckCircle,
   ArrowLeft,
-  Upload
+  Upload,
+  Pencil
 } from 'lucide-react';
 import { useUpload } from '@/contexts/UploadContext';
 
@@ -302,6 +303,13 @@ export default function ContentManagePage() {
                             )}
                           </button>
                         )}
+                        <button
+                          onClick={() => router.push(`/admin/content/${content.id}/edit`)}
+                          className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleDelete(content)}
                           className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
