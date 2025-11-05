@@ -42,6 +42,9 @@ export function GlobalUploadProgress() {
     ? uploadingTasks.reduce((acc, task) => acc + task.progress, 0) / uploadingTasks.length
     : 0;
 
+  // Check if there are any active uploads (uploading or converting)
+  const hasActiveUploads = uploadingTasks.some(t => t.status === 'uploading' || t.status === 'converting');
+
   const handleClearStuckTasks = async () => {
     try {
       await clearStuckTasks();
@@ -66,19 +69,21 @@ export function GlobalUploadProgress() {
     <div className="fixed bottom-[24rem] right-6 z-50 w-96 bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 border-2 border-blue-500/50 shadow-2xl backdrop-blur-xl animate-slide-in">
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-lg font-bold text-white flex items-center">
-          <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
-          Uploads ({uploadingTasks.length} em andamento)
+          <div className={`w-2 h-2 rounded-full mr-2 ${hasActiveUploads ? 'bg-blue-500 animate-pulse' : 'bg-green-500'}`}></div>
+          Uploads ({uploadingTasks.length} {hasActiveUploads ? 'em andamento' : 'concluído(s)'})
         </h4>
-        <button
-          onClick={handleClearStuckTasks}
-          className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
-          title="Limpar todos os uploads travados"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          Limpar Todos
-        </button>
+        {!hasActiveUploads && (
+          <button
+            onClick={handleClearStuckTasks}
+            className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
+            title="Limpar todos os uploads"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Limpar Todos
+          </button>
+        )}
       </div>
 
       {/* Overall Progress */}
@@ -131,23 +136,36 @@ export function GlobalUploadProgress() {
                   <p className="text-xs text-red-400 mt-1">{task.error}</p>
                 )}
               </div>
-              <button
-                onClick={() => handleCancelTask(task.id, task.fileName)}
-                className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                title="Cancelar upload"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              {!hasActiveUploads && (task.status === 'completed' || task.status === 'error') && (
+                <button
+                  onClick={() => handleCancelTask(task.id, task.fileName)}
+                  className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                  title="Remover da lista"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
             </div>
           );
         })}
       </div>
 
-      <p className="mt-4 text-xs text-gray-400 text-center">
-        Não feche esta janela até o upload concluir
-      </p>
+      {hasActiveUploads ? (
+        <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <p className="text-xs text-yellow-400 text-center font-semibold flex items-center justify-center gap-2">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            NÃO FECHE esta janela! Uploads em andamento...
+          </p>
+        </div>
+      ) : (
+        <p className="mt-4 text-xs text-gray-400 text-center">
+          Todos os uploads foram concluídos
+        </p>
+      )}
     </div>
   );
 }
