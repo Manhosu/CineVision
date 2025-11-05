@@ -85,8 +85,13 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
 
       if (response.ok) {
         const data = await response.json();
-        setEpisodes(data);
-        onEpisodesChange?.(data);
+        // Map duration_minutes from API to duration_seconds for frontend
+        const mappedData = data.map((ep: any) => ({
+          ...ep,
+          duration_seconds: ep.duration_minutes ? ep.duration_minutes * 60 : 0
+        }));
+        setEpisodes(mappedData);
+        onEpisodesChange?.(mappedData);
       } else {
         toast.error('Erro ao carregar episódios');
       }
