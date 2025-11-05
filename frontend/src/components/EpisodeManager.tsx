@@ -16,6 +16,9 @@ interface Episode {
   duration_seconds: number;
   thumbnail_url?: string;
   video_url?: string;
+  storage_path?: string;
+  file_storage_key?: string;
+  processing_status?: string;
   created_at: string;
   updated_at: string;
 }
@@ -408,7 +411,9 @@ export function EpisodeManager({ seriesId, totalSeasons, onEpisodesChange }: Epi
                       <p className="text-sm text-gray-400 mt-1">{episode.description}</p>
                       <p className="text-xs text-gray-500 mt-2">
                         Duração: {Math.round(episode.duration_seconds / 60)} min
-                        {episode.video_url && <span className="ml-3">✓ Vídeo carregado</span>}
+                        {(episode.video_url || episode.storage_path || episode.file_storage_key) && (
+                          <span className="ml-3">✓ Vídeo carregado</span>
+                        )}
                       </p>
                     </div>
                   </div>
