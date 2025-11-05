@@ -13,6 +13,7 @@ import {
   Pencil
 } from 'lucide-react';
 import { useUpload } from '@/contexts/UploadContext';
+import { useStartPendingUploads } from '@/hooks/useStartPendingUploads';
 
 interface Content {
   id: string;
@@ -28,6 +29,9 @@ interface Content {
 export default function ContentManagePage() {
   const router = useRouter();
   const { addTask, updateTask, tasks } = useUpload();
+
+  // Auto-start pending uploads when page loads
+  useStartPendingUploads();
   const cancelFlagsRef = useRef<Map<string, boolean>>(new Map());
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
