@@ -32,8 +32,8 @@ interface Series {
   total_episodes: number;
   release_year?: number;
   director?: string;
-  cast?: string[];
-  genres?: string[];
+  cast?: string | string[];
+  genres?: string | string[];
   imdb_rating?: number;
   status: string;
 }
@@ -48,6 +48,14 @@ export default function SeriesDetailsPage() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Helper function to normalize string or array fields
+  const normalizeToArray = (value: string | string[] | undefined): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    // If string, split by comma and trim
+    return value.split(',').map(item => item.trim()).filter(item => item.length > 0);
+  };
 
   useEffect(() => {
     if (!seriesId) return;
@@ -73,6 +81,10 @@ export default function SeriesDetailsPage() {
           router.push(`/movies/${seriesId}`);
           return;
         }
+
+        // Normalize cast and genres to arrays
+        seriesData.cast = normalizeToArray(seriesData.cast);
+        seriesData.genres = normalizeToArray(seriesData.genres);
 
         setSeries(seriesData);
 
