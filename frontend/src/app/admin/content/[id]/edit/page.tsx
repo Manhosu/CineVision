@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { ContentLanguageManager } from '@/components/ContentLanguageManager';
 import { EpisodeManager } from '@/components/EpisodeManager';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import { useUpload } from '@/contexts/UploadContext';
 import { Film, Upload, Save, X, Image as ImageIcon } from 'lucide-react';
 
 interface Content {
@@ -60,6 +61,7 @@ export default function AdminContentEditPage() {
   const router = useRouter();
   const params = useParams();
   const contentId = params?.id as string;
+  const { pendingUploads } = useUpload();
 
   const posterInputRef = useRef<HTMLInputElement>(null);
   const backdropInputRef = useRef<HTMLInputElement>(null);
@@ -257,7 +259,18 @@ export default function AdminContentEditPage() {
 
       if (response.ok) {
         toast.success('Conteúdo atualizado com sucesso!');
-        await loadContent(); // Reload to get updated data
+
+        // Check if there are pending uploads
+        const contentPendingUploads = pendingUploads.filter(u => u.contentId === contentId);
+
+        if (contentPendingUploads.length > 0) {
+          // Redirect to manage page to start uploads
+          toast.success(`${contentPendingUploads.length} upload(s) pendente(s). Iniciando uploads...`);
+          router.push('/admin/content/manage');
+        } else {
+          // No pending uploads, just reload
+          await loadContent();
+        }
       } else {
         const error = await response.json();
         toast.error(`Erro ao atualizar: ${error.message || 'Erro desconhecido'}`);
