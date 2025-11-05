@@ -56,9 +56,9 @@ export default function SeriesDetailsPage() {
       try {
         setLoading(true);
 
-        // Fetch series details - tentamos primeiro no endpoint de series, depois movies
+        // Fetch series details
         let seriesResponse = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies/${seriesId}`
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/series/${seriesId}`
         );
 
         if (!seriesResponse.ok) {
