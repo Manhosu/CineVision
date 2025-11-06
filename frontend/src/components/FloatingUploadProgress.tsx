@@ -77,12 +77,6 @@ export function FloatingUploadProgress() {
     }
   };
 
-  const handleClose = () => {
-    // Remove all completed or ready tasks
-    const completedTasks = episodeTasks.filter(t => t.status === 'ready' || t.status === 'completed');
-    completedTasks.forEach(t => removeTask(t.id));
-  };
-
   return (
     <div className="fixed bottom-6 right-6 z-50 w-96 bg-gradient-to-br from-gray-900 via-gray-800 to-black rounded-2xl p-6 border-2 border-purple-500/50 shadow-2xl backdrop-blur-xl animate-slide-in">
       <div className="flex items-center justify-between mb-3">
@@ -90,27 +84,16 @@ export function FloatingUploadProgress() {
           <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
           Upload de Episódios ({visibleTasks.length})
         </h4>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleClearStuckTasks}
-            className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
-            title="Limpar todos os uploads travados"
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Limpar Todos
-          </button>
-          <button
-            onClick={handleClose}
-            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-            title="Fechar"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+        <button
+          onClick={handleClearStuckTasks}
+          className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
+          title="Cancelar todos os uploads"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Cancelar Todos
+        </button>
       </div>
 
       {/* Overall Progress */}

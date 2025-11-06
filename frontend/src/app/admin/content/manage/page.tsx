@@ -53,6 +53,21 @@ export default function ContentManagePage() {
     });
   }, [tasks]);
 
+  // Reload contents when episode uploads are completed
+  useEffect(() => {
+    const episodeTasks = tasks.filter(t => t.type === 'episode');
+    const allCompleted = episodeTasks.length > 0 &&
+                         episodeTasks.every(t => t.status === 'ready' || t.status === 'completed');
+
+    if (allCompleted) {
+      console.log('[ContentManage] All episode uploads completed, reloading content list...');
+      // Wait 2 seconds to ensure backend has updated the counts
+      setTimeout(() => {
+        fetchContents();
+      }, 2000);
+    }
+  }, [tasks]);
+
   const fetchContents = async () => {
     try {
       setLoading(true);
