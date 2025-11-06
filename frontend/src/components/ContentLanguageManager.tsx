@@ -199,7 +199,8 @@ export function ContentLanguageManager({ contentId, onLanguagesChange, onPending
           videoFile: undefined,
         });
 
-        alert(`Idioma "${newLanguage.language_name}" adicionado! Clique em "Salvar Alterações" para iniciar o upload.`);
+        const tipoTexto = newLanguage.language_type === 'dubbed' ? 'Dublado' : 'Legendado';
+        alert(`Idioma "${tipoTexto}" adicionado! Clique em "Salvar Alterações" para iniciar o upload.`);
       } else {
         const error = await response.json();
         alert(error.message || 'Erro ao adicionar idioma');
