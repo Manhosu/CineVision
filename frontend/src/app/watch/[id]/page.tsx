@@ -57,6 +57,11 @@ export default function WatchPage({ params }: WatchPageProps) {
           `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/movies/${id}`,
           {
             credentials: 'include',
+            cache: 'no-store', // Always fetch fresh data - reflects admin changes immediately
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            },
           }
         );
 
@@ -66,6 +71,11 @@ export default function WatchPage({ params }: WatchPageProps) {
             `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/series/${id}`,
             {
               credentials: 'include',
+              cache: 'no-store', // Always fetch fresh data - reflects admin changes immediately
+              headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+              },
             }
           );
         }

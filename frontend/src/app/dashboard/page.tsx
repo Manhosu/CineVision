@@ -129,9 +129,12 @@ export default function DashboardPage() {
     const makeRequest = async (authToken: string) => {
       return fetch(url, {
         ...options,
+        cache: 'no-store', // Always fetch fresh data - reflects admin changes immediately
         headers: {
           ...options.headers,
           'Authorization': `Bearer ${authToken}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
         },
       });
     };
