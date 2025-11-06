@@ -90,7 +90,8 @@ export function useStartPendingUploads() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          contentId: episodeId,
+          contentId: contentId, // Use seriesId from pendingUpload
+          episodeId: episodeId, // Add episodeId separately
           filename: file.name,
           contentType,
           size: file.size,
@@ -155,7 +156,8 @@ export function useStartPendingUploads() {
             uploadId,
             key,
             parts: uploadedParts,
-            contentId: episodeId,
+            contentId: contentId, // Use seriesId from pendingUpload
+            episodeId: episodeId, // Add episodeId separately
           }),
         }
       );
