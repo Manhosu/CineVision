@@ -118,7 +118,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       )
     );
 
-    // Abort upload in backend if it has uploadId
+    // Abort upload in backend if it's a movie upload (has languageId)
     if (task.uploadId && task.languageId) {
       try {
         const token = typeof window !== 'undefined'
@@ -141,6 +141,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error(`[UploadContext] Erro ao cancelar upload:`, error);
       }
+    } else if (task.type === 'episode') {
+      // For episodes, we can't abort multipart uploads yet (no backend endpoint)
+      // Just mark as cancelled - the upload will continue in background but be ignored
+      console.log(`[UploadContext] ⚠️ Episode upload marked as cancelled (no backend abort): ${task.fileName}`);
     }
   }, [tasks]);
 

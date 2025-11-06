@@ -68,12 +68,19 @@ export function FloatingUploadProgress() {
 
   const handleCancelTask = async (taskId: string, episodeTitle: string) => {
     try {
-      await cancelTask(taskId);
+      // For episodes, just remove from list (no backend abort needed)
+      removeTask(taskId);
       toast.success(`Upload de "${episodeTitle}" cancelado`);
     } catch (error) {
       console.error('Error canceling task:', error);
       toast.error('Erro ao cancelar upload');
     }
+  };
+
+  const handleClose = () => {
+    // Remove all completed or ready tasks
+    const completedTasks = episodeTasks.filter(t => t.status === 'ready' || t.status === 'completed');
+    completedTasks.forEach(t => removeTask(t.id));
   };
 
   return (
@@ -83,16 +90,27 @@ export function FloatingUploadProgress() {
           <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
           Upload de Episódios ({visibleTasks.length})
         </h4>
-        <button
-          onClick={handleClearStuckTasks}
-          className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
-          title="Limpar todos os uploads travados"
-        >
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          Limpar Todos
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleClearStuckTasks}
+            className="text-xs px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center gap-1"
+            title="Limpar todos os uploads travados"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Limpar Todos
+          </button>
+          <button
+            onClick={handleClose}
+            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            title="Fechar"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Overall Progress */}
@@ -175,8 +193,7 @@ export function FloatingUploadProgress() {
               <button
                 onClick={() => handleCancelTask(task.id, task.contentTitle)}
                 className="flex-shrink-0 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                title="Cancelar upload"
-                disabled={task.status === 'completed' || task.status === 'ready'}
+                title={task.status === 'uploading' ? "Cancelar upload" : "Remover da lista"}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
