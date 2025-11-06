@@ -5,11 +5,21 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 export interface PendingUpload {
   id: string;
   file: File;
-  episodeId: string;
-  episodeTitle: string;
-  seasonNumber: number;
-  episodeNumber: number;
   contentId: string;
+
+  // Episode-specific fields (for series)
+  episodeId?: string;
+  episodeTitle?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+
+  // Language-specific fields (for movies)
+  languageId?: string;
+  languageName?: string;
+  contentTitle?: string;
+
+  // Upload type
+  type: 'episode' | 'language';
 }
 
 export interface UploadTask {

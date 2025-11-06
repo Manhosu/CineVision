@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debug Autenticação</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #0f0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #2a2a2a;
+      border: 1px solid #0f0;
+      border-radius: 5px;
+    }
+    h2 {
+      color: #0ff;
+      margin-top: 0;
+    }
+    .token {
+      word-break: break-all;
+      background: #000;
+      padding: 10px;
+      border-radius: 3px;
+      margin: 10px 0;
+    }
+    .error {
+      color: #f00;
+    }
+    .success {
+      color: #0f0;
+    }
+    .warning {
+      color: #ff0;
+    }
+    button {
+      background: #0f0;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #0ff;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Debug de Autenticação - CineVision</h1>
+
+  <div class="section">
+    <h2>1. Tokens no LocalStorage</h2>
+    <div id="tokens"></div>
+  </div>
+
+  <div class="section">
+    <h2>2. Decodificação do JWT</h2>
+    <div id="jwt-decode"></div>
+  </div>
+
+  <div class="section">
+    <h2>3. Testar Endpoint do Dashboard</h2>
+    <button onclick="testDashboardEndpoint()">Testar Endpoint</button>
+    <div id="test-result"></div>
+  </div>
+
+  <div class="section">
+    <h2>4. Renovar Token</h2>
+    <button onclick="refreshToken()">Renovar Token</button>
+    <div id="refresh-result"></div>
+  </div>
+
+  <script>
+    // Função para decodificar JWT
+    function decodeJWT(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (error) {
+        return null;
+      }
+    }
+
+    // 1. Verificar tokens no localStorage
+    function checkTokens() {
+      const tokensDiv = document.getElementById('tokens');
+      const accessToken = localStorage.getItem('access_token');
+      const refreshToken = localStorage.getItem('refresh_token');
+      const authToken = localStorage.getItem('auth_token');
+      const user = localStorage.getItem('user');
+
+      let html = '<ul>';
+
+      html += `<li><strong>access_token:</strong> ${accessToken ? '<span class="success">✓ Presente</span>' : '<span class="error">✗ Ausente</span>'}</li>`;
+      if (accessToken) {
+        html += `<li class="token">${accessToken.substring(0, 50)}...</li>`;
+      }
+
+      html += `<li><strong>auth_token:</strong> ${authToken ? '<span class="success">✓ Presente</span>' : '<span class="error">✗ Ausente</span>'}</li>`;
+      if (authToken) {
+        html += `<li class="token">${authToken.substring(0, 50)}...</li>`;
+      }
+
+      html += `<li><strong>refresh_token:</strong> ${refreshToken ? '<span class="success">✓ Presente</span>' : '<span class="error">✗ Ausente</span>'}</li>`;
+
+      html += `<li><strong>user:</strong> ${user ? '<span class="success">✓ Presente</span>' : '<span class="error">✗ Ausente</span>'}</li>`;
+      if (user) {
+        const userData = JSON.parse(user);
+        html += `<li class="token">User ID: ${userData.id}</li>`;
+        html += `<li class="token">Telegram ID: ${userData.telegram_id}</li>`;
+        html += `<li class="token">Name: ${userData.name || 'N/A'}</li>`;
+      }
+
+      html += '</ul>';
+      tokensDiv.innerHTML = html;
+    }
+
+    // 2. Decodificar JWT
+    function decodeTokens() {
+      const jwtDiv = document.getElementById('jwt-decode');
+      const authToken = localStorage.getItem('auth_token');
+
+      if (!authToken) {
+        jwtDiv.innerHTML = '<p class="error">✗ Nenhum token auth_token encontrado</p>';
+        return;
+      }
+
+      const decoded = decodeJWT(authToken);
+
+      if (!decoded) {
+        jwtDiv.innerHTML = '<p class="error">✗ Falha ao decodificar token (formato inválido)</p>';
+        return;
+      }
+
+      const now = Math.floor(Date.now() / 1000);
+      const expiresAt = decoded.exp;
+      const issuedAt = decoded.iat;
+      const isExpired = expiresAt < now;
+      const timeToExpire = expiresAt - now;
+
+      let html = '<ul>';
+      html += `<li><strong>Issued At (iat):</strong> ${new Date(issuedAt * 1000).toLocaleString('pt-BR')}</li>`;
+      html += `<li><strong>Expires At (exp):</strong> ${new Date(expiresAt * 1000).toLocaleString('pt-BR')}</li>`;
+      html += `<li><strong>Status:</strong> ${isExpired ? '<span class="error">✗ EXPIRADO</span>' : '<span class="success">✓ VÁLIDO</span>'}</li>`;
+
+      if (!isExpired) {
+        const hours = Math.floor(timeToExpire / 3600);
+        const minutes = Math.floor((timeToExpire % 3600) / 60);
+        html += `<li><strong>Tempo restante:</strong> <span class="success">${hours}h ${minutes}m</span></li>`;
+      } else {
+        const hoursExpired = Math.floor(-timeToExpire / 3600);
+        const minutesExpired = Math.floor((-timeToExpire % 3600) / 60);
+        html += `<li><strong>Expirado há:</strong> <span class="error">${hoursExpired}h ${minutesExpired}m</span></li>`;
+      }
+
+      html += `<li><strong>User ID:</strong> ${decoded.sub || 'N/A'}</li>`;
+      html += `<li><strong>Email:</strong> ${decoded.email || 'N/A'}</li>`;
+      html += `<li><strong>Telegram ID:</strong> ${decoded.telegram_id || 'N/A'}</li>`;
+      html += '</ul>';
+
+      html += '<h3>Payload Completo:</h3>';
+      html += `<div class="token">${JSON.stringify(decoded, null, 2)}</div>`;
+
+      jwtDiv.innerHTML = html;
+    }
+
+    // 3. Testar endpoint do dashboard
+    async function testDashboardEndpoint() {
+      const resultDiv = document.getElementById('test-result');
+      resultDiv.innerHTML = '<p class="warning">⏳ Testando endpoint...</p>';
+
+      const authToken = localStorage.getItem('auth_token');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+      if (!authToken || !user.id) {
+        resultDiv.innerHTML = '<p class="error">✗ Token ou User ID não encontrado</p>';
+        return;
+      }
+
+      const url = `${window.location.protocol}//${window.location.hostname}:3001/api/v1/purchases/user/${user.id}/content`;
+
+      try {
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+          },
+        });
+
+        let html = '<ul>';
+        html += `<li><strong>URL:</strong> <span class="token">${url}</span></li>`;
+        html += `<li><strong>Status:</strong> ${response.ok ? '<span class="success">✓ ' + response.status + ' OK</span>' : '<span class="error">✗ ' + response.status + ' ' + response.statusText + '</span>'}</li>`;
+
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          html += `<li><strong>Response:</strong></li>`;
+          html += `<li class="token">${JSON.stringify(data, null, 2)}</li>`;
+        } else {
+          const text = await response.text();
+          html += `<li><strong>Response (text):</strong></li>`;
+          html += `<li class="token">${text}</li>`;
+        }
+
+        html += '</ul>';
+        resultDiv.innerHTML = html;
+      } catch (error) {
+        resultDiv.innerHTML = `<p class="error">✗ Erro: ${error.message}</p>`;
+      }
+    }
+
+    // 4. Renovar token
+    async function refreshToken() {
+      const resultDiv = document.getElementById('refresh-result');
+      resultDiv.innerHTML = '<p class="warning">⏳ Renovando token...</p>';
+
+      const refreshToken = localStorage.getItem('refresh_token');
+
+      if (!refreshToken) {
+        resultDiv.innerHTML = '<p class="error">✗ Nenhum refresh_token encontrado</p>';
+        return;
+      }
+
+      const url = `${window.location.protocol}//${window.location.hostname}:3001/api/v1/auth/refresh`;
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Atualizar localStorage
+          localStorage.setItem('access_token', data.access_token);
+          localStorage.setItem('auth_token', data.access_token);
+          if (data.refresh_token) {
+            localStorage.setItem('refresh_token', data.refresh_token);
+          }
+
+          let html = '<p class="success">✓ Token renovado com sucesso!</p>';
+          html += '<p>Recarregando diagnósticos...</p>';
+          resultDiv.innerHTML = html;
+
+          // Recarregar diagnósticos
+          setTimeout(() => {
+            checkTokens();
+            decodeTokens();
+          }, 500);
+        } else {
+          const error = await response.json();
+          resultDiv.innerHTML = `<p class="error">✗ Falha ao renovar: ${error.message || response.statusText}</p>`;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<p class="error">✗ Erro: ${error.message}</p>`;
+      }
+    }
+
+    // Executar diagnósticos ao carregar
+    window.onload = () => {
+      checkTokens();
+      decodeTokens();
+    };
+  </script>
+</body>
+</html>

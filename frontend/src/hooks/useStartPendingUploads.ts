@@ -18,9 +18,16 @@ export function useStartPendingUploads() {
     console.log(`[useStartPendingUploads] Starting ${pendingUploads.length} pending upload(s)`);
 
     // Start all uploads in parallel
-    const uploadPromises = pendingUploads.map(pendingUpload =>
-      uploadEpisodeFile(pendingUpload)
-    );
+    const uploadPromises = pendingUploads.map(pendingUpload => {
+      if (pendingUpload.type === 'episode') {
+        return uploadEpisodeFile(pendingUpload);
+      } else if (pendingUpload.type === 'language') {
+        return uploadLanguageFile(pendingUpload);
+      } else {
+        console.error('[useStartPendingUploads] Unknown upload type:', pendingUpload);
+        return Promise.resolve();
+      }
+    });
 
     await Promise.allSettled(uploadPromises);
 
@@ -179,6 +186,166 @@ export function useStartPendingUploads() {
 
     } catch (error: any) {
       console.error('[useStartPendingUploads] Erro no upload:', error);
+
+      updateTask(taskId, {
+        status: 'error',
+        error: error.message || 'Erro no upload',
+      });
+
+      // Don't remove from pending if it failed - user might retry
+    }
+  };
+
+  const uploadLanguageFile = async (pendingUpload: any) => {
+    const { id, file, languageId, languageName, contentTitle, contentId } = pendingUpload;
+
+    // Create unique task ID
+    const taskId = `language-${languageId}-${Date.now()}`;
+
+    try {
+      // Add task to upload context
+      addTask({
+        id: taskId,
+        fileName: file.name,
+        contentTitle: contentTitle || `${languageName}`,
+        progress: 0,
+        status: 'uploading',
+        type: 'movie',
+        languageId,
+      });
+
+      // Get auth token
+      let token: string | null = null;
+
+      if (typeof window !== 'undefined') {
+        const backendToken = localStorage.getItem('access_token');
+        if (backendToken) {
+          token = backendToken;
+        } else {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            token = session.access_token;
+            localStorage.setItem('auth_token', token);
+          } else {
+            token = localStorage.getItem('token') || localStorage.getItem('auth_token');
+          }
+        }
+      }
+
+      if (!token) {
+        throw new Error('Não foi possível obter token de autenticação');
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      };
+
+      // Detect content type
+      const contentType = file.type || 'video/mp4';
+
+      console.log('[useStartPendingUploads] Iniciando upload de linguagem:', {
+        languageId,
+        fileName: file.name,
+        size: file.size,
+        contentType
+      });
+
+      // 1. Initialize multipart upload for language
+      const initResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/initiate-multipart`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          content_language_id: languageId,
+          filename: file.name,
+          content_type: contentType,
+          file_size: file.size,
+        }),
+      });
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
+        throw new Error(errorData.message || 'Erro ao iniciar upload');
+      }
+
+      const { upload_id, presigned_urls } = await initResponse.json();
+      const uploadedParts: { ETag: string; PartNumber: number }[] = [];
+
+      console.log('[useStartPendingUploads] Upload de linguagem iniciado:', { upload_id, partsCount: presigned_urls.length });
+
+      // Update task with uploadId
+      updateTask(taskId, { uploadId: upload_id });
+
+      // 2. Upload chunks
+      const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+      for (let i = 0; i < presigned_urls.length; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, file.size);
+        const chunk = file.slice(start, end);
+
+        const partResponse = await fetch(presigned_urls[i], {
+          method: 'PUT',
+          body: chunk,
+          headers: {
+            'Content-Type': contentType,
+          },
+        });
+
+        if (!partResponse.ok) {
+          throw new Error(`Erro ao fazer upload da parte ${i + 1}`);
+        }
+
+        const etag = partResponse.headers.get('ETag');
+        if (!etag) {
+          throw new Error(`ETag não retornado para parte ${i + 1}`);
+        }
+
+        uploadedParts.push({
+          ETag: etag.replace(/"/g, ''),
+          PartNumber: i + 1
+        });
+
+        // Update progress
+        const progress = Math.round(((i + 1) / presigned_urls.length) * 100);
+        updateTask(taskId, { progress });
+      }
+
+      console.log('[useStartPendingUploads] Upload de partes de linguagem concluído');
+
+      // 3. Complete upload
+      const completeResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/complete-multipart`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            content_language_id: languageId,
+            upload_id: upload_id,
+            parts: uploadedParts,
+          }),
+        }
+      );
+
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json();
+        throw new Error(errorData.message || 'Erro ao finalizar upload');
+      }
+
+      console.log('[useStartPendingUploads] Upload de linguagem concluído com sucesso!');
+
+      // Mark as completed
+      updateTask(taskId, {
+        status: 'ready',
+        progress: 100,
+        processingStatus: 'ready',
+        completedAt: Date.now(),
+      });
+
+      // Remove from pending uploads
+      removePendingUpload(id);
+
+    } catch (error: any) {
+      console.error('[useStartPendingUploads] Erro no upload de linguagem:', error);
 
       updateTask(taskId, {
         status: 'error',

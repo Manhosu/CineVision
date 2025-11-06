@@ -61,7 +61,7 @@ export default function AdminContentEditPage() {
   const router = useRouter();
   const params = useParams();
   const contentId = params?.id as string;
-  const { pendingUploads } = useUpload();
+  const { pendingUploads, addPendingUpload } = useUpload();
 
   const posterInputRef = useRef<HTMLInputElement>(null);
   const backdropInputRef = useRef<HTMLInputElement>(null);
@@ -71,6 +71,9 @@ export default function AdminContentEditPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'languages' | 'episodes'>('details');
+
+  // Track pending language uploads from ContentLanguageManager
+  const [pendingLanguageUploads, setPendingLanguageUploads] = useState<Array<{ languageId: string; file: File; languageName: string }>>([]);
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -270,12 +273,40 @@ export default function AdminContentEditPage() {
       if (response.ok) {
         toast.success('Conteúdo atualizado com sucesso!');
 
-        // Check if there are pending uploads
+        // Check if there are pending episode uploads
         const contentPendingUploads = pendingUploads.filter(u => u.contentId === contentId);
 
-        if (contentPendingUploads.length > 0) {
-          // Redirect to manage page to start uploads
-          toast.success(`${contentPendingUploads.length} upload(s) pendente(s). Iniciando uploads...`);
+        // Check if there are pending language uploads
+        const hasPendingLanguageUploads = pendingLanguageUploads.length > 0;
+
+        if (contentPendingUploads.length > 0 || hasPendingLanguageUploads) {
+          // Add pending language uploads to context
+          if (hasPendingLanguageUploads) {
+            toast.success(`Adicionando ${pendingLanguageUploads.length} upload(s) de vídeo à fila...`);
+
+            // Add each pending language upload to context
+            for (const pendingUpload of pendingLanguageUploads) {
+              addPendingUpload({
+                id: `pending-language-${pendingUpload.languageId}`,
+                file: pendingUpload.file,
+                languageId: pendingUpload.languageId,
+                languageName: pendingUpload.languageName,
+                contentTitle: `${content?.title} - ${pendingUpload.languageName}`,
+                contentId,
+                type: 'language',
+              });
+            }
+
+            // Clear local pending language uploads
+            setPendingLanguageUploads([]);
+          }
+
+          if (contentPendingUploads.length > 0) {
+            toast.success(`${contentPendingUploads.length} upload(s) de episódio pendente(s)`);
+          }
+
+          // Redirect to manage page where useStartPendingUploads hook will start uploads
+          toast.success('Redirecionando para gerenciamento. Os uploads serão iniciados automaticamente.');
           router.push('/admin/content/manage');
         } else {
           // No pending uploads, just reload
@@ -299,6 +330,9 @@ export default function AdminContentEditPage() {
     // Check if there are pending uploads for this content
     const hasPendingUploads = pendingUploads.some(upload => upload.contentId === contentId);
     if (hasPendingUploads) return true;
+
+    // Check if there are pending language uploads
+    if (pendingLanguageUploads.length > 0) return true;
 
     // Compare arrays
     const originalGenres = originalContent.genres
@@ -758,6 +792,10 @@ export default function AdminContentEditPage() {
                 contentId={contentId}
                 onLanguagesChange={(languages) => {
                   console.log('Idiomas atualizados:', languages);
+                }}
+                onPendingUploads={(uploads) => {
+                  console.log('Pending uploads updated:', uploads);
+                  setPendingLanguageUploads(uploads);
                 }}
               />
             </div>

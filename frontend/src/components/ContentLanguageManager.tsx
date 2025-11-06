@@ -34,6 +34,7 @@ interface ContentLanguage {
 interface ContentLanguageManagerProps {
   contentId: string;
   onLanguagesChange?: (languages: ContentLanguage[]) => void;
+  onPendingUploads?: (pendingUploads: Array<{ languageId: string; file: File; languageName: string }>) => void;
 }
 
 const LANGUAGE_TYPE_LABELS = {
@@ -41,12 +42,13 @@ const LANGUAGE_TYPE_LABELS = {
   subtitled: 'Legendado',
 };
 
-export function ContentLanguageManager({ contentId, onLanguagesChange }: ContentLanguageManagerProps) {
+export function ContentLanguageManager({ contentId, onLanguagesChange, onPendingUploads }: ContentLanguageManagerProps) {
   const [languages, setLanguages] = useState<ContentLanguage[]>([]);
   const [languageOptions, setLanguageOptions] = useState<LanguageOption[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [uploadingLanguageId, setUploadingLanguageId] = useState<string | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<Array<{ languageId: string; file: File; languageName: string }>>([]);
 
   // Upload progress tracking
   const [uploadProgress, setUploadProgress] = useState<{
@@ -138,6 +140,11 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
       return;
     }
 
+    if (!newLanguage.videoFile) {
+      alert('Por favor, selecione um arquivo de vídeo');
+      return;
+    }
+
     // Verificar se já existe um arquivo do mesmo tipo
     const existingType = languages.find(lang => lang.language_type === newLanguage.language_type);
     if (existingType) {
@@ -159,11 +166,29 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
         },
         body: JSON.stringify({
           content_id: contentId,
-          ...newLanguage,
+          language_type: newLanguage.language_type,
+          language_code: newLanguage.language_code,
+          language_name: newLanguage.language_name,
+          is_default: newLanguage.is_default,
         }),
       });
 
       if (response.ok) {
+        const createdLanguage = await response.json();
+
+        // Adicionar à lista de uploads pendentes
+        const newPending = {
+          languageId: createdLanguage.id,
+          file: newLanguage.videoFile,
+          languageName: newLanguage.language_name,
+        };
+
+        const updatedPending = [...pendingUploads, newPending];
+        setPendingUploads(updatedPending);
+
+        // Notificar componente pai
+        onPendingUploads?.(updatedPending);
+
         await loadLanguages();
         setShowAddForm(false);
         setNewLanguage({
@@ -173,6 +198,8 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
           is_default: false,
           videoFile: undefined,
         });
+
+        alert(`Idioma "${newLanguage.language_name}" adicionado! Clique em "Salvar Alterações" para iniciar o upload.`);
       } else {
         const error = await response.json();
         alert(error.message || 'Erro ao adicionar idioma');
@@ -429,6 +456,9 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                       {language.is_default && (
                         <Badge variant="default">Padrão</Badge>
                       )}
+                      {pendingUploads.some(p => p.languageId === language.id) && !language.video_url && (
+                        <Badge className="bg-yellow-600 hover:bg-yellow-700">Upload Pendente</Badge>
+                      )}
                     </div>
 
                     <div className="text-sm text-gray-600 space-y-1">
@@ -436,8 +466,11 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                       {language.video_url && (
                         <p>Status: ✅ Vídeo carregado ({formatFileSize(language.file_size_bytes)})</p>
                       )}
-                      {!language.video_url && (
-                        <p>Status: ⏳ Aguardando upload</p>
+                      {!language.video_url && !pendingUploads.some(p => p.languageId === language.id) && (
+                        <p>Status: ⚠️ Nenhum vídeo adicionado</p>
+                      )}
+                      {!language.video_url && pendingUploads.some(p => p.languageId === language.id) && (
+                        <p>Status: ⏳ Arquivo selecionado - clique em "Salvar Alterações" para iniciar upload</p>
                       )}
                     </div>
                   </div>
@@ -456,16 +489,6 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                     )}
 
                     <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setUploadingLanguageId(language.id)}
-                      className="flex items-center gap-1"
-                    >
-                      <Upload className="w-3 h-3" />
-                      Upload
-                    </Button>
-
-                    <Button
                       variant="destructive"
                       size="sm"
                       onClick={() => handleDeleteLanguage(language.id)}
@@ -476,7 +499,7 @@ export function ContentLanguageManager({ contentId, onLanguagesChange }: Content
                   </div>
                 </div>
 
-                {uploadingLanguageId === language.id && (
+                {false && uploadingLanguageId === language.id && (
                   <div className="mt-4 border-t pt-4 space-y-4">
                     {/* Upload Progress Bar */}
                     {uploadProgress && uploadProgress.status !== 'completed' && (

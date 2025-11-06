@@ -55,6 +55,7 @@ export const EpisodeVideoUpload = forwardRef<EpisodeVideoUploadRef, Props>(
         seasonNumber,
         episodeNumber,
         contentId,
+        type: 'episode',
       });
 
       console.log('[EpisodeVideoUpload] Arquivo salvo como pendente:', {
