@@ -183,6 +183,14 @@ export function ContentLanguageManager({ contentId, onLanguagesChange, onPending
           languageName: newLanguage.language_name,
         };
 
+        console.log('[ContentLanguageManager] Adding to pending uploads:', {
+          languageId: createdLanguage.id,
+          hasFile: !!newLanguage.videoFile,
+          fileName: newLanguage.videoFile?.name,
+          fileSize: newLanguage.videoFile?.size,
+          languageName: newLanguage.language_name
+        });
+
         const updatedPending = [...pendingUploads, newPending];
         setPendingUploads(updatedPending);
 

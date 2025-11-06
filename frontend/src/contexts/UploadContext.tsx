@@ -250,14 +250,18 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           const taskTime = parseInt(task.id.split('-')[1] || '0');
           const age = now - taskTime;
 
-          // Remove stuck movie uploads (uploading but 0% progress for more than 30 seconds)
-          if (task.status === 'uploading' && task.progress === 0 && age > 30000) {
-            console.log('Removing stuck movie upload:', task.id);
+          // Remove stuck movie uploads (uploading but 0% progress for more than 2 minutes)
+          // Increased from 30s to 2 minutes to avoid removing uploads that are just slow to start
+          if (task.status === 'uploading' && task.progress === 0 && age > 120000) {
+            console.log('[UploadContext] Removing stuck movie upload (0% for 2 min):', task.id, task.fileName);
             return false;
           }
 
-          // Keep uploading movie tasks that are making progress
-          if (task.status === 'uploading') return true;
+          // Keep uploading movie tasks that are making progress OR recently started
+          if (task.status === 'uploading') {
+            console.log('[UploadContext] Keeping active movie upload:', task.id, 'progress:', task.progress, '%');
+            return true;
+          }
 
           // Auto-remove completed, error, or cancelled movie tasks older than 2 minutes
           return age < 120000; // Keep for 2 minutes so user can see upload result

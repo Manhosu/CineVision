@@ -7,6 +7,17 @@ export function useStartPendingUploads() {
   const isProcessing = useRef(false);
 
   useEffect(() => {
+    console.log('[useStartPendingUploads] Effect triggered:', {
+      pendingUploadsLength: pendingUploads.length,
+      isProcessing: isProcessing.current,
+      pendingUploads: pendingUploads.map(p => ({
+        id: p.id,
+        type: p.type,
+        hasFile: !!p.file,
+        fileName: p.file?.name
+      }))
+    });
+
     // Only start if there are pending uploads and not already processing
     if (pendingUploads.length > 0 && !isProcessing.current) {
       isProcessing.current = true;

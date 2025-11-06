@@ -286,6 +286,14 @@ export default function AdminContentEditPage() {
 
             // Add each pending language upload to context
             for (const pendingUpload of pendingLanguageUploads) {
+              console.log('[EditPage] Adding pending language upload:', {
+                languageId: pendingUpload.languageId,
+                hasFile: !!pendingUpload.file,
+                fileName: pendingUpload.file?.name,
+                fileSize: pendingUpload.file?.size,
+                languageName: pendingUpload.languageName
+              });
+
               addPendingUpload({
                 id: `pending-language-${pendingUpload.languageId}`,
                 file: pendingUpload.file,

@@ -11,14 +11,14 @@ export function FloatingUploadProgress() {
   useEffect(() => {
     console.log('[FloatingUploadProgress] All tasks:', tasks);
     const episodeTasks = tasks.filter(t => t.type === 'episode');
-    console.log('[FloatingUploadProgress] Episode tasks:', episodeTasks);
+    const movieTasks = tasks.filter(t => t.type === 'movie');
+    console.log('[FloatingUploadProgress] Episode tasks:', episodeTasks.length, 'Movie tasks:', movieTasks.length);
   }, [tasks]);
 
-  // Auto-remove FULLY completed episode tasks after 10 seconds
+  // Auto-remove FULLY completed tasks after 10 seconds (episodes AND movies)
   // Only remove when processing is complete (status=ready OR processingStatus=ready)
   useEffect(() => {
-    const episodeTasks = tasks.filter(t => t.type === 'episode');
-    const fullyCompletedTasks = episodeTasks.filter(t =>
+    const fullyCompletedTasks = tasks.filter(t =>
       (t.status === 'ready' || t.processingStatus === 'ready') && t.completedAt
     );
 
@@ -28,7 +28,7 @@ export function FloatingUploadProgress() {
         const timeRemaining = Math.max(0, 10000 - timeElapsed);
 
         return setTimeout(() => {
-          console.log('[FloatingUploadProgress] Auto-removing fully completed task:', task.id);
+          console.log('[FloatingUploadProgress] Auto-removing fully completed task:', task.id, 'type:', task.type);
           removeTask(task.id);
         }, timeRemaining);
       });
@@ -37,19 +37,20 @@ export function FloatingUploadProgress() {
     }
   }, [tasks, removeTask]);
 
-  // Filtrar apenas uploads de episódios
+  // Filtrar uploads de episódios e filmes
   const episodeTasks = tasks.filter(t => t.type === 'episode');
+  const movieTasks = tasks.filter(t => t.type === 'movie');
 
-  // Show all episode tasks during the entire upload session
-  const visibleTasks = episodeTasks;
+  // Show all tasks during the entire upload session
+  const visibleTasks = [...episodeTasks, ...movieTasks];
 
-  // Não mostrar se não há uploads de episódios
+  // Não mostrar se não há uploads
   if (visibleTasks.length === 0) {
-    console.log('[FloatingUploadProgress] No visible episode tasks, hiding component');
+    console.log('[FloatingUploadProgress] No visible tasks, hiding component');
     return null;
   }
 
-  console.log('[FloatingUploadProgress] Rendering with', visibleTasks.length, 'visible episode tasks');
+  console.log('[FloatingUploadProgress] Rendering with', visibleTasks.length, 'visible tasks (', episodeTasks.length, 'episodes,', movieTasks.length, 'movies)');
 
   // Calculate overall progress
   const overallProgress = visibleTasks.length > 0
@@ -66,11 +67,19 @@ export function FloatingUploadProgress() {
     }
   };
 
-  const handleCancelTask = async (taskId: string, episodeTitle: string) => {
+  const handleCancelTask = async (taskId: string, contentTitle: string) => {
     try {
-      // For episodes, just remove from list (no backend abort needed)
-      removeTask(taskId);
-      toast.success(`Upload de "${episodeTitle}" cancelado`);
+      const task = tasks.find(t => t.id === taskId);
+
+      // For movies with languageId, try to abort the upload in backend
+      if (task?.type === 'movie' && task.languageId && task.uploadId) {
+        await cancelTask(taskId);
+      } else {
+        // For episodes or movies without upload started, just remove from list
+        removeTask(taskId);
+      }
+
+      toast.success(`Upload de "${contentTitle}" cancelado`);
     } catch (error) {
       console.error('Error canceling task:', error);
       toast.error('Erro ao cancelar upload');
@@ -82,7 +91,7 @@ export function FloatingUploadProgress() {
       <div className="flex items-center justify-between mb-3">
         <h4 className="text-lg font-bold text-white flex items-center">
           <div className="w-2 h-2 bg-purple-500 rounded-full mr-2 animate-pulse"></div>
-          Upload de Episódios ({visibleTasks.length})
+          Uploads ({visibleTasks.length})
         </h4>
         <button
           onClick={handleClearStuckTasks}
@@ -141,7 +150,10 @@ export function FloatingUploadProgress() {
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between text-xs text-gray-300 mb-1">
                   <span className="font-medium truncate max-w-[160px]" title={task.contentTitle}>
-                    S{task.seasonNumber}E{task.episodeNumber} - {task.contentTitle}
+                    {task.type === 'episode'
+                      ? `S${task.seasonNumber}E${task.episodeNumber} - ${task.contentTitle}`
+                      : task.contentTitle
+                    }
                   </span>
                   <span className="ml-2">{task.progress.toFixed(0)}%</span>
                 </div>
