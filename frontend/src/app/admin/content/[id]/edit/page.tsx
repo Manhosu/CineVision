@@ -286,6 +286,10 @@ export default function AdminContentEditPage() {
   const hasChanges = () => {
     if (!originalContent) return false;
 
+    // Check if there are pending uploads for this content
+    const hasPendingUploads = pendingUploads.some(upload => upload.contentId === contentId);
+    if (hasPendingUploads) return true;
+
     // Compare arrays
     const originalGenres = originalContent.genres
       ? (Array.isArray(originalContent.genres) ? originalContent.genres : originalContent.genres.split(',').map((g: string) => g.trim()))
