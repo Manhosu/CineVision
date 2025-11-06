@@ -23,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       sub: payload.sub,  // Add 'sub' field for compatibility with @GetUser() decorator
       email: payload.email,
       role: payload.role,
+      telegram_id: payload.telegram_id,  // Include telegram_id from payload
     };
   }
 }
