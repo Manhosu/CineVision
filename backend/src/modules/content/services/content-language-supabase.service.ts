@@ -37,7 +37,7 @@ export class ContentLanguageSupabaseService {
   async create(createDto: CreateContentLanguageDto): Promise<any> {
     // Verificar se o conteúdo existe
     const { data: content, error: contentError } = await this.supabaseService.client
-      .from('contents')
+      .from('content')
       .select('id')
       .eq('id', createDto.content_id)
       .single();
