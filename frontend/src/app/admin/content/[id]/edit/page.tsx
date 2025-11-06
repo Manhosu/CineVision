@@ -146,7 +146,8 @@ export default function AdminContentEditPage() {
         setTelegramGroupLink(data.telegram_group_link || '');
         setIsFeatured(data.is_featured || false);
         setPriceInput((data.price_cents / 100).toFixed(2));
-        setImdbRating(data.imdb_rating?.toString() || '');
+        // Only set IMDB rating if it's valid (0-10)
+        setImdbRating(data.imdb_rating && data.imdb_rating >= 0 && data.imdb_rating <= 10 ? data.imdb_rating.toString() : '');
         setReleaseYear(data.release_year?.toString() || '');
         setPosterUrl(data.poster_url || '');
         setBackdropUrl(data.backdrop_url || '');
@@ -225,6 +226,15 @@ export default function AdminContentEditPage() {
 
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
 
+      // Validate IMDB rating (must be between 0-10)
+      let validatedImdbRating = undefined;
+      if (imdbRating) {
+        const rating = parseFloat(imdbRating);
+        if (rating >= 0 && rating <= 10) {
+          validatedImdbRating = rating;
+        }
+      }
+
       const updateData = {
         title: title.trim(),
         description: description.trim(),
@@ -241,7 +251,7 @@ export default function AdminContentEditPage() {
         backdrop_url: backdropUrl,
         is_featured: isFeatured,
         price_cents: Math.round(parseFloat(priceInput) * 100),
-        imdb_rating: imdbRating ? parseFloat(imdbRating) : undefined,
+        imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
       };
 
