@@ -96,15 +96,22 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   }, [tasks, mounted]);
 
   const addTask = useCallback((task: UploadTask) => {
-    console.log('[UploadContext] addTask called with:', task);
+    console.log('[UploadContext] ✅ ADDING TASK:', {
+      id: task.id,
+      type: task.type,
+      fileName: task.fileName,
+      status: task.status,
+      progress: task.progress
+    });
     setTasks(prev => {
       const newTasks = [...prev, task];
-      console.log('[UploadContext] New tasks array:', newTasks);
+      console.log('[UploadContext] Total tasks after add:', newTasks.length);
       return newTasks;
     });
   }, []);
 
   const updateTask = useCallback((id: string, updates: Partial<UploadTask>) => {
+    console.log('[UploadContext] 🔄 UPDATING TASK:', id, updates);
     setTasks(prev =>
       prev.map(task =>
         task.id === id ? { ...task, ...updates } : task
@@ -113,7 +120,19 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const removeTask = useCallback((id: string) => {
-    setTasks(prev => prev.filter(task => task.id !== id));
+    console.log('[UploadContext] ❌ REMOVING TASK:', id);
+    setTasks(prev => {
+      const task = prev.find(t => t.id === id);
+      if (task) {
+        console.log('[UploadContext] Task being removed:', {
+          id: task.id,
+          type: task.type,
+          status: task.status,
+          progress: task.progress
+        });
+      }
+      return prev.filter(task => task.id !== id);
+    });
   }, []);
 
   const cancelTask = useCallback(async (id: string) => {
@@ -241,33 +260,35 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const timer = setInterval(() => {
       setTasks(prev => {
         const now = Date.now();
+
+        // Log all current tasks for debugging
+        const movieTasks = prev.filter(t => t.type === 'movie');
+        if (movieTasks.length > 0) {
+          console.log('[UploadContext] Auto-removal check - Movie tasks:', movieTasks.map(t => ({
+            id: t.id,
+            status: t.status,
+            progress: t.progress,
+            age: now - parseInt(t.id.split('-')[1] || '0')
+          })));
+        }
+
         return prev.filter(task => {
           // NEVER auto-remove episode tasks - they persist until manually cleared
           if (task.type === 'episode') {
             return true;
           }
 
-          const taskTime = parseInt(task.id.split('-')[1] || '0');
-          const age = now - taskTime;
-
-          // Remove stuck movie uploads (uploading but 0% progress for more than 2 minutes)
-          // Increased from 30s to 2 minutes to avoid removing uploads that are just slow to start
-          if (task.status === 'uploading' && task.progress === 0 && age > 120000) {
-            console.log('[UploadContext] Removing stuck movie upload (0% for 2 min):', task.id, task.fileName);
-            return false;
-          }
-
-          // Keep uploading movie tasks that are making progress OR recently started
-          if (task.status === 'uploading') {
-            console.log('[UploadContext] Keeping active movie upload:', task.id, 'progress:', task.progress, '%');
+          // TEMPORARILY: NEVER auto-remove movie tasks during upload to debug the issue
+          // Once we confirm uploads work, we can re-enable auto-removal for completed tasks
+          if (task.type === 'movie') {
+            console.log('[UploadContext] Keeping movie task (auto-removal disabled for debugging):', task.id, 'status:', task.status, 'progress:', task.progress);
             return true;
           }
 
-          // Auto-remove completed, error, or cancelled movie tasks older than 2 minutes
-          return age < 120000; // Keep for 2 minutes so user can see upload result
+          return true;
         });
       });
-    }, 1000);
+    }, 5000); // Check every 5 seconds instead of 1 second to reduce log spam
 
     return () => clearInterval(timer);
   }, []);
