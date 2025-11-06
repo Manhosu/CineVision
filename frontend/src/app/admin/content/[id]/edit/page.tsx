@@ -241,7 +241,7 @@ export default function AdminContentEditPage() {
         synopsis: synopsis.trim(),
         release_date: releaseDate,
         duration_minutes: Number(durationMinutes),
-        genres: selectedGenres.join(', '),
+        genres: selectedGenres, // Send as array, not string
         rating: rating.trim(),
         director: director.trim(),
         cast: cast.trim(),
