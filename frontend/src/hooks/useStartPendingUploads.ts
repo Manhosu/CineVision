@@ -90,13 +90,11 @@ export function useStartPendingUploads() {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          contentId: contentId, // Use seriesId from pendingUpload
-          episodeId: episodeId, // Add episodeId separately
+          episodeId: episodeId, // For episodes, ONLY send episodeId (not contentId)
           filename: file.name,
           contentType,
           size: file.size,
           audioType: 'original', // Episodes don't have dubbing variants
-          isEpisode: true,
         }),
       });
 
@@ -156,8 +154,7 @@ export function useStartPendingUploads() {
             uploadId,
             key,
             parts: uploadedParts,
-            contentId: contentId, // Use seriesId from pendingUpload
-            episodeId: episodeId, // Add episodeId separately
+            episodeId: episodeId, // For episodes, ONLY send episodeId (not contentId)
           }),
         }
       );
