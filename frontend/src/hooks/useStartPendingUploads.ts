@@ -178,13 +178,15 @@ export function useStartPendingUploads() {
       );
 
       if (!completeResponse.ok) {
-        const errorData = await completeResponse.json();
+        const errorData = await completeResponse.json().catch(() => ({ message: 'Erro desconhecido' }));
+        console.error('[useStartPendingUploads] Erro ao completar upload:', errorData);
         throw new Error(errorData.message || 'Erro ao finalizar upload');
       }
 
-      console.log('[useStartPendingUploads] Upload concluído com sucesso!');
+      const completeData = await completeResponse.json();
+      console.log('[useStartPendingUploads] Upload concluído com sucesso! Resposta:', completeData);
 
-      // Mark as completed
+      // Mark as ready immediately (no video processing needed)
       updateTask(taskId, {
         status: 'ready',
         progress: 100,
