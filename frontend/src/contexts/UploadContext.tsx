@@ -27,7 +27,7 @@ export interface UploadTask {
   fileName: string;
   contentTitle: string;
   progress: number;
-  status: 'uploading' | 'completed' | 'converting' | 'ready' | 'error' | 'cancelled';
+  status: 'waiting' | 'uploading' | 'completed' | 'converting' | 'ready' | 'error' | 'cancelled';
   error?: string;
   cancelRequested?: boolean;
   uploadId?: string;

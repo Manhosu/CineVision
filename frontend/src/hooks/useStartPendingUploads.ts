@@ -26,24 +26,51 @@ export function useStartPendingUploads() {
   }, [pendingUploads.length]); // Trigger when pending uploads change
 
   const startAllUploads = async () => {
-    console.log(`[useStartPendingUploads] Starting ${pendingUploads.length} pending upload(s)`);
+    console.log(`[useStartPendingUploads] Starting ${pendingUploads.length} pending upload(s) with concurrency limit of 2`);
 
-    // Start all uploads in parallel
-    const uploadPromises = pendingUploads.map(pendingUpload => {
-      if (pendingUpload.type === 'episode') {
-        return uploadEpisodeFile(pendingUpload);
-      } else if (pendingUpload.type === 'language') {
-        return uploadLanguageFile(pendingUpload);
-      } else {
-        console.error('[useStartPendingUploads] Unknown upload type:', pendingUpload);
-        return Promise.resolve();
+    const MAX_CONCURRENT_UPLOADS = 2;
+    const queue = [...pendingUploads];
+    let activeCount = 0;
+
+    // Helper to process one upload
+    const processUpload = async (pendingUpload: any) => {
+      activeCount++;
+      console.log(`[useStartPendingUploads] ⬆️ Starting upload (${activeCount}/${MAX_CONCURRENT_UPLOADS}):`, pendingUpload.file?.name);
+
+      try {
+        if (pendingUpload.type === 'episode') {
+          await uploadEpisodeFile(pendingUpload);
+        } else if (pendingUpload.type === 'language') {
+          await uploadLanguageFile(pendingUpload);
+        } else {
+          console.error('[useStartPendingUploads] Unknown upload type:', pendingUpload);
+        }
+      } finally {
+        activeCount--;
+        console.log(`[useStartPendingUploads] ⬇️ Upload completed. Active: ${activeCount}, Remaining: ${queue.length}`);
+
+        // Start next upload if available
+        if (queue.length > 0) {
+          const nextUpload = queue.shift()!;
+          processUpload(nextUpload); // Fire and forget
+        }
       }
-    });
+    };
 
+    // Start initial batch (up to MAX_CONCURRENT_UPLOADS)
+    const initialBatch = queue.splice(0, MAX_CONCURRENT_UPLOADS);
+    const uploadPromises = initialBatch.map(upload => processUpload(upload));
+
+    // Wait for all uploads to complete
     await Promise.allSettled(uploadPromises);
 
+    // Wait for any remaining uploads from the queue to finish
+    while (activeCount > 0) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
     isProcessing.current = false;
-    console.log('[useStartPendingUploads] All uploads completed');
+    console.log('[useStartPendingUploads] ✅ All uploads completed');
   };
 
   const uploadEpisodeFile = async (pendingUpload: any) => {
