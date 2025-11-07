@@ -649,6 +649,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
   async handleWebhook(webhookData: any, signature?: string) {
     try {
+      this.logger.log('🔔 Webhook received:', JSON.stringify(webhookData).substring(0, 200));
+
       // Validate webhook signature if provided
       if (signature && this.webhookSecret) {
         const isValid = this.validateWebhookSignature(webhookData, signature);
@@ -660,9 +662,13 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
 
       // Process different types of updates
       if (webhookData.message) {
+        this.logger.log('📩 Processing message update');
         await this.processMessage(webhookData.message);
       } else if (webhookData.callback_query) {
+        this.logger.log('🔘 Processing callback query');
         await this.processCallbackQuery(webhookData.callback_query);
+      } else {
+        this.logger.warn('⚠️ Unknown webhook update type:', Object.keys(webhookData));
       }
 
       return { status: 'processed' };
@@ -685,6 +691,8 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
     const chatId = message.chat.id;
     const text = message.text;
     const telegramUserId = message.from.id;
+
+    this.logger.log(`📨 processMessage called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
 
     // Register user as active for catalog sync notifications
     if (this.catalogSyncService) {
