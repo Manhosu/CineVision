@@ -151,8 +151,11 @@ export class ContentLanguageUploadController {
       video_storage_key: storageKey,
     });
 
+    // Retornar no formato snake_case esperado pelo frontend
     return {
-      ...uploadResult,
+      upload_id: uploadResult.uploadId,
+      presigned_urls: uploadResult.presignedUrls,
+      key: uploadResult.key,
       content_language_id: initiateDto.content_language_id,
       storage_key: storageKey,
     };
