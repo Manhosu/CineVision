@@ -499,8 +499,8 @@ export class AdminContentSimpleService {
     // Mapear campos permitidos
     const allowedFields = [
       'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
-      'trailer_url', 'telegram_group_link', 'release_date', 'release_year',
-      'duration_minutes', 'imdb_rating', 'rating', 'director', 'cast',
+      'trailer_url', 'telegram_group_link', 'release_year',
+      'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'total_seasons', 'total_episodes',
       'status', 'availability'
     ];

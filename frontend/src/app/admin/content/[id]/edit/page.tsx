@@ -125,7 +125,6 @@ export default function AdminContentEditPage() {
         setTitle(data.title || '');
         setDescription(data.description || '');
         setSynopsis(data.synopsis || '');
-        setReleaseDate(data.release_date ? data.release_date.split('T')[0] : '');
         setDurationMinutes(data.duration_minutes || 0);
 
         // Handle genres as string or array
@@ -136,7 +135,7 @@ export default function AdminContentEditPage() {
           setSelectedGenres(genresArray);
         }
 
-        setRating(data.rating || '');
+        setRating(data.age_rating || ''); // Database column is age_rating
         setDirector(data.director || '');
 
         // Handle cast as string or array
@@ -242,10 +241,9 @@ export default function AdminContentEditPage() {
         title: title.trim(),
         description: description.trim(),
         synopsis: synopsis.trim(),
-        release_date: releaseDate,
         duration_minutes: Number(durationMinutes),
         genres: selectedGenres, // Send as array, not string
-        rating: rating.trim(),
+        age_rating: rating.trim(), // Database column is age_rating, not rating
         director: director.trim(),
         cast: cast.trim(),
         trailer_url: trailerUrl.trim(),
@@ -352,10 +350,9 @@ export default function AdminContentEditPage() {
       title !== (originalContent.title || '') ||
       description !== (originalContent.description || '') ||
       synopsis !== (originalContent.synopsis || '') ||
-      releaseDate !== (originalContent.release_date ? originalContent.release_date.split('T')[0] : '') ||
       durationMinutes !== (originalContent.duration_minutes || 0) ||
       genresChanged ||
-      rating !== (originalContent.rating || '') ||
+      rating !== (originalContent.age_rating || '') ||
       director !== (originalContent.director || '') ||
       cast !== (Array.isArray(originalContent.cast) ? originalContent.cast.join(', ') : (originalContent.cast || '')) ||
       trailerUrl !== (originalContent.trailer_url || '') ||
@@ -564,23 +561,13 @@ export default function AdminContentEditPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">Data de Lançamento</label>
-                  <input
-                    type="date"
-                    value={releaseDate}
-                    onChange={(e) => setReleaseDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                  />
-                </div>
-
-                <div>
                   <label className="block text-sm font-medium mb-2">Ano de Lançamento</label>
                   <input
                     type="number"
                     value={releaseYear}
                     onChange={(e) => setReleaseYear(e.target.value)}
                     className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                    placeholder="2024"
+                    placeholder="2025"
                     min="1900"
                     max="2100"
                   />
