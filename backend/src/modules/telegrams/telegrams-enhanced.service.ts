@@ -2190,7 +2190,13 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       if (!content.content_languages || content.content_languages.length === 0) {
         this.logger.error('No languages found for content:', purchase.content_id);
-        await this.sendMessage(parseInt(chatId), '❌ Vídeo não disponível. Entre em contato com suporte.');
+        await this.sendMessage(parseInt(chatId),
+          `❌ **Vídeo Ainda Não Disponível**\n\n` +
+          `O conteúdo "${content.title}" foi comprado com sucesso, mas o vídeo ainda não foi adicionado ao sistema.\n\n` +
+          `📧 Nossa equipe foi notificada e o vídeo será disponibilizado em breve.\n\n` +
+          `🔔 Você receberá uma notificação quando o vídeo estiver pronto!`,
+          { parse_mode: 'Markdown' }
+        );
         return;
       }
 
@@ -2324,13 +2330,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       if (userAddedAutomatically) {
         // User was added automatically to the group
         await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\nO filme está disponível no grupo do Telegram\n\n🌐 **Ou assista online:**\nAcesse seu dashboard para assistir no navegador`,
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n✨ O vídeo está disponível no grupo do Telegram\n\n🌐 **Ou assista no dashboard:**\nAcesse seu painel para assistir no navegador`,
           {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
-                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
               ]
             }
           }
@@ -2345,14 +2350,13 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       } else if (telegramGroupAvailable && telegramInviteLink) {
         // User needs to click the invite link
         await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\nClique no botão abaixo para entrar no grupo e baixar o filme\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`,
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\n✨ Clique no botão abaixo para entrar no grupo\n🎬 O vídeo está disponível lá!\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`,
           {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
                 [{ text: '📱 Entrar no Grupo', url: telegramInviteLink }],
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
-                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
               ]
             }
           }
@@ -2366,13 +2370,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         });
       } else {
         await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\nAcesse seu dashboard para começar a assistir`,
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\n✨ Acesse seu dashboard para assistir\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram`,
           {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
-                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
               ]
             }
           }
@@ -2401,78 +2404,27 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
   /**
    * Handler para callback de assistir vídeo (watch_<purchase_id>_<language_id>)
+   * DESABILITADO: Vídeos agora só estão disponíveis via grupo do Telegram e dashboard
    */
   private async handleWatchVideoCallback(chatId: number, telegramUserId: number, data: string) {
-    try {
-      // Extrair IDs: watch_<purchase_id>_<language_id>
-      const parts = data.split('_');
-      if (parts.length < 3) {
-        await this.sendMessage(chatId, '❌ Link inválido.');
-        return;
-      }
+    this.logger.log(`Watch video callback disabled - redirecting to dashboard. Chat: ${chatId}, Data: ${data}`);
 
-      const purchaseId = parts[1];
-      const languageId = parts[2];
+    // Redirecionar usuário para o dashboard
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+    const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${telegramUserId}&redirect=/dashboard`;
 
-      this.logger.log(`Watch request from chat ${chatId}: purchase=${purchaseId}, language=${languageId}`);
-
-      // Verificar se a compra existe e está paga
-      const { data: purchase, error: purchaseError } = await this.supabase
-        .from('purchases')
-        .select('*, content(*)')
-        .eq('id', purchaseId)
-        .eq('status', 'paid')
-        .single();
-
-      if (purchaseError || !purchase) {
-        this.logger.warn(`Purchase ${purchaseId} not found or not paid`);
-        await this.sendMessage(chatId, '❌ Compra não encontrada ou pagamento não confirmado.');
-        return;
-      }
-
-      // Buscar language específico
-      const { data: language, error: langError } = await this.supabase
-        .from('content_languages')
-        .select('*')
-        .eq('id', languageId)
-        .eq('content_id', purchase.content_id)
-        .single();
-
-      if (langError || !language || !language.video_storage_key) {
-        this.logger.error(`Language ${languageId} not found or no video_storage_key`);
-        await this.sendMessage(chatId, '❌ Vídeo não encontrado.');
-        return;
-      }
-
-      // Gerar presigned URL do S3
-      await this.sendMessage(chatId, '⏳ Gerando link de acesso...');
-
-      const videoUrl = await this.generateSignedVideoUrl(language.video_storage_key);
-
-      // Calcular tamanho do arquivo em GB
-      const sizeGB = language.file_size_bytes
-        ? (language.file_size_bytes / (1024 * 1024 * 1024)).toFixed(2)
-        : 'Desconhecido';
-
-      // Enviar link do vídeo
-      const message = `🎬 **${purchase.content.title}**\n\n${language.language_name}\n\n📊 Tamanho: ${sizeGB} GB\n⏱️  Link válido por: 4 horas\n\n💡 **Como assistir:**\n• Clique no botão abaixo\n• O vídeo abrirá no navegador\n• Você pode assistir online ou baixar\n\n⚠️ **Importante:**\n• Link expira em 4 horas\n• Você pode solicitar novo link a qualquer momento`;
-
-      await this.sendMessage(chatId, message, {
+    await this.sendMessage(chatId,
+      `📱 **Assistir Conteúdo**\n\n✨ Os vídeos estão disponíveis em:\n\n**1️⃣ Grupo do Telegram**\n   Se você comprou um conteúdo com grupo, o vídeo está disponível lá!\n\n**2️⃣ Dashboard Online**\n   Acesse sua dashboard para assistir no navegador\n\n🎬 Clique no botão abaixo para acessar sua dashboard:`,
+      {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '▶️ Assistir Agora', url: videoUrl }],
-            [{ text: '🔄 Gerar Novo Link', callback_data: data }],
-            [{ text: '🔙 Minhas Compras', callback_data: 'my_purchases' }],
+            [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
+            [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
           ],
         },
-      });
-
-      this.logger.log(`Video URL sent to chat ${chatId} for language ${languageId}`);
-    } catch (error) {
-      this.logger.error('Error handling watch video callback:', error);
-      await this.sendMessage(chatId, '❌ Erro ao gerar link do vídeo. Tente novamente em alguns segundos.');
-    }
+      }
+    );
   }
 
   // ==================== POLLING METHODS ====================
