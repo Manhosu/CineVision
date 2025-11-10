@@ -98,9 +98,17 @@ function SeriesPageContent() {
           fetchSeries(page, genre, sort),
           fetchCategories()
         ]);
-        setSeriesData(seriesResult);
-        setCategories(categoriesResult);
+
+        // Ensure seriesResult has correct structure
+        const validSeriesData = {
+          movies: seriesResult?.movies || [],
+          pagination: seriesResult?.pagination || { page: 1, totalPages: 1, total: 0 }
+        };
+
+        setSeriesData(validSeriesData);
+        setCategories(categoriesResult || []);
       } catch (err) {
+        console.error('[SeriesPage] Error loading data:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
       } finally {
         setLoading(false);
@@ -178,7 +186,7 @@ function SeriesPageContent() {
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/>
                 </svg>
-                <span>{seriesData.pagination.total} {seriesData.pagination.total === 1 ? 'série' : 'séries'} disponíveis</span>
+                <span>{seriesData.pagination?.total || 0} {(seriesData.pagination?.total || 0) === 1 ? 'série' : 'séries'} disponíveis</span>
               </div>
             </div>
           </div>
@@ -198,8 +206,8 @@ function SeriesPageContent() {
 
               {/* Series Grid */}
               <MovieGrid
-                movies={seriesData.movies}
-                pagination={seriesData.pagination}
+                movies={seriesData.movies || []}
+                pagination={seriesData.pagination || { page: 1, totalPages: 1, total: 0 }}
                 currentPage={page}
               />
             </div>
