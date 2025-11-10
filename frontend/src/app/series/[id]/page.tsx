@@ -48,6 +48,8 @@ export default function SeriesDetailsPage() {
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isOwned, setIsOwned] = useState<boolean>(false);
+  const [checkingOwnership, setCheckingOwnership] = useState(true);
 
   // Helper function to normalize string or array fields
   const normalizeToArray = (value: string | string[] | undefined): string[] => {
@@ -88,6 +90,26 @@ export default function SeriesDetailsPage() {
 
         setSeries(seriesData);
 
+        // Check ownership status
+        try {
+          const ownershipResponse = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/check/${seriesId}`,
+            { credentials: 'include' }
+          );
+
+          if (ownershipResponse.ok) {
+            const ownershipData = await ownershipResponse.json();
+            setIsOwned(ownershipData.isOwned || false);
+          } else {
+            setIsOwned(false);
+          }
+        } catch (ownershipError) {
+          console.error('Erro ao verificar propriedade:', ownershipError);
+          setIsOwned(false);
+        } finally {
+          setCheckingOwnership(false);
+        }
+
         // Fetch episodes
         try {
           const episodesResponse = await fetch(
@@ -119,13 +141,31 @@ export default function SeriesDetailsPage() {
   }, [seriesId, router]);
 
   const handleEpisodePlay = (episode: Episode) => {
+    // Verificar se o usuário possui a série antes de permitir assistir
+    if (!isOwned) {
+      toast.error('Você precisa comprar a série para assistir os episódios', {
+        duration: 4000,
+        icon: '🔒'
+      });
+      return;
+    }
+
     // Redirecionar para página de player com o episódio selecionado
     router.push(`/watch/${seriesId}?episode=${episode.id}&season=${episode.season_number}&ep=${episode.episode_number}`);
   };
 
   const handlePurchase = () => {
-    // TODO: Implementar fluxo de compra
-    toast.info('Funcionalidade de compra em desenvolvimento');
+    // Gerar deep link do Telegram para compra da série
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+    const deepLink = `https://t.me/${botUsername}?start=buy_${seriesId}`;
+
+    toast.success('Abrindo Telegram...', {
+      duration: 2000,
+      icon: '📱'
+    });
+
+    // Abrir Telegram
+    window.open(deepLink, '_blank');
   };
 
   if (loading) {
@@ -247,20 +287,46 @@ export default function SeriesDetailsPage() {
                 </div>
               )}
 
-              {/* Purchase Button */}
+              {/* Purchase/Watch Button */}
               <div className="flex items-center space-x-4">
-                <div className="text-3xl font-bold text-primary-500">
-                  R$ {(series.price_cents / 100).toFixed(2)}
-                </div>
-                <button
-                  onClick={handlePurchase}
-                  className="px-8 py-3 bg-primary-600 hover:bg-primary-700 rounded-lg font-semibold transition-colors flex items-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <span>Comprar Série Completa</span>
-                </button>
+                {!isOwned && (
+                  <div className="text-3xl font-bold text-primary-500">
+                    R$ {(series.price_cents / 100).toFixed(2)}
+                  </div>
+                )}
+
+                {checkingOwnership ? (
+                  <div className="px-8 py-3 bg-gray-600 rounded-lg flex items-center space-x-2">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span className="font-semibold">Verificando...</span>
+                  </div>
+                ) : isOwned ? (
+                  <button
+                    onClick={() => {
+                      if (episodes.length > 0) {
+                        handleEpisodePlay(episodes[0]);
+                      } else {
+                        toast.error('Nenhum episódio disponível');
+                      }
+                    }}
+                    className="px-8 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <span>Você já possui essa série</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handlePurchase}
+                    className="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                    </svg>
+                    <span>Comprar via Telegram</span>
+                  </button>
+                )}
               </div>
 
               {/* Additional Info */}
