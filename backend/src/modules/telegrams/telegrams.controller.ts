@@ -21,16 +21,19 @@ export class TelegramsController {
     this.logger.log('TelegramsController initialized');
   }
 
-  @Post('webhook')
-  @ApiOperation({ summary: 'Telegram bot webhook handler' })
-  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
-  async handleWebhook(
-    @Body() webhookData: any,
-    @Headers('x-telegram-bot-api-secret-token') signature?: string
-  ) {
-    // Use enhanced service which has Mini App support
-    return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
-  }
+  // WEBHOOK ENDPOINTS DISABLED - Using polling mode instead
+  // Polling mode works better with free tier servers that sleep after 15 min
+
+  // @Post('webhook')
+  // @ApiOperation({ summary: 'Telegram bot webhook handler' })
+  // @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  // async handleWebhook(
+  //   @Body() webhookData: any,
+  //   @Headers('x-telegram-bot-api-secret-token') signature?: string
+  // ) {
+  //   // Use enhanced service which has Mini App support
+  //   return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
+  // }
 
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })
@@ -42,24 +45,24 @@ export class TelegramsController {
     );
   }
 
-  @Post('setup-webhook')
-  @ApiOperation({ summary: 'Setup Telegram webhook' })
-  @ApiResponse({ status: 200, description: 'Webhook setup successfully' })
-  async setupWebhook(@Body() setupData: { url: string; secretToken?: string }) {
-    return this.telegramsService.setupWebhook(setupData.url, setupData.secretToken);
-  }
+  // @Post('setup-webhook')
+  // @ApiOperation({ summary: 'Setup Telegram webhook' })
+  // @ApiResponse({ status: 200, description: 'Webhook setup successfully' })
+  // async setupWebhook(@Body() setupData: { url: string; secretToken?: string }) {
+  //   return this.telegramsService.setupWebhook(setupData.url, setupData.secretToken);
+  // }
 
-  @Get('setup-webhook')
-  @ApiOperation({ summary: 'Setup Telegram webhook (auto-detect URL)' })
-  @ApiResponse({ status: 200, description: 'Webhook setup successfully' })
-  async setupWebhookAuto() {
-    // Auto-detect backend URL from environment
-    const backendUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'https://cinevisionn.onrender.com';
-    const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
+  // @Get('setup-webhook')
+  // @ApiOperation({ summary: 'Setup Telegram webhook (auto-detect URL)' })
+  // @ApiResponse({ status: 200, description: 'Webhook setup successfully' })
+  // async setupWebhookAuto() {
+  //   // Auto-detect backend URL from environment
+  //   const backendUrl = process.env.BACKEND_URL || process.env.RENDER_EXTERNAL_URL || 'https://cinevisionn.onrender.com';
+  //   const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
 
-    this.logger.log(`Setting up webhook with URL: ${webhookUrl}`);
-    return this.telegramsService.setupWebhook(webhookUrl);
-  }
+  //   this.logger.log(`Setting up webhook with URL: ${webhookUrl}`);
+  //   return this.telegramsService.setupWebhook(webhookUrl);
+  // }
 
   @Post('payment-confirmation')
   @ApiOperation({ summary: 'Send payment confirmation' })

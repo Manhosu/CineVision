@@ -2478,25 +2478,17 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   // ==================== POLLING METHODS ====================
 
   async onModuleInit() {
-    // Check environment to decide between polling or webhook
-    const nodeEnv = this.configService.get<string>('NODE_ENV');
-    const webhookUrl = this.configService.get<string>('TELEGRAM_WEBHOOK_URL');
+    // Always use polling mode (works on free tier servers)
+    this.logger.log('🤖 Starting Telegram bot in POLLING mode...');
+    this.logger.log('ℹ️  Polling mode works on free tier servers (no webhook timeout issues)');
 
-    if (nodeEnv === 'production' && webhookUrl) {
-      // In production with webhook configured, use webhook mode
-      this.logger.log('Production mode: Webhook mode enabled (polling disabled)');
-      this.logger.log(`Webhook URL: ${webhookUrl}`);
-      // Webhook should be configured manually via /setup-webhook endpoint
-    } else if (nodeEnv === 'development') {
-      // Only in development, use polling
-      this.logger.log('Development mode: Starting Telegram bot polling...');
-      await this.deleteWebhook(); // Remove webhook if exists
-      this.startPolling();
-    } else {
-      // Production without webhook - don't delete webhook or start polling
-      this.logger.warn('Production mode: No TELEGRAM_WEBHOOK_URL configured. Bot will not start.');
-      this.logger.warn('Please configure TELEGRAM_WEBHOOK_URL environment variable and use webhook mode.');
-    }
+    // Delete any existing webhook before starting polling
+    await this.deleteWebhook();
+
+    // Start polling for updates
+    this.startPolling();
+
+    this.logger.log('✅ Telegram bot polling started successfully');
   }
 
   private async deleteWebhook() {
