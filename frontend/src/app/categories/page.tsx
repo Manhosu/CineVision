@@ -149,43 +149,77 @@ export default function CategoriesPage() {
               {/* Categories Grid */}
               {categoriesWithCount.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {categoriesWithCount.map((category) => (
-                    <Link
-                      key={category.id}
-                      href={`/movies?genre=${encodeURIComponent(category.name)}`}
-                      className="group relative bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-dark-800/70 hover:border-red-500/30 transition-all duration-300 hover:scale-105"
-                    >
-                      <div className="aspect-square bg-gradient-to-br from-red-600/20 to-red-800/20 rounded-lg mb-4 flex items-center justify-center group-hover:from-red-600/30 group-hover:to-red-800/30 transition-all duration-300">
-                        <div className="w-12 h-12 text-red-400 group-hover:text-red-300 transition-colors">
-                          <svg fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
-                          </svg>
+                  {categoriesWithCount.map((category) => {
+                    // Special handling for "Séries" category - redirect to /series
+                    const isSeries = category.name.toLowerCase() === 'séries' || category.name.toLowerCase() === 'series';
+                    const href = isSeries ? '/series' : `/movies?genre=${encodeURIComponent(category.name)}`;
+                    const linkText = isSeries ? 'Ver séries →' : 'Ver filmes →';
+                    const countText = isSeries
+                      ? `${category.movieCount} ${category.movieCount === 1 ? 'série' : 'séries'}`
+                      : `${category.movieCount} ${category.movieCount === 1 ? 'filme' : 'filmes'}`;
+
+                    return (
+                      <Link
+                        key={category.id}
+                        href={href}
+                        className="group relative bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 hover:bg-dark-800/70 hover:border-red-500/30 transition-all duration-300 hover:scale-105"
+                      >
+                        <div className={`aspect-square bg-gradient-to-br rounded-lg mb-4 flex items-center justify-center transition-all duration-300 ${
+                          isSeries
+                            ? 'from-blue-600/20 to-blue-800/20 group-hover:from-blue-600/30 group-hover:to-blue-800/30'
+                            : 'from-red-600/20 to-red-800/20 group-hover:from-red-600/30 group-hover:to-red-800/30'
+                        }`}>
+                          <div className={`w-12 h-12 transition-colors ${
+                            isSeries
+                              ? 'text-blue-400 group-hover:text-blue-300'
+                              : 'text-red-400 group-hover:text-red-300'
+                          }`}>
+                            {isSeries ? (
+                              <svg fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/>
+                              </svg>
+                            ) : (
+                              <svg fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z"/>
+                              </svg>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-red-300 transition-colors">
-                        {category.name}
-                      </h3>
+                        <h3 className={`text-lg font-semibold text-white mb-2 transition-colors ${
+                          isSeries
+                            ? 'group-hover:text-blue-300'
+                            : 'group-hover:text-red-300'
+                        }`}>
+                          {category.name}
+                        </h3>
 
-                      {category.description && (
-                        <p className="text-sm text-gray-400 mb-3 line-clamp-2">
-                          {category.description}
-                        </p>
-                      )}
+                        {category.description && (
+                          <p className="text-sm text-gray-400 mb-3 line-clamp-2">
+                            {category.description}
+                          </p>
+                        )}
 
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-400">
-                          {category.movieCount} {category.movieCount === 1 ? 'filme' : 'filmes'}
-                        </span>
-                        <span className="text-red-400 group-hover:text-red-300 transition-colors">
-                          Ver filmes →
-                        </span>
-                      </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-400">
+                            {countText}
+                          </span>
+                          <span className={`transition-colors ${
+                            isSeries
+                              ? 'text-blue-400 group-hover:text-blue-300'
+                              : 'text-red-400 group-hover:text-red-300'
+                          }`}>
+                            {linkText}
+                          </span>
+                        </div>
 
-                      {/* Hover effect overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none" />
-                    </Link>
-                  ))}
+                        {/* Hover effect overlay */}
+                        <div className={`absolute inset-0 bg-gradient-to-r to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none ${
+                          isSeries ? 'from-blue-600/5' : 'from-red-600/5'
+                        }`} />
+                      </Link>
+                    );
+                  })}
                 </div>
               ) : (
                 /* Empty State */
@@ -222,20 +256,32 @@ export default function CategoriesPage() {
                     {categoriesWithCount
                       .sort((a, b) => b.movieCount - a.movieCount)
                       .slice(0, 6)
-                      .map((category) => (
-                        <Link
-                          key={`popular-${category.id}`}
-                          href={`/movies?genre=${encodeURIComponent(category.name)}&sort=popular`}
-                          className="group p-4 bg-dark-800/30 border border-white/5 rounded-lg hover:bg-dark-800/50 hover:border-red-500/20 transition-all duration-300 text-center hover:scale-105"
-                        >
-                          <h4 className="font-medium text-white group-hover:text-red-300 transition-colors">
-                            {category.name}
-                          </h4>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {category.movieCount} filmes
-                          </p>
-                        </Link>
-                      ))}
+                      .map((category) => {
+                        const isSeries = category.name.toLowerCase() === 'séries' || category.name.toLowerCase() === 'series';
+                        const href = isSeries ? '/series?sort=popular' : `/movies?genre=${encodeURIComponent(category.name)}&sort=popular`;
+                        const countText = isSeries
+                          ? `${category.movieCount} ${category.movieCount === 1 ? 'série' : 'séries'}`
+                          : `${category.movieCount} ${category.movieCount === 1 ? 'filme' : 'filmes'}`;
+
+                        return (
+                          <Link
+                            key={`popular-${category.id}`}
+                            href={href}
+                            className={`group p-4 bg-dark-800/30 border border-white/5 rounded-lg hover:bg-dark-800/50 transition-all duration-300 text-center hover:scale-105 ${
+                              isSeries ? 'hover:border-blue-500/20' : 'hover:border-red-500/20'
+                            }`}
+                          >
+                            <h4 className={`font-medium text-white transition-colors ${
+                              isSeries ? 'group-hover:text-blue-300' : 'group-hover:text-red-300'
+                            }`}>
+                              {category.name}
+                            </h4>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {countText}
+                            </p>
+                          </Link>
+                        );
+                      })}
                   </div>
                 </div>
               )}
