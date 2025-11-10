@@ -16,9 +16,10 @@ interface MovieGridProps {
     hasPrev: boolean;
   };
   currentPage?: number;
+  baseUrl?: string; // Dynamic base URL for pagination
 }
 
-export default function MovieGrid({ movies, pagination, currentPage = 1 }: MovieGridProps) {
+export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl = '/movies' }: MovieGridProps) {
   const [purchasedContentIds, setPurchasedContentIds] = useState<Set<string>>(new Set());
   const [telegramId, setTelegramId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +76,10 @@ export default function MovieGrid({ movies, pagination, currentPage = 1 }: Movie
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 mb-8">
         {movies.map((movie) => {
           const purchased = isPurchased(movie.id);
-          const linkHref = purchased ? `/player?contentId=${movie.id}` : `/movies/${movie.id}`;
+          // Detect if content is a series
+          const isSeries = (movie as any).content_type === 'series';
+          const detailsPath = isSeries ? `/series/${movie.id}` : `/movies/${movie.id}`;
+          const linkHref = purchased ? `/player?contentId=${movie.id}` : detailsPath;
           const buttonText = purchased ? 'Assistir' : 'Ver detalhes';
           const buttonIcon = purchased ? (
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -209,7 +213,7 @@ export default function MovieGrid({ movies, pagination, currentPage = 1 }: Movie
         <Pagination
           currentPage={currentPage}
           totalPages={pagination.totalPages}
-          baseUrl="/movies"
+          baseUrl={baseUrl}
         />
       )}
     </div>

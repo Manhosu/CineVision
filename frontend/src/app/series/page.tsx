@@ -209,6 +209,7 @@ function SeriesPageContent() {
                 movies={seriesData.movies || []}
                 pagination={seriesData.pagination || { page: 1, totalPages: 1, total: 0 }}
                 currentPage={page}
+                baseUrl="/series"
               />
             </div>
           </div>
