@@ -7,7 +7,6 @@ import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/component
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { supabase } from '@/lib/supabase';
 import { useUpload } from '@/contexts/UploadContext';
-import { useStartPendingUploads } from '@/hooks/useStartPendingUploads';
 
 interface ContentFormData {
   title: string;
@@ -79,9 +78,6 @@ export default function AdminContentCreatePage() {
   const router = useRouter();
   const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
   const { addTask, updateTask, addPendingUpload } = useUpload(); // Global upload context
-
-  // Auto-start pending uploads when they're added to the queue
-  useStartPendingUploads();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContentId, setCreatedContentId] = useState<string | null>(null);
