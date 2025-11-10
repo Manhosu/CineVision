@@ -174,7 +174,7 @@ export class ContentSupabaseService {
         // If no content found for this category, return empty result
         if (contentIds.length === 0) {
           return {
-            data: [],
+            movies: [],
             total: 0,
             page,
             limit,
@@ -184,7 +184,7 @@ export class ContentSupabaseService {
       } else {
         // Category doesn't exist, return empty result
         return {
-          data: [],
+          movies: [],
           total: 0,
           page,
           limit,
@@ -262,7 +262,7 @@ export class ContentSupabaseService {
     });
 
     return {
-      data: seriesWithUrls,
+      movies: seriesWithUrls,
       total: count || 0,
       page,
       limit,
