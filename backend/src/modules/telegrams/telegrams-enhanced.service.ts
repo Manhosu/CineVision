@@ -507,6 +507,49 @@ ${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
   }
 
   /**
+   * Adds a user directly to the Telegram group (requires bot admin with invite permission)
+   * @param groupLink - The group's invite link or chat ID
+   * @param telegramUserId - Telegram user ID to add
+   * @returns true if user was added successfully, false otherwise
+   */
+  private async addUserToGroup(groupLink: string, telegramUserId: number): Promise<boolean> {
+    try {
+      this.logger.log(`Attempting to add user ${telegramUserId} to group: ${groupLink}`);
+
+      const chatId = await this.getChatIdFromLink(groupLink);
+
+      if (!chatId) {
+        this.logger.warn(`Could not extract chat ID from link: ${groupLink}`);
+        return false;
+      }
+
+      // Try to add the user directly to the group
+      const response = await axios.post(`${this.botApiUrl}/addChatMember`, {
+        chat_id: chatId,
+        user_id: telegramUserId,
+      });
+
+      if (response.data.ok) {
+        this.logger.log(`✅ Successfully added user ${telegramUserId} to group ${chatId}`);
+
+        await this.supabase.from('system_logs').insert({
+          type: 'telegram_group',
+          level: 'info',
+          message: `Auto-added user ${telegramUserId} to group ${chatId}`,
+        });
+
+        return true;
+      } else {
+        this.logger.warn(`Could not add user automatically: ${response.data.description}`);
+        return false;
+      }
+    } catch (error) {
+      this.logger.warn(`Error adding user to group: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
    * Creates a single-use invite link for a Telegram group
    * @param groupLink - The group's invite link (e.g., https://t.me/+AbCdEfGhIjK)
    * @param userId - User ID for logging purposes
@@ -2240,41 +2283,76 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       // Check if content has Telegram group configured
       let telegramInviteLink: string | null = null;
       let telegramGroupAvailable = false;
+      let userAddedAutomatically = false;
 
       if (content.telegram_group_link) {
         this.logger.log(`Content has Telegram group: ${content.telegram_group_link}`);
         telegramGroupAvailable = true;
 
-        // Try to create single-use invite link
+        // Get user's telegram_id to add them to the group
         const { data: user } = await this.supabase
           .from('users')
-          .select('id')
+          .select('id, telegram_id')
           .eq('id', purchase.user_id)
           .single();
 
-        if (user) {
-          telegramInviteLink = await this.createInviteLinkForUser(content.telegram_group_link, user.id);
+        if (user && user.telegram_id) {
+          // STRATEGY 1: Try to add user automatically to the group
+          this.logger.log(`Attempting to add user ${user.telegram_id} automatically to group...`);
+          userAddedAutomatically = await this.addUserToGroup(
+            content.telegram_group_link,
+            parseInt(user.telegram_id)
+          );
 
-          if (telegramInviteLink) {
-            this.logger.log(`Created invite link for purchase ${purchase.id}: ${telegramInviteLink}`);
-          } else {
-            // Fallback to original group link if we couldn't create a custom one
-            this.logger.warn(`Could not create custom invite link, using original: ${content.telegram_group_link}`);
-            telegramInviteLink = content.telegram_group_link;
+          if (!userAddedAutomatically) {
+            // STRATEGY 2: If automatic add fails, create invite link as fallback
+            this.logger.log(`Auto-add failed, creating invite link for purchase ${purchase.id}...`);
+            telegramInviteLink = await this.createInviteLinkForUser(content.telegram_group_link, user.id);
+
+            if (telegramInviteLink) {
+              this.logger.log(`Created invite link for purchase ${purchase.id}: ${telegramInviteLink}`);
+            } else {
+              // STRATEGY 3: Last resort - use original group link
+              this.logger.warn(`Could not create custom invite link, using original: ${content.telegram_group_link}`);
+              telegramInviteLink = content.telegram_group_link;
+            }
           }
         }
       }
 
       // Send appropriate confirmation message based on whether Telegram group is available
-      if (telegramGroupAvailable && telegramInviteLink) {
+      if (userAddedAutomatically) {
+        // User was added automatically to the group
         await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Acesso ao Telegram:**\nClique no botão abaixo para entrar automaticamente no grupo privado e baixar o filme:\n\n🌐 **Assistir Online:**\nAcesse seu dashboard: ${dashboardUrl}\n\n⚠️ O link de entrada expira em 24 horas e só pode ser usado uma vez.`,
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\nO filme está disponível no grupo do Telegram\n\n🌐 **Ou assista online:**\nAcesse seu dashboard para assistir no navegador`,
           {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
-                [{ text: '📱 Entrar no Grupo do Telegram', url: telegramInviteLink }],
-                [{ text: '🌐 Acessar Dashboard', url: dashboardUrl }]
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
+                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
+              ]
+            }
+          }
+        );
+
+        // Log successful automatic addition
+        await this.supabase.from('system_logs').insert({
+          type: 'delivery',
+          level: 'info',
+          message: `Auto-added user to Telegram group for purchase ${purchase.id}`,
+        });
+      } else if (telegramGroupAvailable && telegramInviteLink) {
+        // User needs to click the invite link
+        await this.sendMessage(parseInt(chatId),
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\nClique no botão abaixo para entrar no grupo e baixar o filme\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '📱 Entrar no Grupo', url: telegramInviteLink }],
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
+                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
               ]
             }
           }
@@ -2288,8 +2366,16 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         });
       } else {
         await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora no seu dashboard:**\n${dashboardUrl}`,
-          { parse_mode: 'Markdown' }
+          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\nAcesse seu dashboard para começar a assistir`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }],
+                [{ text: '📋 Minhas Compras', callback_data: 'my_purchases' }]
+              ]
+            }
+          }
         );
 
         // Log successful delivery without Telegram group
