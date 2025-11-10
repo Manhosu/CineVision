@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import LazyImage from '@/components/ui/LazyImage';
+import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import { ArrowLeftIcon, PlayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -319,22 +320,7 @@ export default function SeriesDetailsPage() {
               </div>
 
               {/* Trailer Section */}
-              {series.trailer_url && (
-                <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6 sm:p-8 tv:p-12">
-                  <h2 className="text-2xl tv:text-3xl font-bold text-white mb-4 tv:mb-6">
-                    Trailer
-                  </h2>
-                  <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-dark-900">
-                    <iframe
-                      src={series.trailer_url.replace('watch?v=', 'embed/').split('&')[0]}
-                      title={`Trailer de ${series.title}`}
-                      className="absolute inset-0 w-full h-full"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  </div>
-                </div>
-              )}
+              <TrailerSection movie={series as any} />
 
               {/* Synopsis */}
               {series.synopsis && (
