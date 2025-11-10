@@ -1599,52 +1599,6 @@ export default function AdminContentCreatePage() {
                   </button>
                 </div>
 
-                {/* Queue Statistics */}
-                {(queueStats.total > 0) && (
-                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-xl p-4 mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-white font-semibold flex items-center space-x-2">
-                        <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        <span>Status do Upload em Fila</span>
-                      </h4>
-                      <div className="text-sm text-gray-400">
-                        {queueStats.active > 0 ? (
-                          <span className="text-blue-400 animate-pulse">⚡ {queueStats.active} em progresso</span>
-                        ) : queueStats.pending > 0 ? (
-                          <span className="text-yellow-400">⏳ {queueStats.pending} aguardando</span>
-                        ) : (
-                          <span className="text-green-400">✓ Concluído</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 gap-4 text-center">
-                      <div>
-                        <div className="text-2xl font-bold text-white">{queueStats.total}</div>
-                        <div className="text-xs text-gray-400">Total</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-green-400">{queueStats.completed}</div>
-                        <div className="text-xs text-gray-400">Concluídos</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-blue-400">{queueStats.active}</div>
-                        <div className="text-xs text-gray-400">Em Progresso</div>
-                      </div>
-                      <div>
-                        <div className="text-2xl font-bold text-yellow-400">{queueStats.pending}</div>
-                        <div className="text-xs text-gray-400">Na Fila</div>
-                      </div>
-                    </div>
-                    {queueStats.failed > 0 && (
-                      <div className="mt-3 p-2 bg-red-900/30 border border-red-500/50 rounded text-red-400 text-sm">
-                        ⚠️ {queueStats.failed} episódio(s) falharam
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Episodes List for Current Season */}
                 <div className="space-y-4">
                   {episodes
