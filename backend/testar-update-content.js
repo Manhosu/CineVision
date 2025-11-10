@@ -23,11 +23,10 @@ async function testarUpdate() {
 
   console.log(`📝 Testando com: ${contents.title} (${contents.id})\n`);
 
-  // Tentar atualizar com todos os campos
+  // Tentar atualizar com todos os campos (usando nomes corretos)
   const testData = {
     telegram_group_link: 'https://t.me/teste123',
-    rating: 'L',
-    release_date: '2025-01-10',
+    age_rating: 'L',
   };
 
   const { data: updated, error: updateError } = await supabase
@@ -45,13 +44,12 @@ async function testarUpdate() {
   console.log('✅ Update bem-sucedido!\n');
   console.log('Campos atualizados:');
   console.log(`  telegram_group_link: ${updated.telegram_group_link || 'null'}`);
-  console.log(`  rating: ${updated.rating || 'null'}`);
-  console.log(`  release_date: ${updated.release_date || 'null'}`);
+  console.log(`  age_rating: ${updated.age_rating || 'null'}`);
 
   // Verificar se os dados foram realmente salvos
   const { data: verified, error: verifyError } = await supabase
     .from('content')
-    .select('telegram_group_link, rating, release_date')
+    .select('telegram_group_link, age_rating')
     .eq('id', contents.id)
     .single();
 
@@ -62,12 +60,10 @@ async function testarUpdate() {
 
   console.log('\n🔍 Verificação (leitura direta do banco):');
   console.log(`  telegram_group_link: ${verified.telegram_group_link || 'null'}`);
-  console.log(`  rating: ${verified.rating || 'null'}`);
-  console.log(`  release_date: ${verified.release_date || 'null'}`);
+  console.log(`  age_rating: ${verified.age_rating || 'null'}`);
 
   if (verified.telegram_group_link === testData.telegram_group_link &&
-      verified.rating === testData.rating &&
-      verified.release_date === testData.release_date) {
+      verified.age_rating === testData.age_rating) {
     console.log('\n✅ SUCESSO! Todos os campos foram salvos corretamente!\n');
   } else {
     console.log('\n⚠️  AVISO: Alguns campos não foram salvos como esperado\n');
