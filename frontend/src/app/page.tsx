@@ -57,6 +57,7 @@ function AutoLoginHandler() {
 }
 
 function HomePageContent() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
@@ -205,6 +206,16 @@ function HomePageContent() {
     loadContent();
   }, []);
 
+  const handleMovieClick = (movie: Movie) => {
+    // Navigate to detail page based on content type
+    const contentType = (movie as any).content_type || 'movie';
+    if (contentType === 'series') {
+      router.push(`/series/${movie.id}`);
+    } else {
+      router.push(`/movies/${movie.id}`);
+    }
+  };
+
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0d0d0d' }}>
@@ -254,6 +265,7 @@ function HomePageContent() {
                 type={section.type}
                 priority={index === 0}
                 purchasedMovieIds={purchasedMovies}
+                onMovieClick={handleMovieClick}
               />
             ))
           ) : (

@@ -6,7 +6,6 @@ import { toast } from 'react-hot-toast';
 import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { supabase } from '@/lib/supabase';
-import { UploadQueue, QueueStats } from '@/lib/uploadQueue';
 import { useUpload } from '@/contexts/UploadContext';
 import { useStartPendingUploads } from '@/hooks/useStartPendingUploads';
 
@@ -79,7 +78,7 @@ interface Episode {
 export default function AdminContentCreatePage() {
   const router = useRouter();
   const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
-  const { addTask, updateTask } = useUpload(); // Global upload context
+  const { addTask, updateTask, addPendingUpload } = useUpload(); // Global upload context
 
   // Auto-start pending uploads when they're added to the queue
   useStartPendingUploads();
@@ -129,18 +128,6 @@ export default function AdminContentCreatePage() {
   const [showEpisodeManager, setShowEpisodeManager] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(1);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
-
-  // Upload queue state
-  const [uploadQueue] = useState(() => new UploadQueue(2, (stats) => {
-    setQueueStats(stats);
-  }));
-  const [queueStats, setQueueStats] = useState<QueueStats>({
-    total: 0,
-    completed: 0,
-    failed: 0,
-    pending: 0,
-    active: 0,
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -751,54 +738,97 @@ export default function AdminContentCreatePage() {
     })));
 
     if (episodesToUpload.length > 0) {
-      toast.success(`Iniciando upload de ${episodesToUpload.length} episódio(s)...`);
+      try {
+        toast.success(`Criando ${episodesToUpload.length} episódio(s) no banco de dados...`);
 
-      // Add all episodes to the upload queue
-      const queueItems = episodesToUpload.map(episode => ({
-        id: `${episode.season_number}-${episode.episode_number}`,
-        execute: () => uploadEpisode(episode),
-        priority: episode.season_number * 1000 + episode.episode_number,
-      }));
+        // Step 1: Create all episodes in backend first
+        const episodeIds: { [key: string]: string } = {};
 
-      console.log('[finalizeSeries] Adding to queue:', queueItems.map(item => item.id));
-      uploadQueue.addBatch(queueItems);
-
-      // Upload acontece em background - publicação será automática após conclusão
-      uploadQueue.waitForCompletion().then(async () => {
-        const stats = uploadQueue.getStats();
-
-        if (stats.failed > 0) {
-          toast.error(`${stats.completed} episódio(s) enviado(s), ${stats.failed} falharam. Publicação cancelada.`);
-          return;
-        }
-
-        // Todos os uploads completaram - publicar automaticamente
-        try {
-          const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
-            {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
-              },
+        for (const episode of episodesToUpload) {
+          try {
+            // Upload thumbnail if exists
+            let thumbnailUrl = episode.thumbnail_url;
+            if (episode.thumbnail_file) {
+              const thumbResult = await uploadImageToSupabase(
+                episode.thumbnail_file,
+                'cinevision-capas',
+                `episodes/s${episode.season_number}e${episode.episode_number}`
+              );
+              if (thumbResult.error) throw new Error(thumbResult.error);
+              thumbnailUrl = thumbResult.publicUrl;
             }
-          );
 
-          if (!response.ok) {
-            throw new Error('Erro ao publicar série');
+            // Create episode in database
+            const episodeData = {
+              series_id: createdContentId,
+              season_number: episode.season_number,
+              episode_number: episode.episode_number,
+              title: episode.title,
+              description: episode.description,
+              duration_minutes: episode.duration_minutes,
+              thumbnail_url: thumbnailUrl,
+            };
+
+            const response = await fetch(
+              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(episodeData),
+              }
+            );
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.message || 'Erro ao criar episódio');
+            }
+
+            const createdEpisode = await response.json();
+            const episodeId = createdEpisode.data?.id || createdEpisode.id;
+            const episodeKey = `s${episode.season_number}e${episode.episode_number}`;
+            episodeIds[episodeKey] = episodeId;
+
+            console.log(`[finalizeSeries] Episódio ${episodeKey} criado: ${episodeId}`);
+          } catch (error: any) {
+            console.error(`Error creating episode S${episode.season_number}E${episode.episode_number}:`, error);
+            toast.error(`Erro ao criar episódio S${episode.season_number}E${episode.episode_number}: ${error.message}`);
+            return;
           }
-
-          toast.success('✅ Série publicada e usuários notificados!');
-        } catch (error: any) {
-          console.error('Error publishing series:', error);
-          toast.error('Erro ao publicar série: ' + error.message);
         }
-      });
 
-      toast.success('Upload iniciado! A série será publicada automaticamente quando todos os uploads terminarem.');
-      router.push('/admin');
+        toast.success(`✅ ${Object.keys(episodeIds).length} episódio(s) criado(s). Iniciando uploads...`);
+
+        // Step 2: Add all episode videos as pending uploads
+        for (const episode of episodesToUpload) {
+          const episodeKey = `s${episode.season_number}e${episode.episode_number}`;
+          const episodeId = episodeIds[episodeKey];
+
+          if (!episodeId || !episode.video_file) continue;
+
+          addPendingUpload({
+            id: `episode-${episodeId}-${Date.now()}`,
+            file: episode.video_file,
+            contentId: createdContentId!,
+            episodeId: episodeId,
+            episodeTitle: episode.title,
+            seasonNumber: episode.season_number,
+            episodeNumber: episode.episode_number,
+            type: 'episode',
+          });
+
+          console.log(`[finalizeSeries] Added pending upload for episode ${episodeKey}`);
+        }
+
+        toast.success('✅ Uploads adicionados à fila! (máximo 2 simultâneos)');
+        toast.success('Navegue livremente - os uploads continuam em segundo plano', { duration: 5000 });
+
+        // Navigate to content manage page so user can see upload progress
+        router.push('/admin/content/manage');
+      } catch (error: any) {
+        console.error('Error in finalizeSeries:', error);
+        toast.error(error.message || 'Erro ao finalizar série');
+      }
       return;
     }
 
