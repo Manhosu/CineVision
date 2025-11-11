@@ -389,8 +389,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           throw new NotFoundException('Compra não encontrada');
         }
 
-        // Entregar filme baseado no tipo
-        await this.deliverMovie(purchase);
+        // Entregar conteúdo via grupo Telegram + Dashboard (NUNCA no chat privado)
+        await this.deliverContentAfterPayment(purchase);
         return;
       }
 
@@ -411,8 +411,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
         throw new NotFoundException('Compra não encontrada');
       }
 
-      // Entregar o filme
-      await this.deliverMovie(purchase, pendingPurchase);
+      // Entregar conteúdo via grupo Telegram + Dashboard (NUNCA no chat privado)
+      await this.deliverContentAfterPayment(purchase);
 
       // Limpar cache
       this.pendingPurchases.delete(purchaseId);
@@ -422,89 +422,6 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
   }
 
-  /**
-   * Entrega o filme via Telegram (com ou sem conta)
-   */
-  private async deliverMovie(purchase: any, cachedData?: PendingPurchase) {
-    const content = purchase.content;
-    const chatId = cachedData?.chat_id || purchase.provider_meta?.telegram_chat_id;
-
-    if (!chatId) {
-      this.logger.error('No chat_id found for purchase delivery');
-      return;
-    }
-
-    // Buscar vídeo do filme (versão dublada ou legendada)
-    const { data: contentLanguages } = await this.supabase
-      .from('content_languages')
-      .select('*')
-      .eq('content_id', content.id)
-      .eq('is_active', true)
-      .order('is_default', { ascending: false });
-
-    const videoLanguage = contentLanguages?.[0];
-
-    if (!videoLanguage || !videoLanguage.video_storage_key) {
-      await this.sendMessage(parseInt(chatId), `❌ Erro: Vídeo do filme "${content.title}" não disponível. Entre em contato com o suporte.`);
-      return;
-    }
-
-    // Gerar signed URL do S3 para o vídeo
-    const videoUrl = await this.generateSignedVideoUrl(videoLanguage.video_storage_key);
-
-    // Mensagem de confirmação
-    const message = `✅ **Pagamento Confirmado!**
-
-🎬 **${content.title}**
-${content.description || ''}
-💰 Valor pago: R$ ${(purchase.amount_cents / 100).toFixed(2)}
-
-${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
-  ? '✨ O filme foi adicionado à sua conta! Você pode assistir no site em "Meus Filmes".\n\n'
-  : '📱 Você comprou sem cadastro. O filme está disponível apenas neste chat.\n\n'
-}🔗 **Link para assistir:** ${videoUrl}
-
-${cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
-  ? '🌐 Acesse também: https://cinevision.com/dashboard'
-  : '⚠️ Salve este link! Ele é válido por 7 dias.'
-}`;
-
-    await this.sendMessage(parseInt(chatId), message, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '▶️ Assistir Agora', url: videoUrl }],
-          ...(cachedData?.purchase_type === PurchaseType.WITH_ACCOUNT
-            ? [[{ text: '🌐 Ver no Site', url: 'https://cinevision.com/dashboard' }]]
-            : []
-          ),
-        ],
-      },
-    });
-  }
-
-  /**
-   * Gera URL assinada do S3 para acesso temporário ao vídeo
-   */
-  private async generateSignedVideoUrl(storageKey: string): Promise<string> {
-    try {
-      const command = new GetObjectCommand({
-        Bucket: 'cinevision-video',
-        Key: storageKey,
-      });
-
-      // Gerar presigned URL válida por 4 horas (14400 segundos)
-      const presignedUrl = await getSignedUrl(this.s3Client, command, {
-        expiresIn: 14400,
-      });
-
-      this.logger.log(`Generated presigned URL for key: ${storageKey}`);
-      return presignedUrl;
-    } catch (error) {
-      this.logger.error('Error generating signed URL:', error);
-      throw new Error('Failed to generate video access URL');
-    }
-  }
 
   /**
    * Adds a user directly to the Telegram group (requires bot admin with invite permission)
@@ -2074,91 +1991,6 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    * - Se compra SEM CONTA: Envia apenas no Telegram
    * - Envia TODOS os idiomas disponíveis (dublado, legendado, etc.)
    */
-  /**
-   * Helper to send video content based on file size
-   * Files ≤2GB: Send directly via Telegram
-   * Files >2GB: Send only presigned link
-   */
-  private async sendVideoContent(chatId: string, options: {
-    title: string;
-    language: any;
-    fileSize: number;
-    TWO_GB_IN_BYTES: number;
-  }): Promise<void> {
-    try {
-      const { title, language, fileSize, TWO_GB_IN_BYTES } = options;
-
-      const langLabel = language.language_type === 'dubbed' ? '🎙️ Dublado' :
-                       language.language_type === 'subtitled' ? '📝 Legendado' :
-                       '🎬 Original';
-
-      const sizeGB = fileSize ? (fileSize / (1024 * 1024 * 1024)).toFixed(2) : 'Desconhecido';
-
-      // Generate presigned URL
-      const videoUrl = await this.generateSignedVideoUrl(language.video_storage_key);
-
-      if (fileSize && fileSize <= TWO_GB_IN_BYTES) {
-        // File is ≤2GB - send directly via Telegram
-        this.logger.log(`Sending file directly (${sizeGB} GB): ${title} - ${langLabel}`);
-
-        await this.sendMessage(parseInt(chatId),
-          `📥 **${title}**\n${langLabel} - ${language.language_name}\n📊 Tamanho: ${sizeGB} GB\n\n⏬ Enviando arquivo...`,
-          { parse_mode: 'Markdown' }
-        );
-
-        try {
-          // Send document using Telegram Bot API
-          const response = await axios.post(`${this.botApiUrl}/sendDocument`, {
-            chat_id: parseInt(chatId),
-            document: videoUrl,
-            caption: `🎬 ${title}\n${langLabel} - ${language.language_name}\n📊 ${sizeGB} GB`,
-            parse_mode: 'Markdown'
-          });
-
-          if (response.data.ok) {
-            this.logger.log(`File sent successfully: ${title}`);
-          } else {
-            throw new Error(response.data.description || 'Failed to send document');
-          }
-        } catch (sendError) {
-          this.logger.error(`Failed to send file directly, sending link instead: ${sendError.message}`);
-          // Fallback to link if direct send fails
-          await this.sendVideoLink(chatId, title, langLabel, language.language_name, sizeGB, videoUrl);
-        }
-      } else {
-        // File is >2GB - send only link
-        this.logger.log(`File too large (${sizeGB} GB), sending link only: ${title} - ${langLabel}`);
-        await this.sendVideoLink(chatId, title, langLabel, language.language_name, sizeGB, videoUrl);
-      }
-    } catch (error) {
-      this.logger.error(`Error sending video content: ${error.message}`);
-      await this.sendMessage(parseInt(chatId), `❌ Erro ao enviar: ${options.title}`);
-    }
-  }
-
-  /**
-   * Send video as link with button
-   */
-  private async sendVideoLink(
-    chatId: string,
-    title: string,
-    langLabel: string,
-    langName: string,
-    sizeGB: string,
-    videoUrl: string
-  ): Promise<void> {
-    await this.sendMessage(parseInt(chatId),
-      `🎬 **${title}**\n${langLabel} - ${langName}\n📊 Tamanho: ${sizeGB} GB\n⏱️  Link válido por: 4 horas`,
-      {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '▶️ Assistir/Baixar', url: videoUrl }]
-          ]
-        }
-      }
-    );
-  }
 
   /**
    * PUBLIC API: Deliver content to user after successful payment
