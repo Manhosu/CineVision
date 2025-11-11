@@ -11,6 +11,10 @@ interface AdminStats {
   totalUsers: number;
   totalRequests: number;
   recentUploads: number;
+  contentChange?: string;
+  usersChange?: string;
+  requestsChange?: string;
+  viewsChange?: string;
 }
 
 interface ContentItem {
@@ -86,7 +90,11 @@ export default function AdminDashboard() {
           totalContent: contentData.total || 0,
           totalUsers: usersData.total || 0,
           totalRequests: requestsData.pending || 0,
-          recentUploads: contentData.totalViews || 0
+          recentUploads: contentData.totalViews || 0,
+          contentChange: contentData.contentChange || '0%',
+          usersChange: usersData.usersChange || '0%',
+          requestsChange: requestsData.requestsChange || '0%',
+          viewsChange: contentData.viewsChange || '0%'
         });
 
         // Buscar conteúdos recentes para a lista
@@ -193,7 +201,7 @@ export default function AdminDashboard() {
         </svg>
       ),
       gradient: 'from-blue-500 to-cyan-500',
-      change: '+12%'
+      change: stats.contentChange || '0%'
     },
     {
       title: 'Usuários Ativos',
@@ -204,7 +212,7 @@ export default function AdminDashboard() {
         </svg>
       ),
       gradient: 'from-green-500 to-emerald-500',
-      change: '+5%'
+      change: stats.usersChange || '0%'
     },
     {
       title: 'Solicitações Pendentes',
@@ -215,7 +223,7 @@ export default function AdminDashboard() {
         </svg>
       ),
       gradient: 'from-yellow-500 to-orange-500',
-      change: '-2%'
+      change: stats.requestsChange || '0%'
     },
     {
       title: 'Visualizações',
@@ -227,7 +235,7 @@ export default function AdminDashboard() {
         </svg>
       ),
       gradient: 'from-purple-500 to-pink-500',
-      change: '+18%'
+      change: stats.viewsChange || '0%'
     }
   ];
 

@@ -65,16 +65,36 @@ export class AnalyticsService {
    */
   async upsertUserSession(session: UserSession): Promise<void> {
     try {
-      // Se temos user_id mas não temos user_name, buscar do auth.users
+      // Se temos user_id, buscar dados do usuário da tabela users (incluindo Telegram)
       let userName = session.user_name;
-      if (session.user_id && !userName) {
+      let telegramId = session.telegram_id;
+      let telegramUsername = session.telegram_username;
+
+      if (session.user_id) {
         try {
-          const { data: userData } = await this.supabase.auth.admin.getUserById(session.user_id);
-          if (userData?.user?.user_metadata?.name) {
-            userName = userData.user.user_metadata.name;
-          } else if (userData?.user?.email) {
-            // Fallback: usar parte do email antes do @
-            userName = userData.user.email.split('@')[0];
+          // Buscar dados da tabela users primeiro (tem telegram_id e telegram_username)
+          const { data: dbUser } = await this.supabase
+            .from('users')
+            .select('name, telegram_id, telegram_username')
+            .eq('id', session.user_id)
+            .single();
+
+          if (dbUser) {
+            // Usar dados da tabela users (prioridade)
+            userName = dbUser.name || userName;
+            telegramId = dbUser.telegram_id || telegramId;
+            telegramUsername = dbUser.telegram_username || telegramUsername;
+          }
+
+          // Se ainda não temos user_name, buscar do auth.users
+          if (!userName) {
+            const { data: userData } = await this.supabase.auth.admin.getUserById(session.user_id);
+            if (userData?.user?.user_metadata?.name) {
+              userName = userData.user.user_metadata.name;
+            } else if (userData?.user?.email) {
+              // Fallback: usar parte do email antes do @
+              userName = userData.user.email.split('@')[0];
+            }
           }
         } catch (userError) {
           // Ignorar erros ao buscar dados do usuário - pode não existir mais
@@ -89,8 +109,8 @@ export class AnalyticsService {
           user_id: session.user_id || null, // Allow null user_id for anonymous sessions
           user_email: session.user_email,
           user_name: userName,
-          telegram_id: session.telegram_id,
-          telegram_username: session.telegram_username,
+          telegram_id: telegramId,
+          telegram_username: telegramUsername,
           ip_address: session.ip_address,
           user_agent: session.user_agent,
           current_page: session.current_page,
