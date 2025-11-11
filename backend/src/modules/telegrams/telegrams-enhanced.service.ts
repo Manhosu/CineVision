@@ -2188,16 +2188,10 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         return;
       }
 
-      if (!content.content_languages || content.content_languages.length === 0) {
-        this.logger.error('No languages found for content:', purchase.content_id);
-        await this.sendMessage(parseInt(chatId),
-          `❌ **Vídeo Ainda Não Disponível**\n\n` +
-          `O conteúdo "${content.title}" foi comprado com sucesso, mas o vídeo ainda não foi adicionado ao sistema.\n\n` +
-          `📧 Nossa equipe foi notificada e o vídeo será disponibilizado em breve.\n\n` +
-          `🔔 Você receberá uma notificação quando o vídeo estiver pronto!`,
-          { parse_mode: 'Markdown' }
-        );
-        return;
+      // Log se não houver idiomas, mas NÃO interrompa o fluxo
+      const hasLanguages = content.content_languages && content.content_languages.length > 0;
+      if (!hasLanguages) {
+        this.logger.warn(`No languages found for content ${purchase.content_id}, but will still check for Telegram group and send dashboard link`);
       }
 
       // NOVO FLUXO: Todas as compras TÊM conta (não há mais compras anônimas)
@@ -2329,8 +2323,11 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       // Send appropriate confirmation message based on whether Telegram group is available
       if (userAddedAutomatically) {
         // User was added automatically to the group
-        await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n✨ O vídeo está disponível no grupo do Telegram\n\n🌐 **Ou assista no dashboard:**\nAcesse seu painel para assistir no navegador`,
+        const message = hasLanguages
+          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n✨ O vídeo está disponível no grupo do Telegram\n\n🌐 **Ou assista no dashboard:**\nAcesse seu painel para assistir no navegador`
+          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema, mas você já tem acesso ao grupo.\n🔔 Você será notificado quando o conteúdo estiver disponível!`;
+
+        await this.sendMessage(parseInt(chatId), message,
           {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2345,12 +2342,15 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         await this.supabase.from('system_logs').insert({
           type: 'delivery',
           level: 'info',
-          message: `Auto-added user to Telegram group for purchase ${purchase.id}`,
+          message: `Auto-added user to Telegram group for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
         });
       } else if (telegramGroupAvailable && telegramInviteLink) {
         // User needs to click the invite link
-        await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\n✨ Clique no botão abaixo para entrar no grupo\n🎬 O vídeo está disponível lá!\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`,
+        const message = hasLanguages
+          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\n✨ Clique no botão abaixo para entrar no grupo\n🎬 O vídeo está disponível lá!\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`
+          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Acesso ao Grupo do Telegram:**\n✨ Clique no botão abaixo para entrar no grupo\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n🔔 Você será notificado no grupo quando o conteúdo estiver disponível!\n\n⏰ O link do grupo expira em 24h e só pode ser usado uma vez.`;
+
+        await this.sendMessage(parseInt(chatId), message,
           {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2366,11 +2366,15 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         await this.supabase.from('system_logs').insert({
           type: 'delivery',
           level: 'info',
-          message: `Delivered content ${content.id} to user ${purchase.user_id} with Telegram group invite for purchase ${purchase.id}`,
+          message: `Delivered content ${content.id} to user ${purchase.user_id} with Telegram group invite for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
         });
       } else {
-        await this.sendMessage(parseInt(chatId),
-          `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\n✨ Acesse seu dashboard para assistir\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram`,
+        // No Telegram group available
+        const message = hasLanguages
+          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\n✨ Acesse seu dashboard para assistir\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram`
+          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n\n🌐 **Dashboard:**\n✨ Acesse seu painel para visualizar quando disponível\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram\n🔔 Você será notificado quando o vídeo estiver pronto!`;
+
+        await this.sendMessage(parseInt(chatId), message,
           {
             parse_mode: 'Markdown',
             reply_markup: {
@@ -2385,7 +2389,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         await this.supabase.from('system_logs').insert({
           type: 'delivery',
           level: 'info',
-          message: `Delivered content ${content.id} to user ${purchase.user_id} (dashboard only) for purchase ${purchase.id}`,
+          message: `Delivered content ${content.id} to user ${purchase.user_id} (dashboard only) for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
         });
       }
 
