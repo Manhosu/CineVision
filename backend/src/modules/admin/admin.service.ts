@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, MoreThan } from 'typeorm';
 import { Content } from '../content/entities/content.entity';
@@ -19,9 +19,12 @@ import {
   NotifyUserDto,
 } from './dto/metrics.dto';
 import { subDays, startOfMonth, startOfYear, format } from 'date-fns';
+import { SupabaseService } from '../../config/supabase.service';
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     @InjectRepository(Content)
     private contentRepository: Repository<Content>,
@@ -37,6 +40,7 @@ export class AdminService {
     private streamingAnalyticsRepository: Repository<StreamingAnalytics>,
     @InjectRepository(ContentRequest)
     private contentRequestRepository: Repository<ContentRequest>,
+    private supabaseService: SupabaseService,
   ) {}
 
   async getMetrics(query: GetMetricsDto): Promise<MetricsResponseDto> {
@@ -667,5 +671,182 @@ export class AdminService {
     return {
       pending,
     };
+  }
+
+  /**
+   * Diagnose Telegram data in users table
+   * Returns statistics about users with/without telegram_id
+   */
+  async diagnoseTelegramData() {
+    try {
+      this.logger.log('Starting Telegram data diagnosis...');
+
+      // 1. Get total counts
+      const { count: totalUsers } = await this.supabaseService.client
+        .from('users')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: usersWithTelegram } = await this.supabaseService.client
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .not('telegram_id', 'is', null);
+
+      const usersWithoutTelegram = (totalUsers || 0) - (usersWithTelegram || 0);
+      const percentageWithTelegram = totalUsers > 0
+        ? Math.round((usersWithTelegram / totalUsers) * 100)
+        : 0;
+
+      // 2. Get sample of users WITHOUT telegram_id
+      const { data: usersWithoutTelegramData } = await this.supabaseService.client
+        .from('users')
+        .select('id, name, email, telegram_id, telegram_username, created_at')
+        .is('telegram_id', null)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      // 3. Get sample of users WITH telegram_id (to confirm format)
+      const { data: usersWithTelegramData } = await this.supabaseService.client
+        .from('users')
+        .select('id, name, email, telegram_id, telegram_username, created_at')
+        .not('telegram_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      // 4. Check active sessions vs user data
+      const { data: activeSessions } = await this.supabaseService.client
+        .from('user_sessions')
+        .select(`
+          session_id,
+          user_id,
+          user_name,
+          telegram_id,
+          telegram_username,
+          last_activity
+        `)
+        .eq('status', 'online')
+        .order('last_activity', { ascending: false })
+        .limit(10);
+
+      // Enrich sessions with user table data for comparison
+      const sessionsWithUserData = await Promise.all(
+        (activeSessions || []).map(async (session) => {
+          if (session.user_id) {
+            const { data: userData } = await this.supabaseService.client
+              .from('users')
+              .select('telegram_id, telegram_username, name')
+              .eq('id', session.user_id)
+              .single();
+
+            return {
+              session_id: session.session_id,
+              user_id: session.user_id,
+              session_data: {
+                name: session.user_name,
+                telegram_id: session.telegram_id,
+                telegram_username: session.telegram_username,
+              },
+              user_table_data: userData || null,
+              has_mismatch: userData && (
+                session.telegram_id !== userData.telegram_id ||
+                session.telegram_username !== userData.telegram_username
+              ),
+            };
+          }
+          return {
+            session_id: session.session_id,
+            user_id: null,
+            session_data: { name: session.user_name },
+            user_table_data: null,
+            has_mismatch: false,
+          };
+        })
+      );
+
+      const result = {
+        summary: {
+          total_users: totalUsers || 0,
+          users_with_telegram: usersWithTelegram || 0,
+          users_without_telegram: usersWithoutTelegram,
+          percentage_with_telegram: `${percentageWithTelegram}%`,
+        },
+        users_without_telegram_sample: usersWithoutTelegramData || [],
+        users_with_telegram_sample: usersWithTelegramData || [],
+        active_sessions_analysis: {
+          total_active: activeSessions?.length || 0,
+          sessions: sessionsWithUserData,
+          sessions_with_mismatch: sessionsWithUserData.filter(s => s.has_mismatch).length,
+        },
+        recommendations: this.generateRecommendations(
+          totalUsers || 0,
+          usersWithTelegram || 0,
+          usersWithoutTelegramData || [],
+          sessionsWithUserData
+        ),
+      };
+
+      this.logger.log('Telegram data diagnosis completed');
+      return result;
+
+    } catch (error) {
+      this.logger.error('Error diagnosing Telegram data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate recommendations based on diagnosis results
+   */
+  private generateRecommendations(
+    totalUsers: number,
+    usersWithTelegram: number,
+    usersWithoutTelegram: any[],
+    sessions: any[]
+  ): string[] {
+    const recommendations: string[] = [];
+
+    if (totalUsers === 0) {
+      recommendations.push('⚠️ No users found in the system');
+      return recommendations;
+    }
+
+    const percentageWithTelegram = (usersWithTelegram / totalUsers) * 100;
+
+    if (percentageWithTelegram < 50) {
+      recommendations.push(
+        `⚠️ Only ${Math.round(percentageWithTelegram)}% of users have Telegram data. ` +
+        'Most users were likely created via email/password or before Telegram integration.'
+      );
+    }
+
+    if (usersWithoutTelegram.some(u => u.email?.includes('telegram_'))) {
+      recommendations.push(
+        '⚠️ Found users with telegram email pattern but no telegram_id. ' +
+        'This might indicate a bug in the authentication flow.'
+      );
+    }
+
+    if (sessions.some(s => s.has_mismatch)) {
+      recommendations.push(
+        '⚠️ Some active sessions have outdated Telegram data. ' +
+        'Call POST /api/v1/analytics/clear-sessions to force refresh.'
+      );
+    }
+
+    if (usersWithTelegram === 0) {
+      recommendations.push(
+        '🔴 CRITICAL: No users have Telegram data! ' +
+        'Check if Telegram authentication is working correctly.'
+      );
+    } else if (percentageWithTelegram >= 80) {
+      recommendations.push(
+        `✅ Good! ${Math.round(percentageWithTelegram)}% of users have Telegram data.`
+      );
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('✅ Everything looks good! Telegram data is present for most users.');
+    }
+
+    return recommendations;
   }
 }

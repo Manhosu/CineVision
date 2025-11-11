@@ -254,6 +254,13 @@ export class AdminController {
     };
   }
 
+  @Get('diagnose/telegram-data')
+  @ApiOperation({ summary: 'Diagnose Telegram data in users table' })
+  @ApiResponse({ status: 200, description: 'Diagnostic report generated successfully' })
+  async diagnoseTelegramData(@GetUser() user: User) {
+    return this.adminService.diagnoseTelegramData();
+  }
+
   @Put('settings')
   @ApiOperation({ summary: 'Update system settings' })
   @HttpCode(HttpStatus.OK)
