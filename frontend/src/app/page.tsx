@@ -82,7 +82,7 @@ function HomePageContent() {
 
         // Fetch real data from API
         const [featuredRes, top10Res, top10SeriesRes, latestRes, allSeriesRes, popularSeriesRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/content/movies?limit=5&sort=newest`, {
+          fetch(`${API_URL}/api/v1/content/featured?limit=5`, {
             cache: 'no-store',
             headers
           }),
@@ -119,12 +119,16 @@ function HomePageContent() {
         const allSeriesData = await allSeriesRes.json();
         const popularSeriesData = await popularSeriesRes.json();
 
-        // Use featured movies or latest for hero banner
-        const featuredMovies = featuredData.movies?.filter((m: Movie) => m.featured) || [];
-        const heroMoviesData = (featuredMovies.length > 0
-          ? featuredMovies.slice(0, 3)
-          : (featuredData.movies || []).slice(0, 3)) as Movie[];
-        setHeroMovies(heroMoviesData);
+        // Use featured content for hero banner - API already returns only featured items
+        const heroMoviesData = (Array.isArray(featuredData) ? featuredData.slice(0, 5) : []) as Movie[];
+
+        // If no featured content, fallback to latest movies
+        if (heroMoviesData.length === 0) {
+          const fallbackMovies = (latestData.movies || []).slice(0, 3);
+          setHeroMovies(fallbackMovies);
+        } else {
+          setHeroMovies(heroMoviesData);
+        }
 
         // Organize content sections with real data
         const sections: ContentSection[] = [

@@ -93,6 +93,14 @@ export class ContentController {
     return this.contentService.findTop10Series();
   }
 
+  @Get('featured')
+  @ApiOperation({ summary: 'Get featured content for homepage banner' })
+  @ApiQuery({ name: 'limit', description: 'Maximum number of featured items', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Featured content retrieved successfully' })
+  async getFeaturedContent(@Query('limit') limit = 10) {
+    return this.contentService.findFeaturedContent(Number(limit));
+  }
+
   @Get('movies/related/:id')
   @ApiOperation({ summary: 'Get related movies' })
   @ApiParam({ name: 'id', description: 'Movie ID' })

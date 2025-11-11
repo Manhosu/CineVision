@@ -75,12 +75,24 @@ export class AdminStatsService {
         this.logger.error('Error getting series count:', seriesError);
       }
 
+      // Get total views from all content
+      const { data: viewsData, error: viewsError } = await this.supabaseService.client
+        .from('content')
+        .select('views');
+
+      let totalViews = 0;
+      if (!viewsError && viewsData) {
+        totalViews = viewsData.reduce((sum, item) => sum + (item.views || 0), 0);
+      } else if (viewsError) {
+        this.logger.error('Error getting views count:', viewsError);
+      }
+
       return {
         total: totalCount || 0,
         published: publishedCount || 0,
         movies: moviesCount || 0,
         series: seriesCount || 0,
-        totalViews: 0, // Placeholder for future implementation
+        totalViews: totalViews,
         message: 'Content statistics retrieved successfully',
       };
     } catch (error) {
@@ -120,7 +132,7 @@ export class AdminStatsService {
       const { count: pendingCount, error: pendingError } = await this.supabaseService.client
         .from('content_requests')
         .select('*', { count: 'exact', head: true })
-        .eq('status', 'PENDING');
+        .eq('status', 'pending');
 
       if (pendingError) {
         this.logger.error('Error getting pending requests count:', pendingError);

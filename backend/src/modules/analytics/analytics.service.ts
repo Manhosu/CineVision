@@ -89,6 +89,8 @@ export class AnalyticsService {
           user_id: session.user_id || null, // Allow null user_id for anonymous sessions
           user_email: session.user_email,
           user_name: userName,
+          telegram_id: session.telegram_id,
+          telegram_username: session.telegram_username,
           ip_address: session.ip_address,
           user_agent: session.user_agent,
           current_page: session.current_page,
