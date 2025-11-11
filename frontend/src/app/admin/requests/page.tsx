@@ -7,7 +7,7 @@ import { Clock, CheckCircle, XCircle, AlertCircle, Calendar, User as UserIcon } 
 
 interface ContentRequest {
   id: string;
-  requested_title: string;
+  title: string;
   description?: string;
   status: 'pending' | 'in_progress' | 'completed' | 'rejected' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
@@ -60,7 +60,7 @@ export default function AdminRequestsPage() {
       }
 
       const data = await response.json();
-      setRequests(Array.isArray(data.data) ? data.data : []);
+      setRequests(Array.isArray(data.requests) ? data.requests : []);
     } catch (err) {
       console.error('Erro ao buscar pedidos:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
@@ -320,7 +320,7 @@ export default function AdminRequestsPage() {
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-white">{request.requested_title}</h3>
+                          <h3 className="text-lg font-semibold text-white">{request.title}</h3>
                           <span
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${statusConfig.color}`}
                           >
