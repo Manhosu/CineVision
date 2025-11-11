@@ -291,7 +291,36 @@ export class AnalyticsService {
         return [];
       }
 
-      return data || [];
+      // Enrich sessions with fresh data from users table
+      const enrichedSessions = await Promise.all(
+        (data || []).map(async (session) => {
+          if (session.user_id) {
+            try {
+              // Fetch fresh user data from users table
+              const { data: userData } = await this.supabase
+                .from('users')
+                .select('name, telegram_id, telegram_username')
+                .eq('id', session.user_id)
+                .single();
+
+              if (userData) {
+                // Override session data with fresh data from users table
+                return {
+                  ...session,
+                  user_name: userData.name || session.user_name,
+                  telegram_id: userData.telegram_id || session.telegram_id,
+                  telegram_username: userData.telegram_username || session.telegram_username,
+                };
+              }
+            } catch (userError) {
+              this.logger.warn(`Could not fetch user data for session ${session.session_id}:`, userError.message);
+            }
+          }
+          return session;
+        })
+      );
+
+      return enrichedSessions;
     } catch (error) {
       this.logger.error('Failed to get active sessions:', error);
       // Return empty array instead of throwing - don't break the app
@@ -317,6 +346,35 @@ export class AnalyticsService {
       return data || [];
     } catch (error) {
       this.logger.error('Failed to get recent activities:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Limpar todas as sessões antigas para forçar refresh
+   */
+  async clearAllSessions(): Promise<{ cleared: number }> {
+    try {
+      // Delete all sessions older than 1 minute (force refresh)
+      const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+
+      const { data, error } = await this.supabase
+        .from('user_sessions')
+        .delete()
+        .lt('last_activity', oneMinuteAgo)
+        .select('session_id');
+
+      if (error) {
+        this.logger.error('Error clearing old sessions:', error);
+        throw error;
+      }
+
+      const clearedCount = data?.length || 0;
+      this.logger.log(`Cleared ${clearedCount} old sessions`);
+
+      return { cleared: clearedCount };
+    } catch (error) {
+      this.logger.error('Failed to clear sessions:', error);
       throw error;
     }
   }

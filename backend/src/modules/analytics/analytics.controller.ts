@@ -109,4 +109,23 @@ export class AnalyticsController {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Endpoint para limpar sessões antigas e forçar refresh (ADMIN)
+   * POST /api/v1/analytics/clear-sessions
+   */
+  @Post('clear-sessions')
+  async clearOldSessions() {
+    try {
+      const result = await this.analyticsService.clearAllSessions();
+      return {
+        success: true,
+        message: 'Old sessions cleared successfully',
+        ...result,
+      };
+    } catch (error) {
+      this.logger.error('Error clearing sessions:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
