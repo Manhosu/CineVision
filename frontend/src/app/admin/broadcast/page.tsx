@@ -22,6 +22,13 @@ interface BroadcastHistory {
   button_url?: string;
   recipients_count: number;
   sent_at: string;
+  recipient_telegram_ids?: string;
+}
+
+interface TelegramUser {
+  telegram_id: string;
+  name?: string;
+  telegram_username?: string;
 }
 
 export default function BroadcastPage() {
@@ -30,15 +37,23 @@ export default function BroadcastPage() {
   const [mounted, setMounted] = useState(false);
 
   const [messageText, setMessageText] = useState('');
-  const [buttonText, setButtonText] = useState('Acessar site');
-  const [buttonUrl, setButtonUrl] = useState('');
   const [usersCount, setUsersCount] = useState(0);
   const [isSending, setIsSending] = useState(false);
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // Targeted messaging - only specific IDs allowed
+  // Send mode: 'specific' or 'all'
+  const [sendMode, setSendMode] = useState<'specific' | 'all'>('all');
   const [telegramIds, setTelegramIds] = useState('');
+  const [allUsers, setAllUsers] = useState<TelegramUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Multiple inline buttons support (up to 3)
+  const [buttons, setButtons] = useState([
+    { text: '', url: '' },
+    { text: '', url: '' },
+    { text: '', url: '' },
+  ]);
 
   // Mark component as mounted
   useEffect(() => {
@@ -65,6 +80,7 @@ export default function BroadcastPage() {
     const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
     if (token) {
       fetchUsersCount();
+      fetchAllUsers();
       fetchBroadcastHistory();
     } else {
       console.error('No token found in localStorage - cannot load data');
@@ -111,6 +127,43 @@ export default function BroadcastPage() {
       }
     } catch (error) {
       console.error('Error fetching users count:', error);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+
+      if (!token) {
+        console.error('No access token found in localStorage');
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/users-list`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        setAllUsers(data.users || []);
+      } else {
+        console.error('Failed to fetch users list:', response.status);
+      }
+    } catch (error) {
+      console.error('Error fetching users list:', error);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -167,15 +220,27 @@ export default function BroadcastPage() {
       return;
     }
 
-    // Validate telegram IDs
-    const ids = telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id);
-    if (ids.length === 0) {
-      toast.error('Adicione pelo menos um Telegram ID');
-      return;
+    // Determine recipients
+    let recipientIds: string[] = [];
+    if (sendMode === 'all') {
+      recipientIds = allUsers.map(u => u.telegram_id);
+      if (recipientIds.length === 0) {
+        toast.error('Nenhum usuário encontrado');
+        return;
+      }
+    } else {
+      recipientIds = telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id);
+      if (recipientIds.length === 0) {
+        toast.error('Adicione pelo menos um Telegram ID');
+        return;
+      }
     }
 
     // Confirm before sending
-    const confirmMessage = `Tem certeza que deseja enviar esta mensagem para ${ids.length} usuário(s)?`;
+    const confirmMessage = sendMode === 'all'
+      ? `🚨 ATENÇÃO! Tem certeza que deseja enviar esta mensagem para TODOS OS ${recipientIds.length} usuários?\n\nEsta ação não pode ser desfeita!`
+      : `Tem certeza que deseja enviar esta mensagem para ${recipientIds.length} usuário(s)?`;
+
     if (!confirm(confirmMessage)) {
       return;
     }
@@ -186,25 +251,25 @@ export default function BroadcastPage() {
       // Get auth token
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
 
-      console.log('Sending broadcast with token:', token ? 'Token exists' : 'NO TOKEN');
-
       if (!token) {
         throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
       }
 
+      // Filter buttons that have both text and URL
+      const validButtons = buttons.filter(b => b.text.trim() && b.url.trim());
+
       const payload: any = {
         message_text: messageText,
-        telegram_ids: telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id),
+        telegram_ids: recipientIds,
       };
 
-      // Add button if both text and URL are provided
-      if (buttonText && typeof buttonText === 'string' && buttonText.trim() &&
-          buttonUrl && typeof buttonUrl === 'string' && buttonUrl.trim()) {
-        payload.button_text = buttonText.trim();
-        payload.button_url = buttonUrl.trim();
+      // Add buttons if any are valid
+      if (validButtons.length > 0) {
+        payload.inline_buttons = validButtons.map(b => ({
+          text: b.text.trim(),
+          url: b.url.trim(),
+        }));
       }
-
-      console.log('Broadcast payload:', payload);
 
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/send`,
@@ -218,20 +283,16 @@ export default function BroadcastPage() {
         }
       );
 
-      console.log('Broadcast response status:', response.status);
-
       if (response.status === 401) {
         throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
       }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        console.error('Broadcast error:', error);
         throw new Error(error.message || 'Falha ao enviar broadcast');
       }
 
       const result = await response.json();
-      console.log('Broadcast result:', result);
 
       toast.success(
         `Broadcast enviado! ${result.successful_sends} de ${result.total_users} mensagens enviadas com sucesso.`
@@ -239,8 +300,11 @@ export default function BroadcastPage() {
 
       // Clear form
       setMessageText('');
-      setButtonText('Acessar site');
-      setButtonUrl('');
+      setButtons([
+        { text: '', url: '' },
+        { text: '', url: '' },
+        { text: '', url: '' },
+      ]);
       setTelegramIds('');
 
       // Refresh history
@@ -271,10 +335,10 @@ export default function BroadcastPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
-                Marketing
+                Marketing via Telegram
               </h1>
               <p className="text-gray-400 text-lg">
-                Envie mensagens para IDs específicos de usuários que iniciaram conversa com o bot
+                Envie mensagens de marketing para usuários do Telegram com botões personalizados
               </p>
             </div>
 
@@ -333,23 +397,97 @@ export default function BroadcastPage() {
                 Compor Mensagem
               </h2>
 
-              {/* Telegram IDs Input */}
+              {/* Send Mode Toggle */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Telegram IDs *
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Destinatários *
                 </label>
-                <textarea
-                  value={telegramIds}
-                  onChange={(e) => setTelegramIds(e.target.value)}
-                  placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
-                  rows={3}
-                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                  required
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  Separe múltiplos IDs com vírgula
-                </p>
+                <div className="flex items-center gap-4 p-4 bg-gray-900/30 rounded-lg border border-gray-700/50">
+                  <button
+                    type="button"
+                    onClick={() => setSendMode('all')}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                      sendMode === 'all'
+                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30'
+                        : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <UsersIcon className="w-5 h-5 inline-block mr-2" />
+                    Todos os Usuários ({allUsers.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSendMode('specific')}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
+                      sendMode === 'specific'
+                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30'
+                        : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    IDs Específicos
+                  </button>
+                </div>
               </div>
+
+              {/* Specific IDs Input (if sendMode === 'specific') */}
+              {sendMode === 'specific' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Telegram IDs *
+                  </label>
+                  <textarea
+                    value={telegramIds}
+                    onChange={(e) => setTelegramIds(e.target.value)}
+                    placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
+                    rows={3}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                    required
+                  />
+                  <p className="mt-2 text-xs text-gray-500">
+                    Separe múltiplos IDs com vírgula
+                  </p>
+                </div>
+              )}
+
+              {/* All Users List (if sendMode === 'all') */}
+              {sendMode === 'all' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Usuários que receberão a mensagem
+                  </label>
+                  <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-4 max-h-48 overflow-y-auto">
+                    {loadingUsers ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-500 mx-auto"></div>
+                      </div>
+                    ) : allUsers.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        Nenhum usuário encontrado
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        {allUsers.map((user, index) => (
+                          <div
+                            key={user.telegram_id}
+                            className="flex items-center gap-2 text-xs text-gray-400 bg-gray-800/30 rounded px-2 py-1"
+                          >
+                            <span className="text-gray-600">#{index + 1}</span>
+                            <span className="font-mono text-gray-300">{user.telegram_id}</span>
+                            {user.name && (
+                              <span className="text-gray-500 truncate">
+                                - {user.name}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs text-yellow-500 flex items-center">
+                    ⚠️ Envio em massa para {allUsers.length} usuários
+                  </p>
+                </div>
+              )}
 
               {/* Message Text */}
               <div>
@@ -370,40 +508,62 @@ export default function BroadcastPage() {
                 </p>
               </div>
 
-              {/* Button Configuration */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Texto do Botão
-                  </label>
-                  <input
-                    type="text"
-                    value={buttonText}
-                    onChange={(e) => setButtonText(e.target.value)}
-                    placeholder="Ex: Acessar site"
-                    maxLength={100}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
-                    <LinkIcon className="w-4 h-4 mr-2" />
-                    URL do Botão
-                  </label>
-                  <input
-                    type="url"
-                    value={buttonUrl}
-                    onChange={(e) => setButtonUrl(e.target.value)}
-                    placeholder="https://www.cinevisionapp.com.br"
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                  />
+              {/* Inline Buttons Configuration */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
+                  <LinkIcon className="w-4 h-4 mr-2" />
+                  Botões Inline (Opcional)
+                </label>
+                <p className="text-xs text-gray-500 mb-3">
+                  Adicione até 3 botões que serão exibidos abaixo da mensagem
+                </p>
+                <div className="space-y-3">
+                  {buttons.map((button, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-gray-900/30 rounded-lg border border-gray-700/50">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">
+                          Botão {index + 1} - Texto
+                        </label>
+                        <input
+                          type="text"
+                          value={button.text}
+                          onChange={(e) => {
+                            const newButtons = [...buttons];
+                            newButtons[index].text = e.target.value;
+                            setButtons(newButtons);
+                          }}
+                          placeholder={`Ex: ${index === 0 ? 'Acessar Site' : index === 1 ? 'Ver Catálogo' : 'Suporte'}`}
+                          maxLength={50}
+                          className="w-full bg-gray-900/50 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">
+                          Botão {index + 1} - URL
+                        </label>
+                        <input
+                          type="url"
+                          value={button.url}
+                          onChange={(e) => {
+                            const newButtons = [...buttons];
+                            newButtons[index].url = e.target.value;
+                            setButtons(newButtons);
+                          }}
+                          placeholder="https://..."
+                          className="w-full bg-gray-900/50 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               {/* Send Button */}
               <div className="flex items-center justify-between pt-4 border-t border-gray-700">
                 <p className="text-sm text-gray-400">
-                  {telegramIds.trim() ? (
+                  {sendMode === 'all' ? (
+                    <>Enviando para <strong className="text-white">{allUsers.length}</strong> usuário(s)</>
+                  ) : telegramIds.trim() ? (
                     <>Enviando para <strong className="text-white">{telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id).length}</strong> ID(s) específico(s)</>
                   ) : (
                     <>Nenhum ID especificado</>
@@ -411,7 +571,7 @@ export default function BroadcastPage() {
                 </p>
                 <button
                   type="submit"
-                  disabled={isSending || !telegramIds.trim()}
+                  disabled={isSending || (sendMode === 'specific' && !telegramIds.trim()) || (sendMode === 'all' && allUsers.length === 0)}
                   className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300 shadow-lg hover:shadow-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center space-x-2"
                 >
                   {isSending ? (

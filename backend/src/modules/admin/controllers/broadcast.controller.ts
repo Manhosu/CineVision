@@ -95,6 +95,28 @@ export class BroadcastController {
   }
 
   /**
+   * Get list of all users who can receive broadcasts
+   */
+  @Get('users-list')
+  async getUsersList() {
+    try {
+      const users = await this.broadcastService.getAllBotUsers();
+
+      return {
+        success: true,
+        users: users.map(u => ({
+          telegram_id: u.telegram_id,
+          name: u.name,
+          telegram_username: u.telegram_username,
+        })),
+      };
+    } catch (error) {
+      this.logger.error('Error in getUsersList:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Upload image for broadcast
    */
   @Post('upload-image')

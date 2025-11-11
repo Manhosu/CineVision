@@ -1,4 +1,14 @@
-import { IsString, IsOptional, IsUrl, MaxLength, MinLength, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsUrl, MaxLength, MinLength, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class InlineButtonDto {
+  @IsString()
+  @MaxLength(50, { message: 'O texto do botão não pode ter mais de 50 caracteres' })
+  text: string;
+
+  @IsUrl({ require_protocol: true }, { message: 'URL do botão inválida' })
+  url: string;
+}
 
 export class SendBroadcastDto {
   @IsString()
@@ -18,6 +28,12 @@ export class SendBroadcastDto {
   @IsOptional()
   @IsUrl({ require_protocol: true }, { message: 'URL do botão inválida' })
   button_url?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'inline_buttons deve ser um array' })
+  @ValidateNested({ each: true })
+  @Type(() => InlineButtonDto)
+  inline_buttons?: InlineButtonDto[];
 
   @IsArray({ message: 'telegram_ids deve ser um array' })
   @IsString({ each: true, message: 'Cada telegram_id deve ser uma string' })

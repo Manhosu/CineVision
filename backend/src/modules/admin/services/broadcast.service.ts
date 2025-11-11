@@ -51,13 +51,10 @@ export class BroadcastService {
     options?: {
       buttonText?: string;
       buttonUrl?: string;
+      inlineButtons?: Array<{ text: string; url: string }>;
     },
   ): Promise<boolean> {
     const endpoint = `${this.telegramApiUrl}/sendMessage`;
-
-    // Validate optional string fields
-    const buttonText = options?.buttonText && typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
-    const buttonUrl = options?.buttonUrl && typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
 
     try {
       const payload: any = {
@@ -66,12 +63,30 @@ export class BroadcastService {
         parse_mode: 'Markdown',
       };
 
-      // Add inline keyboard if button is provided
-      if (buttonText && buttonUrl) {
+      // Priority: use inline_buttons if provided, otherwise fall back to single button
+      if (options?.inlineButtons && Array.isArray(options.inlineButtons) && options.inlineButtons.length > 0) {
+        // Multiple inline buttons - each button is on its own row
+        const inlineKeyboard = options.inlineButtons.map(button => [{
+          text: button.text,
+          url: button.url,
+        }]);
+
         payload.reply_markup = {
-          inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
+          inline_keyboard: inlineKeyboard,
         };
-        this.logger.log(`Sending message with button: ${buttonText} -> ${buttonUrl}`);
+
+        this.logger.log(`Sending message with ${options.inlineButtons.length} inline buttons`);
+      } else if (options?.buttonText && options?.buttonUrl) {
+        // Single button for backward compatibility
+        const buttonText = typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
+        const buttonUrl = typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
+
+        if (buttonText && buttonUrl) {
+          payload.reply_markup = {
+            inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
+          };
+          this.logger.log(`Sending message with button: ${buttonText} -> ${buttonUrl}`);
+        }
       }
 
       const response = await axios.post(endpoint, payload);
@@ -95,7 +110,7 @@ export class BroadcastService {
         endpoint,
         chat_id: chatId,
         message_length: messageText?.length || 0,
-        has_button: !!(buttonText && buttonUrl),
+        has_buttons: !!(options?.inlineButtons || (options?.buttonText && options?.buttonUrl)),
       }));
 
       return false;
@@ -192,6 +207,7 @@ export class BroadcastService {
           user.telegram_chat_id,
           broadcastData.message_text,
           {
+            inlineButtons: broadcastData.inline_buttons,
             buttonText: broadcastData.button_text,
             buttonUrl: broadcastData.button_url,
           },
