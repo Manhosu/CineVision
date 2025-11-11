@@ -140,24 +140,12 @@ export class StripeWebhookService {
 
         this.logger.log(`Purchase ${purchaseId} marked as PAID`);
 
-        // Trigger Telegram bot notification
-        try {
-          const purchaseWithRelations = await this.purchaseRepository.findOne({
-            where: { id: purchaseId },
-            relations: ['content', 'user'],
-          });
-
-          if (purchaseWithRelations && purchaseWithRelations.user && purchaseWithRelations.content) {
-            await this.botNotificationService.sendPurchaseAccess(
-              userId,
-              purchaseWithRelations as any,
-            );
-            this.logger.log(`Telegram notification sent for purchase ${purchaseId}`);
-          }
-        } catch (botError) {
-          this.logger.error(`Failed to send Telegram notification: ${botError.message}`);
-          // Don't fail the webhook if bot notification fails
-        }
+        // NOTE: This TypeORM-based webhook service is deprecated.
+        // Production uses StripeWebhookSupabaseService which calls
+        // TelegramsEnhancedService.deliverContentAfterPayment() for content delivery.
+        // The old sendPurchaseAccess() method has been removed as it sent videos in private chat,
+        // which violates the architecture requirement (content only via Telegram groups + dashboard).
+        this.logger.log(`Telegram notification handled by Supabase webhook service for purchase ${purchaseId}`);
       }
     } catch (error) {
       this.logger.error(`Failed to process payment intent succeeded: ${error.message}`, error.stack);
@@ -278,23 +266,12 @@ export class StripeWebhookService {
 
         this.logger.log(`Checkout completed for purchase ${purchaseId}`);
 
-        // Trigger Telegram bot notification for checkout session too
-        try {
-          const purchaseWithRelations = await this.purchaseRepository.findOne({
-            where: { id: purchaseId },
-            relations: ['content', 'user'],
-          });
-
-          if (purchaseWithRelations && purchaseWithRelations.user && purchaseWithRelations.content) {
-            await this.botNotificationService.sendPurchaseAccess(
-              userId,
-              purchaseWithRelations as any,
-            );
-            this.logger.log(`Telegram notification sent for checkout ${session.id}`);
-          }
-        } catch (botError) {
-          this.logger.error(`Failed to send Telegram notification: ${botError.message}`);
-        }
+        // NOTE: This TypeORM-based webhook service is deprecated.
+        // Production uses StripeWebhookSupabaseService which calls
+        // TelegramsEnhancedService.deliverContentAfterPayment() for content delivery.
+        // The old sendPurchaseAccess() method has been removed as it sent videos in private chat,
+        // which violates the architecture requirement (content only via Telegram groups + dashboard).
+        this.logger.log(`Telegram notification handled by Supabase webhook service for checkout ${session.id}`);
       }
     } catch (error) {
       this.logger.error(`Failed to process checkout session: ${error.message}`, error.stack);
