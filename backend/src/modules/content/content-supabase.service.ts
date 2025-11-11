@@ -390,6 +390,26 @@ export class ContentSupabaseService {
     }
   }
 
+  async findFeaturedContent(limit = 10) {
+    try {
+      this.logger.debug(`Finding featured content (limit: ${limit})`);
+
+      const queryOptions = {
+        where: {
+          status: ContentStatus.PUBLISHED,
+          is_featured: true
+        },
+        order: { column: 'created_at', ascending: false },
+        limit
+      };
+
+      return await this.supabaseClient.select('content', queryOptions);
+    } catch (error) {
+      this.logger.error('Error finding featured content:', error);
+      throw error;
+    }
+  }
+
   async deleteAllMovies() {
     try {
       this.logger.debug('Deleting all movies from database');

@@ -430,6 +430,27 @@ export class ContentSupabaseService {
     return series || [];
   }
 
+  async findFeaturedContent(limit = 10) {
+    const { data: featured, error } = await this.supabaseService.client
+      .from('content')
+      .select(`
+        *,
+        categories:content_categories(
+          category:categories(*)
+        )
+      `)
+      .eq('status', ContentStatus.PUBLISHED)
+      .eq('is_featured', true)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to fetch featured content: ${error.message}`);
+    }
+
+    return featured || [];
+  }
+
   async findRelatedMovies(movieId: string, genres: string[] = [], limit = 6) {
     let query = this.supabaseService.client
       .from('content')
