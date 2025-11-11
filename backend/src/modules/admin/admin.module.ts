@@ -16,6 +16,7 @@ import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.s
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
+import { RequestsSupabaseService } from '../requests/requests-supabase.service';
 import { UploadPresignedController } from './controllers/upload-presigned.controller';
 // Removed DriveImportController - replaced with VideoUploadController
 import { VideoUploadController } from './controllers/video-upload.controller';
@@ -61,7 +62,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminPurchasesController,
   AdminUsersController,
   AdminRequestsPublicController,
-  // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
   BroadcastController,
@@ -73,7 +73,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminPurchasesController,
   AdminUsersController,
   AdminRequestsPublicController,
-  // AdminRequestsController, // Temporarily disabled - requires RequestsModule
   UploadPresignedController,
   VideoUploadController, // Direct S3 multipart upload
   BroadcastController,
@@ -99,6 +98,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   MultipartUploadService,
   ContentLanguageService,
   BroadcastService,
+  RequestsSupabaseService,
 ] : [
   AdminContentSimpleService,
   AdminStatsService,
@@ -110,6 +110,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ContentLanguageSupabaseService,
   BroadcastService,
   TelegramsEnhancedService,
+  RequestsSupabaseService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];
@@ -143,7 +144,6 @@ const conditionalExports = isTypeOrmEnabled() ? [
     SupabaseModule,
     forwardRef(() => AuthModule),
     forwardRef(() => PaymentsModule),
-    // RequestsModule, // Temporarily disabled - causing startup issues
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

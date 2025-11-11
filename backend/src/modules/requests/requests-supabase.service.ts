@@ -1,12 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { RequestStatus } from './entities/content-request.entity';
 import { CreateContentRequestDto, UpdateContentRequestDto, ContentRequestResponseDto } from './dto';
 import { SupabaseService } from '../../config/supabase.service';
+import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 
 @Injectable()
 export class RequestsSupabaseService {
+  private readonly logger = new Logger(RequestsSupabaseService.name);
+
   constructor(
     private readonly supabaseService: SupabaseService,
+    @Inject(forwardRef(() => TelegramsEnhancedService))
+    private readonly telegramsService: TelegramsEnhancedService,
   ) {}
 
   private get supabase() {
@@ -118,15 +123,31 @@ export class RequestsSupabaseService {
       query = query.eq('status', status);
     }
 
-    const { data, count, error } = await query
+    const { data, count, error} = await query
       .range((page - 1) * limit, page * limit - 1);
 
     if (error) {
       throw new BadRequestException(`Failed to fetch requests: ${error.message}`);
     }
 
+    // Fetch user data for each request
+    const requestsWithUsers = await Promise.all(
+      (data || []).map(async (request) => {
+        if (request.user_id) {
+          const { data: userData } = await this.supabase
+            .from('users')
+            .select('telegram_id, telegram_username, name')
+            .eq('id', request.user_id)
+            .single();
+
+          return { ...request, users: userData };
+        }
+        return { ...request, users: null };
+      })
+    );
+
     return {
-      requests: (data || []).map(request => this.mapToResponseDto(request)),
+      requests: requestsWithUsers.map(request => this.mapToResponseDto(request)),
       pagination: {
         page,
         limit,
@@ -168,7 +189,18 @@ export class RequestsSupabaseService {
       throw new NotFoundException(`Request with ID ${id} not found`);
     }
 
-    return this.mapToResponseDto(data);
+    // Fetch user data if user_id exists
+    let userData = null;
+    if (data.user_id) {
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('telegram_id, telegram_username, name')
+        .eq('id', data.user_id)
+        .single();
+      userData = user;
+    }
+
+    return this.mapToResponseDto({ ...data, users: userData });
   }
 
   async findRequestsByUser(userId: string): Promise<ContentRequestResponseDto[]> {
@@ -210,6 +242,9 @@ export class RequestsSupabaseService {
       throw new NotFoundException(`Request with ID ${id} not found`);
     }
 
+    const wasNotCompleted = existingRequest.status !== RequestStatus.COMPLETED;
+    const isBeingCompleted = dto.status === RequestStatus.COMPLETED;
+
     const updateData: any = {
       updated_at: new Date().toISOString(),
     };
@@ -217,7 +252,7 @@ export class RequestsSupabaseService {
     if (dto.status) {
       updateData.status = dto.status;
     }
-    if (dto.admin_notes) {
+    if (dto.admin_notes !== undefined) {
       updateData.admin_notes = dto.admin_notes;
     }
     if (dto.priority) {
@@ -233,14 +268,67 @@ export class RequestsSupabaseService {
       .from('content_requests')
       .update(updateData)
       .eq('id', id)
-      .select()
+      .select('*')
       .single();
 
     if (error) {
       throw new BadRequestException(`Failed to update request: ${error.message}`);
     }
 
-    return this.mapToResponseDto(data);
+    // Send Telegram notification if status changed to completed
+    if (wasNotCompleted && isBeingCompleted && existingRequest.telegram_chat_id) {
+      await this.sendCompletionNotification(existingRequest);
+    }
+
+    // Fetch user data if user_id exists
+    let userData = null;
+    if (data.user_id) {
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('telegram_id, telegram_username, name')
+        .eq('id', data.user_id)
+        .single();
+      userData = user;
+    }
+
+    return this.mapToResponseDto({ ...data, users: userData });
+  }
+
+  /**
+   * Send Telegram notification when a content request is marked as completed
+   */
+  private async sendCompletionNotification(request: any): Promise<void> {
+    try {
+      if (!request.telegram_chat_id) {
+        this.logger.warn(`Cannot send notification - no telegram_chat_id for request ${request.id}`);
+        return;
+      }
+
+      const message = `🎉 **Pedido Concluído!**\n\n` +
+        `✅ Seu pedido de "${request.requested_title}" foi adicionado à plataforma!\n\n` +
+        `🎬 O conteúdo já está disponível para compra.\n\n` +
+        `📱 Digite /start para iniciar o bot e efetuar a compra do filme ou série solicitado.`;
+
+      await this.telegramsService.sendMessage(
+        parseInt(request.telegram_chat_id),
+        message,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Mark notification as sent
+      await this.supabase
+        .from('content_requests')
+        .update({
+          notification_sent: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', request.id);
+
+      this.logger.log(`Completion notification sent for request ${request.id} to chat ${request.telegram_chat_id}`);
+    } catch (error) {
+      this.logger.error(`Failed to send completion notification for request ${request.id}:`, error);
+      // Don't throw - we don't want to fail the update if notification fails
+    }
   }
 
   async deleteRequest(id: string): Promise<void> {
@@ -255,6 +343,9 @@ export class RequestsSupabaseService {
   }
 
   private mapToResponseDto(request: any): ContentRequestResponseDto {
+    // Handle joined user data - Supabase returns it as an object or null
+    const user = request.users;
+
     return {
       id: request.id,
       title: request.requested_title,
@@ -262,13 +353,15 @@ export class RequestsSupabaseService {
       status: request.status,
       priority: request.priority,
       requester_telegram_id: request.telegram_chat_id,
-      requester_telegram_first_name: request.requester_telegram_first_name,
-      requester_telegram_username: request.requester_telegram_username,
+      requester_telegram_first_name: user?.name,
+      requester_telegram_username: user?.telegram_username,
+      telegram_user_id: user?.telegram_id,
       user_id: request.user_id,
       admin_notes: request.admin_notes,
       created_at: request.created_at,
       updated_at: request.updated_at,
       completed_at: request.completed_at,
+      processed_at: request.completed_at,
     };
   }
 }
