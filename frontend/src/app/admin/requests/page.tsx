@@ -98,12 +98,17 @@ export default function AdminRequestsPage() {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
       const response = await fetch(
-        `${apiUrl}/api/v1/admin/requests/${selectedRequest.id}?status=${newStatus}&admin_notes=${encodeURIComponent(adminNotes)}`,
+        `${apiUrl}/api/v1/admin/requests/${selectedRequest.id}`,
         {
           method: 'PUT',
           headers: {
             'Authorization': token ? `Bearer ${token}` : '',
+            'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            status: newStatus,
+            admin_notes: adminNotes,
+          }),
         }
       );
 
@@ -116,6 +121,11 @@ export default function AdminRequestsPage() {
       setSelectedRequest(null);
       setNewStatus('');
       setAdminNotes('');
+
+      // Show success message if status is completed
+      if (newStatus === 'completed') {
+        alert('Pedido marcado como concluído! Uma notificação foi enviada ao cliente via Telegram.');
+      }
     } catch (err) {
       console.error('Erro ao atualizar pedido:', err);
       alert('Erro ao atualizar pedido. Tente novamente.');

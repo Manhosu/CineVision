@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ContentRequest, RequestStatus } from './entities/content-request.entity';
 import { CreateContentRequestDto, UpdateContentRequestDto, ContentRequestResponseDto } from './dto';
+import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 
 @Injectable()
 export class RequestsService {
+  private readonly logger = new Logger(RequestsService.name);
+
   constructor(
     @InjectRepository(ContentRequest)
     private requestRepository: Repository<ContentRequest>,
+    @Inject(forwardRef(() => TelegramsEnhancedService))
+    private readonly telegramsService: TelegramsEnhancedService,
   ) {}
 
   async createRequest(dto: CreateContentRequestDto): Promise<ContentRequestResponseDto> {
@@ -85,11 +90,14 @@ export class RequestsService {
       throw new NotFoundException(`Request with ID ${id} not found`);
     }
 
+    const wasNotCompleted = request.status !== RequestStatus.COMPLETED;
+    const isBeingCompleted = dto.status === RequestStatus.COMPLETED;
+
     // Update fields if provided
     if (dto.status) {
       request.status = dto.status;
     }
-    if (dto.admin_notes) {
+    if (dto.admin_notes !== undefined) {
       request.admin_notes = dto.admin_notes;
     }
     if (dto.priority) {
@@ -102,6 +110,12 @@ export class RequestsService {
     }
 
     const updatedRequest = await this.requestRepository.save(request);
+
+    // Send Telegram notification if status changed to completed
+    if (wasNotCompleted && isBeingCompleted && request.telegram_chat_id) {
+      await this.sendCompletionNotification(request);
+    }
+
     return this.mapToResponseDto(updatedRequest);
   }
 
@@ -145,6 +159,37 @@ export class RequestsService {
       rejected,
       total,
     };
+  }
+
+  /**
+   * Send Telegram notification when a content request is marked as completed
+   */
+  private async sendCompletionNotification(request: ContentRequest): Promise<void> {
+    try {
+      if (!request.telegram_chat_id) {
+        this.logger.warn(`Cannot send notification - no telegram_chat_id for request ${request.id}`);
+        return;
+      }
+
+      const message = `🎉 **Pedido Concluído!**\n\n` +
+        `✅ Seu pedido de "${request.requested_title}" foi adicionado à plataforma!\n\n` +
+        `🎬 O conteúdo já está disponível para compra.\n\n` +
+        `📱 Digite /start para iniciar o bot e efetuar a compra do filme ou série solicitado.`;
+
+      await this.telegramsService.sendMessage(
+        parseInt(request.telegram_chat_id),
+        message,
+        { parse_mode: 'Markdown' }
+      );
+
+      // Mark notification as sent
+      await this.requestRepository.update(request.id, { notification_sent: true });
+
+      this.logger.log(`Completion notification sent for request ${request.id} to chat ${request.telegram_chat_id}`);
+    } catch (error) {
+      this.logger.error(`Failed to send completion notification for request ${request.id}:`, error);
+      // Don't throw - we don't want to fail the update if notification fails
+    }
   }
 
   private mapToResponseDto(request: ContentRequest): ContentRequestResponseDto {
