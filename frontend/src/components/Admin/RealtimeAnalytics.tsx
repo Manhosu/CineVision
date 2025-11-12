@@ -35,6 +35,59 @@ interface ActiveSession {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// Group sessions by user to avoid duplicates
+function groupSessionsByUser(sessions: ActiveSession[]) {
+  const grouped = new Map<string, {
+    key: string;
+    user_id?: string;
+    user_name?: string;
+    telegram_id?: string;
+    telegram_username?: string;
+    session_id: string;
+    is_watching: boolean;
+    last_activity: string;
+    session_count: number;
+  }>();
+
+  sessions.forEach((session) => {
+    // Use user_id for authenticated users, session_id for anonymous visitors
+    const key = session.user_id || session.session_id;
+
+    if (grouped.has(key)) {
+      const existing = grouped.get(key)!;
+      existing.session_count++;
+
+      // Update to most recent activity
+      if (new Date(session.last_activity) > new Date(existing.last_activity)) {
+        existing.last_activity = session.last_activity;
+        existing.is_watching = session.is_watching;
+      }
+
+      // If any session is watching, mark as watching
+      if (session.is_watching) {
+        existing.is_watching = true;
+      }
+    } else {
+      grouped.set(key, {
+        key,
+        user_id: session.user_id,
+        user_name: session.user_name,
+        telegram_id: session.telegram_id,
+        telegram_username: session.telegram_username,
+        session_id: session.session_id,
+        is_watching: session.is_watching,
+        last_activity: session.last_activity,
+        session_count: 1,
+      });
+    }
+  });
+
+  // Convert map to array and sort by last activity
+  return Array.from(grouped.values()).sort((a, b) =>
+    new Date(b.last_activity).getTime() - new Date(a.last_activity).getTime()
+  );
+}
+
 export function RealtimeAnalytics() {
   const [stats, setStats] = useState<RealtimeStats | null>(null);
   const [sessions, setSessions] = useState<ActiveSession[]>([]);
@@ -261,28 +314,35 @@ export function RealtimeAnalytics() {
                 </tr>
               </thead>
               <tbody>
-                {sessions.slice(0, 10).map((session) => (
+                {groupSessionsByUser(sessions).slice(0, 10).map((sessionGroup) => (
                   <tr
-                    key={session.session_id}
+                    key={sessionGroup.key}
                     className="border-b border-white/5 hover:bg-white/5 transition-colors"
                   >
                     <td className="py-3 px-4">
                       <div className="flex flex-col">
-                        <p className="text-white font-medium">
-                          {session.user_name || `Visitante #${session.session_id.slice(-6)}`}
-                        </p>
-                        {session.telegram_id && (
+                        <div className="flex items-center gap-2">
+                          <p className="text-white font-medium">
+                            {sessionGroup.user_name || `Visitante #${sessionGroup.session_id.slice(-6)}`}
+                          </p>
+                          {sessionGroup.session_count > 1 && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-primary-500/20 text-primary-400 text-xs font-medium">
+                              {sessionGroup.session_count} abas
+                            </span>
+                          )}
+                        </div>
+                        {sessionGroup.telegram_id && (
                           <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                            <span className="font-mono">📱 {session.telegram_id}</span>
-                            {session.telegram_username && (
-                              <span>@{session.telegram_username}</span>
+                            <span className="font-mono">📱 {sessionGroup.telegram_id}</span>
+                            {sessionGroup.telegram_username && (
+                              <span>@{sessionGroup.telegram_username}</span>
                             )}
                           </div>
                         )}
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      {session.is_watching ? (
+                      {sessionGroup.is_watching ? (
                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-medium">
                           <Eye className="w-3 h-3" />
                           Assistindo
@@ -295,7 +355,7 @@ export function RealtimeAnalytics() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-gray-400">
-                      {formatTimestamp(session.last_activity)}
+                      {formatTimestamp(sessionGroup.last_activity)}
                     </td>
                   </tr>
                 ))}
