@@ -116,6 +116,11 @@ export class CreateContentDto {
   @IsOptional()
   @IsBoolean()
   is_featured?: boolean;
+
+  @ApiPropertyOptional({ description: 'Mark as release content', default: false })
+  @IsOptional()
+  @IsBoolean()
+  is_release?: boolean;
 }
 
 export class InitiateUploadDto {

@@ -75,6 +75,7 @@ export class AdminContentSimpleService {
       price_cents: data.price_cents || 0,
       currency: 'BRL',
       is_featured: data.is_featured || false,
+      is_release: data.is_release || false,
       genres: data.genres ? (Array.isArray(data.genres) ? data.genres : [data.genres]) : null, // Coluna genres (plural), tipo array
       director: data.director || null,
       cast: data.cast ? (Array.isArray(data.cast) ? data.cast : data.cast.split(',').map((c: string) => c.trim())) : null, // Tipo array
@@ -501,7 +502,7 @@ export class AdminContentSimpleService {
       'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
       'trailer_url', 'telegram_group_link', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
-      'genres', 'price_cents', 'is_featured', 'total_seasons', 'total_episodes',
+      'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
       'status', 'availability'
     ];
 
