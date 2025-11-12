@@ -264,6 +264,7 @@ export class ContentService {
   }
 
   async findReleases(limit = 20) {
+    console.log('[ContentService] findReleases called with limit:', limit);
     const results = await this.contentRepository
       .createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
@@ -274,6 +275,7 @@ export class ContentService {
       .take(limit)
       .getMany();
 
+    console.log('[ContentService] findReleases returned', results.length, 'items');
     return results;
   }
 
