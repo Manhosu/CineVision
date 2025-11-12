@@ -27,20 +27,35 @@ function SearchResults() {
   const searchMovies = async (searchQuery: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${API_URL}/api/v1/content/movies?search=${encodeURIComponent(searchQuery)}`,
-        { cache: 'no-store' }
-      );
+      // Buscar filmes e séries em paralelo
+      const [moviesResponse, seriesResponse] = await Promise.all([
+        fetch(
+          `${API_URL}/api/v1/content/movies?search=${encodeURIComponent(searchQuery)}`,
+          { cache: 'no-store' }
+        ),
+        fetch(
+          `${API_URL}/api/v1/content/series?search=${encodeURIComponent(searchQuery)}`,
+          { cache: 'no-store' }
+        )
+      ]);
 
-      if (!response.ok) {
-        throw new Error('Erro ao buscar filmes');
+      if (!moviesResponse.ok || !seriesResponse.ok) {
+        throw new Error('Erro ao buscar conteúdo');
       }
 
-      const result = await response.json();
-      setMovies(result.movies || []);
+      const moviesResult = await moviesResponse.json();
+      const seriesResult = await seriesResponse.json();
+
+      // Combinar filmes e séries em um único array
+      const allContent = [
+        ...(moviesResult.movies || []),
+        ...(seriesResult.movies || [])
+      ];
+
+      setMovies(allContent);
     } catch (error) {
       console.error('Erro na busca:', error);
-      toast.error('Erro ao buscar filmes');
+      toast.error('Erro ao buscar conteúdo');
       setMovies([]);
     } finally {
       setIsLoading(false);
