@@ -102,10 +102,11 @@ export class ContentController {
   }
 
   @Get('releases')
-  @ApiOperation({ summary: 'Get content marked as releases/lançamentos' })
+  @ApiOperation({ summary: 'Get content marked as releases' })
   @ApiQuery({ name: 'limit', description: 'Maximum number of releases', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Releases retrieved successfully' })
   async getReleases(@Query('limit') limit = 20) {
+    console.log('[ContentController] Getting releases with limit:', limit);
     return this.contentService.findReleases(Number(limit));
   }
 
