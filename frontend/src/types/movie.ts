@@ -15,6 +15,7 @@ export interface Movie {
   featured?: boolean;
   status?: string; // From database: 'ACTIVE' | 'INACTIVE' | 'PUBLISHED'
   availability?: string; // From database: 'SITE' | 'TELEGRAM' | 'BOTH'
+  telegram_group_link?: string; // Telegram group invite link
   created_at?: string;
   updated_at?: string;
   // Purchase related fields (when movie is purchased)

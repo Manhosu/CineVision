@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import LazyImage from '@/components/ui/LazyImage';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
+import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
 import { ArrowLeftIcon, PlayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -39,6 +40,7 @@ interface Series {
   status: string;
   age_rating?: string;
   duration_minutes?: number;
+  telegram_group_link?: string;
 }
 
 export default function SeriesDetailsPage() {
@@ -53,6 +55,8 @@ export default function SeriesDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isOwned, setIsOwned] = useState<boolean>(false);
   const [checkingOwnership, setCheckingOwnership] = useState(true);
+  const [showViewingOptions, setShowViewingOptions] = useState(false);
+  const [selectedEpisodeToWatch, setSelectedEpisodeToWatch] = useState<Episode | null>(null);
 
   // Helper function to normalize string or array fields
   const normalizeToArray = (value: string | string[] | undefined): string[] => {
@@ -160,8 +164,17 @@ export default function SeriesDetailsPage() {
       return;
     }
 
-    // Redirecionar para página de player com o episódio selecionado
-    router.push(`/watch/${seriesId}?episode=${episode.id}&season=${episode.season_number}&ep=${episode.episode_number}`);
+    // Armazenar episódio selecionado e abrir modal de escolha
+    setSelectedEpisodeToWatch(episode);
+    setShowViewingOptions(true);
+  };
+
+  const handleChooseSite = () => {
+    // Fechar modal e redirecionar para o player do site
+    setShowViewingOptions(false);
+    if (selectedEpisodeToWatch) {
+      router.push(`/watch/${seriesId}?episode=${selectedEpisodeToWatch.id}&season=${selectedEpisodeToWatch.season_number}&ep=${selectedEpisodeToWatch.episode_number}`);
+    }
   };
 
   const handlePurchase = () => {
@@ -506,6 +519,17 @@ export default function SeriesDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de escolha de visualização */}
+      {series && (
+        <ViewingOptionsModal
+          isOpen={showViewingOptions}
+          onClose={() => setShowViewingOptions(false)}
+          movieTitle={`${series.title}${selectedEpisodeToWatch ? ` - T${selectedEpisodeToWatch.season_number}E${selectedEpisodeToWatch.episode_number}` : ''}`}
+          telegramGroupLink={series.telegram_group_link || ''}
+          onChooseSite={handleChooseSite}
+        />
+      )}
     </main>
   );
 }
