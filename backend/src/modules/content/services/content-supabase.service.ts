@@ -507,20 +507,7 @@ export class ContentSupabaseService {
     try {
       const { data, error } = await this.supabaseService.client
         .from('content')
-        .select(`
-          *,
-          categories (
-            id,
-            name,
-            slug
-          ),
-          languages:content_language (
-            id,
-            language,
-            audio_url,
-            subtitle_url
-          )
-        `)
+        .select('*')
         .eq('status', 'PUBLISHED')
         .eq('is_release', true)
         .order('created_at', { ascending: false })
