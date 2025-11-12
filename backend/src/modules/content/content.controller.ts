@@ -101,6 +101,14 @@ export class ContentController {
     return this.contentService.findFeaturedContent(Number(limit));
   }
 
+  @Get('releases')
+  @ApiOperation({ summary: 'Get content marked as releases/lançamentos' })
+  @ApiQuery({ name: 'limit', description: 'Maximum number of releases', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Releases retrieved successfully' })
+  async getReleases(@Query('limit') limit = 20) {
+    return this.contentService.findReleases(Number(limit));
+  }
+
   @Get('movies/related/:id')
   @ApiOperation({ summary: 'Get related movies' })
   @ApiParam({ name: 'id', description: 'Movie ID' })

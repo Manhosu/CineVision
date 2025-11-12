@@ -24,6 +24,7 @@ interface ContentFormData {
   backdrop_url: string;
   content_type: 'movie' | 'series';
   is_featured: boolean;
+  is_release: boolean;
   price_cents: number;
 }
 
@@ -98,6 +99,7 @@ export default function AdminContentCreatePage() {
     backdrop_url: '',
     content_type: 'movie',
     is_featured: false,
+    is_release: false,
     price_cents: 1990, // R$ 19.90 default
   });
 
@@ -164,6 +166,7 @@ export default function AdminContentCreatePage() {
         price_cents: formData.price_cents,
         currency: 'BRL',
         is_featured: formData.is_featured,
+        is_release: formData.is_release,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
         director: formData.director || undefined,
         cast: formData.cast || undefined,
@@ -1312,7 +1315,7 @@ export default function AdminContentCreatePage() {
                   <p className="mt-1 text-xs text-gray-400">Valor em centavos: {formData.price_cents}</p>
                 </div>
 
-                <div className="flex items-center justify-center">
+                <div className="flex flex-col gap-4">
                   <label className="relative inline-flex items-center cursor-pointer group">
                     <input
                       type="checkbox"
@@ -1323,6 +1326,18 @@ export default function AdminContentCreatePage() {
                     />
                     <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-red-600 peer-checked:to-red-700"></div>
                     <span className="ms-3 text-sm font-medium text-gray-300">⭐ Destacar na página inicial</span>
+                  </label>
+
+                  <label className="relative inline-flex items-center cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      name="is_release"
+                      checked={formData.is_release}
+                      onChange={handleChange}
+                      className="sr-only peer"
+                    />
+                    <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-600 peer-checked:to-blue-700"></div>
+                    <span className="ms-3 text-sm font-medium text-gray-300">🆕 Marcar como Lançamento</span>
                   </label>
                 </div>
               </div>
@@ -1518,6 +1533,7 @@ export default function AdminContentCreatePage() {
                         backdrop_url: '',
                         content_type: 'movie',
                         is_featured: false,
+                        is_release: false,
                         price_cents: 1990,
                       });
                       setPriceInput('19.90');

@@ -206,6 +206,9 @@ export class Content {
   @Column({ default: false })
   is_featured: boolean;
 
+  @Column({ default: false })
+  is_release: boolean;
+
   @Column({ default: 0 })
   views_count: number;
 

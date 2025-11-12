@@ -263,6 +263,20 @@ export class ContentService {
     return results;
   }
 
+  async findReleases(limit = 20) {
+    const results = await this.contentRepository
+      .createQueryBuilder('content')
+      .where('content.status = :status', { status: ContentStatus.PUBLISHED })
+      .andWhere('content.is_release = :isRelease', { isRelease: true })
+      .leftJoinAndSelect('content.categories', 'categories')
+      .leftJoinAndSelect('content.languages', 'languages')
+      .orderBy('content.created_at', 'DESC')
+      .take(limit)
+      .getMany();
+
+    return results;
+  }
+
   async deleteAllMovies() {
     try {
       const result = await this.contentRepository

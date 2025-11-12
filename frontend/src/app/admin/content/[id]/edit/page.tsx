@@ -26,6 +26,7 @@ interface Content {
   backdrop_url: string;
   content_type: 'movie' | 'series';
   is_featured: boolean;
+  is_release: boolean;
   price_cents: number;
   imdb_rating?: number;
   release_year?: number;
@@ -88,6 +89,7 @@ export default function AdminContentEditPage() {
   const [trailerUrl, setTrailerUrl] = useState('');
   const [telegramGroupLink, setTelegramGroupLink] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
+  const [isRelease, setIsRelease] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [imdbRating, setImdbRating] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
@@ -147,6 +149,7 @@ export default function AdminContentEditPage() {
         setTrailerUrl(data.trailer_url || '');
         setTelegramGroupLink(data.telegram_group_link || '');
         setIsFeatured(data.is_featured || false);
+        setIsRelease(data.is_release || false);
         setPriceInput((data.price_cents / 100).toFixed(2));
         // Only set IMDB rating if it's valid (0-10)
         setImdbRating(data.imdb_rating && data.imdb_rating >= 0 && data.imdb_rating <= 10 ? data.imdb_rating.toString() : '');
@@ -251,6 +254,7 @@ export default function AdminContentEditPage() {
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
         is_featured: isFeatured,
+        is_release: isRelease,
         price_cents: Math.round(parseFloat(priceInput) * 100),
         imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
@@ -360,6 +364,7 @@ export default function AdminContentEditPage() {
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
       isFeatured !== (originalContent.is_featured || false) ||
+      isRelease !== (originalContent.is_release || false) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
       imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
       releaseYear !== (originalContent.release_year?.toString() || '')
@@ -776,6 +781,20 @@ export default function AdminContentEditPage() {
                 />
                 <label htmlFor="is_featured" className="text-sm font-medium cursor-pointer">
                   Destacar na página inicial
+                </label>
+              </div>
+
+              {/* Release Checkbox */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="is_release"
+                  checked={isRelease}
+                  onChange={(e) => setIsRelease(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 bg-dark-700 border-gray-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="is_release" className="text-sm font-medium cursor-pointer">
+                  🆕 Marcar como Lançamento
                 </label>
               </div>
             </div>
