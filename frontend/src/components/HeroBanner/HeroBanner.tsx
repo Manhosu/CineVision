@@ -108,37 +108,18 @@ export function HeroBanner({
     pauseAutoPlay();
   }, [movies.length, pauseAutoPlay]);
 
-  const handleWatchClick = async () => {
-    try {
-      toast.loading('Iniciando compra...', { id: 'purchase' });
-      
-      const response = await fetch('/api/stripe/create-payment-link', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          movieId: currentMovie.id,
-          movieTitle: currentMovie.title,
-          price: currentMovie.price_cents || 1999,
-        }),
-      });
+  const handleWatchClick = () => {
+    // Generate Telegram deep link for purchase
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+    const deepLink = `https://t.me/${botUsername}?start=buy_${currentMovie.id}`;
 
-      if (!response.ok) {
-        throw new Error('Erro ao criar link de pagamento');
-      }
+    toast.success('Abrindo Telegram...', {
+      duration: 2000,
+      icon: '📱'
+    });
 
-      const { paymentUrl } = await response.json();
-      
-      toast.success('Redirecionando para pagamento...', { id: 'purchase' });
-      
-      // Redirect to payment page
-      window.open(paymentUrl, '_blank');
-      
-    } catch (error) {
-      console.error('Erro ao iniciar compra:', error);
-      toast.error('Erro ao iniciar compra. Tente novamente.', { id: 'purchase' });
-    }
+    // Open Telegram
+    window.open(deepLink, '_blank');
   };
 
   const formatPrice = (price: number) => {
@@ -193,7 +174,11 @@ export function HeroBanner({
 
             <div className="flex items-center gap-4">
               <button
-                onClick={() => router.push(`/movies/${currentMovie.id}`)}
+                onClick={() => {
+                  const contentType = currentMovie.content_type || currentMovie.type;
+                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
+                  router.push(route);
+                }}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
               >
                 <PlayIcon className="w-5 h-5" />
