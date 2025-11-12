@@ -81,7 +81,7 @@ function HomePageContent() {
         }
 
         // Fetch real data from API
-        const [featuredRes, top10Res, top10SeriesRes, latestRes, allSeriesRes, popularSeriesRes] = await Promise.all([
+        const [featuredRes, top10Res, top10SeriesRes, releasesRes, allMoviesRes, allSeriesRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/content/featured?limit=5`, {
             cache: 'no-store',
             headers
@@ -94,43 +94,43 @@ function HomePageContent() {
             cache: 'no-store',
             headers
           }),
-          fetch(`${API_URL}/api/v1/content/movies?limit=10&sort=newest`, {
+          fetch(`${API_URL}/api/v1/content/releases?limit=20`, {
             cache: 'no-store',
             headers
           }),
-          fetch(`${API_URL}/api/v1/content/series?limit=20&sort=newest`, {
+          fetch(`${API_URL}/api/v1/content/movies?limit=20`, {
             cache: 'no-store',
             headers
           }),
-          fetch(`${API_URL}/api/v1/content/series?limit=10&sort=popular`, {
+          fetch(`${API_URL}/api/v1/content/series?limit=20`, {
             cache: 'no-store',
             headers
           })
         ]);
 
-        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !latestRes.ok || !allSeriesRes.ok || !popularSeriesRes.ok) {
+        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !releasesRes.ok || !allMoviesRes.ok || !allSeriesRes.ok) {
           throw new Error('Erro ao carregar dados da API');
         }
 
         const featuredData = await featuredRes.json();
         const top10Films = await top10Res.json();
         const top10Series = await top10SeriesRes.json();
-        const latestData = await latestRes.json();
+        const releasesData = await releasesRes.json();
+        const allMoviesData = await allMoviesRes.json();
         const allSeriesData = await allSeriesRes.json();
-        const popularSeriesData = await popularSeriesRes.json();
 
         // Use featured content for hero banner - API already returns only featured items
         const heroMoviesData = (Array.isArray(featuredData) ? featuredData.slice(0, 5) : []) as Movie[];
 
-        // If no featured content, fallback to latest movies
+        // If no featured content, fallback to releases or all movies
         if (heroMoviesData.length === 0) {
-          const fallbackMovies = (latestData.movies || []).slice(0, 3);
+          const fallbackMovies = (Array.isArray(releasesData) ? releasesData : allMoviesData.movies || []).slice(0, 3);
           setHeroMovies(fallbackMovies);
         } else {
           setHeroMovies(heroMoviesData);
         }
 
-        // Organize content sections with real data
+        // Organize content sections with real data - ORDEM CORRETA
         const sections: ContentSection[] = [
           {
             title: 'Brasil: Top 10 em Filmes Hoje',
@@ -143,19 +143,19 @@ function HomePageContent() {
             movies: Array.isArray(top10Series) ? top10Series : []
           },
           {
+            title: 'Lançamentos',
+            type: 'latest' as const,
+            movies: Array.isArray(releasesData) ? releasesData : []
+          },
+          {
+            title: 'Filmes',
+            type: 'latest' as const,
+            movies: allMoviesData.movies || []
+          },
+          {
             title: 'Séries',
             type: 'latest' as const,
             movies: allSeriesData.movies || []
-          },
-          {
-            title: 'Lançamentos',
-            type: 'latest' as const,
-            movies: latestData.movies || []
-          },
-          {
-            title: 'Séries em Alta',
-            type: 'popular' as const,
-            movies: popularSeriesData.movies || []
           }
         ].filter(section => section.movies.length > 0);
 
