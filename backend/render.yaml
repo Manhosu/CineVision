@@ -2,7 +2,7 @@ services:
   - type: web
     name: cinevision-backend
     runtime: node
-    buildCommand: npm ci --no-audit --no-fund && npm run build && npm run migration:run && npm prune --production
+    buildCommand: npm ci --no-audit --no-fund && npm run build && npm prune --production
     startCommand: npm run start:prod
     envVars:
       - key: NODE_ENV
