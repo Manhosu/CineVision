@@ -38,13 +38,30 @@ async function getUserInfo() {
 
       // Buscar dados adicionais do usuário na tabela users (incluindo telegram_id)
       try {
-        const { data: userData } = await supabase
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('telegram_id, telegram_username, name')
           .eq('id', user.id)
           .single();
 
+        if (userError) {
+          console.error('[Analytics] ERRO ao buscar telegram_id da tabela users:', {
+            error: userError,
+            user_id: user.id,
+            code: userError.code,
+            message: userError.message,
+            details: userError.details
+          });
+        }
+
         if (userData) {
+          console.log('[Analytics] Dados do usuário encontrados:', {
+            user_id: user.id,
+            has_telegram_id: !!userData.telegram_id,
+            telegram_id: userData.telegram_id,
+            telegram_username: userData.telegram_username
+          });
+
           return {
             user_id: user.id,
             user_email: user.email,
@@ -54,13 +71,25 @@ async function getUserInfo() {
           };
         }
       } catch (dbError) {
-        console.debug('Error fetching user data from database:', dbError);
+        console.error('[Analytics] EXCEÇÃO ao buscar dados do usuário:', dbError);
       }
+
+      // Fallback: tentar buscar telegram_id do user_metadata do Supabase Auth
+      const telegramIdFromMetadata = user.user_metadata?.telegram_id || user.user_metadata?.telegramId;
+      const telegramUsernameFromMetadata = user.user_metadata?.telegram_username || user.user_metadata?.telegramUsername;
+
+      console.warn('[Analytics] Usando fallback - telegram_id da metadata:', {
+        user_id: user.id,
+        telegram_id_from_metadata: telegramIdFromMetadata,
+        has_telegram_id: !!telegramIdFromMetadata
+      });
 
       return {
         user_id: user.id,
         user_email: user.email,
         user_name: userName,
+        telegram_id: telegramIdFromMetadata,
+        telegram_username: telegramUsernameFromMetadata,
       };
     }
   } catch (error) {
