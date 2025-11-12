@@ -1,10 +1,13 @@
 import {
   Controller,
   Get,
+  Delete,
   Query,
   Param,
   Logger,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { AdminPurchasesSimpleService } from '../services/admin-purchases-simple.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
@@ -69,5 +72,20 @@ export class AdminPurchasesController {
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
   async getOrderStats() {
     return this.adminPurchasesService.getOrderStats();
+  }
+
+  @Delete('orders/:id')
+  @ApiOperation({
+    summary: 'Delete purchase order by ID (Admin only)',
+    description: 'Permanently delete a purchase order. Use with caution. Requires admin authentication.'
+  })
+  @ApiParam({ name: 'id', description: 'Order ID to delete' })
+  @ApiResponse({ status: 200, description: 'Order deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @HttpCode(HttpStatus.OK)
+  async deleteOrder(
+    @Param('id') orderId: string,
+  ) {
+    return this.adminPurchasesService.deleteOrder(orderId);
   }
 }

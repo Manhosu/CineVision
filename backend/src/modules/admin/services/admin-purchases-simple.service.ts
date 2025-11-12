@@ -269,4 +269,40 @@ export class AdminPurchasesSimpleService {
       throw error;
     }
   }
+
+  async deleteOrder(orderId: string) {
+    this.logger.log(`Deleting order by ID: ${orderId}`);
+
+    try {
+      // Check if order exists first
+      const purchase = await this.supabaseClient.selectOne('purchases', {
+        select: '*',
+        where: { id: orderId },
+      });
+
+      if (!purchase) {
+        return {
+          success: false,
+          message: 'Order not found',
+        };
+      }
+
+      // Delete the purchase
+      await this.supabaseClient.delete('purchases', { id: orderId });
+
+      return {
+        success: true,
+        message: `Order ${orderId} deleted successfully`,
+        deletedOrder: {
+          id: purchase.id,
+          user_id: purchase.user_id,
+          content_id: purchase.content_id,
+          status: purchase.status,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error deleting order:', error);
+      throw error;
+    }
+  }
 }
