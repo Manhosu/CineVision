@@ -296,7 +296,59 @@ export class PurchasesSupabaseService {
 
   async findUserContentList(userId: string): Promise<any[]> {
     console.log('[findUserContentList] Fetching content for user:', userId);
-    console.log('[findUserContentList] Looking for status:', PurchaseStatus.PAID, 'and', PurchaseStatus.COMPLETED);
+
+    // Check if user is admin (automatic full access)
+    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983'];
+
+    const { data: userData } = await this.supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('id', userId)
+      .single();
+
+    // Admin users get ALL published content
+    if (userData?.telegram_id && ADMIN_TELEGRAM_IDS.includes(userData.telegram_id)) {
+      console.log('[findUserContentList] Admin user detected, returning all published content');
+
+      const { data: allContent, error: contentError } = await this.supabase
+        .from('content')
+        .select('*')
+        .eq('status', 'PUBLISHED')
+        .order('created_at', { ascending: false });
+
+      if (contentError || !allContent) {
+        console.error('[findUserContentList] Error fetching all content for admin:', contentError);
+        return [];
+      }
+
+      return allContent.map(content => ({
+        id: content.id,
+        title: content.title,
+        description: content.description,
+        content_type: content.content_type,
+        poster_url: content.poster_url,
+        thumbnail_url: content.poster_url,
+        backdrop_url: content.banner_url,
+        duration_minutes: content.duration_minutes,
+        release_year: content.release_year,
+        imdb_rating: content.imdb_rating,
+        price_cents: content.price_cents,
+        telegram_group_link: content.telegram_group_link,
+        total_seasons: content.total_seasons || content.seasons,
+        total_episodes: content.total_episodes || content.episodes,
+        genres: Array.isArray(content.genres)
+          ? content.genres
+          : (typeof content.genres === 'string' && content.genres)
+            ? content.genres.split(',')
+            : [],
+        purchased_at: content.created_at,
+        access_token: null, // Admins don't need tokens
+        access_expires_at: null,
+      }));
+    }
+
+    // Regular users: fetch purchases
+    console.log('[findUserContentList] Regular user, fetching purchases with status:', PurchaseStatus.PAID, 'and', PurchaseStatus.COMPLETED);
 
     const { data, error } = await this.supabase
       .from('purchases')
@@ -506,6 +558,21 @@ export class PurchasesSupabaseService {
   }
 
   async checkUserOwnership(userId: string, contentId: string): Promise<boolean> {
+    // Check if user is admin (automatic full access)
+    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983'];
+
+    const { data: userData } = await this.supabase
+      .from('users')
+      .select('telegram_id')
+      .eq('id', userId)
+      .single();
+
+    // Admin users have automatic access to all content
+    if (userData?.telegram_id && ADMIN_TELEGRAM_IDS.includes(userData.telegram_id)) {
+      return true;
+    }
+
+    // Regular users: check purchase record
     const { data, error } = await this.supabase
       .from('purchases')
       .select('id')
