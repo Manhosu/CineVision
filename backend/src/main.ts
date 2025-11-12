@@ -50,6 +50,8 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
+    'https://cine-vision-murex.vercel.app',
+    'https://cinevisionn.vercel.app',
   ];
 
   // Add production origins from environment
