@@ -502,6 +502,43 @@ export class ContentSupabaseService {
     }
   }
 
+  async findReleases(limit = 20) {
+    console.log('[ContentSupabaseService] findReleases called with limit:', limit);
+    try {
+      const { data, error } = await this.supabaseService.client
+        .from('content')
+        .select(`
+          *,
+          categories (
+            id,
+            name,
+            slug
+          ),
+          languages:content_language (
+            id,
+            language,
+            audio_url,
+            subtitle_url
+          )
+        `)
+        .eq('status', 'PUBLISHED')
+        .eq('is_release', true)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('[ContentSupabaseService] Error fetching releases:', error);
+        throw new Error(`Failed to fetch releases: ${error.message}`);
+      }
+
+      console.log('[ContentSupabaseService] findReleases returned', data?.length || 0, 'items');
+      return data || [];
+    } catch (error) {
+      console.error('[ContentSupabaseService] Exception in findReleases:', error);
+      throw error;
+    }
+  }
+
   async deleteAllContent() {
     try {
       const { data, error } = await this.supabaseService.client
