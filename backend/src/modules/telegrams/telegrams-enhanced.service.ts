@@ -2152,78 +2152,28 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         }
       }
 
-      // Send appropriate confirmation message based on whether Telegram group is available
-      if (userAddedAutomatically) {
-        // User was added automatically to the group
-        const message = hasLanguages
-          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n✨ O vídeo está disponível no grupo do Telegram\n\n🌐 **Ou assista no dashboard:**\nAcesse seu painel para assistir no navegador`
-          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Você foi adicionado automaticamente ao grupo!**\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema, mas você já tem acesso ao grupo.\n🔔 Você será notificado quando o conteúdo estiver disponível!`;
+      // Send unified confirmation message - user chooses viewing option in dashboard
+      const message = hasLanguages
+        ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Como assistir:**\n✨ Acesse seu dashboard para escolher entre:\n   • Assistir no Site (streaming online)\n   • Assistir no Telegram (grupo privado)\n\n👇 Clique no botão abaixo:`
+        : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n\n🌐 **Dashboard:**\n✨ Acesse seu painel para visualizar quando disponível\n🔔 Você será notificado quando o conteúdo estiver pronto!`;
 
-        await this.sendMessage(parseInt(chatId), message,
-          {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
-              ]
-            }
+      await this.sendMessage(parseInt(chatId), message,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
+            ]
           }
-        );
+        }
+      );
 
-        // Log successful automatic addition
-        await this.supabase.from('system_logs').insert({
-          type: 'delivery',
-          level: 'info',
-          message: `Auto-added user to Telegram group for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
-        });
-      } else if (telegramGroupAvailable && telegramInviteLink) {
-        // User needs to click the invite link
-        const message = hasLanguages
-          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Opção 1: Grupo do Telegram**\n✨ Clique no botão abaixo para entrar no grupo\n🎬 O vídeo está disponível lá!\n\n🌐 **Opção 2: Dashboard Online**\nAssista diretamente no navegador\n\n⚠️ O link do grupo expira em 24h e só pode ser usado uma vez.`
-          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n📱 **Acesso ao Grupo do Telegram:**\n✨ Clique no botão abaixo para entrar no grupo\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n🔔 Você será notificado no grupo quando o conteúdo estiver disponível!\n\n⏰ O link do grupo expira em 24h e só pode ser usado uma vez.`;
-
-        await this.sendMessage(parseInt(chatId), message,
-          {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '📱 Entrar no Grupo', url: telegramInviteLink }],
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
-              ]
-            }
-          }
-        );
-
-        // Log successful delivery with Telegram group
-        await this.supabase.from('system_logs').insert({
-          type: 'delivery',
-          level: 'info',
-          message: `Delivered content ${content.id} to user ${purchase.user_id} with Telegram group invite for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
-        });
-      } else {
-        // No Telegram group available
-        const message = hasLanguages
-          ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Assista agora:**\n✨ Acesse seu dashboard para assistir\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram`
-          : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n\n🌐 **Dashboard:**\n✨ Acesse seu painel para visualizar quando disponível\n\n📝 **Nota:** Este conteúdo não possui grupo do Telegram\n🔔 Você será notificado quando o vídeo estiver pronto!`;
-
-        await this.sendMessage(parseInt(chatId), message,
-          {
-            parse_mode: 'Markdown',
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
-              ]
-            }
-          }
-        );
-
-        // Log successful delivery without Telegram group
-        await this.supabase.from('system_logs').insert({
-          type: 'delivery',
-          level: 'info',
-          message: `Delivered content ${content.id} to user ${purchase.user_id} (dashboard only) for purchase ${purchase.id} (hasLanguages: ${hasLanguages})`,
-        });
-      }
+      // Log successful delivery
+      await this.supabase.from('system_logs').insert({
+        type: 'delivery',
+        level: 'info',
+        message: `Delivered content ${content.id} to user ${purchase.user_id} for purchase ${purchase.id} (hasLanguages: ${hasLanguages}, telegramGroupAvailable: ${telegramGroupAvailable})`,
+      });
 
       // Send message to prompt user to use /start for new purchases
       await this.sendMessage(parseInt(chatId),
