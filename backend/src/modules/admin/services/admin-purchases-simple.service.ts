@@ -5,6 +5,9 @@ import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 export class AdminPurchasesSimpleService {
   private readonly logger = new Logger(AdminPurchasesSimpleService.name);
 
+  // Telegram IDs to exclude from purchase listings
+  private readonly BLOCKED_TELEGRAM_IDS = ['5212925997', '2006803983'];
+
   constructor(private readonly supabaseClient: SupabaseRestClient) {
     this.logger.log('AdminPurchasesSimpleService instantiated successfully with real Supabase queries');
   }
@@ -13,6 +16,16 @@ export class AdminPurchasesSimpleService {
     this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}`);
 
     try {
+      // Get blocked user IDs
+      const allUsers = await this.supabaseClient.select('users', {
+        select: 'id,telegram_id',
+      });
+      const blockedUserIds = allUsers
+        .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
+        .map((u: any) => u.id);
+
+      this.logger.log(`Blocking purchases from ${blockedUserIds.length} users with telegram IDs: ${this.BLOCKED_TELEGRAM_IDS.join(', ')}`);
+
       let purchases: any[] = [];
       let totalCount = 0;
 
@@ -56,9 +69,10 @@ export class AdminPurchasesSimpleService {
           allPurchases = allPurchases.filter((p: any) => p.status === status);
         }
 
-        // Filter by matching user_id or content_id
+        // Filter by matching user_id or content_id, AND exclude blocked users
         const filteredPurchases = allPurchases.filter((p: any) =>
-          matchingUserIds.includes(p.user_id) || matchingContentIds.includes(p.content_id)
+          (matchingUserIds.includes(p.user_id) || matchingContentIds.includes(p.content_id)) &&
+          !blockedUserIds.includes(p.user_id)
         );
 
         totalCount = filteredPurchases.length;
@@ -89,14 +103,20 @@ export class AdminPurchasesSimpleService {
 
         // Fetch purchases
         this.logger.log(`Query options: ${JSON.stringify(queryOptions)}`);
-        purchases = await this.supabaseClient.select('purchases', queryOptions);
-        this.logger.log(`Found ${purchases.length} purchases`);
+        let allPurchasesForPage = await this.supabaseClient.select('purchases', queryOptions);
+        this.logger.log(`Found ${allPurchasesForPage.length} purchases before filtering`);
 
-        // Get total count for pagination (only filter if status is provided and not 'all')
-        totalCount = await this.supabaseClient.count('purchases',
-          (status && status !== 'all') ? { status } : {}
-        );
-        this.logger.log(`Total count: ${totalCount}`);
+        // Filter out blocked users
+        purchases = allPurchasesForPage.filter((p: any) => !blockedUserIds.includes(p.user_id));
+        this.logger.log(`${purchases.length} purchases after removing blocked users`);
+
+        // Get total count for pagination (excluding blocked users)
+        const allPurchasesForCount = await this.supabaseClient.select('purchases', {
+          select: 'id,user_id,status',
+          ...(status && status !== 'all' ? { where: { status } } : {}),
+        });
+        totalCount = allPurchasesForCount.filter((p: any) => !blockedUserIds.includes(p.user_id)).length;
+        this.logger.log(`Total count (excluding blocked users): ${totalCount}`);
       }
 
       // Extract unique user IDs and content IDs
@@ -214,10 +234,22 @@ export class AdminPurchasesSimpleService {
     this.logger.log('Calculating purchase statistics');
 
     try {
-      // Fetch all purchases for statistics
-      const allPurchases = await this.supabaseClient.select('purchases', {
-        select: 'id,status,payment_method,amount_cents,created_at',
+      // Get blocked user IDs
+      const allUsers = await this.supabaseClient.select('users', {
+        select: 'id,telegram_id',
       });
+      const blockedUserIds = allUsers
+        .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
+        .map((u: any) => u.id);
+
+      // Fetch all purchases for statistics
+      const allPurchasesRaw = await this.supabaseClient.select('purchases', {
+        select: 'id,status,payment_method,amount_cents,created_at,user_id',
+      });
+
+      // Filter out blocked users
+      const allPurchases = allPurchasesRaw.filter((p: any) => !blockedUserIds.includes(p.user_id));
+      this.logger.log(`Statistics calculated from ${allPurchases.length} purchases (${allPurchasesRaw.length - allPurchases.length} blocked)`);
 
       // Calculate total orders
       const totalOrders = allPurchases.length;
