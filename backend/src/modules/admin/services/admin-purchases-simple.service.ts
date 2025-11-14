@@ -83,14 +83,10 @@ export class AdminPurchasesSimpleService {
 
         this.logger.log(`Filtered to ${totalCount} purchases, showing ${purchases.length} on page ${page}`);
       } else {
-        // Normal mode: filter by status only
-        const offset = (page - 1) * limit;
-
+        // Normal mode: fetch ALL purchases, filter blocked users, then paginate
         const queryOptions: any = {
           select: '*',
           order: { column: 'created_at', ascending: false },
-          limit,
-          offset,
         };
 
         // Add status filter ONLY if provided and not 'all'
@@ -101,22 +97,20 @@ export class AdminPurchasesSimpleService {
           this.logger.log('Fetching ALL purchases (no status filter)');
         }
 
-        // Fetch purchases
+        // Fetch ALL purchases
         this.logger.log(`Query options: ${JSON.stringify(queryOptions)}`);
-        let allPurchasesForPage = await this.supabaseClient.select('purchases', queryOptions);
-        this.logger.log(`Found ${allPurchasesForPage.length} purchases before filtering`);
+        let allPurchases = await this.supabaseClient.select('purchases', queryOptions);
+        this.logger.log(`Found ${allPurchases.length} purchases before filtering`);
 
         // Filter out blocked users
-        purchases = allPurchasesForPage.filter((p: any) => !blockedUserIds.includes(p.user_id));
-        this.logger.log(`${purchases.length} purchases after removing blocked users`);
+        const filteredPurchases = allPurchases.filter((p: any) => !blockedUserIds.includes(p.user_id));
+        this.logger.log(`${filteredPurchases.length} purchases after removing blocked users`);
 
-        // Get total count for pagination (excluding blocked users)
-        const allPurchasesForCount = await this.supabaseClient.select('purchases', {
-          select: 'id,user_id,status',
-          ...(status && status !== 'all' ? { where: { status } } : {}),
-        });
-        totalCount = allPurchasesForCount.filter((p: any) => !blockedUserIds.includes(p.user_id)).length;
-        this.logger.log(`Total count (excluding blocked users): ${totalCount}`);
+        // Apply pagination to filtered results
+        totalCount = filteredPurchases.length;
+        const offset = (page - 1) * limit;
+        purchases = filteredPurchases.slice(offset, offset + limit);
+        this.logger.log(`Showing ${purchases.length} purchases on page ${page} of ${Math.ceil(totalCount / limit)}`);
       }
 
       // Extract unique user IDs and content IDs
