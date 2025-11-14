@@ -8,7 +8,7 @@ interface Purchase {
   user_id: string;
   content_id: string;
   amount_cents: number;
-  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  status: 'pending' | 'paid' | 'COMPLETED' | 'failed' | 'refunded';
   payment_method: string;
   created_at: string;
   updated_at: string;
@@ -138,6 +138,7 @@ export default function AdminPurchasesPage() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'paid':
+      case 'COMPLETED':
         return 'bg-green-900/20 text-green-400 border-green-800/30';
       case 'pending':
         return 'bg-yellow-900/20 text-yellow-400 border-yellow-800/30';
@@ -153,7 +154,8 @@ export default function AdminPurchasesPage() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'paid':
-        return 'Pago';
+      case 'COMPLETED':
+        return 'PAGO';
       case 'pending':
         return 'Pendente';
       case 'failed':
