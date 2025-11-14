@@ -121,6 +121,41 @@ export class MercadoPagoWebhookService {
 
       this.logger.log(`✅ Payment ${dbPayment.id} successfully processed - Purchase ${dbPayment.purchase_id} is now PAID`);
 
+      // Increment content sales counters (weekly_sales, total_sales)
+      try {
+        const { data: purchase } = await this.supabaseService.client
+          .from('purchases')
+          .select('content_id, content(weekly_sales, total_sales, purchases_count)')
+          .eq('id', dbPayment.purchase_id)
+          .single();
+
+        if (purchase && purchase.content_id) {
+          this.logger.log(`Incrementing sales counters for content ${purchase.content_id}`);
+
+          // Try using RPC first (more efficient and atomic)
+          const { error: rpcError } = await this.supabaseService.client.rpc('increment_content_sales', {
+            content_id: purchase.content_id,
+          });
+
+          if (rpcError) {
+            // If RPC doesn't exist, manually increment
+            this.logger.warn('RPC increment_content_sales not found, using manual update');
+            const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+            await this.supabaseService.client
+              .from('content')
+              .update({
+                weekly_sales: (content?.weekly_sales || 0) + 1,
+                total_sales: (content?.total_sales || 0) + 1,
+                purchases_count: (content?.purchases_count || 0) + 1,
+              })
+              .eq('id', purchase.content_id);
+          }
+        }
+      } catch (salesError) {
+        this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
+        // Don't throw - payment is already processed
+      }
+
       // Deliver content to user via Telegram
       try {
         this.logger.log(`Delivering content for purchase ${dbPayment.purchase_id} to user...`);

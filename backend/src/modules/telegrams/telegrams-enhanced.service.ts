@@ -1071,6 +1071,29 @@ export class TelegramsEnhancedService implements OnModuleInit {
           .single();
 
         if (purchase) {
+          // Increment sales counters
+          try {
+            this.logger.log(`Incrementing sales counters for content ${purchase.content_id}`);
+            const { error: rpcError } = await this.supabase.rpc('increment_content_sales', {
+              content_id: purchase.content_id,
+            });
+
+            if (rpcError) {
+              this.logger.warn('RPC increment_content_sales not found, using manual update');
+              const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+              await this.supabase
+                .from('content')
+                .update({
+                  weekly_sales: (content?.weekly_sales || 0) + 1,
+                  total_sales: (content?.total_sales || 0) + 1,
+                  purchases_count: (content?.purchases_count || 0) + 1,
+                })
+                .eq('id', purchase.content_id);
+            }
+          } catch (salesError) {
+            this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
+          }
+
           await this.deliverContentAfterPayment({
             ...purchase,
             provider_meta: { telegram_chat_id: chatId.toString() }
@@ -1122,6 +1145,29 @@ export class TelegramsEnhancedService implements OnModuleInit {
               .single();
 
             if (purchase) {
+              // Increment sales counters
+              try {
+                this.logger.log(`Incrementing sales counters for content ${purchase.content_id}`);
+                const { error: rpcError } = await this.supabase.rpc('increment_content_sales', {
+                  content_id: purchase.content_id,
+                });
+
+                if (rpcError) {
+                  this.logger.warn('RPC increment_content_sales not found, using manual update');
+                  const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+                  await this.supabase
+                    .from('content')
+                    .update({
+                      weekly_sales: (content?.weekly_sales || 0) + 1,
+                      total_sales: (content?.total_sales || 0) + 1,
+                      purchases_count: (content?.purchases_count || 0) + 1,
+                    })
+                    .eq('id', purchase.content_id);
+                }
+              } catch (salesError) {
+                this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
+              }
+
               await this.deliverContentAfterPayment({
                 ...purchase,
                 provider_meta: { telegram_chat_id: chatId.toString() }
