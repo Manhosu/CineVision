@@ -45,6 +45,14 @@ export class RequestsService {
   async findAllRequests(page = 1, limit = 20, status?: RequestStatus) {
     const queryBuilder = this.requestRepository.createQueryBuilder('request')
       .leftJoinAndSelect('request.user', 'user')
+      .select([
+        'request',
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.telegram_id',
+        'user.telegram_username'
+      ])
       .orderBy('request.created_at', 'DESC');
 
     if (status) {
@@ -72,6 +80,16 @@ export class RequestsService {
   async findRequestById(id: string): Promise<ContentRequestResponseDto> {
     const request = await this.requestRepository.findOne({
       where: { id },
+      relations: ['user'],
+      select: {
+        user: {
+          id: true,
+          name: true,
+          email: true,
+          telegram_id: true,
+          telegram_username: true,
+        },
+      },
     });
 
     if (!request) {
@@ -84,6 +102,16 @@ export class RequestsService {
   async updateRequest(id: string, dto: UpdateContentRequestDto): Promise<ContentRequestResponseDto> {
     const request = await this.requestRepository.findOne({
       where: { id },
+      relations: ['user'],
+      select: {
+        user: {
+          id: true,
+          name: true,
+          email: true,
+          telegram_id: true,
+          telegram_username: true,
+        },
+      },
     });
 
     if (!request) {
