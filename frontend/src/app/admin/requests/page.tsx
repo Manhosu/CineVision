@@ -13,6 +13,8 @@ interface ContentRequest {
   priority: 'low' | 'medium' | 'high' | 'urgent';
   user_id?: string;
   telegram_user_id?: string;
+  requester_telegram_username?: string;
+  requester_telegram_first_name?: string;
   admin_notes?: string;
   created_at: string;
   updated_at: string;
@@ -339,7 +341,13 @@ export default function AdminRequestsPage() {
                         <div className="flex items-center gap-4 text-xs text-gray-400">
                           <div className="flex items-center gap-1">
                             <UserIcon className="w-3.5 h-3.5" />
-                            {request.telegram_user_id ? `Telegram ID: ${request.telegram_user_id}` : 'Anônimo'}
+                            {request.requester_telegram_username ? (
+                              <span className="text-blue-400 font-medium">📱 @{request.requester_telegram_username}</span>
+                            ) : request.telegram_user_id ? (
+                              <span className="text-gray-500">📱 ID: {request.telegram_user_id}</span>
+                            ) : (
+                              'Anônimo'
+                            )}
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
