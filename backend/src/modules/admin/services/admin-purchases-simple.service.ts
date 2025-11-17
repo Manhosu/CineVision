@@ -53,8 +53,8 @@ export class AdminPurchasesSimpleService {
           c.title && c.title.toLowerCase().includes(search.toLowerCase())
         );
 
-        const matchingUserIds = matchingUsers.map((u: any) => u.id);
-        const matchingContentIds = matchingContents.map((c: any) => c.id);
+        const matchingUserIds = matchingUsers.map((u: any) => String(u.id));
+        const matchingContentIds = matchingContents.map((c: any) => String(c.id));
 
         this.logger.log(`Found ${matchingUserIds.length} users and ${matchingContentIds.length} contents matching search`);
 
