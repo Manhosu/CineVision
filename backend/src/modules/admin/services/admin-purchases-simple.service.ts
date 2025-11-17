@@ -140,6 +140,44 @@ export class AdminPurchasesSimpleService {
       const userMap = new Map(users.map((u: any) => [String(u.id), u]));
       const contentMap = new Map(contents.map((c: any) => [String(c.id), c]));
 
+      // FALLBACK: For orphaned purchases (user_id not in users table), try to find user by telegram_id
+      const orphanedPurchases = purchases.filter((p: any) =>
+        p.user_id && !userMap.has(String(p.user_id))
+      );
+
+      if (orphanedPurchases.length > 0) {
+        this.logger.warn(`Found ${orphanedPurchases.length} orphaned purchases with invalid user_id`);
+
+        // Extract telegram_user_id from provider_meta
+        const telegramIds = orphanedPurchases
+          .map((p: any) => p.provider_meta?.telegram_user_id)
+          .filter(Boolean);
+
+        if (telegramIds.length > 0) {
+          this.logger.log(`Attempting to recover users by telegram_id: ${telegramIds.join(', ')}`);
+
+          // Fetch users by telegram_id
+          const allUsers = await this.supabaseClient.select('users', {
+            select: 'id,email,telegram_id,telegram_username,name',
+          });
+
+          const usersByTelegramId = allUsers.filter((u: any) =>
+            telegramIds.includes(String(u.telegram_id))
+          );
+
+          // Add recovered users to userMap using their telegram_id as secondary lookup
+          usersByTelegramId.forEach((u: any) => {
+            // Find purchases with this telegram_id and map them to this user
+            orphanedPurchases.forEach((p: any) => {
+              if (p.provider_meta?.telegram_user_id === String(u.telegram_id)) {
+                userMap.set(String(p.user_id), u);
+                this.logger.log(`✅ Recovered user ${u.name} for orphaned purchase ${p.id}`);
+              }
+            });
+          });
+        }
+      }
+
       // Helper function to translate status from Portuguese to English
       const translateStatus = (status: string): string => {
         switch(status) {
@@ -166,6 +204,27 @@ export class AdminPurchasesSimpleService {
       // Transform data to match frontend expectations
       const transformedOrders = purchases.map((purchase: any) => {
         const translatedStatus = translateStatus(purchase.status);
+
+        // Get user from map, or create synthetic user from provider_meta as fallback
+        let user = userMap.get(String(purchase.user_id));
+        if (!user && purchase.provider_meta) {
+          // Create synthetic user object from Telegram metadata
+          const telegramUserId = purchase.provider_meta.telegram_user_id;
+          const telegramChatId = purchase.provider_meta.telegram_chat_id;
+
+          if (telegramUserId) {
+            user = {
+              id: purchase.user_id || 'unknown',
+              name: `Telegram User ${telegramUserId}`,
+              email: `telegram_${telegramUserId}@orphaned.user`,
+              telegram_id: telegramUserId,
+              telegram_username: null,
+              _synthetic: true, // Mark as synthetic for debugging
+            };
+            this.logger.warn(`Created synthetic user for orphaned purchase ${purchase.id} with telegram_id ${telegramUserId}`);
+          }
+        }
+
         return {
           id: purchase.id,
           user_id: purchase.user_id,
@@ -178,7 +237,7 @@ export class AdminPurchasesSimpleService {
           created_at: purchase.created_at,
           updated_at: purchase.updated_at,
           // Include nested user and content data (convert IDs to string for map lookup)
-          user: userMap.get(String(purchase.user_id)) || null,
+          user: user || null,
           content: contentMap.get(String(purchase.content_id)) || null,
         };
       });
