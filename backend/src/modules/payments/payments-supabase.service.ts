@@ -336,6 +336,17 @@ export class PaymentsSupabaseService {
 
       this.logger.log(`PIX payment record created: ${payment.id}`);
 
+      // Update purchase with payment_provider_id and payment_method for tracking
+      await this.supabaseService.client
+        .from('purchases')
+        .update({
+          payment_provider_id: pixResult.paymentId,
+          payment_method: 'pix',
+        })
+        .eq('id', purchaseId);
+
+      this.logger.log(`Purchase ${purchaseId} updated with payment provider ID`);
+
       // Return data in format expected by Telegram bot
       return {
         provider_payment_id: pixResult.paymentId,

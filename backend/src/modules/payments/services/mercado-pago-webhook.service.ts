@@ -46,15 +46,33 @@ export class MercadoPagoWebhookService {
         this.logger.log(`Payment ${paymentId} status: ${payment.status}`);
 
         // Find payment in our database
-        const { data: dbPayment, error } = await this.supabaseService.client
-          .from('payments')
-          .select('*, purchases(*)')
-          .eq('provider_payment_id', String(paymentId))
-          .eq('provider', 'mercadopago')
-          .single();
+        // Note: Retry logic for race condition when webhook arrives before DB commit completes
+        let dbPayment: any = null;
+        let retries = 3;
 
-        if (error || !dbPayment) {
-          this.logger.warn(`Payment ${paymentId} not found in database`);
+        while (retries > 0 && !dbPayment) {
+          const { data, error } = await this.supabaseService.client
+            .from('payments')
+            .select('*, purchases(*)')
+            .eq('provider_payment_id', String(paymentId))
+            .eq('provider', 'mercadopago')
+            .single();
+
+          if (data) {
+            dbPayment = data;
+            break;
+          }
+
+          if (retries > 1) {
+            this.logger.log(`Payment ${paymentId} not found, retrying in 500ms... (${retries - 1} retries left)`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+
+          retries--;
+        }
+
+        if (!dbPayment) {
+          this.logger.warn(`Payment ${paymentId} not found in database after ${3} retries`);
           return;
         }
 
