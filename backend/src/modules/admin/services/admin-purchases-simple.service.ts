@@ -24,7 +24,11 @@ export class AdminPurchasesSimpleService {
         .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
         .map((u: any) => String(u.id)); // Convert UUID to string for comparison with VARCHAR user_id
 
+      // Create a Set for O(1) lookup performance
+      const blockedUserSet = new Set(blockedUserIds);
+
       this.logger.log(`Blocking purchases from ${blockedUserIds.length} users with telegram IDs: ${this.BLOCKED_TELEGRAM_IDS.join(', ')}`);
+      this.logger.log(`Blocked user IDs: ${blockedUserIds.join(', ')}`);
 
       let purchases: any[] = [];
       let totalCount = 0;
@@ -140,6 +144,16 @@ export class AdminPurchasesSimpleService {
       const userMap = new Map(users.map((u: any) => [String(u.id), u]));
       const contentMap = new Map(contents.map((c: any) => [String(c.id), c]));
 
+      // Helper function to get status color
+      const getStatusColor = (status: string) => {
+        switch(status) {
+          case 'pago': return 'green';
+          case 'pendente': return 'yellow';
+          case 'falhou': return 'red';
+          default: return 'gray';
+        }
+      };
+
       // Transform data to match frontend expectations
       const transformedOrders = purchases.map((purchase: any) => ({
         id: purchase.id,
@@ -148,6 +162,7 @@ export class AdminPurchasesSimpleService {
         amount_cents: purchase.amount_cents,
         currency: purchase.currency || 'BRL',
         status: purchase.status,
+        status_color: getStatusColor(purchase.status),
         payment_method: purchase.payment_method || 'unknown',
         created_at: purchase.created_at,
         updated_at: purchase.updated_at,
@@ -156,6 +171,19 @@ export class AdminPurchasesSimpleService {
         content: contentMap.get(purchase.content_id) || null,
       }));
 
+      // Calculate statistics from filtered purchases
+      const stats = {
+        total: totalCount,
+        paid: transformedOrders.filter((p: any) => p.status === 'pago').length,
+        pending: transformedOrders.filter((p: any) => p.status === 'pendente').length,
+        failed: transformedOrders.filter((p: any) => p.status === 'falhou').length,
+        total_revenue: transformedOrders
+          .filter((p: any) => p.status === 'pago')
+          .reduce((sum: number, p: any) => sum + (p.amount_cents || 0), 0) / 100,
+      };
+
+      this.logger.log(`Statistics: ${JSON.stringify(stats)}`);
+
       // Return in format expected by frontend
       return {
         purchases: transformedOrders,
@@ -163,6 +191,7 @@ export class AdminPurchasesSimpleService {
         totalPages: Math.ceil(totalCount / limit),
         total: totalCount,
         limit,
+        stats,
       };
     } catch (error) {
       this.logger.error('Error fetching orders:', error);
