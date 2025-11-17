@@ -140,41 +140,57 @@ export class AdminPurchasesSimpleService {
       const userMap = new Map(users.map((u: any) => [String(u.id), u]));
       const contentMap = new Map(contents.map((c: any) => [String(c.id), c]));
 
-      // Helper function to get status color
+      // Helper function to translate status from Portuguese to English
+      const translateStatus = (status: string): string => {
+        switch(status) {
+          case 'pago': return 'paid';
+          case 'pendente': return 'pending';
+          case 'falhou': return 'failed';
+          default: return status;
+        }
+      };
+
+      // Helper function to get status color (accepts both PT and EN)
       const getStatusColor = (status: string) => {
         switch(status) {
-          case 'pago': return 'green';
-          case 'pendente': return 'yellow';
-          case 'falhou': return 'red';
+          case 'pago':
+          case 'paid': return 'green';
+          case 'pendente':
+          case 'pending': return 'yellow';
+          case 'falhou':
+          case 'failed': return 'red';
           default: return 'gray';
         }
       };
 
       // Transform data to match frontend expectations
-      const transformedOrders = purchases.map((purchase: any) => ({
-        id: purchase.id,
-        user_id: purchase.user_id,
-        content_id: purchase.content_id,
-        amount_cents: purchase.amount_cents,
-        currency: purchase.currency || 'BRL',
-        status: purchase.status,
-        status_color: getStatusColor(purchase.status),
-        payment_method: purchase.payment_method || 'unknown',
-        created_at: purchase.created_at,
-        updated_at: purchase.updated_at,
-        // Include nested user and content data
-        user: userMap.get(purchase.user_id) || null,
-        content: contentMap.get(purchase.content_id) || null,
-      }));
+      const transformedOrders = purchases.map((purchase: any) => {
+        const translatedStatus = translateStatus(purchase.status);
+        return {
+          id: purchase.id,
+          user_id: purchase.user_id,
+          content_id: purchase.content_id,
+          amount_cents: purchase.amount_cents,
+          currency: purchase.currency || 'BRL',
+          status: translatedStatus, // Translate PT → EN for frontend
+          status_color: getStatusColor(translatedStatus),
+          payment_method: purchase.payment_method || 'unknown',
+          created_at: purchase.created_at,
+          updated_at: purchase.updated_at,
+          // Include nested user and content data
+          user: userMap.get(purchase.user_id) || null,
+          content: contentMap.get(purchase.content_id) || null,
+        };
+      });
 
-      // Calculate statistics from filtered purchases
+      // Calculate statistics from filtered purchases (now using English status)
       const stats = {
         total: totalCount,
-        paid: transformedOrders.filter((p: any) => p.status === 'pago').length,
-        pending: transformedOrders.filter((p: any) => p.status === 'pendente').length,
-        failed: transformedOrders.filter((p: any) => p.status === 'falhou').length,
+        paid: transformedOrders.filter((p: any) => p.status === 'paid').length,
+        pending: transformedOrders.filter((p: any) => p.status === 'pending').length,
+        failed: transformedOrders.filter((p: any) => p.status === 'failed').length,
         total_revenue: transformedOrders
-          .filter((p: any) => p.status === 'pago')
+          .filter((p: any) => p.status === 'paid')
           .reduce((sum: number, p: any) => sum + (p.amount_cents || 0), 0) / 100,
       };
 
@@ -274,12 +290,12 @@ export class AdminPurchasesSimpleService {
       // Calculate total orders
       const totalOrders = allPurchases.length;
 
-      // Calculate total revenue (only from paid orders)
+      // Calculate total revenue (only from paid orders - status in Portuguese)
       const totalRevenueCents = allPurchases
-        .filter((p: any) => p.status === 'paid')
+        .filter((p: any) => p.status === 'pago')
         .reduce((sum: number, p: any) => sum + (p.amount_cents || 0), 0);
 
-      // Count orders by status
+      // Count orders by status (database has Portuguese status)
       const ordersByStatus = allPurchases.reduce((acc: any, p: any) => {
         acc[p.status] = (acc[p.status] || 0) + 1;
         return acc;
@@ -300,16 +316,16 @@ export class AdminPurchasesSimpleService {
       ).length;
 
       // Calculate conversion rate (paid vs total)
-      const paidOrders = ordersByStatus.paid || 0;
+      const paidOrders = ordersByStatus.pago || 0;
       const conversionRate = totalOrders > 0 ? paidOrders / totalOrders : 0;
 
-      // Return in format expected by frontend
+      // Return in format expected by frontend (English field names)
       return {
         total_purchases: totalOrders,
         total_revenue_cents: totalRevenueCents,
-        pending_purchases: ordersByStatus.pending || 0,
-        paid_purchases: ordersByStatus.paid || 0,
-        failed_purchases: ordersByStatus.failed || 0,
+        pending_purchases: ordersByStatus.pendente || 0,  // Portuguese DB value
+        paid_purchases: ordersByStatus.pago || 0,         // Portuguese DB value
+        failed_purchases: ordersByStatus.falhou || 0,     // Portuguese DB value
         refunded_purchases: ordersByStatus.refunded || 0,
         // Additional stats for reference
         orders_by_payment_method: ordersByPaymentMethod,
