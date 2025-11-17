@@ -423,36 +423,38 @@ export class AdminPurchasesSimpleService {
 
         const translatedStatus = translateStatus(currentStatus);
 
-        // Get user from map - if not found, extract REAL Telegram data from provider_meta
+        // Get user from map (users table has the real Telegram data)
         let user = userMap.get(String(purchase.user_id));
         let telegramData = null;
 
-        // Extract REAL Telegram data from provider_meta
-        if (purchase.provider_meta) {
-          const telegramUserId = purchase.provider_meta.telegram_user_id;
-          const telegramUsername = purchase.provider_meta.telegram_username;
-          const telegramFirstName = purchase.provider_meta.telegram_first_name;
-          const telegramLastName = purchase.provider_meta.telegram_last_name;
-
-          if (telegramUserId) {
-            telegramData = {
-              telegram_id: telegramUserId,
-              telegram_username: telegramUsername || null,
-              telegram_display_name: [telegramFirstName, telegramLastName].filter(Boolean).join(' ') || `User ${telegramUserId}`,
-            };
-          }
+        // If user exists in database, use their data to create telegram_data
+        if (user) {
+          telegramData = {
+            telegram_id: user.telegram_id || purchase.provider_meta?.telegram_user_id,
+            telegram_username: user.telegram_username || null,
+            telegram_display_name: user.name || `User ${user.telegram_id || purchase.provider_meta?.telegram_user_id}`,
+          };
         }
+        // Fallback: If no user in database, try to extract from provider_meta
+        else if (purchase.provider_meta?.telegram_user_id) {
+          const telegramUserId = purchase.provider_meta.telegram_user_id;
 
-        // If no user found in database, use ONLY the real Telegram data (no synthetic user)
-        if (!user && telegramData) {
+          telegramData = {
+            telegram_id: telegramUserId,
+            telegram_username: null,
+            telegram_display_name: `User ${telegramUserId}`,
+          };
+
+          // Create minimal user object for display
           user = {
             id: purchase.user_id || 'unknown',
             name: telegramData.telegram_display_name,
-            email: null, // No fake email
+            email: null,
             telegram_id: telegramData.telegram_id,
-            telegram_username: telegramData.telegram_username,
+            telegram_username: null,
           };
-          this.logger.log(`Using real Telegram data for purchase ${purchase.id}: ${telegramData.telegram_id} (@${telegramData.telegram_username || 'no-username'})`);
+
+          this.logger.warn(`No user found for purchase ${purchase.id}, using provider_meta: telegram_id=${telegramUserId}`);
         }
 
         return {
