@@ -28,25 +28,28 @@ export class AdminPurchasesController {
 
   @Get('orders')
   @ApiOperation({
-    summary: 'List all purchase orders (Admin only)',
-    description: 'Retrieve paginated list of purchase orders with user and content information. Requires admin authentication.'
+    summary: 'List all purchase orders with REAL Telegram data (Admin only)',
+    description: 'Retrieve paginated list of purchase orders with REAL user Telegram information and real-time payment status from Stripe. Shows actual telegram_id and @username from provider_meta, not synthetic data. Requires admin authentication.'
   })
   @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 20)' })
   @ApiQuery({ name: 'status', required: false, description: 'Filter by order status (paid, pending, failed)' })
   @ApiQuery({ name: 'search', required: false, description: 'Search by user email, name, telegram username, or content title' })
-  @ApiResponse({ status: 200, description: 'Orders retrieved successfully' })
+  @ApiQuery({ name: 'syncWithStripe', required: false, description: 'Sync payment status with Stripe in real-time (default: true)' })
+  @ApiResponse({ status: 200, description: 'Orders retrieved successfully with real Telegram data and real-time payment status' })
   async getAllOrders(
     @Query('page') page = '1',
     @Query('limit') limit = '20',
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('syncWithStripe') syncWithStripe = 'true',
   ) {
     return this.adminPurchasesService.getAllOrders(
       parseInt(page),
       parseInt(limit),
       status,
       search,
+      syncWithStripe === 'true',
     );
   }
 

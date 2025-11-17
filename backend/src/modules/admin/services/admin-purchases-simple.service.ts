@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseRestClient } from '../../../config/supabase-rest-client';
+import Stripe from 'stripe';
+import { MercadoPagoService } from '../../payments/services/mercado-pago.service';
 
 @Injectable()
 export class AdminPurchasesSimpleService {
   private readonly logger = new Logger(AdminPurchasesSimpleService.name);
+  private stripe: Stripe | null = null;
 
   // User UUIDs to exclude from purchase listings (test users)
   // Eduardo Gouveia (telegram_id: 5212925997) and Eduardo Evangelista (telegram_id: 2006803983)
@@ -12,12 +15,135 @@ export class AdminPurchasesSimpleService {
     'ae8a0bfb-a280-479b-be23-ae28fe4ac2ca'  // Eduardo Evangelista
   ];
 
-  constructor(private readonly supabaseClient: SupabaseRestClient) {
+  constructor(
+    private readonly supabaseClient: SupabaseRestClient,
+    private readonly mercadoPagoService: MercadoPagoService,
+  ) {
     this.logger.log('AdminPurchasesSimpleService instantiated successfully with real Supabase queries');
+
+    // Initialize Stripe if API key is available
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (stripeSecretKey) {
+      this.stripe = new Stripe(stripeSecretKey, {
+        apiVersion: '2025-08-27.basil',
+      });
+      this.logger.log('Stripe initialized for real-time status sync');
+    } else {
+      this.logger.warn('STRIPE_SECRET_KEY not found - Stripe real-time status sync disabled');
+    }
   }
 
-  async getAllOrders(page: number = 1, limit: number = 20, status?: string, search?: string) {
-    this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}`);
+  /**
+   * Sync payment status with Stripe in real-time
+   * Returns a map of payment_intent_id -> real Stripe status
+   */
+  private async syncPaymentStatusWithStripe(paymentIntentIds: string[]): Promise<Map<string, any>> {
+    const statusMap = new Map<string, any>();
+
+    if (!this.stripe || paymentIntentIds.length === 0) {
+      if (!this.stripe) {
+        this.logger.warn('Stripe not initialized - skipping real-time sync');
+      }
+      return statusMap;
+    }
+
+    try {
+      this.logger.log(`Syncing ${paymentIntentIds.length} payment intents with Stripe...`);
+
+      // Fetch each payment intent individually for accurate real-time status
+      const promises = paymentIntentIds.map(async (piId) => {
+        try {
+          const paymentIntent = await this.stripe!.paymentIntents.retrieve(piId);
+          return {
+            id: piId,
+            data: {
+              status: paymentIntent.status,
+              amount: paymentIntent.amount,
+              currency: paymentIntent.currency,
+              payment_method: paymentIntent.payment_method,
+              created: paymentIntent.created,
+              latest_charge: paymentIntent.latest_charge,
+            },
+          };
+        } catch (error: any) {
+          this.logger.warn(`Failed to retrieve payment intent ${piId}:`, error.message);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(promises);
+
+      // Build the status map
+      for (const result of results) {
+        if (result) {
+          statusMap.set(result.id, result.data);
+        }
+      }
+
+      this.logger.log(`✅ Synced ${statusMap.size}/${paymentIntentIds.length} payment intents from Stripe`);
+    } catch (error) {
+      this.logger.error('Error syncing with Stripe:', error);
+      // Don't throw - gracefully degrade if Stripe fails
+    }
+
+    return statusMap;
+  }
+
+  /**
+   * Sync payment status with Mercado Pago in real-time
+   * Returns a map of payment_id -> real Mercado Pago status
+   */
+  private async syncPaymentStatusWithMercadoPago(paymentIds: string[]): Promise<Map<string, any>> {
+    const statusMap = new Map<string, any>();
+
+    if (paymentIds.length === 0) {
+      return statusMap;
+    }
+
+    try {
+      this.logger.log(`Syncing ${paymentIds.length} payments with Mercado Pago...`);
+
+      // Fetch each payment individually for accurate real-time status
+      const promises = paymentIds.map(async (paymentId) => {
+        try {
+          const payment = await this.mercadoPagoService.getPayment(paymentId);
+          return {
+            id: paymentId,
+            data: {
+              status: payment.status,
+              status_detail: payment.status_detail,
+              amount: payment.transaction_amount,
+              currency: payment.currency_id,
+              payment_method: payment.payment_method_id,
+              created: payment.date_created,
+            },
+          };
+        } catch (error: any) {
+          this.logger.warn(`Failed to retrieve Mercado Pago payment ${paymentId}:`, error.message);
+          return null;
+        }
+      });
+
+      const results = await Promise.all(promises);
+
+      // Build the status map
+      for (const result of results) {
+        if (result) {
+          statusMap.set(result.id, result.data);
+        }
+      }
+
+      this.logger.log(`✅ Synced ${statusMap.size}/${paymentIds.length} payments from Mercado Pago`);
+    } catch (error) {
+      this.logger.error('Error syncing with Mercado Pago:', error);
+      // Don't throw - gracefully degrade if Mercado Pago fails
+    }
+
+    return statusMap;
+  }
+
+  async getAllOrders(page: number = 1, limit: number = 20, status?: string, search?: string, syncWithStripe: boolean = true) {
+    this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}, syncWithStripe: ${syncWithStripe}`);
 
     try {
       // Use UUIDs directly for O(1) lookup performance
@@ -140,6 +266,36 @@ export class AdminPurchasesSimpleService {
       const userMap = new Map(users.map((u: any) => [String(u.id), u]));
       const contentMap = new Map(contents.map((c: any) => [String(c.id), c]));
 
+      // Sync payment status with payment providers for real-time accuracy
+      let stripeStatusMap = new Map<string, any>();
+      let mercadoPagoStatusMap = new Map<string, any>();
+
+      if (syncWithStripe) {
+        // Separate Stripe and Mercado Pago payment IDs
+        const stripePaymentIds = purchases
+          .filter((p: any) => p.payment_method === 'stripe' || p.payment_method === 'card')
+          .map((p: any) => p.payment_provider_id)
+          .filter(Boolean);
+
+        const mercadoPagoPaymentIds = purchases
+          .filter((p: any) => p.payment_method === 'pix' || p.payment_method === 'mercadopago')
+          .map((p: any) => p.payment_provider_id)
+          .filter(Boolean);
+
+        // Sync both providers in parallel
+        const [stripeMap, mpMap] = await Promise.all([
+          stripePaymentIds.length > 0
+            ? this.syncPaymentStatusWithStripe(stripePaymentIds)
+            : Promise.resolve(new Map()),
+          mercadoPagoPaymentIds.length > 0
+            ? this.syncPaymentStatusWithMercadoPago(mercadoPagoPaymentIds)
+            : Promise.resolve(new Map()),
+        ]);
+
+        stripeStatusMap = stripeMap;
+        mercadoPagoStatusMap = mpMap;
+      }
+
       // FALLBACK: For orphaned purchases (user_id not in users table), try to find user by telegram_id
       const orphanedPurchases = purchases.filter((p: any) =>
         p.user_id && !userMap.has(String(p.user_id))
@@ -203,26 +359,100 @@ export class AdminPurchasesSimpleService {
 
       // Transform data to match frontend expectations
       const transformedOrders = purchases.map((purchase: any) => {
-        const translatedStatus = translateStatus(purchase.status);
+        let currentStatus = purchase.status;
+        let paymentProviderData = null;
+        let statusSource = 'database';
 
-        // Get user from map, or create synthetic user from provider_meta as fallback
+        // Check if we have real-time status from Stripe
+        const stripeStatus = purchase.payment_provider_id
+          ? stripeStatusMap.get(purchase.payment_provider_id)
+          : null;
+
+        // Check if we have real-time status from Mercado Pago
+        const mpStatus = purchase.payment_provider_id
+          ? mercadoPagoStatusMap.get(purchase.payment_provider_id)
+          : null;
+
+        if (stripeStatus) {
+          // Map Stripe status to our internal status
+          const stripeToInternalStatus: Record<string, string> = {
+            'succeeded': 'pago',
+            'processing': 'pendente',
+            'requires_payment_method': 'pendente',
+            'requires_confirmation': 'pendente',
+            'requires_action': 'pendente',
+            'canceled': 'falhou',
+            'failed': 'falhou',
+          };
+
+          const mappedStatus = stripeToInternalStatus[stripeStatus.status] || currentStatus;
+
+          // Update status if it differs from database
+          if (mappedStatus !== currentStatus) {
+            this.logger.warn(`Status mismatch for purchase ${purchase.id}: DB=${currentStatus}, Stripe=${stripeStatus.status}. Using Stripe status.`);
+            currentStatus = mappedStatus;
+          }
+
+          paymentProviderData = stripeStatus;
+          statusSource = 'stripe_realtime';
+        } else if (mpStatus) {
+          // Map Mercado Pago status to our internal status
+          const mpToInternalStatus: Record<string, string> = {
+            'approved': 'pago',
+            'in_process': 'pendente',
+            'pending': 'pendente',
+            'authorized': 'pendente',
+            'in_mediation': 'pendente',
+            'cancelled': 'falhou',
+            'rejected': 'falhou',
+            'refunded': 'falhou',
+            'charged_back': 'falhou',
+          };
+
+          const mappedStatus = mpToInternalStatus[mpStatus.status] || currentStatus;
+
+          // Update status if it differs from database
+          if (mappedStatus !== currentStatus) {
+            this.logger.warn(`Status mismatch for purchase ${purchase.id}: DB=${currentStatus}, MercadoPago=${mpStatus.status}. Using MercadoPago status.`);
+            currentStatus = mappedStatus;
+          }
+
+          paymentProviderData = mpStatus;
+          statusSource = 'mercadopago_realtime';
+        }
+
+        const translatedStatus = translateStatus(currentStatus);
+
+        // Get user from map - if not found, extract REAL Telegram data from provider_meta
         let user = userMap.get(String(purchase.user_id));
-        if (!user && purchase.provider_meta) {
-          // Create synthetic user object from Telegram metadata
+        let telegramData = null;
+
+        // Extract REAL Telegram data from provider_meta
+        if (purchase.provider_meta) {
           const telegramUserId = purchase.provider_meta.telegram_user_id;
-          const telegramChatId = purchase.provider_meta.telegram_chat_id;
+          const telegramUsername = purchase.provider_meta.telegram_username;
+          const telegramFirstName = purchase.provider_meta.telegram_first_name;
+          const telegramLastName = purchase.provider_meta.telegram_last_name;
 
           if (telegramUserId) {
-            user = {
-              id: purchase.user_id || 'unknown',
-              name: `Telegram User ${telegramUserId}`,
-              email: `telegram_${telegramUserId}@orphaned.user`,
+            telegramData = {
               telegram_id: telegramUserId,
-              telegram_username: null,
-              _synthetic: true, // Mark as synthetic for debugging
+              telegram_username: telegramUsername || null,
+              telegram_display_name: [telegramFirstName, telegramLastName].filter(Boolean).join(' ') || `User ${telegramUserId}`,
             };
-            this.logger.warn(`Created synthetic user for orphaned purchase ${purchase.id} with telegram_id ${telegramUserId}`);
           }
+        }
+
+        // If no user found in database, use ONLY the real Telegram data (no synthetic user)
+        if (!user && telegramData) {
+          user = {
+            id: purchase.user_id || 'unknown',
+            name: telegramData.telegram_display_name,
+            email: null, // No fake email
+            telegram_id: telegramData.telegram_id,
+            telegram_username: telegramData.telegram_username,
+          };
+          this.logger.log(`Using real Telegram data for purchase ${purchase.id}: ${telegramData.telegram_id} (@${telegramData.telegram_username || 'no-username'})`);
         }
 
         return {
@@ -233,12 +463,18 @@ export class AdminPurchasesSimpleService {
           currency: purchase.currency || 'BRL',
           status: translatedStatus, // Translate PT → EN for frontend
           status_color: getStatusColor(translatedStatus),
+          status_source: statusSource, // database | stripe_realtime | mercadopago_realtime
           payment_method: purchase.payment_method || 'unknown',
+          payment_provider_id: purchase.payment_provider_id || null,
           created_at: purchase.created_at,
           updated_at: purchase.updated_at,
           // Include nested user and content data (convert IDs to string for map lookup)
           user: user || null,
           content: contentMap.get(String(purchase.content_id)) || null,
+          // Include raw Telegram data for debugging
+          telegram_data: telegramData,
+          // Include payment provider real-time data if available
+          payment_provider_data: paymentProviderData,
         };
       });
 
