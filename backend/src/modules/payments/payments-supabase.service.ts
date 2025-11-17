@@ -329,7 +329,7 @@ export class PaymentsSupabaseService {
           payment_method: 'pix',
           provider: 'mercadopago',
           provider_payment_id: pixResult.paymentId,
-          status: 'pendente',
+          status: 'pending', // Must be English for payments table ENUM
         })
         .select()
         .single();
