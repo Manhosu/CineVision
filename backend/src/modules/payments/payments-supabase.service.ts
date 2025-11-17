@@ -321,7 +321,7 @@ export class PaymentsSupabaseService {
       this.logger.log(`Mercado Pago PIX payment created: ${pixResult.paymentId}`);
 
       // Create payment record in database
-      const { data: payment } = await this.supabaseService.client
+      const { data: payment, error: paymentError } = await this.supabaseService.client
         .from('payments')
         .insert({
           purchase_id: purchaseId,
@@ -333,6 +333,11 @@ export class PaymentsSupabaseService {
         })
         .select()
         .single();
+
+      if (paymentError || !payment) {
+        this.logger.error(`Failed to create payment record: ${paymentError?.message || 'Unknown error'}`);
+        throw new Error(`Failed to create payment record: ${paymentError?.message || 'Payment insert returned null'}`);
+      }
 
       this.logger.log(`PIX payment record created: ${payment.id}`);
 
