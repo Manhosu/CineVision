@@ -5,8 +5,12 @@ import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 export class AdminPurchasesSimpleService {
   private readonly logger = new Logger(AdminPurchasesSimpleService.name);
 
-  // Telegram IDs to exclude from purchase listings
-  private readonly BLOCKED_TELEGRAM_IDS = ['5212925997', '2006803983'];
+  // User UUIDs to exclude from purchase listings (test users)
+  // Eduardo Gouveia (telegram_id: 5212925997) and Eduardo Evangelista (telegram_id: 2006803983)
+  private readonly BLOCKED_USER_IDS = [
+    '84dca2a4-02cd-4dfa-a7df-6f2afcb26027', // Eduardo Gouveia
+    'ae8a0bfb-a280-479b-be23-ae28fe4ac2ca'  // Eduardo Evangelista
+  ];
 
   constructor(private readonly supabaseClient: SupabaseRestClient) {
     this.logger.log('AdminPurchasesSimpleService instantiated successfully with real Supabase queries');
@@ -16,19 +20,11 @@ export class AdminPurchasesSimpleService {
     this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}`);
 
     try {
-      // Get blocked user IDs
-      const allUsers = await this.supabaseClient.select('users', {
-        select: 'id,telegram_id',
-      });
-      const blockedUserIds = allUsers
-        .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
-        .map((u: any) => String(u.id)); // Convert UUID to string for comparison with VARCHAR user_id
-
-      // Create a Set for O(1) lookup performance
+      // Use UUIDs directly for O(1) lookup performance
+      const blockedUserIds = this.BLOCKED_USER_IDS;
       const blockedUserSet = new Set(blockedUserIds);
 
-      this.logger.log(`Blocking purchases from ${blockedUserIds.length} users with telegram IDs: ${this.BLOCKED_TELEGRAM_IDS.join(', ')}`);
-      this.logger.log(`Blocked user IDs: ${blockedUserIds.join(', ')}`);
+      this.logger.log(`Filtering ${blockedUserIds.length} blocked test users`);
 
       let purchases: any[] = [];
       let totalCount = 0;
@@ -263,13 +259,8 @@ export class AdminPurchasesSimpleService {
     this.logger.log('Calculating purchase statistics');
 
     try {
-      // Get blocked user IDs
-      const allUsers = await this.supabaseClient.select('users', {
-        select: 'id,telegram_id',
-      });
-      const blockedUserIds = allUsers
-        .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
-        .map((u: any) => String(u.id)); // Convert UUID to string for comparison with VARCHAR user_id
+      // Use UUIDs directly
+      const blockedUserIds = this.BLOCKED_USER_IDS;
 
       // Fetch all purchases for statistics
       const allPurchasesRaw = await this.supabaseClient.select('purchases', {
@@ -278,7 +269,7 @@ export class AdminPurchasesSimpleService {
 
       // Filter out blocked users
       const allPurchases = allPurchasesRaw.filter((p: any) => !blockedUserIds.includes(p.user_id));
-      this.logger.log(`Statistics calculated from ${allPurchases.length} purchases (${allPurchasesRaw.length - allPurchases.length} blocked)`);
+      this.logger.log(`Statistics: ${allPurchases.length} real purchases (${allPurchasesRaw.length - allPurchases.length} test purchases filtered)`);
 
       // Calculate total orders
       const totalOrders = allPurchases.length;
