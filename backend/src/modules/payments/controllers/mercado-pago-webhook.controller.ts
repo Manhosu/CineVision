@@ -1,7 +1,7 @@
 import { Controller, Post, Body, Headers, HttpCode, Logger } from '@nestjs/common';
 import { MercadoPagoWebhookService } from '../services/mercado-pago-webhook.service';
 
-@Controller('api/v1/webhooks/mercadopago')
+@Controller('webhooks/mercadopago')
 export class MercadoPagoWebhookController {
   private readonly logger = new Logger(MercadoPagoWebhookController.name);
 
@@ -11,7 +11,7 @@ export class MercadoPagoWebhookController {
 
   /**
    * Webhook endpoint for Mercado Pago notifications
-   * URL to configure in Mercado Pago: https://YOUR_DOMAIN/api/v1/webhooks/mercadopago
+   * URL configured in Mercado Pago: https://cinevisionn.onrender.com/api/v1/webhooks/mercadopago
    *
    * Documentation: https://www.mercadopago.com.br/developers/pt/docs/your-integrations/notifications/webhooks
    */
