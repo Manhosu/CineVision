@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Delete,
+  Post,
   Query,
   Param,
   Logger,
@@ -90,5 +91,35 @@ export class AdminPurchasesController {
     @Param('id') orderId: string,
   ) {
     return this.adminPurchasesService.deleteOrder(orderId);
+  }
+
+  @Post('expire-pending')
+  @ApiOperation({
+    summary: 'Expire old pending purchases (Admin only)',
+    description: 'Marks pending purchases older than specified hours as expired. Default is 24 hours.'
+  })
+  @ApiQuery({ name: 'maxAgeHours', required: false, description: 'Maximum age in hours before expiration (default: 24)' })
+  @ApiResponse({ status: 200, description: 'Pending purchases expired successfully' })
+  @HttpCode(HttpStatus.OK)
+  async expirePendingPurchases(
+    @Query('maxAgeHours') maxAgeHours = '24',
+  ) {
+    this.logger.log(`Admin triggered expire pending purchases (max age: ${maxAgeHours}h)`);
+    return this.adminPurchasesService.expirePendingPurchases(parseInt(maxAgeHours));
+  }
+
+  @Delete('cleanup-expired')
+  @ApiOperation({
+    summary: 'Clean up old expired purchases (Admin only)',
+    description: 'Permanently deletes expired purchases older than specified days. Default is 7 days.'
+  })
+  @ApiQuery({ name: 'deleteOlderThanDays', required: false, description: 'Delete expired purchases older than this many days (default: 7)' })
+  @ApiResponse({ status: 200, description: 'Expired purchases cleaned up successfully' })
+  @HttpCode(HttpStatus.OK)
+  async cleanupExpiredPurchases(
+    @Query('deleteOlderThanDays') deleteOlderThanDays = '7',
+  ) {
+    this.logger.log(`Admin triggered cleanup expired purchases (older than ${deleteOlderThanDays} days)`);
+    return this.adminPurchasesService.cleanupExpiredPurchases(parseInt(deleteOlderThanDays));
   }
 }

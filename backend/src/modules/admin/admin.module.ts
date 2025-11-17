@@ -13,6 +13,7 @@ import { AdminImageUploadController } from './controllers/admin-image-upload.con
 import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
+import { PurchasesCleanupService } from './services/purchases-cleanup.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
@@ -99,12 +100,14 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ContentLanguageService,
   BroadcastService,
   RequestsSupabaseService,
+  PurchasesCleanupService,
 ] : [
   AdminContentSimpleService,
   AdminStatsService,
   AdminSettingsSupabaseService,
   ImageUploadService,
   AdminPurchasesSimpleService,
+  PurchasesCleanupService,
   StripeService,
   MultipartUploadService,
   ContentLanguageSupabaseService,

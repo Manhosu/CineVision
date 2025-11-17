@@ -668,4 +668,117 @@ export class AdminPurchasesSimpleService {
       throw error;
     }
   }
+
+  /**
+   * Expire old pending purchases
+   * Marks purchases as 'expirado' (expired) if they've been pending for too long
+   */
+  async expirePendingPurchases(maxAgeHours: number = 24): Promise<{
+    expired: number;
+    total: number;
+  }> {
+    this.logger.log(`Checking for pending purchases older than ${maxAgeHours} hours...`);
+
+    try {
+      const expirationDate = new Date();
+      expirationDate.setHours(expirationDate.getHours() - maxAgeHours);
+
+      // Fetch all pending purchases older than the expiration date
+      const allPurchases = await this.supabaseClient.select('purchases', {
+        select: 'id,status,created_at,expires_at',
+      });
+
+      const pendingPurchases = allPurchases.filter((p: any) => {
+        const isPending = p.status === 'pending' || p.status === 'pendente';
+        const createdAt = new Date(p.created_at);
+        const isExpired = createdAt < expirationDate;
+
+        return isPending && isExpired;
+      });
+
+      this.logger.log(`Found ${pendingPurchases.length} expired pending purchases`);
+
+      let expiredCount = 0;
+
+      // Update each expired purchase
+      for (const purchase of pendingPurchases) {
+        try {
+          await this.supabaseClient.update(
+            'purchases',
+            { id: purchase.id },
+            {
+              status: 'expirado',
+              updated_at: new Date().toISOString(),
+            },
+          );
+          expiredCount++;
+        } catch (error: any) {
+          this.logger.error(`Failed to expire purchase ${purchase.id}:`, error.message);
+        }
+      }
+
+      this.logger.log(`✅ Expired ${expiredCount} pending purchases`);
+
+      return {
+        expired: expiredCount,
+        total: pendingPurchases.length,
+      };
+    } catch (error) {
+      this.logger.error('Error expiring pending purchases:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up expired purchases
+   * Optionally deletes expired purchases older than a certain age
+   */
+  async cleanupExpiredPurchases(deleteOlderThanDays: number = 7): Promise<{
+    deleted: number;
+    total: number;
+  }> {
+    this.logger.log(`Cleaning up expired purchases older than ${deleteOlderThanDays} days...`);
+
+    try {
+      const deletionDate = new Date();
+      deletionDate.setDate(deletionDate.getDate() - deleteOlderThanDays);
+
+      // Fetch all expired purchases older than deletion date
+      const allPurchases = await this.supabaseClient.select('purchases', {
+        select: 'id,status,created_at',
+      });
+
+      const expiredPurchases = allPurchases.filter((p: any) => {
+        const isExpired = p.status === 'expirado';
+        const createdAt = new Date(p.created_at);
+        const shouldDelete = createdAt < deletionDate;
+
+        return isExpired && shouldDelete;
+      });
+
+      this.logger.log(`Found ${expiredPurchases.length} old expired purchases to delete`);
+
+      let deletedCount = 0;
+
+      // Delete each old expired purchase
+      for (const purchase of expiredPurchases) {
+        try {
+          await this.supabaseClient.delete('purchases', { id: purchase.id });
+          deletedCount++;
+        } catch (error: any) {
+          this.logger.error(`Failed to delete purchase ${purchase.id}:`, error.message);
+        }
+      }
+
+      this.logger.log(`✅ Deleted ${deletedCount} expired purchases`);
+
+      return {
+        deleted: deletedCount,
+        total: expiredPurchases.length,
+      };
+    } catch (error) {
+      this.logger.error('Error cleaning up expired purchases:', error);
+      throw error;
+    }
+  }
 }
