@@ -379,13 +379,14 @@ export default function AdminPurchasesPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
                           <div className="text-white font-medium">#{purchase.id.slice(-8)}</div>
-                          <div className="text-gray-400 capitalize">{purchase.payment_method}</div>
+                          {purchase.payment_method && purchase.payment_method !== 'unknown' && (
+                            <div className="text-gray-400 capitalize">{purchase.payment_method}</div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
                           <div className="text-white">{purchase.user?.name || 'N/A'}</div>
-                          <div className="text-gray-400">{purchase.user?.email || 'N/A'}</div>
                           {purchase.user?.telegram_id && (
                             <div className="text-xs mt-1">
                               {purchase.user.telegram_username ? (
