@@ -243,23 +243,23 @@ export class AdminPurchasesSimpleService {
       const userIds = [...new Set(purchases.map((p: any) => p.user_id).filter(Boolean))];
       const contentIds = [...new Set(purchases.map((p: any) => p.content_id).filter(Boolean))];
 
-      // Fetch users and content separately
+      // Fetch users and content separately using IN filter for efficiency
       let users: any[] = [];
       if (userIds.length > 0) {
-        const allUsers = await this.supabaseClient.select('users', {
+        users = await this.supabaseClient.select('users', {
           select: 'id,email,telegram_id,telegram_username,name',
+          where: { id: { in: userIds } },
         });
-        // Convert UUID to string to match VARCHAR user_id from purchases
-        users = allUsers.filter((u: any) => userIds.includes(String(u.id)));
+        this.logger.log(`Fetched ${users.length} users for ${userIds.length} user IDs`);
       }
 
       let contents: any[] = [];
       if (contentIds.length > 0) {
-        const allContents = await this.supabaseClient.select('content', {
+        contents = await this.supabaseClient.select('content', {
           select: 'id,title,poster_url',
+          where: { id: { in: contentIds } },
         });
-        // Convert UUID to string for consistent comparison
-        contents = allContents.filter((c: any) => contentIds.includes(String(c.id)));
+        this.logger.log(`Fetched ${contents.length} contents for ${contentIds.length} content IDs`);
       }
 
       // Create lookup maps (convert UUIDs to strings to match VARCHAR user_id in purchases)
