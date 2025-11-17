@@ -22,7 +22,7 @@ export class AdminPurchasesSimpleService {
       });
       const blockedUserIds = allUsers
         .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
-        .map((u: any) => u.id);
+        .map((u: any) => String(u.id)); // Convert UUID to string for comparison with VARCHAR user_id
 
       this.logger.log(`Blocking purchases from ${blockedUserIds.length} users with telegram IDs: ${this.BLOCKED_TELEGRAM_IDS.join(', ')}`);
 
@@ -240,7 +240,7 @@ export class AdminPurchasesSimpleService {
       });
       const blockedUserIds = allUsers
         .filter((u: any) => this.BLOCKED_TELEGRAM_IDS.includes(u.telegram_id?.toString()))
-        .map((u: any) => u.id);
+        .map((u: any) => String(u.id)); // Convert UUID to string for comparison with VARCHAR user_id
 
       // Fetch all purchases for statistics
       const allPurchasesRaw = await this.supabaseClient.select('purchases', {
