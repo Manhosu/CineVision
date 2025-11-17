@@ -329,7 +329,7 @@ export class PaymentsSupabaseService {
           payment_method: 'pix',
           provider: 'mercadopago',
           provider_payment_id: pixResult.paymentId,
-          status: 'pending',
+          status: 'pendente',
         })
         .select()
         .single();

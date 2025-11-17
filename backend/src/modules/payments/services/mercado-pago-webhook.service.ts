@@ -77,12 +77,12 @@ export class MercadoPagoWebhookService {
         }
 
         // IDEMPOTENCY CHECK: If payment already processed, skip
-        if (dbPayment.status === 'paid' && payment.status === 'approved') {
+        if (dbPayment.status === 'pago' && payment.status === 'approved') {
           this.logger.log(`Payment ${paymentId} already processed as paid - skipping (idempotency)`);
           return;
         }
 
-        if (dbPayment.status === 'failed' && (payment.status === 'cancelled' || payment.status === 'rejected')) {
+        if (dbPayment.status === 'falhou' && (payment.status === 'cancelled' || payment.status === 'rejected')) {
           this.logger.log(`Payment ${paymentId} already processed as failed - skipping (idempotency)`);
           return;
         }
@@ -114,7 +114,7 @@ export class MercadoPagoWebhookService {
       const { error: paymentError } = await this.supabaseService.client
         .from('payments')
         .update({
-          status: 'paid',
+          status: 'pago',
           paid_at: new Date().toISOString(),
         })
         .eq('id', dbPayment.id);
@@ -128,7 +128,7 @@ export class MercadoPagoWebhookService {
       const { error: purchaseError } = await this.supabaseService.client
         .from('purchases')
         .update({
-          status: 'paid',
+          status: 'pago',
         })
         .eq('id', dbPayment.purchase_id);
 
@@ -229,7 +229,7 @@ export class MercadoPagoWebhookService {
       const { error } = await this.supabaseService.client
         .from('payments')
         .update({
-          status: 'failed',
+          status: 'falhou',
         })
         .eq('id', dbPayment.id);
 
@@ -253,11 +253,11 @@ export class MercadoPagoWebhookService {
       this.logger.log(`Payment ${dbPayment.id} is pending`);
 
       // Update payment status if needed
-      if (dbPayment.status !== 'pending') {
+      if (dbPayment.status !== 'pendente') {
         const { error } = await this.supabaseService.client
           .from('payments')
           .update({
-            status: 'pending',
+            status: 'pendente',
           })
           .eq('id', dbPayment.id);
 
