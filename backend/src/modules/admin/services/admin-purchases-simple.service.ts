@@ -177,9 +177,9 @@ export class AdminPurchasesSimpleService {
           payment_method: purchase.payment_method || 'unknown',
           created_at: purchase.created_at,
           updated_at: purchase.updated_at,
-          // Include nested user and content data
-          user: userMap.get(purchase.user_id) || null,
-          content: contentMap.get(purchase.content_id) || null,
+          // Include nested user and content data (convert IDs to string for map lookup)
+          user: userMap.get(String(purchase.user_id)) || null,
+          content: contentMap.get(String(purchase.content_id)) || null,
         };
       });
 
