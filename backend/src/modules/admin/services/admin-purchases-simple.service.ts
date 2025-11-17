@@ -429,11 +429,25 @@ export class AdminPurchasesSimpleService {
 
         // If user exists in database, use their data to create telegram_data
         if (user) {
+          // Filter out synthetic emails (e.g., telegram_XXXXX@cinevision.temp)
+          const isSyntheticEmail = user.email && (
+            user.email.includes('@cinevision.temp') ||
+            user.email.startsWith('telegram_')
+          );
+
           telegramData = {
             telegram_id: user.telegram_id || purchase.provider_meta?.telegram_user_id,
             telegram_username: user.telegram_username || null,
             telegram_display_name: user.name || `User ${user.telegram_id || purchase.provider_meta?.telegram_user_id}`,
           };
+
+          // Clean the user object - remove synthetic email
+          if (isSyntheticEmail) {
+            user = {
+              ...user,
+              email: null, // Don't show synthetic emails to admin
+            };
+          }
         }
         // Fallback: If no user in database, try to extract from provider_meta
         else if (purchase.provider_meta?.telegram_user_id) {
