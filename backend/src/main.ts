@@ -136,8 +136,9 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
 
-  console.log(`🚀 Cine Vision API running on: http://localhost:${port}`);
+  console.log(`🚀 Cine Vision API v1.0.1 running on: http://localhost:${port}`);
   console.log(`📚 Swagger docs available at: http://localhost:${port}/api/docs`);
+  console.log(`✅ FIXED: User limit increased from 1000 to 10000`);
 }
 
 bootstrap();
