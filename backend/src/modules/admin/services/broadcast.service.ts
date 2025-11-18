@@ -22,21 +22,50 @@ export class BroadcastService {
 
   /**
    * Get all users who have started the bot (have telegram_chat_id)
+   * Uses pagination to fetch ALL users (Supabase has max 1000 per request)
    */
   async getAllBotUsers(): Promise<any[]> {
     try {
-      const { data, error } = await this.supabase
-        .from('users')
-        .select('id, telegram_id, telegram_chat_id, telegram_username, name')
-        .not('telegram_chat_id', 'is', null)
-        .limit(10000); // Set high limit to fetch all users (default is 1000)
+      const allUsers: any[] = [];
+      const pageSize = 1000;
+      let page = 0;
+      let hasMore = true;
 
-      if (error) {
-        this.logger.error('Error fetching bot users:', error);
-        throw new Error('Failed to fetch users');
+      while (hasMore) {
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
+        this.logger.log(`Fetching users page ${page + 1} (${from}-${to})...`);
+
+        const { data, error, count } = await this.supabase
+          .from('users')
+          .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
+          .not('telegram_chat_id', 'is', null)
+          .range(from, to);
+
+        if (error) {
+          this.logger.error('Error fetching bot users:', error);
+          throw new Error('Failed to fetch users');
+        }
+
+        if (data && data.length > 0) {
+          allUsers.push(...data);
+          this.logger.log(`Fetched ${data.length} users (total so far: ${allUsers.length})`);
+        }
+
+        // Check if there are more pages
+        hasMore = data && data.length === pageSize;
+        page++;
+
+        // Safety check: stop after 20 pages (20,000 users max)
+        if (page >= 20) {
+          this.logger.warn('Reached maximum pagination limit of 20 pages');
+          break;
+        }
       }
 
-      return data || [];
+      this.logger.log(`✅ Total users fetched: ${allUsers.length}`);
+      return allUsers;
     } catch (error) {
       this.logger.error('Error in getAllBotUsers:', error);
       throw error;
