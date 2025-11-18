@@ -28,7 +28,8 @@ export class BroadcastService {
       const { data, error } = await this.supabase
         .from('users')
         .select('id, telegram_id, telegram_chat_id, telegram_username, name')
-        .not('telegram_chat_id', 'is', null);
+        .not('telegram_chat_id', 'is', null)
+        .limit(10000); // Set high limit to fetch all users (default is 1000)
 
       if (error) {
         this.logger.error('Error fetching bot users:', error);
