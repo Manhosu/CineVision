@@ -162,6 +162,7 @@ export class AdminPurchasesSimpleService {
         // Search users by email, name, or telegram_username
         const users = await this.supabaseClient.select('users', {
           select: 'id,email,telegram_id,telegram_username,name',
+          limit: 10000, // Set high limit to search through all users
         });
 
         const matchingUsers = users.filter((u: any) =>
@@ -173,6 +174,7 @@ export class AdminPurchasesSimpleService {
         // Search content by title
         const contents = await this.supabaseClient.select('content', {
           select: 'id,title,poster_url',
+          limit: 10000, // Set high limit to search through all content
         });
 
         const matchingContents = contents.filter((c: any) =>
