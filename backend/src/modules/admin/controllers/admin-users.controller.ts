@@ -14,7 +14,8 @@ export class AdminUsersController {
   async getAllUsers() {
     const users = await this.supabaseClient.select('users', {
       select: 'id, telegram_id, telegram_username, telegram_chat_id, name, role, created_at',
-      order: { column: 'created_at', ascending: false }
+      order: { column: 'created_at', ascending: false },
+      limit: 10000 // Set high limit to fetch all users (default is 1000)
     });
 
     // Filter only users with telegram_id
