@@ -1020,8 +1020,23 @@ export class TelegramsEnhancedService implements OnModuleInit {
       });
 
     } catch (error) {
-      this.logger.error('Error handling PIX payment:', error);
-      await this.sendMessage(chatId, '❌ Erro ao gerar QR Code PIX. Verifique se a chave PIX está configurada no admin.');
+      this.logger.error('Error handling PIX payment:');
+      this.logger.error(error);
+
+      // Check if it's a Mercado Pago configuration error
+      let errorMessage = '❌ Erro ao gerar QR Code PIX.';
+
+      if (error.message && (error.message.includes('not configured') || error.message.includes('não está configurado'))) {
+        errorMessage = '❌ Sistema de pagamento PIX temporariamente indisponível. Por favor, contate o suporte.';
+        this.logger.error('🚨 MERCADO PAGO NOT CONFIGURED! Admin needs to set MERCADO_PAGO_ACCESS_TOKEN');
+      } else if (error.message && (error.message.includes('UNAUTHORIZED') || error.message.includes('inválido') || error.message.includes('expirado'))) {
+        errorMessage = '❌ Erro de autenticação com Mercado Pago. Por favor, contate o suporte.';
+        this.logger.error('🚨 MERCADO PAGO TOKEN INVALID OR EXPIRED! Admin needs to update MERCADO_PAGO_ACCESS_TOKEN');
+      } else {
+        errorMessage = '❌ Erro ao gerar QR Code PIX. Por favor, tente novamente ou contate o suporte.';
+      }
+
+      await this.sendMessage(chatId, errorMessage);
     }
   }
 
