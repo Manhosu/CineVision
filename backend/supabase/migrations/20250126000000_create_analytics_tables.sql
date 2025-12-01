@@ -41,7 +41,8 @@ CREATE INDEX IF NOT EXISTS idx_activity_events_user_id ON activity_events(user_i
 CREATE INDEX IF NOT EXISTS idx_activity_events_event_type ON activity_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_activity_events_created_at ON activity_events(created_at);
 
--- Create function to cleanup inactive sessions (sessions older than 15 minutes)
+-- Create function to cleanup inactive sessions (sessions older than 2 HOURS)
+-- Increased from 15 minutes to 2 hours to properly track users watching movies/series
 CREATE OR REPLACE FUNCTION cleanup_inactive_sessions()
 RETURNS void
 LANGUAGE plpgsql
@@ -51,7 +52,7 @@ BEGIN
   SET status = 'offline',
       disconnected_at = NOW()
   WHERE status = 'online'
-    AND last_activity < NOW() - INTERVAL '15 minutes';
+    AND last_activity < NOW() - INTERVAL '2 hours';
 END;
 $$;
 
