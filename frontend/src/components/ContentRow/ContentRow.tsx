@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { Top10MovieCard } from '@/components/Top10MovieCard/Top10MovieCard';
@@ -23,11 +24,33 @@ export function ContentRow({
   type,
   purchasedMovieIds = new Set()
 }: ContentRowProps) {
+  const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [isScrolling, setIsScrolling] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+
+  // Mapear título da seção para URL de navegação
+  const getViewAllUrl = (sectionTitle: string): string => {
+    const titleLower = sectionTitle.toLowerCase();
+    if (titleLower.includes('série') || titleLower.includes('series')) {
+      return '/series';
+    }
+    if (titleLower.includes('filme') || titleLower.includes('movies')) {
+      return '/movies';
+    }
+    if (titleLower.includes('lançamento') || titleLower.includes('release')) {
+      return '/movies?filter=releases';
+    }
+    // Default: página de busca
+    return '/search';
+  };
+
+  const handleViewAll = () => {
+    const url = getViewAllUrl(title);
+    router.push(url);
+  };
 
   const updateScrollButtons = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -186,7 +209,10 @@ export function ContentRow({
             {/* Card "Ver mais" se houver muitos filmes */}
             {movies.length >= 12 && !isTop10 && (
               <div className="flex-none w-[clamp(160px, 20vw, 200px)]">
-                <div className="h-full flex items-center justify-center rounded-xl border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer aspect-[2/3]">
+                <div
+                  onClick={handleViewAll}
+                  className="h-full flex items-center justify-center rounded-xl border-2 border-dashed border-white/20 text-white/60 hover:text-white hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer aspect-[2/3] active:scale-95"
+                >
                   <div className="text-center p-4">
                     <ChevronRightIcon className="w-10 h-10 mx-auto mb-2" />
                     <p className="font-medium text-sm">Ver todos</p>
