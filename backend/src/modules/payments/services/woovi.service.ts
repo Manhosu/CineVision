@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
+import * as QRCode from 'qrcode';
 
 export interface CreatePixPaymentDto {
   amount: number; // in cents
@@ -176,19 +177,67 @@ export class WooviService {
       const brCode = responseData.brCode || charge.brCode;
 
       this.logger.log(`PIX charge created: ${charge.correlationID}`);
+      this.logger.debug(`Woovi response: ${JSON.stringify(charge)}`);
 
       // Calculate expiration
       const expiresAt = charge.expiresDate
         ? new Date(charge.expiresDate)
         : new Date(Date.now() + 3600 * 1000);
 
-      // Extract QR code image (Woovi returns as base64 with prefix or URL)
-      let qrCodeBase64 = charge.qrCodeImage || '';
-      if (qrCodeBase64.startsWith('data:image/')) {
-        qrCodeBase64 = qrCodeBase64.replace(/^data:image\/\w+;base64,/, '');
+      // Extract QR code image - check multiple possible locations
+      let qrCodeBase64 = '';
+      const qrCodeImageSource = charge.qrCodeImage || charge.paymentMethods?.pix?.qrCodeImage || '';
+
+      this.logger.log(`QR Code source: ${qrCodeImageSource ? qrCodeImageSource.substring(0, 100) + '...' : 'EMPTY'}`);
+
+      if (qrCodeImageSource) {
+        if (qrCodeImageSource.startsWith('data:image/')) {
+          // Already base64 with prefix - remove prefix
+          qrCodeBase64 = qrCodeImageSource.replace(/^data:image\/\w+;base64,/, '');
+          this.logger.log('QR Code is base64 with data prefix');
+        } else if (qrCodeImageSource.startsWith('http')) {
+          // It's a URL - download and convert to base64
+          this.logger.log(`QR Code is URL, downloading: ${qrCodeImageSource}`);
+          try {
+            const imageResponse = await axios.get(qrCodeImageSource, {
+              responseType: 'arraybuffer',
+              timeout: 10000,
+            });
+            qrCodeBase64 = Buffer.from(imageResponse.data).toString('base64');
+            this.logger.log('QR Code downloaded and converted to base64');
+          } catch (imgError) {
+            this.logger.error(`Failed to download QR code image: ${imgError.message}`);
+          }
+        } else {
+          // Assume it's already raw base64
+          qrCodeBase64 = qrCodeImageSource;
+          this.logger.log('QR Code is raw base64');
+        }
+      } else {
+        this.logger.warn('No QR code image found in Woovi response');
       }
 
-      this.logger.log(`QR Code generated for: ${charge.correlationID}`);
+      // Fallback: generate QR code locally from brCode if Woovi didn't return an image
+      if (!qrCodeBase64 && brCode) {
+        this.logger.log('Generating QR code locally from brCode...');
+        try {
+          const qrCodeDataUrl = await QRCode.toDataURL(brCode, {
+            width: 300,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF',
+            },
+          });
+          // Remove the data:image/png;base64, prefix
+          qrCodeBase64 = qrCodeDataUrl.replace(/^data:image\/\w+;base64,/, '');
+          this.logger.log('QR code generated locally successfully');
+        } catch (qrError) {
+          this.logger.error(`Failed to generate QR code locally: ${qrError.message}`);
+        }
+      }
+
+      this.logger.log(`QR Code generated for: ${charge.correlationID}, has image: ${qrCodeBase64.length > 0}`);
 
       return {
         paymentId: charge.correlationID,
