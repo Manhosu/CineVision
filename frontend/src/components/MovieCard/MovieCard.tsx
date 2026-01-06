@@ -57,17 +57,29 @@ const MovieCard = memo(function MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
-    // Check if content has Telegram group link
-    const telegramGroupLink = (movie as any).telegram_group_link;
+    const availability = movie.availability || 'BOTH';
+    const telegramGroupLink = movie.telegram_group_link;
+    const hasTelegramLink = !!telegramGroupLink;
 
-    if (telegramGroupLink) {
-      // Show viewing options modal (Site or Telegram)
-      setShowViewingOptions(true);
+    // If only TELEGRAM is available, go directly to Telegram
+    if (availability === 'TELEGRAM' && hasTelegramLink) {
+      window.open(telegramGroupLink, '_blank');
       return;
     }
 
-    // No Telegram group, proceed with normal flow
-    proceedToWatch();
+    // If only SITE is available (or TELEGRAM but no link), go directly to player
+    if (availability === 'SITE' || (availability === 'TELEGRAM' && !hasTelegramLink)) {
+      proceedToWatch();
+      return;
+    }
+
+    // If BOTH are available and has Telegram link, show modal
+    if (hasTelegramLink) {
+      setShowViewingOptions(true);
+    } else {
+      // BOTH but no Telegram link, go directly to site
+      proceedToWatch();
+    }
   };
 
   const proceedToWatch = async () => {
@@ -239,16 +251,17 @@ const MovieCard = memo(function MovieCard({
       )}
 
       {/* Viewing Options Modal (Site or Telegram) */}
-      {isPurchased && (movie as any).telegram_group_link && (
+      {isPurchased && (
         <ViewingOptionsModal
           isOpen={showViewingOptions}
           onClose={() => setShowViewingOptions(false)}
           movieTitle={movie.title}
-          telegramGroupLink={(movie as any).telegram_group_link}
+          telegramGroupLink={movie.telegram_group_link || ''}
           onChooseSite={() => {
             setShowViewingOptions(false);
             proceedToWatch();
           }}
+          availability={(movie.availability as 'SITE' | 'TELEGRAM' | 'BOTH') || 'BOTH'}
         />
       )}
     </div>

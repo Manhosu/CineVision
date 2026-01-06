@@ -55,8 +55,28 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
   };
 
   const handleWatch = async () => {
-    // Abrir modal de escolha de visualização
-    setShowViewingOptions(true);
+    const availability = movie.availability || 'BOTH';
+    const hasTelegramLink = !!movie.telegram_group_link;
+
+    // If only TELEGRAM is available, go directly to Telegram
+    if (availability === 'TELEGRAM' && hasTelegramLink) {
+      window.open(movie.telegram_group_link, '_blank');
+      return;
+    }
+
+    // If only SITE is available (or TELEGRAM but no link), go directly to player
+    if (availability === 'SITE' || (availability === 'TELEGRAM' && !hasTelegramLink)) {
+      window.location.href = `/watch/${movie.id}`;
+      return;
+    }
+
+    // If BOTH are available and has Telegram link, show modal
+    if (hasTelegramLink) {
+      setShowViewingOptions(true);
+    } else {
+      // BOTH but no Telegram link, go directly to site
+      window.location.href = `/watch/${movie.id}`;
+    }
   };
 
   const handleChooseSite = () => {
@@ -129,6 +149,7 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
         movieTitle={movie.title}
         telegramGroupLink={movie.telegram_group_link || ''}
         onChooseSite={handleChooseSite}
+        availability={(movie.availability as 'SITE' | 'TELEGRAM' | 'BOTH') || 'BOTH'}
       />
     </>
   );

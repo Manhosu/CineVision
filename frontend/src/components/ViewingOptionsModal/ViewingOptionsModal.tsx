@@ -10,6 +10,7 @@ interface ViewingOptionsModalProps {
   movieTitle: string;
   telegramGroupLink: string;
   onChooseSite: () => void;
+  availability?: 'SITE' | 'TELEGRAM' | 'BOTH';
 }
 
 export function ViewingOptionsModal({
@@ -18,7 +19,11 @@ export function ViewingOptionsModal({
   movieTitle,
   telegramGroupLink,
   onChooseSite,
+  availability = 'BOTH',
 }: ViewingOptionsModalProps) {
+  // Determine which options to show based on availability
+  const showSiteOption = availability === 'SITE' || availability === 'BOTH';
+  const showTelegramOption = (availability === 'TELEGRAM' || availability === 'BOTH') && telegramGroupLink;
   const handleTelegramClick = () => {
     // Open Telegram group link in new tab
     window.open(telegramGroupLink, '_blank');
@@ -62,7 +67,11 @@ export function ViewingOptionsModal({
 
                 {/* Header */}
                 <Dialog.Title className="text-2xl font-bold text-white mb-2">
-                  Como você quer assistir?
+                  {showSiteOption && showTelegramOption
+                    ? 'Como você quer assistir?'
+                    : showTelegramOption
+                      ? 'Assistir no Telegram'
+                      : 'Assistir no Site'}
                 </Dialog.Title>
                 <p className="text-gray-400 mb-8">
                   {movieTitle}
@@ -70,55 +79,61 @@ export function ViewingOptionsModal({
 
                 {/* Options */}
                 <div className="space-y-4">
-                  {/* Site Option */}
-                  <button
-                    onClick={onChooseSite}
-                    className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-2 border-purple-500/30 hover:border-purple-500/60 p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/20"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-                        <GlobeAltIcon className="w-6 h-6 text-purple-400" />
+                  {/* Site Option - only show if availability includes SITE */}
+                  {showSiteOption && (
+                    <button
+                      onClick={onChooseSite}
+                      className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-2 border-purple-500/30 hover:border-purple-500/60 p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-purple-500/20"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+                          <GlobeAltIcon className="w-6 h-6 text-purple-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <h3 className="text-lg font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
+                            🌐 Assistir no Site
+                          </h3>
+                          <p className="text-sm text-gray-400">
+                            Assista diretamente no navegador com nosso player online
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 text-left">
-                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-purple-300 transition-colors">
-                          🌐 Assistir no Site
-                        </h3>
-                        <p className="text-sm text-gray-400">
-                          Assista diretamente no navegador com nosso player online
-                        </p>
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  </button>
+                      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-blue-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </button>
+                  )}
 
-                  {/* Telegram Option */}
-                  <button
-                    onClick={handleTelegramClick}
-                    className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border-2 border-blue-500/30 hover:border-blue-500/60 p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20"
-                  >
-                    <div className="flex items-start gap-4">
-                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
-                        <ChatBubbleLeftRightIcon className="w-6 h-6 text-blue-400" />
+                  {/* Telegram Option - only show if availability includes TELEGRAM and has link */}
+                  {showTelegramOption && (
+                    <button
+                      onClick={handleTelegramClick}
+                      className="w-full group relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border-2 border-blue-500/30 hover:border-blue-500/60 p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-500/20"
+                    >
+                      <div className="flex items-start gap-4">
+                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center group-hover:bg-blue-500/30 transition-colors">
+                          <ChatBubbleLeftRightIcon className="w-6 h-6 text-blue-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-300 transition-colors">
+                            📱 Assistir no Telegram
+                          </h3>
+                          <p className="text-sm text-gray-400">
+                            Acesse o grupo privado do Telegram para baixar o filme
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 text-left">
-                        <h3 className="text-lg font-bold text-white mb-1 group-hover:text-blue-300 transition-colors">
-                          📱 Assistir no Telegram
-                        </h3>
-                        <p className="text-sm text-gray-400">
-                          Acesse o grupo privado do Telegram para baixar o filme
-                        </p>
-                      </div>
-                    </div>
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  </button>
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-cyan-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </button>
+                  )}
                 </div>
 
-                {/* Info */}
-                <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <p className="text-xs text-blue-300">
-                    💡 <strong>Dica:</strong> No Telegram você pode baixar o filme para assistir offline, enquanto no site você assiste online com streaming.
-                  </p>
-                </div>
+                {/* Info - only show when both options are available */}
+                {showSiteOption && showTelegramOption && (
+                  <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                    <p className="text-xs text-blue-300">
+                      💡 <strong>Dica:</strong> No Telegram você pode baixar o filme para assistir offline, enquanto no site você assiste online com streaming.
+                    </p>
+                  </div>
+                )}
               </Dialog.Panel>
             </Transition.Child>
           </div>
