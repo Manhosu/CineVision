@@ -14,5 +14,5 @@ import { UserRole } from '../../users/entities/user.entity';
 export class AdminSettingsController {
   constructor(private readonly settingsService: AdminSettingsService) {}
 
-  // PIX settings endpoints removed - using Mercado Pago PIX instead
+  // PIX settings endpoints removed - using Woovi PIX instead
 }

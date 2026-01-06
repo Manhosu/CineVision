@@ -9,10 +9,40 @@ const supabase = createClient(
 );
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const mpAccessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN;
+
+// Woovi configuration
+const wooviAppId = process.env.WOOVI_APP_ID;
+const wooviSandbox = process.env.WOOVI_SANDBOX === 'true';
+const wooviBaseUrl = wooviSandbox
+  ? 'https://api.woovi-sandbox.com'
+  : 'https://api.woovi.com';
+
+// Get Woovi payment status
+async function getWooviPaymentStatus(correlationID) {
+  if (!wooviAppId) {
+    console.log('⚠️  WOOVI_APP_ID not configured');
+    return null;
+  }
+
+  try {
+    const response = await axios.get(
+      `${wooviBaseUrl}/api/v1/charge/${correlationID}`,
+      {
+        headers: {
+          'Authorization': wooviAppId,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data.charge || response.data;
+  } catch (error) {
+    console.log(`⚠️  Failed to get Woovi payment: ${error.message}`);
+    return null;
+  }
+}
 
 async function syncPaymentStatuses() {
-  console.log('🔄 Syncing payment statuses from Stripe and Mercado Pago...\n');
+  console.log('🔄 Syncing payment statuses from Stripe and Woovi...\n');
 
   // Get all payments with provider_payment_id
   const { data: payments, error } = await supabase
@@ -64,34 +94,28 @@ async function syncPaymentStatuses() {
           console.log(`  Status is still ${realStatus}, keeping as pending`);
         }
 
-      } else if (payment.provider === 'mercadopago') {
-        // Check with Mercado Pago
-        try {
-          const response = await axios.get(
-            `https://api.mercadopago.com/v1/payments/${payment.provider_payment_id}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${mpAccessToken}`
-              }
-            }
-          );
+      } else if (payment.provider === 'woovi') {
+        // Check with Woovi
+        const wooviPayment = await getWooviPaymentStatus(payment.provider_payment_id);
 
-          realStatus = response.data.status;
-          console.log(`  Mercado Pago status: ${realStatus}`);
+        if (wooviPayment) {
+          realStatus = wooviPayment.status;
+          console.log(`  Woovi status: ${realStatus}`);
 
-          // Map Mercado Pago status to internal status
-          if (realStatus === 'approved') {
+          // Map Woovi status to internal status
+          if (realStatus === 'COMPLETED') {
             await updatePaymentStatus(payment, 'pago');
             updated++;
-          } else if (realStatus === 'cancelled' || realStatus === 'rejected') {
+          } else if (realStatus === 'EXPIRED') {
             await updatePaymentStatus(payment, 'falhou');
             updated++;
           } else {
             console.log(`  Status is still ${realStatus}, keeping as pending`);
           }
-        } catch (e) {
-          console.log(`  ⚠️  Failed to retrieve from Mercado Pago: ${e.message}`);
         }
+      } else if (payment.provider === 'efi' || payment.provider === 'mercadopago') {
+        // Legacy: Skip old EFI/Mercado Pago payments (no longer supported)
+        console.log(`  ⚠️  ${payment.provider} is no longer supported, skipping`);
       }
 
     } catch (error) {

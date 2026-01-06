@@ -40,6 +40,7 @@ import { SystemLog } from '../logs/entities/system-log.entity';
 import { StreamingAnalytics } from '../content/entities/streaming-analytics.entity';
 import { ContentRequest } from '../requests/entities/content-request.entity';
 import { StripeService } from '../payments/services/stripe.service';
+import { WooviService } from '../payments/services/woovi.service';
 import { VideoUploadService } from '../video/video-upload.service';
 import { BotNotificationService } from '../telegrams/services/bot-notification.service';
 import { TelegramsService } from '../telegrams/telegrams.service';
@@ -109,6 +110,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   AdminPurchasesSimpleService,
   PurchasesCleanupService,
   StripeService,
+  WooviService,
   MultipartUploadService,
   ContentLanguageSupabaseService,
   BroadcastService,

@@ -7,7 +7,7 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as bcrypt from 'bcrypt';
 import { AutoLoginService } from '../auth/services/auto-login.service';
-import { MercadoPagoService } from '../payments/services/mercado-pago.service';
+import { WooviService } from '../payments/services/woovi.service';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -81,7 +81,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private autoLoginService: AutoLoginService,
-    private mercadoPagoService: MercadoPagoService,
+    private wooviService: WooviService,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.webhookSecret = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
@@ -1023,15 +1023,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
       this.logger.error('Error handling PIX payment:');
       this.logger.error(error);
 
-      // Check if it's a Mercado Pago configuration error
+      // Check if it's a Woovi configuration error
       let errorMessage = '❌ Erro ao gerar QR Code PIX.';
 
       if (error.message && (error.message.includes('not configured') || error.message.includes('não está configurado'))) {
         errorMessage = '❌ Sistema de pagamento PIX temporariamente indisponível. Por favor, contate o suporte.';
-        this.logger.error('🚨 MERCADO PAGO NOT CONFIGURED! Admin needs to set MERCADO_PAGO_ACCESS_TOKEN');
-      } else if (error.message && (error.message.includes('UNAUTHORIZED') || error.message.includes('inválido') || error.message.includes('expirado'))) {
-        errorMessage = '❌ Erro de autenticação com Mercado Pago. Por favor, contate o suporte.';
-        this.logger.error('🚨 MERCADO PAGO TOKEN INVALID OR EXPIRED! Admin needs to update MERCADO_PAGO_ACCESS_TOKEN');
+        this.logger.error('🚨 WOOVI NOT CONFIGURED! Admin needs to set Woovi credentials');
+      } else if (error.message && (error.message.includes('UNAUTHORIZED') || error.message.includes('inválido') || error.message.includes('expirado') || error.message.includes('certificado'))) {
+        errorMessage = '❌ Erro de autenticação com Woovi. Por favor, contate o suporte.';
+        this.logger.error('🚨 WOOVI CREDENTIALS INVALID! Admin needs to update Woovi credentials');
       } else {
         errorMessage = '❌ Erro ao gerar QR Code PIX. Por favor, tente novamente ou contate o suporte.';
       }
@@ -1054,7 +1054,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .from('payments')
         .select('*')
         .eq('purchase_id', purchaseId)
-        .eq('provider', 'mercadopago')
+        .eq('provider', 'woovi')
         .eq('payment_method', 'pix')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -1119,16 +1119,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
         this.pendingPixPayments.delete(purchaseId);
 
       } else if (payment.status === 'pending') {
-        // Consultar o Mercado Pago para ver o status atualizado
-        this.logger.log(`Checking payment status in Mercado Pago: ${payment.provider_payment_id}`);
+        // Consultar o Woovi para ver o status atualizado
+        this.logger.log(`Checking payment status in Woovi: ${payment.provider_payment_id}`);
 
         try {
-          const mpPayment = await this.mercadoPagoService.getPayment(payment.provider_payment_id);
-          this.logger.log(`Mercado Pago status for ${payment.provider_payment_id}: ${mpPayment.status}`);
+          const wooviPayment = await this.wooviService.getPayment(payment.provider_payment_id);
+          this.logger.log(`Woovi status for ${payment.provider_payment_id}: ${wooviPayment.originalStatus}`);
 
-          if (mpPayment.status === 'approved') {
+          if (wooviPayment.originalStatus === 'COMPLETED' || wooviPayment.status === 'approved') {
             // Pagamento foi aprovado! Atualizar banco
-            this.logger.log(`Payment ${payment.provider_payment_id} approved in Mercado Pago. Updating database...`);
+            this.logger.log(`Payment ${payment.provider_payment_id} approved in Woovi. Updating database...`);
 
             await this.supabase
               .from('payments')
@@ -1194,7 +1194,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
             return;
           }
         } catch (error) {
-          this.logger.error(`Error checking Mercado Pago status: ${error.message}`);
+          this.logger.error(`Error checking Woovi status: ${error.message}`);
           // Continue com a mensagem de pendente se houver erro na consulta
         }
 
@@ -2055,7 +2055,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
   /**
    * PUBLIC API: Deliver content to user after successful payment
-   * Called by webhook services (Stripe, Mercado Pago) after payment confirmation
+   * Called by webhook services (Stripe, Woovi) after payment confirmation
    * @param purchase - Purchase object with content_id and provider_meta.telegram_chat_id
    */
   public async deliverContentAfterPayment(purchase: any): Promise<void> {

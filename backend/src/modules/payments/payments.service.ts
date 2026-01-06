@@ -308,7 +308,7 @@ export class PaymentsService {
 
   private async handleLegacyWebhook(webhookData: any) {
     try {
-      // Simulate webhook data structure from Mercado Pago
+      // Simulate webhook data structure from EFI Bank
       const { purchase_token, status, payment_id, amount } = webhookData;
 
       if (!purchase_token || !status || !payment_id) {

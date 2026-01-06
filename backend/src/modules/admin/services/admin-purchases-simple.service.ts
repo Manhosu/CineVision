@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 import Stripe from 'stripe';
-import { MercadoPagoService } from '../../payments/services/mercado-pago.service';
+import { WooviService } from '../../payments/services/woovi.service';
 
 @Injectable()
 export class AdminPurchasesSimpleService {
@@ -17,7 +17,7 @@ export class AdminPurchasesSimpleService {
 
   constructor(
     private readonly supabaseClient: SupabaseRestClient,
-    private readonly mercadoPagoService: MercadoPagoService,
+    private readonly wooviService: WooviService,
   ) {
     this.logger.log('AdminPurchasesSimpleService instantiated successfully with real Supabase queries');
 
@@ -90,10 +90,10 @@ export class AdminPurchasesSimpleService {
   }
 
   /**
-   * Sync payment status with Mercado Pago in real-time
-   * Returns a map of payment_id -> real Mercado Pago status
+   * Sync payment status with Woovi in real-time
+   * Returns a map of payment_id (correlationID) -> real Woovi status
    */
-  private async syncPaymentStatusWithMercadoPago(paymentIds: string[]): Promise<Map<string, any>> {
+  private async syncPaymentStatusWithWoovi(paymentIds: string[]): Promise<Map<string, any>> {
     const statusMap = new Map<string, any>();
 
     if (paymentIds.length === 0) {
@@ -101,25 +101,25 @@ export class AdminPurchasesSimpleService {
     }
 
     try {
-      this.logger.log(`Syncing ${paymentIds.length} payments with Mercado Pago...`);
+      this.logger.log(`Syncing ${paymentIds.length} payments with Woovi...`);
 
       // Fetch each payment individually for accurate real-time status
       const promises = paymentIds.map(async (paymentId) => {
         try {
-          const payment = await this.mercadoPagoService.getPayment(paymentId);
+          const payment = await this.wooviService.getPayment(paymentId);
           return {
             id: paymentId,
             data: {
               status: payment.status,
-              status_detail: payment.status_detail,
-              amount: payment.transaction_amount,
-              currency: payment.currency_id,
-              payment_method: payment.payment_method_id,
-              created: payment.date_created,
+              originalStatus: payment.originalStatus,
+              amount: payment.value ? payment.value / 100 : null,
+              currency: 'BRL',
+              payment_method: 'pix',
+              created: payment.createdAt,
             },
           };
         } catch (error: any) {
-          this.logger.warn(`Failed to retrieve Mercado Pago payment ${paymentId}:`, error.message);
+          this.logger.warn(`Failed to retrieve Woovi payment ${paymentId}:`, error.message);
           return null;
         }
       });
@@ -133,10 +133,10 @@ export class AdminPurchasesSimpleService {
         }
       }
 
-      this.logger.log(`✅ Synced ${statusMap.size}/${paymentIds.length} payments from Mercado Pago`);
+      this.logger.log(`Synced ${statusMap.size}/${paymentIds.length} payments from Woovi`);
     } catch (error) {
-      this.logger.error('Error syncing with Mercado Pago:', error);
-      // Don't throw - gracefully degrade if Mercado Pago fails
+      this.logger.error('Error syncing with Woovi:', error);
+      // Don't throw - gracefully degrade if Woovi fails
     }
 
     return statusMap;
@@ -270,32 +270,32 @@ export class AdminPurchasesSimpleService {
 
       // Sync payment status with payment providers for real-time accuracy
       let stripeStatusMap = new Map<string, any>();
-      let mercadoPagoStatusMap = new Map<string, any>();
+      let wooviStatusMap = new Map<string, any>();
 
       if (syncWithStripe) {
-        // Separate Stripe and Mercado Pago payment IDs
+        // Separate Stripe and Woovi payment IDs
         const stripePaymentIds = purchases
           .filter((p: any) => p.payment_method === 'stripe' || p.payment_method === 'card')
           .map((p: any) => p.payment_provider_id)
           .filter(Boolean);
 
-        const mercadoPagoPaymentIds = purchases
-          .filter((p: any) => p.payment_method === 'pix' || p.payment_method === 'mercadopago')
+        const wooviPaymentIds = purchases
+          .filter((p: any) => p.payment_method === 'pix' || p.payment_method === 'woovi')
           .map((p: any) => p.payment_provider_id)
           .filter(Boolean);
 
         // Sync both providers in parallel
-        const [stripeMap, mpMap] = await Promise.all([
+        const [stripeMap, wooviMap] = await Promise.all([
           stripePaymentIds.length > 0
             ? this.syncPaymentStatusWithStripe(stripePaymentIds)
             : Promise.resolve(new Map()),
-          mercadoPagoPaymentIds.length > 0
-            ? this.syncPaymentStatusWithMercadoPago(mercadoPagoPaymentIds)
+          wooviPaymentIds.length > 0
+            ? this.syncPaymentStatusWithWoovi(wooviPaymentIds)
             : Promise.resolve(new Map()),
         ]);
 
         stripeStatusMap = stripeMap;
-        mercadoPagoStatusMap = mpMap;
+        wooviStatusMap = wooviMap;
       }
 
       // FALLBACK: For orphaned purchases (user_id not in users table), try to find user by telegram_id
@@ -370,9 +370,9 @@ export class AdminPurchasesSimpleService {
           ? stripeStatusMap.get(purchase.payment_provider_id)
           : null;
 
-        // Check if we have real-time status from Mercado Pago
-        const mpStatus = purchase.payment_provider_id
-          ? mercadoPagoStatusMap.get(purchase.payment_provider_id)
+        // Check if we have real-time status from Woovi
+        const wooviStatus = purchase.payment_provider_id
+          ? wooviStatusMap.get(purchase.payment_provider_id)
           : null;
 
         if (stripeStatus) {
@@ -397,30 +397,27 @@ export class AdminPurchasesSimpleService {
 
           paymentProviderData = stripeStatus;
           statusSource = 'stripe_realtime';
-        } else if (mpStatus) {
-          // Map Mercado Pago status to our internal status
-          const mpToInternalStatus: Record<string, string> = {
+        } else if (wooviStatus) {
+          // Map Woovi status to our internal status
+          const wooviToInternalStatus: Record<string, string> = {
             'approved': 'pago',
-            'in_process': 'pendente',
+            'COMPLETED': 'pago',
             'pending': 'pendente',
-            'authorized': 'pendente',
-            'in_mediation': 'pendente',
+            'ACTIVE': 'pendente',
             'cancelled': 'falhou',
-            'rejected': 'falhou',
-            'refunded': 'falhou',
-            'charged_back': 'falhou',
+            'EXPIRED': 'falhou',
           };
 
-          const mappedStatus = mpToInternalStatus[mpStatus.status] || currentStatus;
+          const mappedStatus = wooviToInternalStatus[wooviStatus.originalStatus] || wooviToInternalStatus[wooviStatus.status] || currentStatus;
 
           // Update status if it differs from database
           if (mappedStatus !== currentStatus) {
-            this.logger.warn(`Status mismatch for purchase ${purchase.id}: DB=${currentStatus}, MercadoPago=${mpStatus.status}. Using MercadoPago status.`);
+            this.logger.warn(`Status mismatch for purchase ${purchase.id}: DB=${currentStatus}, Woovi=${wooviStatus.originalStatus}. Using Woovi status.`);
             currentStatus = mappedStatus;
           }
 
-          paymentProviderData = mpStatus;
-          statusSource = 'mercadopago_realtime';
+          paymentProviderData = wooviStatus;
+          statusSource = 'woovi_realtime';
         }
 
         const translatedStatus = translateStatus(currentStatus);
@@ -473,7 +470,7 @@ export class AdminPurchasesSimpleService {
           currency: purchase.currency || 'BRL',
           status: translatedStatus, // Translate PT → EN for frontend
           status_color: getStatusColor(translatedStatus),
-          status_source: statusSource, // database | stripe_realtime | mercadopago_realtime
+          status_source: statusSource, // database | stripe_realtime | woovi_realtime
           payment_method: purchase.payment_method || 'unknown',
           payment_provider_id: purchase.payment_provider_id || null,
           created_at: purchase.created_at,

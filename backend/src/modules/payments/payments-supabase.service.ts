@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException, Inject, Opt
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../config/supabase.service';
 import { StripeService } from './services/stripe.service';
-import { MercadoPagoService } from './services/mercado-pago.service';
+import { WooviService } from './services/woovi.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
 import { PaymentMethod } from './providers/interfaces';
 import {
@@ -20,7 +20,7 @@ export class PaymentsSupabaseService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly stripeService: StripeService,
-    private readonly mercadoPagoService: MercadoPagoService,
+    private readonly wooviService: WooviService,
     private readonly pixQRCodeService: PixQRCodeService,
     private readonly configService: ConfigService,
   ) {
@@ -279,11 +279,11 @@ export class PaymentsSupabaseService {
   }
 
   /**
-   * Create PIX payment with Mercado Pago
+   * Create PIX payment with Woovi
    * Generates PIX QR Code for direct payment in Telegram
    */
   async createPixPayment(purchaseId: string): Promise<any> {
-    this.logger.log(`Creating PIX payment with Mercado Pago QR code for purchase ${purchaseId}`);
+    this.logger.log(`Creating PIX payment with Woovi for purchase ${purchaseId}`);
 
     try {
       // Get purchase details
@@ -304,10 +304,10 @@ export class PaymentsSupabaseService {
       const content = purchase.content;
       const amountCents = content.price_cents;
 
-      this.logger.log(`Creating PIX payment with Mercado Pago for ${content.title} - R$ ${amountCents / 100}`);
+      this.logger.log(`Creating PIX payment with Woovi for ${content.title} - R$ ${amountCents / 100}`);
 
-      // Create PIX Payment with Mercado Pago
-      const pixResult = await this.mercadoPagoService.createPixPayment({
+      // Create PIX Payment with Woovi
+      const pixResult = await this.wooviService.createPixPayment({
         amount: amountCents,
         description: `CineVision - ${content.title}`,
         email: purchase.user_email || 'cliente@cinevision.com',
@@ -318,7 +318,7 @@ export class PaymentsSupabaseService {
         },
       });
 
-      this.logger.log(`Mercado Pago PIX payment created: ${pixResult.paymentId}`);
+      this.logger.log(`Woovi PIX payment created: ${pixResult.paymentId}`);
 
       // Create payment record in database
       const { data: payment, error: paymentError } = await this.supabaseService.client
@@ -327,9 +327,9 @@ export class PaymentsSupabaseService {
           purchase_id: purchaseId,
           amount_cents: amountCents,
           payment_method: 'pix',
-          provider: 'mercadopago',
+          provider: 'woovi',
           provider_payment_id: pixResult.paymentId,
-          status: 'pending', // Must be English for payments table ENUM
+          status: 'pending',
         })
         .select()
         .single();
@@ -357,11 +357,11 @@ export class PaymentsSupabaseService {
         provider_payment_id: pixResult.paymentId,
         payment_method: 'pix',
         qr_code_text: pixResult.qrCode, // PIX code for copy-paste
-        qr_code_image: pixResult.qrCodeBase64, // Base64 image for Telegram (already in base64!)
+        qr_code_image: pixResult.qrCodeBase64, // Base64 image for Telegram
         copy_paste_code: pixResult.qrCode, // Same as qr_code_text, for PIX copy-paste
         amount_cents: amountCents,
         amount_brl: (amountCents / 100).toFixed(2),
-        expires_in: 1800, // 30 minutes (Mercado Pago default)
+        expires_in: 3600, // 60 minutes
         payment_instructions: 'Escaneie o QR Code ou use o código PIX Copia e Cola para pagar. Pagamento aprovado automaticamente!',
       };
     } catch (error) {
