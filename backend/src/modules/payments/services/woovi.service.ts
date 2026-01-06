@@ -19,31 +19,33 @@ export interface PixPaymentResult {
   amount: number;
 }
 
-interface WooviChargeResponse {
-  charge: {
-    status: string;
-    value: number;
-    identifier: string;
-    correlationID: string;
-    brCode: string;
-    paymentLinkUrl: string;
-    qrCodeImage: string;
-    expiresDate: string;
-    createdAt: string;
-    updatedAt: string;
-    expiresIn: number;
-    transactionID?: string;
-    paymentMethods?: {
-      pix: {
-        method: string;
-        txid: string;
-        qrCode: string;
-        qrCodeImage: string;
-      };
-    };
-  };
+interface WooviCharge {
+  status: string;
+  value: number;
+  identifier: string;
   correlationID: string;
   brCode: string;
+  paymentLinkUrl?: string;
+  qrCodeImage?: string;
+  expiresDate?: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresIn?: number;
+  transactionID?: string;
+  paymentMethods?: {
+    pix: {
+      method: string;
+      txid: string;
+      qrCode: string;
+      qrCodeImage: string;
+    };
+  };
+}
+
+interface WooviChargeResponse {
+  charge?: WooviCharge;
+  correlationID?: string;
+  brCode?: string;
 }
 
 @Injectable()
@@ -169,8 +171,9 @@ export class WooviService {
         }
       );
 
-      const charge = chargeResponse.data.charge || chargeResponse.data;
-      const brCode = chargeResponse.data.brCode || charge.brCode;
+      const responseData = chargeResponse.data as WooviChargeResponse & WooviCharge;
+      const charge: WooviCharge = responseData.charge || responseData as WooviCharge;
+      const brCode = responseData.brCode || charge.brCode;
 
       this.logger.log(`PIX charge created: ${charge.correlationID}`);
 
