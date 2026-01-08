@@ -13,7 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
-import { Movie } from '@/types/movie';
+import { Movie, getEffectiveAvailability } from '@/types/movie';
 import { LanguageSelector } from '@/components/LanguageSelector/LanguageSelector';
 import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
 
@@ -57,28 +57,36 @@ const MovieCard = memo(function MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
-    const availability = movie.availability || 'BOTH';
-    const telegramGroupLink = movie.telegram_group_link;
-    const hasTelegramLink = !!telegramGroupLink;
+    // Auto-detect availability based on video and telegram fields
+    const effectiveAvailability = getEffectiveAvailability(movie);
 
-    // If only TELEGRAM is available, go directly to Telegram
-    if (availability === 'TELEGRAM' && hasTelegramLink) {
-      window.open(telegramGroupLink, '_blank');
-      return;
-    }
+    console.log('[MovieCard] Effective availability:', effectiveAvailability, {
+      hasVideo: !!(movie.video_url || movie.hls_master_url),
+      hasTelegram: !!movie.telegram_group_link,
+    });
 
-    // If only SITE is available (or TELEGRAM but no link), go directly to player
-    if (availability === 'SITE' || (availability === 'TELEGRAM' && !hasTelegramLink)) {
-      proceedToWatch();
-      return;
-    }
+    switch (effectiveAvailability) {
+      case 'TELEGRAM':
+        // Only Telegram available - open Telegram directly
+        window.open(movie.telegram_group_link, '_blank');
+        break;
 
-    // If BOTH are available and has Telegram link, show modal
-    if (hasTelegramLink) {
-      setShowViewingOptions(true);
-    } else {
-      // BOTH but no Telegram link, go directly to site
-      proceedToWatch();
+      case 'SITE':
+        // Only Site available - go to player directly
+        proceedToWatch();
+        break;
+
+      case 'BOTH':
+        // Both available - show modal to choose
+        setShowViewingOptions(true);
+        break;
+
+      case 'UNAVAILABLE':
+        // No video and no Telegram - show error
+        toast.error('Conteudo indisponivel no momento', {
+          duration: 3000,
+        });
+        break;
     }
   };
 
@@ -261,7 +269,7 @@ const MovieCard = memo(function MovieCard({
             setShowViewingOptions(false);
             proceedToWatch();
           }}
-          availability={(movie.availability as 'SITE' | 'TELEGRAM' | 'BOTH') || 'BOTH'}
+          availability={getEffectiveAvailability(movie) === 'UNAVAILABLE' ? 'BOTH' : getEffectiveAvailability(movie)}
         />
       )}
     </div>
