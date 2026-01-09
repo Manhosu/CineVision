@@ -67,29 +67,16 @@ const MovieCard = memo(function MovieCard({
       content_languages: movie.content_languages,
     });
 
-    switch (effectiveAvailability) {
-      case 'TELEGRAM':
-        // Only Telegram available - open Telegram directly
-        window.open(movie.telegram_group_link, '_blank');
-        break;
-
-      case 'SITE':
-        // Only Site available - go to player directly
-        proceedToWatch();
-        break;
-
-      case 'BOTH':
-        // Both available - show modal to choose
-        setShowViewingOptions(true);
-        break;
-
-      case 'UNAVAILABLE':
-        // No video and no Telegram - show error
-        toast.error('Conteudo indisponivel no momento', {
-          duration: 3000,
-        });
-        break;
+    // Always show modal with available options (except when unavailable)
+    if (effectiveAvailability === 'UNAVAILABLE') {
+      toast.error('Conteudo indisponivel no momento', {
+        duration: 3000,
+      });
+      return;
     }
+
+    // Show modal - it will display only the available options
+    setShowViewingOptions(true);
   };
 
   const proceedToWatch = async () => {
