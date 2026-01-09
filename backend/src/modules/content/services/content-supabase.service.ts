@@ -51,12 +51,20 @@ export class ContentSupabaseService {
     }
 
     // Step 2: Build the main query with optional ID filter
+    // Include content_languages to check if video is uploaded
     let query = this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `, { count: 'exact' })
       .eq('status', ContentStatus.PUBLISHED)
@@ -113,12 +121,20 @@ export class ContentSupabaseService {
   }
 
   async findMovieById(id: string) {
+    // Include content_languages to check if video is uploaded
     const { data: movie, error } = await this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('id', id)
@@ -194,12 +210,20 @@ export class ContentSupabaseService {
     }
 
     // Step 2: Build the main query with optional ID filter
+    // Include content_languages to check if video is uploaded
     let query = this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `, { count: 'exact' })
       .eq('status', ContentStatus.PUBLISHED)
@@ -271,12 +295,20 @@ export class ContentSupabaseService {
   }
 
   async findSeriesById(id: string) {
+    // Include content_languages to check if video is uploaded
     const { data: series, error } = await this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('id', id)

@@ -61,8 +61,10 @@ const MovieCard = memo(function MovieCard({
     const effectiveAvailability = getEffectiveAvailability(movie);
 
     console.log('[MovieCard] Effective availability:', effectiveAvailability, {
-      hasVideo: !!(movie.video_url || movie.hls_master_url),
+      hasVideoLegacy: !!(movie.video_url || movie.hls_master_url),
+      hasVideoLanguages: movie.content_languages?.some(l => l.video_url || l.hls_master_url),
       hasTelegram: !!movie.telegram_group_link,
+      content_languages: movie.content_languages,
     });
 
     switch (effectiveAvailability) {
