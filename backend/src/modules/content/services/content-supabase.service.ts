@@ -380,13 +380,20 @@ export class ContentSupabaseService {
 
   async searchContent(query: string, page = 1, limit = 20) {
     const offset = (page - 1) * limit;
-    
+
     const { data: content, error, count } = await this.supabaseService.client
       .from('content')
       .select(`
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
@@ -423,6 +430,13 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
@@ -446,6 +460,13 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
@@ -469,6 +490,13 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
@@ -490,6 +518,13 @@ export class ContentSupabaseService {
         *,
         categories:content_categories(
           category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
@@ -539,7 +574,19 @@ export class ContentSupabaseService {
     try {
       const { data, error } = await this.supabaseService.client
         .from('content')
-        .select('*')
+        .select(`
+          *,
+          categories:content_categories(
+            category:categories(*)
+          ),
+          content_languages(
+            id,
+            language_name,
+            video_url,
+            hls_master_url,
+            upload_status
+          )
+        `)
         .eq('status', 'PUBLISHED')
         .eq('is_release', true)
         .order('created_at', { ascending: false })
