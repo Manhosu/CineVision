@@ -312,7 +312,16 @@ export class PurchasesSupabaseService {
 
       const { data: allContent, error: contentError } = await this.supabase
         .from('content')
-        .select('*')
+        .select(`
+          *,
+          content_languages(
+            id,
+            language_name,
+            video_url,
+            hls_master_url,
+            upload_status
+          )
+        `)
         .eq('status', 'PUBLISHED')
         .order('created_at', { ascending: false });
 
@@ -334,6 +343,9 @@ export class PurchasesSupabaseService {
         imdb_rating: content.imdb_rating,
         price_cents: content.price_cents,
         telegram_group_link: content.telegram_group_link,
+        video_url: content.video_url,
+        hls_master_url: content.hls_master_url,
+        content_languages: content.content_languages || [],
         total_seasons: content.total_seasons || content.seasons,
         total_episodes: content.total_episodes || content.episodes,
         genres: Array.isArray(content.genres)
@@ -354,7 +366,16 @@ export class PurchasesSupabaseService {
       .from('purchases')
       .select(`
         *,
-        content(*)
+        content(
+          *,
+          content_languages(
+            id,
+            language_name,
+            video_url,
+            hls_master_url,
+            upload_status
+          )
+        )
       `)
       .eq('user_id', userId)
       .in('status', [PurchaseStatus.PAID, PurchaseStatus.COMPLETED])
@@ -393,6 +414,9 @@ export class PurchasesSupabaseService {
           imdb_rating: purchase.content.imdb_rating,
           price_cents: purchase.content.price_cents,
           telegram_group_link: purchase.content.telegram_group_link, // Add telegram group link for viewing options modal
+          video_url: purchase.content.video_url, // Legacy video URL
+          hls_master_url: purchase.content.hls_master_url, // Legacy HLS URL
+          content_languages: purchase.content.content_languages || [], // Language-based videos
           total_seasons: purchase.content.total_seasons || purchase.content.seasons, // Add season count for series
           total_episodes: purchase.content.total_episodes || purchase.content.episodes, // Add episode count for series
           genres: Array.isArray(purchase.content.genres)
