@@ -47,10 +47,18 @@ export function getEffectiveAvailability(movie: Movie): 'SITE' | 'TELEGRAM' | 'B
 
   // Also check content_languages for uploaded videos (new system)
   if (!hasVideo && movie.content_languages && movie.content_languages.length > 0) {
-    // Check if any language has a completed video upload
-    hasVideo = movie.content_languages.some(
-      lang => (lang.video_url || lang.hls_master_url) && lang.upload_status === 'completed'
-    );
+    // Check if any language has a video URL
+    // Accept if video_url or hls_master_url exists AND upload_status is NOT failed/pending/processing
+    hasVideo = movie.content_languages.some(lang => {
+      const hasVideoUrl = !!(lang.video_url || lang.hls_master_url);
+      if (!hasVideoUrl) return false;
+
+      // If there's a video URL, check upload_status
+      // Accept: completed, COMPLETED, null, undefined, or empty string (assume ready if URL exists)
+      const status = lang.upload_status?.toLowerCase();
+      const isNotReady = status === 'failed' || status === 'pending' || status === 'processing';
+      return !isNotReady;
+    });
   }
 
   const hasTelegram = !!movie.telegram_group_link;
