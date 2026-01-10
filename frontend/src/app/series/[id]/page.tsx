@@ -8,6 +8,7 @@ import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
 import { ArrowLeftIcon, PlayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
+import { Movie, getEffectiveAvailability } from '@/types/movie';
 
 interface Episode {
   id: string;
@@ -528,6 +529,7 @@ export default function SeriesDetailsPage() {
           movieTitle={`${series.title}${selectedEpisodeToWatch ? ` - T${selectedEpisodeToWatch.season_number}E${selectedEpisodeToWatch.episode_number}` : ''}`}
           telegramGroupLink={series.telegram_group_link || ''}
           onChooseSite={handleChooseSite}
+          availability={getEffectiveAvailability(series as unknown as Movie)}
         />
       )}
     </main>
