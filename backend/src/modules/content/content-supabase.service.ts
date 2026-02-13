@@ -19,8 +19,100 @@ export class ContentSupabaseService {
 
   constructor(private readonly supabaseClient: SupabaseRestClient) {}
 
+  /**
+   * Busca inteligente usando funcao PostgreSQL com fuzzy search, unaccent e full-text search.
+   * Requer que a migracao 003-smart-search.sql tenha sido executada no banco.
+   */
+  async searchContent(
+    search: string,
+    contentType?: string,
+    page = 1,
+    limit = 20,
+    sort = 'relevance'
+  ) {
+    try {
+      this.logger.log(`Smart search: query="${search}", type=${contentType}, page=${page}`);
+
+      if (!search || !search.trim()) {
+        return {
+          movies: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+          },
+        };
+      }
+
+      const offset = (page - 1) * limit;
+
+      // Call the PostgreSQL search function via RPC
+      const results = await this.supabaseClient.rpc('search_content', {
+        search_query: search.trim(),
+        content_type_filter: contentType || null,
+        result_limit: limit,
+        result_offset: offset,
+      });
+
+      // Get total count for pagination
+      const totalCount = await this.supabaseClient.rpc('search_content_count', {
+        search_query: search.trim(),
+        content_type_filter: contentType || null,
+      });
+
+      let sortedResults = Array.isArray(results) ? results : [];
+
+      // Apply secondary sort if not using relevance
+      if (sort !== 'relevance' && sort !== 'created_at') {
+        switch (sort) {
+          case 'newest':
+            sortedResults.sort((a: any, b: any) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+            break;
+          case 'popular':
+            sortedResults.sort((a: any, b: any) => (b.views_count || 0) - (a.views_count || 0));
+            break;
+          case 'rating':
+            sortedResults.sort((a: any, b: any) => (b.imdb_rating || 0) - (a.imdb_rating || 0));
+            break;
+        }
+      }
+
+      const total = typeof totalCount === 'number' ? totalCount : (Array.isArray(totalCount) ? totalCount.length : 0);
+
+      return {
+        movies: sortedResults,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Error in smart search:', error);
+      // Fallback to basic ILIKE search if RPC fails (e.g., function not yet created)
+      this.logger.warn('Falling back to basic ILIKE search');
+      return this.findAllMoviesBasic(page, limit, undefined, 'created_at', search);
+    }
+  }
+
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
-    console.log(`🔍 [SEARCH DEBUG] Finding movies with search="${search}"`);
+    // Use smart search when searching without genre filter
+    if (search && search.trim() && !genre) {
+      return this.searchContent(search, ContentType.MOVIE, page, limit, sort === 'created_at' ? 'relevance' : sort);
+    }
+
+    return this.findAllMoviesBasic(page, limit, genre, sort, search);
+  }
+
+  private async findAllMoviesBasic(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
     try {
       this.logger.log(`Finding movies: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
 
@@ -144,6 +236,15 @@ export class ContentSupabaseService {
   }
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
+    // Use smart search when searching without genre filter
+    if (search && search.trim() && !genre) {
+      return this.searchContent(search, ContentType.SERIES, page, limit, sort === 'created_at' ? 'relevance' : sort);
+    }
+
+    return this.findAllSeriesBasic(page, limit, genre, sort, search);
+  }
+
+  private async findAllSeriesBasic(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
     try {
       this.logger.debug(`Finding series: page=${page}, limit=${limit}, genre=${genre}, sort=${sort}, search=${search}`);
 

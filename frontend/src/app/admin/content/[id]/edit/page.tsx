@@ -3,11 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { ContentLanguageManager } from '@/components/ContentLanguageManager';
-import { EpisodeManager } from '@/components/EpisodeManager';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
-import { useUpload } from '@/contexts/UploadContext';
-import { Film, Upload, Save, X, Image as ImageIcon } from 'lucide-react';
+import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
 
 interface Content {
   id: string;
@@ -62,8 +59,6 @@ export default function AdminContentEditPage() {
   const router = useRouter();
   const params = useParams();
   const contentId = params?.id as string;
-  const { pendingUploads, addPendingUpload } = useUpload();
-
   const posterInputRef = useRef<HTMLInputElement>(null);
   const backdropInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +66,6 @@ export default function AdminContentEditPage() {
   const [originalContent, setOriginalContent] = useState<Content | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'languages' | 'episodes'>('details');
-
-  // Track pending language uploads from ContentLanguageManager
-  const [pendingLanguageUploads, setPendingLanguageUploads] = useState<Array<{ languageId: string; file: File; languageName: string }>>([]);
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -274,54 +265,7 @@ export default function AdminContentEditPage() {
 
       if (response.ok) {
         toast.success('Conteúdo atualizado com sucesso!');
-
-        // Check if there are pending episode uploads
-        const contentPendingUploads = pendingUploads.filter(u => u.contentId === contentId);
-
-        // Check if there are pending language uploads
-        const hasPendingLanguageUploads = pendingLanguageUploads.length > 0;
-
-        if (contentPendingUploads.length > 0 || hasPendingLanguageUploads) {
-          // Add pending language uploads to context
-          if (hasPendingLanguageUploads) {
-            toast.success(`Adicionando ${pendingLanguageUploads.length} upload(s) de vídeo à fila...`);
-
-            // Add each pending language upload to context
-            for (const pendingUpload of pendingLanguageUploads) {
-              console.log('[EditPage] Adding pending language upload:', {
-                languageId: pendingUpload.languageId,
-                hasFile: !!pendingUpload.file,
-                fileName: pendingUpload.file?.name,
-                fileSize: pendingUpload.file?.size,
-                languageName: pendingUpload.languageName
-              });
-
-              addPendingUpload({
-                id: `pending-language-${pendingUpload.languageId}`,
-                file: pendingUpload.file,
-                languageId: pendingUpload.languageId,
-                languageName: pendingUpload.languageName,
-                contentTitle: `${content?.title} - ${pendingUpload.languageName}`,
-                contentId,
-                type: 'language',
-              });
-            }
-
-            // Clear local pending language uploads
-            setPendingLanguageUploads([]);
-          }
-
-          if (contentPendingUploads.length > 0) {
-            toast.success(`${contentPendingUploads.length} upload(s) de episódio pendente(s)`);
-          }
-
-          // Redirect to manage page where useStartPendingUploads hook will start uploads
-          toast.success('Redirecionando para gerenciamento. Os uploads serão iniciados automaticamente.');
-          router.push('/admin/content/manage');
-        } else {
-          // No pending uploads, just reload
-          await loadContent();
-        }
+        await loadContent();
       } else {
         const error = await response.json();
         toast.error(`Erro ao atualizar: ${error.message || 'Erro desconhecido'}`);
@@ -336,13 +280,6 @@ export default function AdminContentEditPage() {
 
   const hasChanges = () => {
     if (!originalContent) return false;
-
-    // Check if there are pending uploads for this content
-    const hasPendingUploads = pendingUploads.some(upload => upload.contentId === contentId);
-    if (hasPendingUploads) return true;
-
-    // Check if there are pending language uploads
-    if (pendingLanguageUploads.length > 0) return true;
 
     // Compare arrays
     const originalGenres = originalContent.genres
@@ -441,57 +378,19 @@ export default function AdminContentEditPage() {
             </button>
           </div>
 
-          {/* Tabs */}
+          {/* Tab Header */}
           <div className="flex border-b border-white/10">
-            <button
-              onClick={() => setActiveTab('details')}
-              className={`px-6 py-3 font-medium transition-colors ${
-                activeTab === 'details'
-                  ? 'text-primary-400 border-b-2 border-primary-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
+            <div className="px-6 py-3 font-medium text-primary-400 border-b-2 border-primary-400">
               <div className="flex items-center gap-2">
                 <Film className="w-4 h-4" />
                 Detalhes do Conteúdo
               </div>
-            </button>
-            {content.content_type === 'movie' && (
-              <button
-                onClick={() => setActiveTab('languages')}
-                className={`px-6 py-3 font-medium transition-colors ${
-                  activeTab === 'languages'
-                    ? 'text-primary-400 border-b-2 border-primary-400'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Upload className="w-4 h-4" />
-                  Idiomas e Vídeos
-                </div>
-              </button>
-            )}
-            {content.content_type === 'series' && (
-              <button
-                onClick={() => setActiveTab('episodes')}
-                className={`px-6 py-3 font-medium transition-colors ${
-                  activeTab === 'episodes'
-                    ? 'text-primary-400 border-b-2 border-primary-400'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Film className="w-4 h-4" />
-                  Episódios
-                </div>
-              </button>
-            )}
+            </div>
           </div>
         </div>
 
         {/* Content */}
         <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6">
-          {activeTab === 'details' && (
             <div className="space-y-6">
               <h2 className="text-xl font-semibold mb-6">Informações Básicas</h2>
 
@@ -604,13 +503,16 @@ export default function AdminContentEditPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">Link do Grupo Telegram</label>
+                  <label className="block text-sm font-medium mb-2">Link do Grupo Telegram *</label>
                   <input
                     type="url"
                     value={telegramGroupLink}
                     onChange={(e) => setTelegramGroupLink(e.target.value)}
-                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                    className={`w-full px-4 py-2 bg-dark-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 ${
+                      !telegramGroupLink.trim() ? 'border-red-500/50' : 'border-white/10'
+                    }`}
                     placeholder="https://t.me/..."
+                    required
                   />
                 </div>
               </div>
@@ -798,34 +700,6 @@ export default function AdminContentEditPage() {
                 </label>
               </div>
             </div>
-          )}
-
-          {activeTab === 'languages' && content.content_type === 'movie' && (
-            <div>
-              <ContentLanguageManager
-                contentId={contentId}
-                onLanguagesChange={(languages) => {
-                  console.log('Idiomas atualizados:', languages);
-                }}
-                onPendingUploads={(uploads) => {
-                  console.log('Pending uploads updated:', uploads);
-                  setPendingLanguageUploads(uploads);
-                }}
-              />
-            </div>
-          )}
-
-          {activeTab === 'episodes' && content.content_type === 'series' && (
-            <div>
-              <EpisodeManager
-                seriesId={contentId}
-                totalSeasons={content.total_seasons || 1}
-                onEpisodesChange={(episodes) => {
-                  console.log('Episódios atualizados:', episodes);
-                }}
-              />
-            </div>
-          )}
         </div>
       </div>
     </div>

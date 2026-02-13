@@ -22,7 +22,7 @@ interface Movie {
   genres?: string[];
   featured?: boolean;
   status: string;
-  availability?: 'SITE' | 'TELEGRAM' | 'BOTH';
+  availability?: string;
   price?: number; // Para compatibilidade com HeroBanner
   vote_average?: number; // Para compatibilidade com HeroBanner
   runtime?: number; // Para compatibilidade com HeroBanner

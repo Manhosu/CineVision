@@ -38,33 +38,10 @@ export interface Movie {
 }
 
 /**
- * Helper function to determine effective availability based on video and telegram fields
- * Checks both legacy video_url fields AND content_languages for uploaded videos
+ * Helper function to determine effective availability based on telegram fields.
+ * Content delivery is now exclusively via Telegram.
  */
-export function getEffectiveAvailability(movie: Movie): 'SITE' | 'TELEGRAM' | 'BOTH' | 'UNAVAILABLE' {
-  // Check legacy video fields on content table
-  let hasVideo = !!(movie.video_url || movie.hls_master_url);
-
-  // Also check content_languages for uploaded videos (new system)
-  if (!hasVideo && movie.content_languages && movie.content_languages.length > 0) {
-    // Check if any language has a video URL
-    // Accept if video_url or hls_master_url exists AND upload_status is NOT failed/pending/processing
-    hasVideo = movie.content_languages.some(lang => {
-      const hasVideoUrl = !!(lang.video_url || lang.hls_master_url);
-      if (!hasVideoUrl) return false;
-
-      // If there's a video URL, check upload_status
-      // Accept: completed, COMPLETED, null, undefined, or empty string (assume ready if URL exists)
-      const status = lang.upload_status?.toLowerCase();
-      const isNotReady = status === 'failed' || status === 'pending' || status === 'processing';
-      return !isNotReady;
-    });
-  }
-
+export function getEffectiveAvailability(movie: Movie): 'TELEGRAM' | 'UNAVAILABLE' {
   const hasTelegram = !!movie.telegram_group_link;
-
-  if (hasVideo && hasTelegram) return 'BOTH';
-  if (hasVideo && !hasTelegram) return 'SITE';
-  if (!hasVideo && hasTelegram) return 'TELEGRAM';
-  return 'UNAVAILABLE';
+  return hasTelegram ? 'TELEGRAM' : 'UNAVAILABLE';
 }

@@ -12,9 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
-import { Movie, getEffectiveAvailability } from '@/types/movie';
-import { LanguageSelector } from '@/components/LanguageSelector/LanguageSelector';
-import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
+import { Movie } from '@/types/movie';
 
 interface Top10MovieCardProps {
   movie: Movie;
@@ -35,8 +33,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const [isHovered, setIsHovered] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
-  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
-  const [showViewingOptions, setShowViewingOptions] = useState(false);
 
   // Debug log
   if (isPurchased) {
@@ -54,51 +50,15 @@ const Top10MovieCard = memo(function Top10MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
-    // Auto-detect availability based on video and telegram fields
-    const effectiveAvailability = getEffectiveAvailability(movie);
-
-    console.log('[Top10MovieCard] Effective availability:', effectiveAvailability, {
-      hasVideoLegacy: !!(movie.video_url || movie.hls_master_url),
-      hasVideoLanguages: movie.content_languages?.some(l => l.video_url || l.hls_master_url),
-      hasTelegram: !!movie.telegram_group_link,
-      content_languages: movie.content_languages,
-    });
-
-    // Always show modal with available options (except when unavailable)
-    if (effectiveAvailability === 'UNAVAILABLE') {
+    if (!movie.telegram_group_link) {
       toast.error('Conteudo indisponivel no momento', {
         duration: 3000,
       });
       return;
     }
 
-    // Show modal - it will display only the available options
-    setShowViewingOptions(true);
-  };
-
-  const proceedToWatch = async () => {
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content-language-upload/public/languages/${movie.id}`
-      );
-
-      if (response.ok) {
-        const languages = await response.json();
-
-        if (languages.length === 0) {
-          router.push(`/watch/${movie.id}`);
-        } else if (languages.length === 1) {
-          router.push(`/watch/${movie.id}?lang=${languages[0].id}`);
-        } else {
-          setShowLanguageSelector(true);
-        }
-      } else {
-        router.push(`/watch/${movie.id}`);
-      }
-    } catch (error) {
-      console.error('Error fetching languages:', error);
-      router.push(`/watch/${movie.id}`);
-    }
+    // Open Telegram group link directly
+    window.open(movie.telegram_group_link, '_blank');
   };
 
   const handlePurchase = (e: React.MouseEvent) => {
@@ -248,30 +208,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
         </div>
       </div>
 
-      {/* Language Selector Modal */}
-      {isPurchased && (
-        <LanguageSelector
-          isOpen={showLanguageSelector}
-          onClose={() => setShowLanguageSelector(false)}
-          contentId={movie.id}
-          movieTitle={movie.title}
-        />
-      )}
-
-      {/* Viewing Options Modal (Site or Telegram) */}
-      {isPurchased && (
-        <ViewingOptionsModal
-          isOpen={showViewingOptions}
-          onClose={() => setShowViewingOptions(false)}
-          movieTitle={movie.title}
-          telegramGroupLink={movie.telegram_group_link || ''}
-          onChooseSite={() => {
-            setShowViewingOptions(false);
-            proceedToWatch();
-          }}
-          availability={getEffectiveAvailability(movie) === 'UNAVAILABLE' ? 'BOTH' : getEffectiveAvailability(movie)}
-        />
-      )}
     </div>
   );
 });

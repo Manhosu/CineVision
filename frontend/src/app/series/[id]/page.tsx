@@ -5,10 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import LazyImage from '@/components/ui/LazyImage';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
-import { ViewingOptionsModal } from '@/components/ViewingOptionsModal/ViewingOptionsModal';
 import { ArrowLeftIcon, PlayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import { Movie, getEffectiveAvailability } from '@/types/movie';
 
 interface Episode {
   id: string;
@@ -56,8 +54,6 @@ export default function SeriesDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isOwned, setIsOwned] = useState<boolean>(false);
   const [checkingOwnership, setCheckingOwnership] = useState(true);
-  const [showViewingOptions, setShowViewingOptions] = useState(false);
-  const [selectedEpisodeToWatch, setSelectedEpisodeToWatch] = useState<Episode | null>(null);
 
   // Helper function to normalize string or array fields
   const normalizeToArray = (value: string | string[] | undefined): string[] => {
@@ -156,26 +152,24 @@ export default function SeriesDetailsPage() {
   }, [seriesId, router]);
 
   const handleEpisodePlay = (episode: Episode) => {
-    // Verificar se o usuário possui a série antes de permitir assistir
+    // Verificar se o usuario possui a serie antes de permitir assistir
     if (!isOwned) {
-      toast.error('Você precisa comprar a série para assistir os episódios', {
+      toast.error('Voce precisa comprar a serie para assistir os episodios', {
         duration: 4000,
         icon: '🔒'
       });
       return;
     }
 
-    // Armazenar episódio selecionado e abrir modal de escolha
-    setSelectedEpisodeToWatch(episode);
-    setShowViewingOptions(true);
-  };
-
-  const handleChooseSite = () => {
-    // Fechar modal e redirecionar para o player do site
-    setShowViewingOptions(false);
-    if (selectedEpisodeToWatch) {
-      router.push(`/watch/${seriesId}?episode=${selectedEpisodeToWatch.id}&season=${selectedEpisodeToWatch.season_number}&ep=${selectedEpisodeToWatch.episode_number}`);
+    if (!series?.telegram_group_link) {
+      toast.error('Conteudo indisponivel no momento', {
+        duration: 3000,
+      });
+      return;
     }
+
+    // Open Telegram group link directly
+    window.open(series.telegram_group_link, '_blank');
   };
 
   const handlePurchase = () => {
@@ -521,17 +515,6 @@ export default function SeriesDetailsPage() {
         </div>
       </div>
 
-      {/* Modal de escolha de visualização */}
-      {series && (
-        <ViewingOptionsModal
-          isOpen={showViewingOptions}
-          onClose={() => setShowViewingOptions(false)}
-          movieTitle={`${series.title}${selectedEpisodeToWatch ? ` - T${selectedEpisodeToWatch.season_number}E${selectedEpisodeToWatch.episode_number}` : ''}`}
-          telegramGroupLink={series.telegram_group_link || ''}
-          onChooseSite={handleChooseSite}
-          availability={getEffectiveAvailability(series as unknown as Movie)}
-        />
-      )}
     </main>
   );
 }

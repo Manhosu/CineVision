@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Film,
@@ -12,8 +12,6 @@ import {
   Upload,
   Pencil
 } from 'lucide-react';
-import { useUpload } from '@/contexts/UploadContext';
-import { useStartPendingUploads } from '@/hooks/useStartPendingUploads';
 
 interface Content {
   id: string;
@@ -28,11 +26,7 @@ interface Content {
 
 export default function ContentManagePage() {
   const router = useRouter();
-  const { addTask, updateTask, tasks } = useUpload();
 
-  // Auto-start pending uploads when page loads
-  useStartPendingUploads();
-  const cancelFlagsRef = useRef<Map<string, boolean>>(new Map());
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,30 +37,6 @@ export default function ContentManagePage() {
   useEffect(() => {
     fetchContents();
   }, []);
-
-  // Sync cancel flags from tasks
-  useEffect(() => {
-    tasks.forEach(task => {
-      if (task.cancelRequested) {
-        cancelFlagsRef.current.set(task.id, true);
-      }
-    });
-  }, [tasks]);
-
-  // Reload contents when episode uploads are completed
-  useEffect(() => {
-    const episodeTasks = tasks.filter(t => t.type === 'episode');
-    const allCompleted = episodeTasks.length > 0 &&
-                         episodeTasks.every(t => t.status === 'ready' || t.status === 'completed');
-
-    if (allCompleted) {
-      console.log('[ContentManage] All episode uploads completed, reloading content list...');
-      // Wait 2 seconds to ensure backend has updated the counts
-      setTimeout(() => {
-        fetchContents();
-      }, 2000);
-    }
-  }, [tasks]);
 
   const fetchContents = async () => {
     try {
@@ -206,7 +176,7 @@ export default function ContentManagePage() {
               Gerenciar Conteúdos
             </h1>
             <p className="text-gray-400 mt-2">
-              Gerencie filmes, séries e seus áudios/legendas
+              Gerencie filmes e séries do catálogo
             </p>
           </div>
         </div>
@@ -358,7 +328,6 @@ export default function ContentManagePage() {
               </p>
               <ul className="list-disc list-inside text-sm text-gray-400 mb-6 space-y-1">
                 <li>O conteúdo do banco de dados</li>
-                <li>Todos os arquivos de vídeo do S3</li>
                 <li>Todos os episódios (se for série)</li>
                 <li>Imagens (poster, backdrop)</li>
               </ul>

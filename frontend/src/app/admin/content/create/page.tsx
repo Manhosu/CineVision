@@ -1,12 +1,9 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { SimultaneousVideoUpload, SimultaneousVideoUploadRef } from '@/components/SimultaneousVideoUpload';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
-import { supabase } from '@/lib/supabase';
-import { useUpload } from '@/contexts/UploadContext';
 
 interface ContentFormData {
   title: string;
@@ -67,22 +64,14 @@ interface Episode {
   description: string;
   duration_minutes: number;
   thumbnail_url?: string;
-  video_file?: File;
   thumbnail_file?: File;
-  uploading?: boolean;
-  uploaded?: boolean;
-  uploadProgress?: number;
-  error?: string;
 }
 
 export default function AdminContentCreatePage() {
   const router = useRouter();
-  const videoUploadRef = useRef<SimultaneousVideoUploadRef>(null);
-  const { addTask, updateTask, addPendingUpload } = useUpload(); // Global upload context
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContentId, setCreatedContentId] = useState<string | null>(null);
-  const [showLanguageManager, setShowLanguageManager] = useState(false);
   const [formData, setFormData] = useState<ContentFormData>({
     title: '',
     description: '',
@@ -148,6 +137,12 @@ export default function AdminContentCreatePage() {
       return;
     }
 
+    // Validar link do Telegram (obrigatório)
+    if (!formData.telegram_group_link || !formData.telegram_group_link.trim()) {
+      toast.error('O link do grupo do Telegram é obrigatório.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -159,10 +154,10 @@ export default function AdminContentCreatePage() {
         poster_url: formData.poster_url,
         backdrop_url: formData.backdrop_url || undefined,
         trailer_url: formData.trailer_url || undefined,
-        telegram_group_link: formData.telegram_group_link || undefined,
-        content_type: formData.content_type, // Manter content_type
-        type: formData.content_type, // Também enviar type para compatibilidade
-        availability: 'site', // Padrão
+        telegram_group_link: formData.telegram_group_link,
+        content_type: formData.content_type,
+        type: formData.content_type,
+        availability: 'telegram',
         price_cents: formData.price_cents,
         currency: 'BRL',
         is_featured: formData.is_featured,
@@ -170,9 +165,9 @@ export default function AdminContentCreatePage() {
         genres: formData.genres.length > 0 ? formData.genres : undefined,
         director: formData.director || undefined,
         cast: formData.cast || undefined,
-        release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined, // release_date → release_year
+        release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
-        imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined, // rating → imdb_rating
+        imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
       };
 
       // Adicionar informações de série se aplicável
@@ -203,8 +198,9 @@ export default function AdminContentCreatePage() {
       if (formData.content_type === 'series') {
         setShowEpisodeManager(true);
       } else {
-        // Para filmes, mostrar gerenciador de vídeos/idiomas
-        setShowLanguageManager(true);
+        // Para filmes, redirecionar para gerenciamento
+        toast.success('Filme criado! Redirecionando...');
+        router.push('/admin/content/manage');
       }
     } catch (error: any) {
       console.error('Error creating content:', error);
@@ -361,92 +357,9 @@ export default function AdminContentCreatePage() {
     toast.success('Episódio removido');
   };
 
-  /**
-   * Poll episode processing status after upload completes
-   */
-  const pollProcessingStatus = async (taskId: string, episodeId: string) => {
-    const maxAttempts = 60; // 5 minutes max (60 * 5 seconds)
-    let attempts = 0;
-
-    const poll = async () => {
-      try {
-        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-        if (!token) {
-          console.error('[pollProcessingStatus] No auth token found');
-          return;
-        }
-
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/episodes/${episodeId}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('[pollProcessingStatus] Failed to fetch episode status');
-          return;
-        }
-
-        const episodeData = await response.json();
-        const processingStatus = episodeData.data?.processing_status || episodeData.processing_status;
-
-        console.log(`[pollProcessingStatus] Episode ${episodeId} status:`, processingStatus);
-
-        // Update task with processing status
-        updateTask(taskId, { processingStatus });
-
-        if (processingStatus === 'ready') {
-          // Processing complete
-          updateTask(taskId, {
-            status: 'ready',
-            processingStatus: 'ready',
-            completedAt: Date.now(),
-          });
-          toast.success('Processamento concluído! Episódio pronto para assistir.');
-          return;
-        } else if (processingStatus === 'failed') {
-          // Processing failed
-          updateTask(taskId, {
-            status: 'error',
-            processingStatus: 'failed',
-            error: 'Falha no processamento do vídeo',
-          });
-          toast.error('Erro no processamento do vídeo');
-          return;
-        }
-
-        // Continue polling if still processing
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 5000); // Poll every 5 seconds
-        } else {
-          // Timeout
-          console.log('[pollProcessingStatus] Polling timeout reached');
-          updateTask(taskId, {
-            processingStatus: 'processing',
-            completedAt: Date.now(),
-          });
-        }
-      } catch (error) {
-        console.error('[pollProcessingStatus] Error:', error);
-        attempts++;
-        if (attempts < maxAttempts) {
-          setTimeout(poll, 5000);
-        }
-      }
-    };
-
-    // Start polling after 5 seconds (give backend time to start processing)
-    setTimeout(poll, 5000);
-  };
-
-  const uploadEpisode = async (episode: Episode) => {
-    if (!episode.video_file) {
-      toast.error('Por favor, selecione um arquivo de vídeo para o episódio');
+  const finalizeSeries = async () => {
+    if (episodes.length === 0) {
+      toast.error('Por favor, adicione pelo menos um episódio antes de finalizar');
       return;
     }
 
@@ -455,386 +368,51 @@ export default function AdminContentCreatePage() {
       return;
     }
 
-    // Create global upload task that persists across page navigation
-    const taskId = `episode-${createdContentId}-s${episode.season_number}e${episode.episode_number}-${Date.now()}`;
-
-    console.log('[uploadEpisode] Creating task:', {
-      taskId,
-      type: 'episode',
-      fileName: episode.video_file.name,
-      contentTitle: episode.title,
-      seasonNumber: episode.season_number,
-      episodeNumber: episode.episode_number,
-    });
-
-    addTask({
-      id: taskId,
-      type: 'episode',
-      fileName: episode.video_file.name,
-      contentTitle: episode.title,
-      progress: 0,
-      status: 'uploading',
-      seasonNumber: episode.season_number,
-      episodeNumber: episode.episode_number,
-    });
-
-    console.log('[uploadEpisode] Task created successfully');
-
     try {
-      // Marcar como uploading
-      setEpisodes(prev => prev.map(ep =>
-        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
-          ? { ...ep, uploading: true, error: undefined }
-          : ep
-      ));
+      toast.success(`Criando ${episodes.length} episódio(s)...`);
 
-      // 1. Upload thumbnail se houver
-      let thumbnailUrl = episode.thumbnail_url;
-      if (episode.thumbnail_file) {
-        const thumbResult = await uploadImageToSupabase(
-          episode.thumbnail_file,
-          'cinevision-capas',
-          `episodes/s${episode.season_number}e${episode.episode_number}`
-        );
-        if (thumbResult.error) throw new Error(thumbResult.error);
-        thumbnailUrl = thumbResult.publicUrl;
-      }
-
-      // 2. Criar episódio no backend
-      const episodeData = {
-        series_id: createdContentId,
-        season_number: episode.season_number,
-        episode_number: episode.episode_number,
-        title: episode.title,
-        description: episode.description,
-        duration_minutes: episode.duration_minutes,
-        thumbnail_url: thumbnailUrl,
-      };
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(episodeData),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erro ao criar episódio');
-      }
-
-      const createdEpisode = await response.json();
-      const episodeId = createdEpisode.data?.id || createdEpisode.id;
-
-      // 3. Upload do vídeo do episódio usando multipart upload S3
-      const videoFile = episode.video_file;
-
-      // Get auth token
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado');
-      }
-
-      // Detect content type
-      const getContentType = (file: File): string => {
-        if (file.type && file.type.startsWith('video/')) {
-          return file.type;
-        }
-        const extension = file.name.split('.').pop()?.toLowerCase();
-        switch (extension) {
-          case 'mp4': return 'video/mp4';
-          case 'mov': return 'video/quicktime';
-          default: return 'video/mp4';
-        }
-      };
-
-      const contentType = getContentType(videoFile);
-
-      // 3.1. Initiate multipart upload
-      const initResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/init`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            episodeId: episodeId,
-            filename: videoFile.name,
-            contentType: contentType,
-            size: videoFile.size,
-          }),
-        }
-      );
-
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json().catch(() => ({ message: 'Erro ao iniciar upload' }));
-        throw new Error(errorData.message || 'Erro ao iniciar upload');
-      }
-
-      const { uploadId, key, partSize, partsCount, presignedUrls } = await initResponse.json();
-      const uploadedParts: { ETag: string; PartNumber: number }[] = [];
-
-      // 3.2. Upload parts to S3
-      for (let i = 0; i < presignedUrls.length; i++) {
-        const { partNumber, url: presignedUrl } = presignedUrls[i];
-        const start = (partNumber - 1) * partSize;
-        const end = Math.min(start + partSize, videoFile.size);
-        const chunk = videoFile.slice(start, end);
-
-        const partResponse = await fetch(presignedUrl, {
-          method: 'PUT',
-          body: chunk,
-        });
-
-        if (!partResponse.ok) {
-          throw new Error(`Erro ao fazer upload da parte ${partNumber}`);
+      // Criar todos os episódios no backend
+      for (const episode of episodes) {
+        let thumbnailUrl = episode.thumbnail_url;
+        if (episode.thumbnail_file) {
+          const thumbResult = await uploadImageToSupabase(
+            episode.thumbnail_file,
+            'cinevision-capas',
+            `episodes/s${episode.season_number}e${episode.episode_number}`
+          );
+          if (thumbResult.error) throw new Error(thumbResult.error);
+          thumbnailUrl = thumbResult.publicUrl;
         }
 
-        const etag = partResponse.headers.get('ETag');
-        if (!etag) {
-          throw new Error(`ETag não retornado para parte ${partNumber}`);
-        }
+        const episodeData = {
+          series_id: createdContentId,
+          season_number: episode.season_number,
+          episode_number: episode.episode_number,
+          title: episode.title,
+          description: episode.description,
+          duration_minutes: episode.duration_minutes,
+          thumbnail_url: thumbnailUrl,
+        };
 
-        uploadedParts.push({ ETag: etag.replace(/"/g, ''), PartNumber: partNumber });
-
-        // Update progress (both local and global)
-        const progress = Math.round(((i + 1) / partsCount) * 100);
-        setEpisodes(prev => prev.map(ep =>
-          ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
-            ? { ...ep, uploadProgress: progress }
-            : ep
-        ));
-
-        // Update global task progress
-        updateTask(taskId, { progress });
-      }
-
-      // 3.3. Complete multipart upload
-      const completeResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/uploads/complete`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            uploadId,
-            key,
-            parts: uploadedParts,
-            episodeId: episodeId,
-          }),
-        }
-      );
-
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.json().catch(() => ({ message: 'Erro ao finalizar upload' }));
-        throw new Error(errorData.message || 'Erro ao finalizar upload');
-      }
-
-      setEpisodes(prev => prev.map(ep =>
-        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
-          ? { ...ep, id: episodeId, uploading: false, uploaded: true }
-          : ep
-      ));
-
-      // Mark upload as completed, now start monitoring processing
-      updateTask(taskId, {
-        status: 'completed',
-        progress: 100,
-        processingStatus: 'pending',
-        episodeId: episodeId,
-      });
-
-      toast.success(`Episódio S${episode.season_number}E${episode.episode_number} enviado - aguardando processamento...`);
-
-      // Start polling for processing status
-      pollProcessingStatus(taskId, episodeId);
-    } catch (error: any) {
-      console.error('Error uploading episode:', error);
-      setEpisodes(prev => prev.map(ep =>
-        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
-          ? { ...ep, uploading: false, error: error.message }
-          : ep
-      ));
-
-      // Mark global task as error
-      updateTask(taskId, { status: 'error', error: error.message });
-
-      toast.error(error.message || 'Erro ao fazer upload do episódio');
-    }
-  };
-
-  /**
-   * Upload all episodes that have video files but haven't been uploaded yet
-   */
-  const uploadAllEpisodes = async () => {
-    const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
-
-    if (episodesToUpload.length === 0) {
-      toast.error('Nenhum episódio disponível para upload');
-      return;
-    }
-
-    toast.success(`Iniciando upload de ${episodesToUpload.length} episódio(s) em fila...`);
-
-    // Add all episodes to the upload queue
-    const queueItems = episodesToUpload.map(episode => ({
-      id: `${episode.season_number}-${episode.episode_number}`,
-      execute: () => uploadEpisode(episode),
-      priority: episode.season_number * 1000 + episode.episode_number, // Upload in order
-    }));
-
-    uploadQueue.addBatch(queueItems);
-
-    // Wait for completion
-    await uploadQueue.waitForCompletion();
-
-    const stats = uploadQueue.getStats();
-    if (stats.failed > 0) {
-      toast.error(`${stats.completed} episódio(s) enviado(s), ${stats.failed} falharam`);
-    } else {
-      toast.success(`Todos os ${stats.completed} episódio(s) foram enviados com sucesso!`);
-    }
-  };
-
-  const finalizeSeries = async () => {
-    if (episodes.length === 0) {
-      toast.error('Por favor, adicione pelo menos um episódio antes de finalizar');
-      return;
-    }
-
-    // Verificar se todos os episódios têm arquivos de vídeo selecionados
-    const episodesWithoutFiles = episodes.filter(ep => !ep.video_file);
-    if (episodesWithoutFiles.length > 0) {
-      toast.error(`${episodesWithoutFiles.length} episódio(s) não possuem arquivo de vídeo selecionado`);
-      return;
-    }
-
-    // Iniciar upload de todos os episódios que ainda não foram enviados
-    const episodesToUpload = episodes.filter(ep => ep.video_file && !ep.uploaded && !ep.uploading);
-
-    console.log('[finalizeSeries] Total episodes:', episodes.length);
-    console.log('[finalizeSeries] All episodes:', episodes.map(ep => ({
-      season: ep.season_number,
-      episode: ep.episode_number,
-      title: ep.title,
-      hasVideo: !!ep.video_file,
-      uploaded: ep.uploaded,
-      uploading: ep.uploading
-    })));
-    console.log('[finalizeSeries] Episodes WITHOUT video file:', episodesWithoutFiles.length);
-    console.log('[finalizeSeries] Episodes to upload:', episodesToUpload.length);
-    console.log('[finalizeSeries] Episodes to upload details:', episodesToUpload.map(ep => ({
-      season: ep.season_number,
-      episode: ep.episode_number,
-      title: ep.title
-    })));
-
-    if (episodesToUpload.length > 0) {
-      try {
-        toast.success(`Criando ${episodesToUpload.length} episódio(s) no banco de dados...`);
-
-        // Step 1: Create all episodes in backend first
-        const episodeIds: { [key: string]: string } = {};
-
-        for (const episode of episodesToUpload) {
-          try {
-            // Upload thumbnail if exists
-            let thumbnailUrl = episode.thumbnail_url;
-            if (episode.thumbnail_file) {
-              const thumbResult = await uploadImageToSupabase(
-                episode.thumbnail_file,
-                'cinevision-capas',
-                `episodes/s${episode.season_number}e${episode.episode_number}`
-              );
-              if (thumbResult.error) throw new Error(thumbResult.error);
-              thumbnailUrl = thumbResult.publicUrl;
-            }
-
-            // Create episode in database
-            const episodeData = {
-              series_id: createdContentId,
-              season_number: episode.season_number,
-              episode_number: episode.episode_number,
-              title: episode.title,
-              description: episode.description,
-              duration_minutes: episode.duration_minutes,
-              thumbnail_url: thumbnailUrl,
-            };
-
-            const response = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify(episodeData),
-              }
-            );
-
-            if (!response.ok) {
-              const error = await response.json();
-              throw new Error(error.message || 'Erro ao criar episódio');
-            }
-
-            const createdEpisode = await response.json();
-            const episodeId = createdEpisode.data?.id || createdEpisode.id;
-            const episodeKey = `s${episode.season_number}e${episode.episode_number}`;
-            episodeIds[episodeKey] = episodeId;
-
-            console.log(`[finalizeSeries] Episódio ${episodeKey} criado: ${episodeId}`);
-          } catch (error: any) {
-            console.error(`Error creating episode S${episode.season_number}E${episode.episode_number}:`, error);
-            toast.error(`Erro ao criar episódio S${episode.season_number}E${episode.episode_number}: ${error.message}`);
-            return;
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/series/${createdContentId}/episodes`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(episodeData),
           }
+        );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || `Erro ao criar episódio S${episode.season_number}E${episode.episode_number}`);
         }
-
-        toast.success(`✅ ${Object.keys(episodeIds).length} episódio(s) criado(s). Iniciando uploads...`);
-
-        // Step 2: Add all episode videos as pending uploads
-        for (const episode of episodesToUpload) {
-          const episodeKey = `s${episode.season_number}e${episode.episode_number}`;
-          const episodeId = episodeIds[episodeKey];
-
-          if (!episodeId || !episode.video_file) continue;
-
-          addPendingUpload({
-            id: `episode-${episodeId}-${Date.now()}`,
-            file: episode.video_file,
-            contentId: createdContentId!,
-            episodeId: episodeId,
-            episodeTitle: episode.title,
-            seasonNumber: episode.season_number,
-            episodeNumber: episode.episode_number,
-            type: 'episode',
-          });
-
-          console.log(`[finalizeSeries] Added pending upload for episode ${episodeKey}`);
-        }
-
-        toast.success('✅ Uploads adicionados à fila! (máximo 2 simultâneos)');
-        toast.success('Navegue livremente - os uploads continuam em segundo plano', { duration: 5000 });
-
-        // Navigate to content manage page so user can see upload progress
-        router.push('/admin/content/manage');
-      } catch (error: any) {
-        console.error('Error in finalizeSeries:', error);
-        toast.error(error.message || 'Erro ao finalizar série');
       }
-      return;
-    }
 
-    // Se todos já foram enviados, apenas publicar
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
+      // Publicar a série
+      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+      const publishResponse = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`,
         {
           method: 'PUT',
@@ -845,12 +423,12 @@ export default function AdminContentCreatePage() {
         }
       );
 
-      if (!response.ok) {
+      if (!publishResponse.ok) {
         throw new Error('Erro ao publicar série');
       }
 
-      toast.success('✅ Série publicada com sucesso!');
-      router.push('/admin');
+      toast.success('Série publicada com sucesso!');
+      router.push('/admin/content/manage');
     } catch (error: any) {
       console.error('Error finalizing series:', error);
       toast.error(error.message || 'Erro ao finalizar série');
@@ -876,7 +454,7 @@ export default function AdminContentCreatePage() {
             <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent">
               Criar Novo Conteúdo
             </h1>
-            <p className="text-xl text-gray-400">Adicione um novo filme ou série ao catálogo com uploads simultâneos</p>
+            <p className="text-xl text-gray-400">Adicione um novo filme ou série ao catálogo</p>
           </div>
         </div>
 
@@ -905,8 +483,8 @@ export default function AdminContentCreatePage() {
                     className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
                     required
                   >
-                    <option value="movie">🎬 Filme</option>
-                    <option value="series">📺 Série</option>
+                    <option value="movie">Filme</option>
+                    <option value="series">Série</option>
                   </select>
                 </div>
 
@@ -952,8 +530,8 @@ export default function AdminContentCreatePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <p>
-                        Após criar a série, você poderá fazer upload dos episódios individualmente através do gerenciador de vídeos.
-                        Cada episódio será vinculado à temporada correspondente.
+                        Após criar a série, você poderá adicionar os episódios com título, descrição e duração.
+                        O conteúdo será entregue via Telegram.
                       </p>
                     </div>
                   </div>
@@ -1162,7 +740,7 @@ export default function AdminContentCreatePage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-white">Mídia e Imagens</h2>
+                <h2 className="text-2xl font-bold text-white">Mídia e Links</h2>
               </div>
 
               <div>
@@ -1179,7 +757,7 @@ export default function AdminContentCreatePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Link do Grupo do Telegram (Opcional)
+                  Link do Grupo do Telegram *
                 </label>
                 <input
                   type="text"
@@ -1187,15 +765,18 @@ export default function AdminContentCreatePage() {
                   value={formData.telegram_group_link}
                   onChange={handleChange}
                   placeholder="https://t.me/+AbCdEfGhIjK ou -1001234567890"
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  className={`w-full px-4 py-3 bg-gray-900/50 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 ${
+                    !formData.telegram_group_link.trim() ? 'border-red-500/50' : 'border-gray-600/50'
+                  }`}
+                  required
                 />
                 <p className="mt-2 text-xs text-yellow-400 bg-yellow-900/20 px-3 py-2 rounded-lg border border-yellow-600/30">
-                  ⚠️ <strong>IMPORTANTE:</strong> O bot DEVE estar neste grupo como <strong>administrador</strong> com permissão para <strong>criar links de convite</strong>.
+                  <strong>IMPORTANTE:</strong> O bot DEVE estar neste grupo como <strong>administrador</strong> com permissão para <strong>criar links de convite</strong>.
                   Você pode fornecer o link de convite (https://t.me/+...) ou o Chat ID numérico do grupo (-1001234567890).
                 </p>
                 {formData.telegram_group_link && (
                   <p className="mt-2 text-xs text-blue-400 bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-600/30">
-                    📱 Após a compra, o usuário receberá um link de convite de uso único para entrar neste grupo.
+                    Após a compra, o usuário receberá um link de convite de uso único para entrar neste grupo.
                   </p>
                 )}
               </div>
@@ -1229,7 +810,7 @@ export default function AdminContentCreatePage() {
                   )}
                   {fileUpload.posterFile && (
                     <div className="text-xs text-gray-400 bg-gray-900/30 px-3 py-2 rounded-lg">
-                      📄 {fileUpload.posterFile.name} ({(fileUpload.posterFile.size / 1024 / 1024).toFixed(2)} MB)
+                      {fileUpload.posterFile.name} ({(fileUpload.posterFile.size / 1024 / 1024).toFixed(2)} MB)
                     </div>
                   )}
                 </div>
@@ -1262,7 +843,7 @@ export default function AdminContentCreatePage() {
                   )}
                   {fileUpload.backdropFile && (
                     <div className="text-xs text-gray-400 bg-gray-900/30 px-3 py-2 rounded-lg">
-                      📄 {fileUpload.backdropFile.name} ({(fileUpload.backdropFile.size / 1024 / 1024).toFixed(2)} MB)
+                      {fileUpload.backdropFile.name} ({(fileUpload.backdropFile.size / 1024 / 1024).toFixed(2)} MB)
                     </div>
                   )}
                 </div>
@@ -1325,7 +906,7 @@ export default function AdminContentCreatePage() {
                       className="sr-only peer"
                     />
                     <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-red-600 peer-checked:to-red-700"></div>
-                    <span className="ms-3 text-sm font-medium text-gray-300">⭐ Destacar na página inicial</span>
+                    <span className="ms-3 text-sm font-medium text-gray-300">Destacar na página inicial</span>
                   </label>
 
                   <label className="relative inline-flex items-center cursor-pointer group">
@@ -1337,7 +918,7 @@ export default function AdminContentCreatePage() {
                       className="sr-only peer"
                     />
                     <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-600 peer-checked:to-blue-700"></div>
-                    <span className="ms-3 text-sm font-medium text-gray-300">🆕 Marcar como Lançamento</span>
+                    <span className="ms-3 text-sm font-medium text-gray-300">Marcar como Lançamento</span>
                   </label>
                 </div>
               </div>
@@ -1371,194 +952,12 @@ export default function AdminContentCreatePage() {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  <span>Criar Conteúdo e Adicionar Vídeos</span>
+                  <span>Criar Conteúdo</span>
                 </>
               )}
             </button>
           </div>
         </form>
-
-        {/* Video Upload Section - shown after content creation */}
-        {showLanguageManager && createdContentId && (
-          <div className="mt-8 space-y-6">
-            {/* Success Banner */}
-            <div className="relative bg-gradient-to-br from-green-900/50 via-green-800/30 to-gray-900/50 backdrop-blur-xl rounded-2xl p-8 border-2 border-green-500/50 shadow-2xl overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent"></div>
-
-              <div className="relative z-10 flex items-start space-x-6">
-                <div className="flex-shrink-0">
-                  <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center shadow-lg animate-pulse">
-                    <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="flex-1">
-                  <h2 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
-                    ✅ Conteúdo Criado com Sucesso!
-                  </h2>
-                  <p className="text-xl text-gray-300 mb-4">
-                    Agora adicione os vídeos nas versões <strong className="text-blue-400">Dublado</strong> e <strong className="text-purple-400">Legendado</strong>
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                    <div className="flex items-center space-x-3 bg-blue-900/20 px-4 py-3 rounded-xl border border-blue-500/30">
-                      <svg className="w-5 h-5 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
-                      </svg>
-                      <div>
-                        <p className="text-xs text-gray-400">Formato</p>
-                        <p className="text-sm font-semibold text-white">.mp4 apenas</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3 bg-purple-900/20 px-4 py-3 rounded-xl border border-purple-500/30">
-                      <svg className="w-5 h-5 text-purple-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-                      </svg>
-                      <div>
-                        <p className="text-xs text-gray-400">Tamanho Máx</p>
-                        <p className="text-sm font-semibold text-white">5GB por arquivo</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3 bg-green-900/20 px-4 py-3 rounded-xl border border-green-500/30">
-                      <svg className="w-5 h-5 text-green-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <div>
-                        <p className="text-xs text-gray-400">Upload</p>
-                        <p className="text-sm font-semibold text-white">Simultâneo</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Simultaneous Video Upload Component */}
-            <SimultaneousVideoUpload
-              ref={videoUploadRef}
-              contentId={createdContentId}
-              onUploadComplete={() => {
-                toast.success('Vídeos enviados com sucesso!');
-              }}
-            />
-
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-4">
-              <div className="flex gap-4">
-                <button
-                  onClick={async () => {
-                    console.log('[Finalizar Button] Clicked');
-                    console.log('[Finalizar Button] videoUploadRef.current:', videoUploadRef.current);
-                    console.log('[Finalizar Button] hasFiles():', videoUploadRef.current?.hasFiles());
-
-                    // Publicar conteúdo e notificar usuários
-                    const publishContent = async () => {
-                      try {
-                        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-                        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${createdContentId}/publish`, {
-                          method: 'PUT',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
-                          },
-                        });
-
-                        if (!response.ok) {
-                          console.error('Erro ao publicar conteúdo');
-                          toast.error('Erro ao publicar conteúdo.');
-                        } else {
-                          console.log('✅ Conteúdo publicado e notificações enviadas');
-                          toast.success('✅ Conteúdo publicado e usuários notificados!');
-                        }
-                      } catch (error) {
-                        console.error('Error publishing content:', error);
-                        toast.error('Erro ao publicar conteúdo.');
-                      }
-                    };
-
-                    // Se não há arquivos de vídeo selecionados, apenas publica e redireciona
-                    if (!videoUploadRef.current?.hasFiles()) {
-                      console.log('[Finalizar Button] Nenhum arquivo selecionado, publicando...');
-                      await publishContent();
-                      router.push('/admin');
-                      return;
-                    }
-
-                    console.log('[Finalizar Button] Iniciando upload...');
-                    // Iniciar upload em background (não aguarda a conclusão, apenas inicia)
-                    videoUploadRef.current.startUpload().catch((error) => {
-                      console.error('[Finalizar Button] Upload error:', error);
-                      toast.error('Erro ao iniciar upload. Verifique os arquivos.');
-                    });
-
-                    // Pequeno delay para garantir que o upload foi iniciado
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // NÃO publicar agora - será publicado automaticamente quando uploads estiverem 100%
-                    toast.success('Upload iniciado! O conteúdo será publicado automaticamente quando todos os uploads terminarem.');
-
-                    // Redirecionar para /admin onde o modal flutuante ficará visível
-                    console.log('[Finalizar Button] Redirecionando para /admin. Modal de upload acompanhará o progresso.');
-                    router.push('/admin');
-                  }}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-green-900/50 flex items-center justify-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>Finalizar</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    if (confirm('Deseja criar outro conteúdo? Os vídeos do conteúdo atual já foram salvos.')) {
-                      setCreatedContentId(null);
-                      setShowLanguageManager(false);
-                      setFormData({
-                        title: '',
-                        description: '',
-                        synopsis: '',
-                        release_date: '',
-                        duration_minutes: 0,
-                        genres: [],
-                        rating: '',
-                        director: '',
-                        cast: '',
-                        trailer_url: '',
-                        poster_url: '',
-                        backdrop_url: '',
-                        content_type: 'movie',
-                        is_featured: false,
-                        is_release: false,
-                        price_cents: 1990,
-                      });
-                      setPriceInput('19.90');
-                      setFileUpload({
-                        posterFile: null,
-                        posterUploading: false,
-                        posterUrl: '',
-                        backdropFile: null,
-                        backdropUploading: false,
-                        backdropUrl: '',
-                      });
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }
-                  }}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-blue-900/50 flex items-center justify-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span>Criar Outro Conteúdo</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Episode Manager - shown after series creation */}
         {showEpisodeManager && createdContentId && (
@@ -1579,7 +978,7 @@ export default function AdminContentCreatePage() {
 
                   <div className="flex-1">
                     <h2 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent mb-2">
-                      ✅ Série Criada com Sucesso!
+                      Série Criada com Sucesso!
                     </h2>
                     <p className="text-xl text-gray-300 mb-4">
                       Agora adicione os episódios da sua série. Você pode adicionar episódios para cada temporada.
@@ -1631,48 +1030,6 @@ export default function AdminContentCreatePage() {
                           </div>
 
                           <div className="flex items-center space-x-2">
-                            {episode.uploaded ? (
-                              <span className="px-3 py-1 bg-green-900/30 border border-green-500/50 text-green-400 text-sm rounded-lg flex items-center space-x-1">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
-                                <span>Enviado</span>
-                              </span>
-                            ) : episode.uploading ? (
-                              <div className="flex items-center space-x-2">
-                                <span className="px-3 py-1 bg-blue-900/30 border border-blue-500/50 text-blue-400 text-sm rounded-lg flex items-center space-x-2">
-                                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
-                                  <span>Enviando {episode.uploadProgress || 0}%</span>
-                                </span>
-                              </div>
-                            ) : episode.video_file ? (
-                              <span className="px-3 py-1 bg-purple-900/30 border border-purple-500/50 text-purple-400 text-sm rounded-lg flex items-center space-x-1">
-                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                </svg>
-                                <span>Pronto</span>
-                              </span>
-                            ) : (
-                              <label className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg cursor-pointer transition-colors">
-                                Selecionar Vídeo
-                                <input
-                                  type="file"
-                                  accept="video/*"
-                                  className="hidden"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      setEpisodes(prev => prev.map(ep =>
-                                        ep.season_number === episode.season_number && ep.episode_number === episode.episode_number
-                                          ? { ...ep, video_file: file }
-                                          : ep
-                                      ));
-                                    }
-                                  }}
-                                />
-                              </label>
-                            )}
-
                             <button
                               onClick={() => setEditingEpisode(episode)}
                               className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
@@ -1694,18 +1051,6 @@ export default function AdminContentCreatePage() {
                             </button>
                           </div>
                         </div>
-
-                        {episode.error && (
-                          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
-                            Erro: {episode.error}
-                          </div>
-                        )}
-
-                        {episode.video_file && !episode.uploaded && (
-                          <div className="text-xs text-gray-400 bg-gray-900/30 px-3 py-2 rounded-lg">
-                            📹 {episode.video_file.name} ({(episode.video_file.size / 1024 / 1024).toFixed(2)} MB)
-                          </div>
-                        )}
                       </div>
                     ))}
 
@@ -1715,7 +1060,7 @@ export default function AdminContentCreatePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4v16M17 4v16M3 8h4m10 0h4M3 12h18M3 16h4m10 0h4M4 20h16a1 1 0 001-1V5a1 1 0 00-1-1H4a1 1 0 00-1 1v14a1 1 0 001 1z" />
                       </svg>
                       <p className="text-lg">Nenhum episódio adicionado para a Temporada {currentSeason}</p>
-                      <p className="text-sm mt-2">Clique em "Adicionar Episódio" para começar</p>
+                      <p className="text-sm mt-2">Clique em &quot;Adicionar Episódio&quot; para começar</p>
                     </div>
                   )}
                 </div>
@@ -1750,6 +1095,18 @@ export default function AdminContentCreatePage() {
                         rows={4}
                         placeholder="Descrição do episódio..."
                         className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">Duração (minutos)</label>
+                      <input
+                        type="number"
+                        value={editingEpisode.duration_minutes}
+                        onChange={(e) => setEditingEpisode({ ...editingEpisode, duration_minutes: parseInt(e.target.value) || 0 })}
+                        min="0"
+                        placeholder="45"
+                        className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
