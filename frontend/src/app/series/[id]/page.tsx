@@ -480,8 +480,8 @@ export default function SeriesDetailsPage() {
                     <div>
                       <dt className="text-sm tv:text-base font-medium text-gray-400 mb-1 tv:mb-2">Disponível em</dt>
                       <dd className="flex items-center gap-2 tv:gap-3 text-white tv:text-lg">
-                        <div className="w-2 h-2 tv:w-3 tv:h-3 bg-green-500 rounded-full"></div>
-                        Site + Telegram
+                        <div className="w-2 h-2 tv:w-3 tv:h-3 bg-blue-500 rounded-full"></div>
+                        Telegram
                       </dd>
                     </div>
                   </div>
