@@ -21,7 +21,15 @@ ON content USING gin (f_unaccent(lower(title)) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_content_description_trgm
 ON content USING gin (f_unaccent(lower(COALESCE(description, ''))) gin_trgm_ops);
 
--- 6. Funcao principal de busca inteligente
+-- 6. Helper: verifica se TODAS as palavras aparecem no texto (busca por palavras individuais)
+CREATE OR REPLACE FUNCTION all_words_match(haystack text, words text[])
+RETURNS boolean AS $$
+  SELECT bool_and(haystack ILIKE '%' || word || '%')
+  FROM unnest(words) AS word
+  WHERE length(trim(word)) > 0
+$$ LANGUAGE sql IMMUTABLE PARALLEL SAFE;
+
+-- 7. Funcao principal de busca inteligente
 CREATE OR REPLACE FUNCTION search_content(
   search_query text,
   content_type_filter text DEFAULT NULL,
@@ -65,10 +73,16 @@ RETURNS TABLE (
 ) AS $$
 DECLARE
   normalized_query text;
+  query_words text[];
   tsquery_val tsquery;
 BEGIN
   -- Normalizar a query: remover acentos e converter para minusculas
   normalized_query := f_unaccent(lower(trim(search_query)));
+
+  -- Dividir query em palavras individuais (para busca por palavra)
+  query_words := string_to_array(normalized_query, ' ');
+  -- Remover palavras vazias
+  query_words := array(SELECT word FROM unnest(query_words) AS word WHERE length(trim(word)) > 0);
 
   -- Construir tsquery para full-text search
   BEGIN
@@ -115,9 +129,18 @@ BEGIN
     c.created_at,
     c.updated_at,
     (
-      -- Ranking: match exato ILIKE (10x) > similaridade titulo (5x) > full-text (3x) > descricao (1x)
+      -- Ranking: todas palavras no titulo (15x) > frase exata titulo (10x) > palavras titulo+desc (7x)
+      -- > similaridade titulo (5x) > full-text (3x) > similaridade descricao (1x)
+      CASE WHEN all_words_match(f_unaccent(lower(c.title)), query_words)
+           THEN 15.0 ELSE 0.0 END
+      +
       CASE WHEN f_unaccent(lower(c.title)) ILIKE '%' || normalized_query || '%'
            THEN 10.0 ELSE 0.0 END
+      +
+      CASE WHEN all_words_match(
+             f_unaccent(lower(c.title || ' ' || COALESCE(c.description, ''))),
+             query_words
+           ) THEN 7.0 ELSE 0.0 END
       +
       COALESCE(similarity(f_unaccent(lower(c.title)), normalized_query), 0) * 5.0
       +
@@ -132,20 +155,26 @@ BEGIN
   WHERE c.status = 'PUBLISHED'
     AND (content_type_filter IS NULL OR c.content_type = content_type_filter)
     AND (
-      -- ILIKE com unaccent (busca por fragmento + normalizacao de acentos)
+      -- Todas as palavras aparecem no titulo (ex: "wicked 2" encontra "Wicked: Parte 2")
+      all_words_match(f_unaccent(lower(c.title)), query_words)
+      OR
+      -- Frase exata no titulo (ex: "wicked" encontra "Wicked")
       f_unaccent(lower(c.title)) ILIKE '%' || normalized_query || '%'
       OR
-      -- Similaridade trigram no titulo (fuzzy matching)
-      similarity(f_unaccent(lower(c.title)), normalized_query) > 0.1
+      -- Todas as palavras aparecem no titulo + descricao combinados
+      all_words_match(
+        f_unaccent(lower(c.title || ' ' || COALESCE(c.description, ''))),
+        query_words
+      )
+      OR
+      -- Similaridade trigram no titulo (fuzzy matching, ex: "btman" encontra "Batman")
+      similarity(f_unaccent(lower(c.title)), normalized_query) > 0.15
       OR
       -- Full-text search no titulo e descricao
       to_tsvector('portuguese', c.title || ' ' || COALESCE(c.description, '')) @@ tsquery_val
       OR
-      -- ILIKE na descricao com unaccent
-      f_unaccent(lower(COALESCE(c.description, ''))) ILIKE '%' || normalized_query || '%'
-      OR
       -- Similaridade trigram na descricao
-      similarity(f_unaccent(lower(COALESCE(c.description, ''))), normalized_query) > 0.2
+      similarity(f_unaccent(lower(COALESCE(c.description, ''))), normalized_query) > 0.25
     )
   ORDER BY search_rank DESC, c.created_at DESC
   LIMIT result_limit
@@ -153,7 +182,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE;
 
--- 7. Funcao de contagem para paginacao
+-- 8. Funcao de contagem para paginacao
 CREATE OR REPLACE FUNCTION search_content_count(
   search_query text,
   content_type_filter text DEFAULT NULL
@@ -161,10 +190,13 @@ CREATE OR REPLACE FUNCTION search_content_count(
 RETURNS integer AS $$
 DECLARE
   normalized_query text;
+  query_words text[];
   tsquery_val tsquery;
   total integer;
 BEGIN
   normalized_query := f_unaccent(lower(trim(search_query)));
+  query_words := string_to_array(normalized_query, ' ');
+  query_words := array(SELECT word FROM unnest(query_words) AS word WHERE length(trim(word)) > 0);
 
   BEGIN
     tsquery_val := to_tsquery('portuguese',
@@ -179,15 +211,20 @@ BEGIN
   WHERE c.status = 'PUBLISHED'
     AND (content_type_filter IS NULL OR c.content_type = content_type_filter)
     AND (
+      all_words_match(f_unaccent(lower(c.title)), query_words)
+      OR
       f_unaccent(lower(c.title)) ILIKE '%' || normalized_query || '%'
       OR
-      similarity(f_unaccent(lower(c.title)), normalized_query) > 0.1
+      all_words_match(
+        f_unaccent(lower(c.title || ' ' || COALESCE(c.description, ''))),
+        query_words
+      )
+      OR
+      similarity(f_unaccent(lower(c.title)), normalized_query) > 0.15
       OR
       to_tsvector('portuguese', c.title || ' ' || COALESCE(c.description, '')) @@ tsquery_val
       OR
-      f_unaccent(lower(COALESCE(c.description, ''))) ILIKE '%' || normalized_query || '%'
-      OR
-      similarity(f_unaccent(lower(COALESCE(c.description, ''))), normalized_query) > 0.2
+      similarity(f_unaccent(lower(COALESCE(c.description, ''))), normalized_query) > 0.25
     );
 
   RETURN total;

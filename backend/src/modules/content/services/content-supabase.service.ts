@@ -1,12 +1,145 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
 import { ContentStatus, ContentType } from '../entities/content.entity';
 
 @Injectable()
 export class ContentSupabaseService {
+  private readonly logger = new Logger(ContentSupabaseService.name);
+
   constructor(private readonly supabaseService: SupabaseService) {}
 
+  /**
+   * Smart search using PostgreSQL RPC function with fuzzy search, unaccent, and word splitting.
+   * Falls back to improved ILIKE if RPC is not available.
+   */
+  private async smartSearch(search: string, contentType: string, page: number, limit: number, sort: string) {
+    const offset = (page - 1) * limit;
+
+    try {
+      // Call the PostgreSQL search function via RPC
+      const { data: results, error } = await this.supabaseService.client
+        .rpc('search_content', {
+          search_query: search.trim(),
+          content_type_filter: contentType,
+          result_limit: limit,
+          result_offset: offset,
+        });
+
+      if (error) throw error;
+
+      // Get total count for pagination
+      const { data: countData, error: countError } = await this.supabaseService.client
+        .rpc('search_content_count', {
+          search_query: search.trim(),
+          content_type_filter: contentType,
+        });
+
+      if (countError) throw countError;
+
+      const total = typeof countData === 'number' ? countData : 0;
+
+      // Apply secondary sort if not using relevance
+      let sortedResults = Array.isArray(results) ? results : [];
+      if (sort !== 'newest') {
+        switch (sort) {
+          case 'popular':
+            sortedResults.sort((a: any, b: any) => (b.views_count || 0) - (a.views_count || 0));
+            break;
+          case 'rating':
+            sortedResults.sort((a: any, b: any) => (b.imdb_rating || 0) - (a.imdb_rating || 0));
+            break;
+          case 'price_low':
+            sortedResults.sort((a: any, b: any) => (a.price_cents || 0) - (b.price_cents || 0));
+            break;
+          case 'price_high':
+            sortedResults.sort((a: any, b: any) => (b.price_cents || 0) - (a.price_cents || 0));
+            break;
+        }
+      }
+
+      return {
+        movies: sortedResults,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      this.logger.warn(`Smart search RPC failed, falling back to ILIKE: ${error}`);
+      return this.ilikeFallbackSearch(search, contentType, page, limit, sort);
+    }
+  }
+
+  /**
+   * Improved ILIKE fallback: splits multi-word queries and searches each word independently.
+   */
+  private async ilikeFallbackSearch(search: string, contentType: string, page: number, limit: number, sort: string) {
+    const offset = (page - 1) * limit;
+    const words = search.trim().split(/\s+/).filter(w => w.length > 0);
+
+    // Build OR filter: each word must appear in title OR description
+    // For PostgREST, we build an or() filter string
+    const orConditions = words.map(word => {
+      const encoded = word.replace(/[%_]/g, '');
+      return `title.ilike.%${encoded}%`;
+    });
+
+    let query = this.supabaseService.client
+      .from('content')
+      .select('*', { count: 'exact' })
+      .eq('status', ContentStatus.PUBLISHED)
+      .eq('content_type', contentType);
+
+    // Apply each word as an ILIKE filter (AND logic - all words must match)
+    for (const word of words) {
+      const encoded = word.replace(/[%_]/g, '');
+      query = query.ilike('title', `%${encoded}%`);
+    }
+
+    // Apply sorting
+    switch (sort) {
+      case 'newest':
+        query = query.order('created_at', { ascending: false });
+        break;
+      case 'popular':
+        query = query.order('views_count', { ascending: false });
+        break;
+      case 'rating':
+        query = query.order('imdb_rating', { ascending: false });
+        break;
+      case 'price_low':
+        query = query.order('price_cents', { ascending: true });
+        break;
+      case 'price_high':
+        query = query.order('price_cents', { ascending: false });
+        break;
+      default:
+        query = query.order('created_at', { ascending: false });
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      throw new Error(`Failed to search content: ${error.message}`);
+    }
+
+    return {
+      movies: data || [],
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
+
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
+    // Use smart search when searching without genre filter
+    if (search && search.trim() && !genre) {
+      return this.smartSearch(search, ContentType.MOVIE, page, limit, sort);
+    }
+
     const offset = (page - 1) * limit;
 
     // Step 1: If genre filter is provided, get content IDs for this category
@@ -51,7 +184,6 @@ export class ContentSupabaseService {
     }
 
     // Step 2: Build the main query with optional ID filter
-    // Include content_languages to check if video is uploaded
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -75,9 +207,12 @@ export class ContentSupabaseService {
       query = query.in('id', contentIds);
     }
 
-    // Apply search filter if search term is provided
+    // Apply search filter with word splitting (AND logic)
     if (search && search.trim()) {
-      query = query.ilike('title', `%${search.trim()}%`);
+      const words = search.trim().split(/\s+/).filter(w => w.length > 0);
+      for (const word of words) {
+        query = query.ilike('title', `%${word}%`);
+      }
     }
 
     // Apply sorting
@@ -110,7 +245,6 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movies: ${error.message}`);
     }
 
-    // Return movies with file_storage_key - frontend will generate presigned URLs
     return {
       movies: movies || [],
       total: count || 0,
@@ -166,6 +300,11 @@ export class ContentSupabaseService {
   }
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
+    // Use smart search when searching without genre filter
+    if (search && search.trim() && !genre) {
+      return this.smartSearch(search, ContentType.SERIES, page, limit, sort);
+    }
+
     const offset = (page - 1) * limit;
 
     // Step 1: If genre filter is provided, get content IDs for this category
@@ -210,7 +349,6 @@ export class ContentSupabaseService {
     }
 
     // Step 2: Build the main query with optional ID filter
-    // Include content_languages to check if video is uploaded
     let query = this.supabaseService.client
       .from('content')
       .select(`
@@ -234,9 +372,12 @@ export class ContentSupabaseService {
       query = query.in('id', contentIds);
     }
 
-    // Apply search filter if search term is provided
+    // Apply search filter with word splitting (AND logic)
     if (search && search.trim()) {
-      query = query.ilike('title', `%${search.trim()}%`);
+      const words = search.trim().split(/\s+/).filter(w => w.length > 0);
+      for (const word of words) {
+        query = query.ilike('title', `%${word}%`);
+      }
     }
 
     // Apply sorting
