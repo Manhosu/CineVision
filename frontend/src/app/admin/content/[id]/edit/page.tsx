@@ -168,12 +168,15 @@ export default function AdminContentEditPage() {
       setPosterUploading(true);
       setPosterFile(file);
 
-      const url = await uploadImageToSupabase(file, 'posters');
-      setPosterUrl(url);
+      const result = await uploadImageToSupabase(file, 'cinevision-capas', 'posters');
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      setPosterUrl(result.publicUrl);
       toast.success('Pôster enviado com sucesso!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao fazer upload do pôster:', error);
-      toast.error('Erro ao fazer upload do pôster');
+      toast.error(error.message || 'Erro ao fazer upload do pôster');
       setPosterFile(null);
     } finally {
       setPosterUploading(false);
@@ -188,12 +191,15 @@ export default function AdminContentEditPage() {
       setBackdropUploading(true);
       setBackdropFile(file);
 
-      const url = await uploadImageToSupabase(file, 'backdrops');
-      setBackdropUrl(url);
+      const result = await uploadImageToSupabase(file, 'cinevision-capas', 'backdrops');
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      setBackdropUrl(result.publicUrl);
       toast.success('Backdrop enviado com sucesso!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao fazer upload do backdrop:', error);
-      toast.error('Erro ao fazer upload do backdrop');
+      toast.error(error.message || 'Erro ao fazer upload do backdrop');
       setBackdropFile(null);
     } finally {
       setBackdropUploading(false);

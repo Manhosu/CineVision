@@ -66,7 +66,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.gstatic.com https://www.google.com https://ssl.gstatic.com https://cast.googleapis.com http://www.gstatic.com https://gstatic.com https://www.youtube.com https://www.youtube-nocookie.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: https: blob: https://cinevision-capas.s3.us-east-1.amazonaws.com https://cinevision-filmes.s3.us-east-1.amazonaws.com https://img.youtube.com",
+              "img-src 'self' data: https: blob: https://img.youtube.com",
               "media-src 'self' https: blob:",
               "font-src 'self' https://fonts.gstatic.com",
               `connect-src 'self' https: wss: http://localhost:3000 http://localhost:3001 ${process.env.NEXT_PUBLIC_API_URL || ''} https://clients3.google.com https://ssl.gstatic.com`,
@@ -88,7 +88,6 @@ const nextConfig = {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    // Disable optimization for S3 images due to timeout issues
     unoptimized: process.env.NODE_ENV === 'development',
     remotePatterns: [
       {
@@ -100,31 +99,6 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'szghyvnbmjlquznxhqum.supabase.co',
         pathname: '/storage/v1/object/public/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cinevision-capas.s3.us-east-1.amazonaws.com',
-        pathname: '/posters/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cinevision-cover.s3.us-east-1.amazonaws.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cinevision-cover.s3.us-east-2.amazonaws.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cinevision-video.s3.us-east-2.amazonaws.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'cinevision-filmes.s3.us-east-1.amazonaws.com',
-        pathname: '/videos/**',
       },
       {
         protocol: 'http',
@@ -145,8 +119,6 @@ const nextConfig = {
   // Environment variables available to client
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
-    NEXT_PUBLIC_CDN_URL: process.env.NEXT_PUBLIC_CDN_URL,
-    NEXT_PUBLIC_CAST_APP_ID: process.env.NEXT_PUBLIC_CAST_APP_ID,
   },
 
   // Webpack configuration

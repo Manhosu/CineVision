@@ -1,28 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
-import { S3Client, DeleteObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AdminContentSimpleService {
   private readonly logger = new Logger(AdminContentSimpleService.name);
-  private readonly s3Client: S3Client;
-  private readonly bucketName: string;
 
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly configService: ConfigService,
   ) {
     console.log('AdminContentSimpleService instantiated successfully');
-
-    this.s3Client = new S3Client({
-      region: this.configService.get('AWS_REGION') || 'us-east-1',
-      credentials: {
-        accessKeyId: this.configService.get('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get('AWS_SECRET_ACCESS_KEY'),
-      },
-    });
-    this.bucketName = this.configService.get('S3_VIDEO_BUCKET') || this.configService.get('AWS_S3_BUCKET') || 'cinevision-video';
   }
 
   async getAllContent() {
@@ -350,84 +338,15 @@ export class AdminContentSimpleService {
 
     this.logger.log(`Found content: ${content.title}`);
 
-    // 2. Deletar arquivos de vídeo do S3 (content_languages table)
-    const { data: languages } = await this.supabaseService.client
-      .from('content_languages')
-      .select('video_storage_key')
-      .eq('content_id', contentId);
-
-    if (languages && languages.length > 0) {
-      for (const lang of languages) {
-        if (lang.video_storage_key) {
-          try {
-            await this.s3Client.send(new DeleteObjectCommand({
-              Bucket: this.bucketName,
-              Key: lang.video_storage_key,
-            }));
-            this.logger.log(`Deleted S3 object: ${lang.video_storage_key}`);
-          } catch (s3Error) {
-            this.logger.warn(`Failed to delete S3 object ${lang.video_storage_key}:`, s3Error);
-          }
-        }
-      }
-    }
-
-    // 3. Deletar imagens (poster e backdrop) do S3
-    const imagesToDelete = [content.poster_url, content.backdrop_url].filter(Boolean);
-    for (const imageUrl of imagesToDelete) {
-      try {
-        // Extrair a key da URL
-        const url = new URL(imageUrl);
-        const key = url.pathname.substring(1); // Remove leading /
-        await this.s3Client.send(new DeleteObjectCommand({
-          Bucket: this.bucketName,
-          Key: key,
-        }));
-        this.logger.log(`Deleted image from S3: ${key}`);
-      } catch (error) {
-        this.logger.warn(`Failed to delete image from S3:`, error);
-      }
-    }
-
-    // 4. Se for série, deletar episódios e seus arquivos do S3
+    // 2. Se for série, deletar episódios
     if (content.content_type === 'series') {
       const { data: episodes } = await this.supabaseService.client
         .from('episodes')
-        .select('id, file_storage_key, thumbnail_url')
+        .select('id')
         .eq('series_id', contentId);
 
       if (episodes && episodes.length > 0) {
         this.logger.log(`Found ${episodes.length} episodes to delete`);
-
-        for (const episode of episodes) {
-          // Deletar arquivo de vídeo do episódio do S3
-          if (episode.file_storage_key) {
-            try {
-              await this.s3Client.send(new DeleteObjectCommand({
-                Bucket: this.bucketName,
-                Key: episode.file_storage_key,
-              }));
-              this.logger.log(`Deleted episode video from S3: ${episode.file_storage_key}`);
-            } catch (s3Error) {
-              this.logger.warn(`Failed to delete episode video ${episode.file_storage_key}:`, s3Error);
-            }
-          }
-
-          // Deletar thumbnail do episódio do S3
-          if (episode.thumbnail_url) {
-            try {
-              const url = new URL(episode.thumbnail_url);
-              const key = url.pathname.substring(1);
-              await this.s3Client.send(new DeleteObjectCommand({
-                Bucket: this.bucketName,
-                Key: key,
-              }));
-              this.logger.log(`Deleted episode thumbnail from S3: ${key}`);
-            } catch (error) {
-              this.logger.warn(`Failed to delete episode thumbnail from S3:`, error);
-            }
-          }
-        }
 
         // Deletar episódios do banco
         await this.supabaseService.client
@@ -439,7 +358,7 @@ export class AdminContentSimpleService {
       }
     }
 
-    // 5. Deletar registros relacionados (cascade deve funcionar, mas garantimos)
+    // 3. Deletar registros relacionados
     await this.supabaseService.client
       .from('content_languages')
       .delete()
@@ -455,7 +374,7 @@ export class AdminContentSimpleService {
       .delete()
       .eq('content_id', contentId);
 
-    // 6. Deletar o conteúdo do banco
+    // 4. Deletar o conteúdo do banco
     const { error: deleteError } = await this.supabaseService.client
       .from('content')
       .delete()
@@ -612,7 +531,7 @@ export class AdminContentSimpleService {
   async deleteAudioTrack(contentId: string, audioId: string) {
     this.logger.log(`Deleting audio track ${audioId} from content ${contentId}`);
 
-    // Buscar o audio track para obter informações do S3
+    // Buscar o audio track
     const { data: audioTrack, error: fetchError } = await this.supabaseService.client
       .from('content_languages')
       .select('*')
@@ -622,42 +541,6 @@ export class AdminContentSimpleService {
 
     if (fetchError || !audioTrack) {
       throw new NotFoundException(`Audio track with ID ${audioId} not found for content ${contentId}`);
-    }
-
-    // Deletar arquivo do S3 se existir
-    if (audioTrack.video_storage_key) {
-      try {
-        await this.s3Client.send(new DeleteObjectCommand({
-          Bucket: this.bucketName,
-          Key: audioTrack.video_storage_key,
-        }));
-        this.logger.log(`Deleted S3 object: ${audioTrack.video_storage_key}`);
-      } catch (s3Error) {
-        this.logger.warn(`Failed to delete S3 object:`, s3Error);
-      }
-    }
-
-    // Deletar arquivos HLS se existirem
-    if (audioTrack.hls_base_path) {
-      try {
-        const listCommand = new ListObjectsV2Command({
-          Bucket: this.bucketName,
-          Prefix: audioTrack.hls_base_path,
-        });
-        const listResult = await this.s3Client.send(listCommand);
-
-        if (listResult.Contents && listResult.Contents.length > 0) {
-          for (const object of listResult.Contents) {
-            await this.s3Client.send(new DeleteObjectCommand({
-              Bucket: this.bucketName,
-              Key: object.Key,
-            }));
-          }
-          this.logger.log(`Deleted HLS files from: ${audioTrack.hls_base_path}`);
-        }
-      } catch (s3Error) {
-        this.logger.warn(`Failed to delete HLS files:`, s3Error);
-      }
     }
 
     // Deletar do banco
@@ -695,42 +578,6 @@ export class AdminContentSimpleService {
 
     if (fetchError || !episode) {
       throw new NotFoundException(`Episode with ID ${episodeId} not found`);
-    }
-
-    // Deletar arquivos do S3 se existirem
-    if (episode.file_storage_key) {
-      try {
-        await this.s3Client.send(new DeleteObjectCommand({
-          Bucket: this.bucketName,
-          Key: episode.file_storage_key,
-        }));
-        this.logger.log(`Deleted S3 object: ${episode.file_storage_key}`);
-      } catch (s3Error) {
-        this.logger.warn(`Failed to delete S3 object:`, s3Error);
-      }
-    }
-
-    // Deletar arquivos HLS se existirem
-    if (episode.hls_base_path) {
-      try {
-        const listCommand = new ListObjectsV2Command({
-          Bucket: this.bucketName,
-          Prefix: episode.hls_base_path,
-        });
-        const listResult = await this.s3Client.send(listCommand);
-
-        if (listResult.Contents && listResult.Contents.length > 0) {
-          for (const object of listResult.Contents) {
-            await this.s3Client.send(new DeleteObjectCommand({
-              Bucket: this.bucketName,
-              Key: object.Key,
-            }));
-          }
-          this.logger.log(`Deleted HLS files from: ${episode.hls_base_path}`);
-        }
-      } catch (s3Error) {
-        this.logger.warn(`Failed to delete HLS files:`, s3Error);
-      }
     }
 
     // Deletar do banco

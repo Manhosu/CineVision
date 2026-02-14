@@ -18,11 +18,7 @@ import { AdminRequestsController } from './controllers/admin-requests.controller
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
 import { RequestsSupabaseService } from '../requests/requests-supabase.service';
-import { UploadPresignedController } from './controllers/upload-presigned.controller';
-// Removed DriveImportController - replaced with VideoUploadController
-import { VideoUploadController } from './controllers/video-upload.controller';
 import { BroadcastController } from './controllers/broadcast.controller';
-import { MultipartUploadService } from './services/multipart-upload.service';
 import { BroadcastService } from './services/broadcast.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
@@ -41,13 +37,9 @@ import { StreamingAnalytics } from '../content/entities/streaming-analytics.enti
 import { ContentRequest } from '../requests/entities/content-request.entity';
 import { StripeService } from '../payments/services/stripe.service';
 import { WooviService } from '../payments/services/woovi.service';
-import { VideoUploadService } from '../video/video-upload.service';
 import { BotNotificationService } from '../telegrams/services/bot-notification.service';
 import { TelegramsService } from '../telegrams/telegrams.service';
 import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
-import { CDNService } from '../cdn/services/cdn.service';
-import { QueueService } from '../queue/services/queue.service';
-import { TranscodeService } from '../content/services/transcode.service';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { RequestsModule } from '../requests/requests.module';
@@ -64,8 +56,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminPurchasesController,
   AdminUsersController,
   AdminRequestsPublicController,
-  UploadPresignedController,
-  VideoUploadController, // Direct S3 multipart upload
   BroadcastController,
 ] : [
   AdminContentController,
@@ -75,8 +65,6 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminPurchasesController,
   AdminUsersController,
   AdminRequestsPublicController,
-  UploadPresignedController,
-  VideoUploadController, // Direct S3 multipart upload
   BroadcastController,
 ];
 
@@ -89,15 +77,10 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   AdminStatsService,
   AdminSettingsService,
   StripeService,
-  VideoUploadService,
   BotNotificationService,
   TelegramsService,
   TelegramsEnhancedService,
-  CDNService,
-  QueueService,
-  TranscodeService,
   ImageUploadService,
-  MultipartUploadService,
   ContentLanguageService,
   BroadcastService,
   RequestsSupabaseService,
@@ -111,7 +94,6 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   PurchasesCleanupService,
   StripeService,
   WooviService,
-  MultipartUploadService,
   ContentLanguageSupabaseService,
   BroadcastService,
   TelegramsEnhancedService,
@@ -125,8 +107,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
   AdminContentService,
   AdminSettingsService,
   StripeService,
-  MultipartUploadService,
-] : [AdminContentSimpleService, AdminSettingsService, MultipartUploadService];
+] : [AdminContentSimpleService, AdminSettingsService];
 
 @Module({
   imports: [
