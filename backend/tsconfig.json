@@ -21,5 +21,17 @@
       "@/*": ["src/*"]
     }
   },
-  "exclude": ["node_modules", "dist", "src/modules/video/**"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/modules/video/**",
+    "src/modules/cdn/**",
+    "src/modules/admin/services/image-upload.service.ts",
+    "src/modules/admin/services/multipart-upload.service.ts",
+    "src/modules/admin/controllers/upload-presigned.controller.ts",
+    "src/modules/content/services/transcode.service.ts",
+    "scripts/**",
+    "upload-*.ts",
+    "bulk-*.ts"
+  ]
 }

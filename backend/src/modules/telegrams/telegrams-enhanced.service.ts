@@ -3,8 +3,7 @@ import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+// AWS SDK removed - content delivery via Telegram only
 import * as bcrypt from 'bcrypt';
 import { AutoLoginService } from '../auth/services/auto-login.service';
 import { WooviService } from '../payments/services/woovi.service';
@@ -58,7 +57,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly botApiUrl: string;
   private readonly supabase: SupabaseClient;
   private readonly apiUrl: string;
-  private readonly s3Client: S3Client;
+  private readonly s3Client: any; // AWS SDK removed
   private catalogSyncService: any; // Will be injected by setter to avoid circular dependency
 
   // Cache temporário de compras pendentes (em produção, usar Redis)
@@ -100,14 +99,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     this.supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Initialize S3 client for presigned URLs
-    this.s3Client = new S3Client({
-      region: 'us-east-2',
-      credentials: {
-        accessKeyId: this.configService.get<string>('AWS_ACCESS_KEY_ID'),
-        secretAccessKey: this.configService.get<string>('AWS_SECRET_ACCESS_KEY'),
-      },
-    });
+    // AWS S3 client removed - content delivery via Telegram only
+    this.s3Client = null;
 
     this.logger.log('TelegramsEnhancedService initialized');
     this.logger.log(`Bot token configured: ${!!this.botToken}`);
