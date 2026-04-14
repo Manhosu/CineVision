@@ -6,6 +6,7 @@ import { PixService } from './services/pix.service';
 import { StripeService } from './services/stripe.service';
 import { WooviService } from './services/woovi.service';
 import { NewBankService } from './services/new-bank.service';
+import { OasyfyService } from './services/oasyfy.service';
 import { WooviWebhookService } from './services/woovi-webhook.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
@@ -13,6 +14,7 @@ import { StripeWebhookSupabaseService } from './services/stripe-webhook-supabase
 import { StripeTestController } from './controllers/stripe-test.controller';
 import { StripeWebhookController } from './controllers/stripe-webhook.controller';
 import { WooviWebhookController } from './controllers/woovi-webhook.controller';
+import { OasyfyWebhookController } from './controllers/oasyfy-webhook.controller';
 import { PixProviderFactory } from './providers/pix-provider.factory';
 import { TestPaymentController } from './test-payment.controller';
 import { Payment } from './entities/payment.entity';
@@ -22,28 +24,26 @@ import { TelegramsModule } from '../telegrams/telegrams.module';
 import { SupabaseModule } from '../../config/supabase.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
-// Always load PaymentsController and required services since Telegram bot needs them
-const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController, WooviWebhookController, TestPaymentController];
+const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController, WooviWebhookController, OasyfyWebhookController, TestPaymentController];
 
-// When TypeORM is disabled, use PaymentsSupabaseService instead of PaymentsService
 const conditionalProviders = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService, WooviService, NewBankService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookService, {
+  ? [PaymentsService, PixService, StripeService, WooviService, NewBankService, OasyfyService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookService, {
       provide: 'IPaymentsService',
       useClass: PaymentsService,
     }]
-  : [PaymentsSupabaseService, StripeService, WooviService, NewBankService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookSupabaseService, {
+  : [PaymentsSupabaseService, StripeService, WooviService, NewBankService, OasyfyService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookSupabaseService, {
       provide: PaymentsService,
       useClass: PaymentsSupabaseService,
     }];
 
 const conditionalExports = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService, WooviService, PixQRCodeService, PixProviderFactory]
-  : [PaymentsService, StripeService, WooviService, PixQRCodeService, PixProviderFactory]; // PaymentsService alias points to PaymentsSupabaseService
+  ? [PaymentsService, PixService, StripeService, WooviService, OasyfyService, PixQRCodeService, PixProviderFactory]
+  : [PaymentsService, StripeService, WooviService, OasyfyService, PixQRCodeService, PixProviderFactory];
 
 @Module({
   imports: [
     ...optionalTypeOrmFeature([Payment, Purchase]),
-    SupabaseModule, // Always import SupabaseModule for Supabase-based services
+    SupabaseModule,
     forwardRef(() => AdminModule),
     forwardRef(() => TelegramsModule),
   ],
