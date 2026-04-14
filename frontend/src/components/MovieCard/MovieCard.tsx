@@ -114,17 +114,17 @@ const MovieCard = memo(function MovieCard({
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
-      {/* Premium Minimalist Card */}
-      <div className="relative w-full rounded-xl overflow-hidden bg-gradient-to-b from-zinc-900/50 to-zinc-950/80 backdrop-blur-sm transition-all duration-500 ease-out hover:scale-[1.02] hover:shadow-[0_8px_30px_rgba(0,0,0,0.6)]">
+      {/* Clean Card - Poster + Info Below */}
+      <div className="relative w-full transition-all duration-300 ease-out hover:scale-[1.02]">
 
-        {/* Poster Container - Clean & Full */}
-        <div className="relative w-full overflow-hidden" style={{ aspectRatio: '2/3', minHeight: '300px' }}>
+        {/* Poster - Clean, no text overlay */}
+        <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: '2/3', minHeight: '280px' }}>
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}
             fill
             priority={priority}
-            className="object-cover transition-all duration-500 ease-out group-hover:scale-105"
+            className="object-cover transition-all duration-500 ease-out group-hover:scale-105 group-hover:brightness-110"
             placeholder={movie.title}
             fallbackSrc="/images/placeholder-poster.svg"
             sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
@@ -132,83 +132,76 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Subtle Top Gradient for Badges */}
-          <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10" />
-
-          {/* Top Left - Discount Badge */}
+          {/* Top Left - Discount Badge (only badge on poster) */}
           {movie.discount_percentage && movie.discount_percentage > 0 && (
-            <div className="absolute top-2 left-2 z-20 flex items-center gap-1">
-              <div className="flex items-center gap-1 px-2 py-1 bg-red-600 rounded-md shadow-lg text-white text-xs font-bold">
+            <div className="absolute top-2 left-2 z-20">
+              <div className="flex items-center gap-1 px-2 py-1 bg-red-600 rounded-md shadow-lg text-white text-[10px] font-bold">
                 {movie.is_flash_promo && <span>&#9889;</span>}
                 <span>-{movie.discount_percentage}%</span>
               </div>
             </div>
           )}
 
-          {/* Top Right Badges - Minimalist */}
-          <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
-            {isPurchased && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500 rounded-md shadow-lg">
-                <CheckIcon className="w-3.5 h-3.5 text-white" />
+          {/* Top Right - Purchased check */}
+          {isPurchased && (
+            <div className="absolute top-2 right-2 z-20">
+              <div className="flex items-center gap-1 px-1.5 py-1 bg-emerald-500 rounded-md shadow-lg">
+                <CheckIcon className="w-3 h-3 text-white" />
               </div>
-            )}
-            {movie.age_rating && (
-              <div className="px-2 py-0.5 bg-black/80 backdrop-blur-md border border-white/20 text-white text-xs font-bold rounded">
-                {movie.age_rating}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Bottom Info - Always Visible */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/95 to-transparent p-3 z-30">
-            {/* Title */}
-            <h3 className="text-white font-bold text-sm mb-1.5 line-clamp-2 leading-tight">
-              {movie.title}
-            </h3>
+          {/* Bottom Left - Year (small, subtle) */}
+          {movie.release_year && (
+            <div className="absolute bottom-2 left-2 z-20">
+              <span className="text-[10px] text-white/70 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded">
+                {movie.release_year}
+              </span>
+            </div>
+          )}
 
-            {/* Meta Info */}
-            <div className="flex items-center gap-2 mb-2 text-xs text-gray-300">
-              {movie.release_year && (
-                <span>{movie.release_year}</span>
-              )}
+          {/* Quality badge on poster */}
+          {movie.quality_label && (
+            <div className="absolute bottom-2 right-2 z-20">
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                movie.quality_label === 'EXCLUSIVA' ? 'bg-red-600/80 text-white' :
+                movie.quality_label === 'CINEMA' ? 'bg-purple-600/80 text-white' :
+                movie.quality_label === 'FULL HD' ? 'bg-blue-600/80 text-white' :
+                'bg-yellow-600/80 text-white'
+              }`}>
+                {movie.quality_label}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Info Below Poster - Title + Price */}
+        <div className="pt-2 px-0.5">
+          <h3 className="text-white font-semibold text-xs line-clamp-1 leading-tight mb-1">
+            {movie.title}
+          </h3>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
               {(movie as any).content_type === 'series' && (
-                <span className="px-1.5 py-0.5 bg-blue-500/80 rounded text-white font-medium text-[10px]">Série</span>
+                <span className="px-1 py-0.5 bg-blue-500/30 text-blue-400 rounded font-medium">Serie</span>
               )}
             </div>
 
-            {/* Action Button */}
-            <button
-              onClick={isPurchased ? handleWatch : handlePurchase}
-              className="w-full flex items-center justify-center gap-2 bg-white text-black font-bold py-2 px-3 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              {isPurchased ? (
-                <>
-                  <PlayIcon className="w-4 h-4" />
-                  <span className="text-xs">Assistir</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingCartIcon className="w-4 h-4" />
-                  {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
-                    <span className="text-xs flex items-center gap-1.5">
-                      <span className="line-through text-gray-500">{formatPrice(movie.price_cents)}</span>
-                      <span className="text-red-600 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
-                    </span>
-                  ) : (
-                    <span className="text-xs">{formatPrice(movie.price_cents)}</span>
-                  )}
-                </>
-              )}
-            </button>
+            {/* Price */}
+            {isPurchased ? (
+              <span className="text-[10px] text-emerald-400 font-semibold">Adquirido</span>
+            ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-500 line-through">{formatPrice(movie.price_cents)}</span>
+                <span className="text-xs text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
+              </div>
+            ) : (
+              <span className="text-xs text-white/80 font-semibold">{formatPrice(movie.price_cents)}</span>
+            )}
           </div>
         </div>
-
-        {/* Bottom Glow Effect */}
-        <div className={`absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent transition-opacity duration-500 ${
-          isHovered ? 'opacity-100' : 'opacity-0'
-        }`} />
       </div>
-
     </div>
   );
 });
