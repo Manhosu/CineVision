@@ -316,13 +316,6 @@ export default function DashboardPage() {
   };
 
   return (
-    {/* WhatsAppGate desativado até Igor enviar link do grupo */}
-    {/* <WhatsAppGate
-      userId={user.id}
-      whatsappJoined={whatsappJoined}
-      whatsappLink="https://chat.whatsapp.com/PLACEHOLDER"
-      onConfirmJoined={() => setWhatsappJoined(true)}
-    > */}
     <div className="min-h-screen bg-dark-950">
       <Header />
 
@@ -509,6 +502,5 @@ export default function DashboardPage() {
 
       <Footer />
     </div>
-    {/* </WhatsAppGate> */}
   );
 }
