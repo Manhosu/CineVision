@@ -80,7 +80,7 @@ export function Header({ transparent = false }: HeaderProps) {
         )}
 
         <div className="container mx-auto px-4 lg:px-8 relative z-10">
-          <div className="flex items-center justify-between h-16 lg:h-[70px]">
+          <div className="flex items-center justify-between h-20 lg:h-24">
             {/* Logo estilo Netflix - Simples e Clean */}
             <Link
               href="/"
@@ -92,7 +92,7 @@ export function Header({ transparent = false }: HeaderProps) {
                 width={450}
                 height={135}
                 priority
-                className="h-14 lg:h-16 w-auto transition-opacity duration-200 hover:opacity-80"
+                className="h-16 lg:h-20 w-auto transition-opacity duration-200 hover:opacity-80"
               />
             </Link>
 
@@ -209,7 +209,7 @@ export function Header({ transparent = false }: HeaderProps) {
             />
 
             {/* Menu Content */}
-            <div className="fixed top-16 lg:top-20 left-0 right-0 bg-dark-900/98 backdrop-blur-lg border-t border-white/10 shadow-2xl z-50 transform transition-transform duration-300">
+            <div className="fixed top-20 lg:top-24 left-0 right-0 bg-dark-900/98 backdrop-blur-lg border-t border-white/10 shadow-2xl z-50 transform transition-transform duration-300">
               <div className="container mx-auto px-4 py-6 max-h-screen overflow-y-auto">
                 {/* Navegação Principal */}
                 <nav className="space-y-1 mb-6">
