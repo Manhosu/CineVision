@@ -80,13 +80,13 @@ export function FlashPromotionBanner() {
   return (
     <>
       {/* Spacer to push content below the fixed banner */}
-      <div className="h-10 sm:h-11" />
+      <div className="h-10" />
       {/* Fixed banner above header */}
       <div className="fixed top-0 left-0 right-0 z-[60] overflow-hidden bg-gradient-to-r from-red-900 via-orange-800 to-red-900 border-b border-red-700/50">
         {/* Animated background pulse */}
         <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 via-orange-500/20 to-red-600/20 animate-pulse" />
 
-        <div className="relative z-10 container mx-auto px-4 py-2.5 flex items-center justify-center gap-3 sm:gap-5 text-center flex-wrap">
+        <div className="relative z-10 container mx-auto px-3 sm:px-4 py-2 flex items-center justify-center gap-2 sm:gap-4 text-center overflow-hidden flex-nowrap whitespace-nowrap">
           {/* Lightning + Title */}
           <div className="flex items-center gap-1.5">
             <span className="text-lg animate-bounce">&#9889;</span>

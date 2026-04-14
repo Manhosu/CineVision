@@ -45,16 +45,48 @@ export class PurchasesSupabaseService {
       throw new NotFoundException(`Content with ID ${dto.content_id} not found`);
     }
 
+    // Check for active discounts and calculate final price
+    let finalAmountCents = content.price_cents;
+    try {
+      const now = new Date().toISOString();
+      const { data: activeDiscounts } = await this.supabase
+        .from('discounts')
+        .select('*')
+        .eq('is_active', true)
+        .lte('starts_at', now)
+        .gte('ends_at', now)
+        .order('discount_value', { ascending: false });
+
+      if (activeDiscounts && activeDiscounts.length > 0) {
+        // Find best discount: individual > category > global
+        const individual = activeDiscounts.find(d => d.discount_scope === 'individual' && d.scope_id === content.id);
+        const global = activeDiscounts.find(d => d.discount_scope === 'global');
+        const bestDiscount = individual || global;
+
+        if (bestDiscount) {
+          if (bestDiscount.discount_type === 'percentage') {
+            const discountAmount = Math.round(content.price_cents * (bestDiscount.discount_value / 100));
+            finalAmountCents = Math.max(0, content.price_cents - discountAmount);
+          } else {
+            finalAmountCents = Math.max(0, content.price_cents - bestDiscount.discount_value);
+          }
+        }
+      }
+    } catch (discountErr) {
+      // If discount check fails, use original price
+      console.warn('Failed to check discounts, using original price:', discountErr);
+    }
+
     // Generate purchase token
     const purchase_token = uuidv4();
 
-    // Create purchase record
+    // Create purchase record with discounted price
     const { data: savedPurchase, error: purchaseError } = await this.supabase
       .from('purchases')
       .insert({
         user_id: dto.user_id,
         content_id: dto.content_id,
-        amount_cents: content.price_cents,
+        amount_cents: finalAmountCents,
         currency: 'BRL',
         status: PurchaseStatus.PENDING,
         preferred_delivery: dto.preferred_delivery,

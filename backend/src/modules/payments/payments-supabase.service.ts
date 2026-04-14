@@ -72,7 +72,7 @@ export class PaymentsSupabaseService {
             },
           },
           {
-            unitAmount: content.price_cents,
+            unitAmount: purchase.amount_cents || content.price_cents,
             currency: content.currency?.toLowerCase() || 'brl',
             metadata: {
               content_id: content.id,
@@ -304,7 +304,8 @@ export class PaymentsSupabaseService {
       }
 
       const content = purchase.content;
-      const amountCents = content.price_cents;
+      // Use purchase amount (already has discount applied) instead of content.price_cents
+      const amountCents = purchase.amount_cents || content.price_cents;
 
       const pixProvider = this.pixProviderFactory.getProvider();
       const providerName = pixProvider.getProviderName();

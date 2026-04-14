@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import NextImage from 'next/image';
 import {
   PlayIcon,
+  InformationCircleIcon,
   ClockIcon,
   CalendarIcon,
   ChevronLeftIcon,
@@ -130,7 +131,7 @@ export function HeroBanner({
   };
 
   return (
-    <div className="relative h-[80vh] md:h-[75vh] min-h-[550px] overflow-hidden">
+    <div className="relative h-[70vh] md:h-[70vh] lg:h-[80vh] min-h-[450px] lg:min-h-[550px] overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
         <NextImage
@@ -140,23 +141,23 @@ export function HeroBanner({
           className="object-cover"
           priority
         />
-        {/* Gradient overlays - stronger on mobile for readability */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-[#050508]/70 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#050508]/60 to-transparent md:from-[#050508]/40" />
+        {/* Gradient overlays */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-[#050508]/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050508]/70 via-[#050508]/30 to-transparent" />
       </div>
 
-      {/* Content - positioned at bottom for clean mobile look */}
-      <div className="relative z-10 h-full flex items-end pb-20 md:pb-16">
+      {/* Content - positioned at bottom */}
+      <div className="relative z-10 h-full flex items-end pb-16 md:pb-14 lg:pb-16">
         <div className="container mx-auto px-5 lg:px-8">
-          <div className="max-w-lg lg:max-w-2xl">
-            <h1 className="text-2xl md:text-4xl lg:text-5xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
+          <div className="max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl">
+            <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
               {currentMovie.title}
             </h1>
 
-            {/* Compact metadata row - FilmZone style */}
-            <div className="flex items-center gap-3 mb-2 text-xs md:text-sm text-white/60">
+            {/* Compact metadata row */}
+            <div className="flex items-center gap-2 md:gap-3 mb-2 text-[11px] md:text-sm text-white/60">
               {currentMovie.imdb_rating && (
-                <span className="text-white/80 font-medium">IMDB {currentMovie.imdb_rating}</span>
+                <span className="text-white/80 font-medium">TMDB {currentMovie.imdb_rating}</span>
               )}
               {currentMovie.release_year && (
                 <span>{currentMovie.release_year}</span>
@@ -164,29 +165,45 @@ export function HeroBanner({
               {currentMovie.duration_minutes && (
                 <span>{Math.floor(currentMovie.duration_minutes / 60)}h {currentMovie.duration_minutes % 60}m</span>
               )}
+              {(currentMovie as any).content_type === 'series' && (currentMovie as any).total_seasons && (
+                <span>{(currentMovie as any).total_seasons} Temporada(s)</span>
+              )}
               {currentMovie.age_rating && (
-                <span className="border border-white/30 text-white/70 px-1.5 py-0.5 rounded text-xs font-medium">
+                <span className="border border-white/30 text-white/70 px-1.5 py-0.5 rounded text-[10px] md:text-xs font-medium">
                   {currentMovie.age_rating}
                 </span>
               )}
             </div>
 
-            <p className="text-sm text-white/60 mb-4 line-clamp-2 md:line-clamp-3 leading-relaxed">
+            <p className="text-xs md:text-sm lg:text-base text-white/50 mb-4 md:mb-5 line-clamp-2 md:line-clamp-3 leading-relaxed max-w-md lg:max-w-lg">
               {currentMovie.description || 'Descrição não disponível.'}
             </p>
 
-            {/* Clean white button - FilmZone style */}
-            <button
-              onClick={() => {
-                const contentType = currentMovie.content_type || currentMovie.type;
-                const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
-                router.push(route);
-              }}
-              className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
-            >
-              <PlayIcon className="w-4 h-4" />
-              Assistir
-            </button>
+            {/* Two buttons - FilmZone style: Assistir (white) + Detalhes (gray) */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const contentType = (currentMovie as any).content_type || (currentMovie as any).type;
+                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
+                  router.push(route);
+                }}
+                className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
+              >
+                <PlayIcon className="w-4 h-4" />
+                Assistir
+              </button>
+              <button
+                onClick={() => {
+                  const contentType = (currentMovie as any).content_type || (currentMovie as any).type;
+                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
+                  router.push(route);
+                }}
+                className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95 border border-white/10"
+              >
+                <InformationCircleIcon className="w-4 h-4" />
+                Detalhes
+              </button>
+            </div>
           </div>
         </div>
       </div>
