@@ -85,6 +85,8 @@ export class OasyfyService implements PixProvider {
       client: {
         name: 'Cliente CineVision',
         email: options.email || 'cliente@cinevision.com',
+        phone: '(00) 00000-0000',
+        document: '529.982.247-25',
       },
       callbackUrl,
       metadata: {
