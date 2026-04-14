@@ -227,9 +227,9 @@ export function HeroBanner({
         </>
       )}
 
-      {/* Dots Indicator - smaller and subtler */}
+      {/* Dots Indicator - inside hero, above overlap zone */}
       {movies.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+        <div className="absolute bottom-8 md:bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
           {movies.map((_, index) => (
             <button
               key={index}

@@ -258,7 +258,7 @@ function HomePageContent() {
         )}
 
         {/* Seções de conteúdo */}
-        <div className="relative z-10 -mt-16 md:-mt-32 pb-20">
+        <div className="relative z-10 -mt-8 md:-mt-12 pb-20">
           {isLoading ? (
             // Skeleton das seções
             <>
