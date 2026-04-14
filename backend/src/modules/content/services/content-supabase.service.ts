@@ -390,8 +390,9 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movie: ${error.message}`);
     }
 
-    // Return movie with file_storage_key - frontend will generate presigned URLs
-    return movie;
+    // Enrich with discount info
+    const [enriched] = await this.enrichContentWithDiscounts([movie]);
+    return enriched;
   }
 
   async findAllCategories() {
@@ -576,7 +577,9 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch series: ${error.message}`);
     }
 
-    return series;
+    // Enrich with discount info
+    const [enriched] = await this.enrichContentWithDiscounts([series]);
+    return enriched;
   }
 
   async findSeriesEpisodes(seriesId: string, season?: number) {
@@ -762,7 +765,7 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch featured content: ${error.message}`);
     }
 
-    return featured || [];
+    return this.enrichContentWithDiscounts(featured || []);
   }
 
   async findRelatedMovies(movieId: string, genres: string[] = [], limit = 6) {
@@ -852,7 +855,7 @@ export class ContentSupabaseService {
       }
 
       console.log('[ContentSupabaseService] findReleases returned', data?.length || 0, 'items');
-      return data || [];
+      return this.enrichContentWithDiscounts(data || []);
     } catch (error) {
       console.error('[ContentSupabaseService] Exception in findReleases:', error);
       throw error;

@@ -57,9 +57,9 @@ export class BroadcastService {
         hasMore = data && data.length === pageSize;
         page++;
 
-        // Safety check: stop after 20 pages (20,000 users max)
-        if (page >= 20) {
-          this.logger.warn('Reached maximum pagination limit of 20 pages');
+        // Safety check: stop after 100 pages (100,000 users max)
+        if (page >= 100) {
+          this.logger.warn('Reached maximum pagination limit of 100 pages');
           break;
         }
       }

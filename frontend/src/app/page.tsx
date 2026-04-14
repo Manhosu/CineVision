@@ -242,12 +242,13 @@ function HomePageContent() {
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#050508' }}>
       {/* Header fixo */}
+      {/* Flash Promotion Banner - above header */}
+      <FlashPromotionBanner />
+
       <Header />
 
       {/* Conteúdo principal */}
       <main className="relative">
-        {/* Flash Promotion Banner */}
-        <FlashPromotionBanner />
 
         {/* Banner Hero */}
         {isLoading ? (

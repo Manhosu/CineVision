@@ -199,12 +199,28 @@ export default async function MoviePage({ params }: MoviePageProps) {
                     </div>
 
                     <div className="text-right">
-                      <div className="text-3xl sm:text-4xl tv:text-5xl font-bold text-primary-600 mb-2">
-                        R$ {(movie.price_cents / 100).toFixed(2)}
-                      </div>
-                      <div className="text-sm tv:text-base text-gray-400">
-                        Compra única
-                      </div>
+                      {movie.discounted_price_cents ? (
+                        <>
+                          <div className="text-lg text-gray-500 line-through mb-1">
+                            R$ {(movie.price_cents / 100).toFixed(2)}
+                          </div>
+                          <div className="text-3xl sm:text-4xl tv:text-5xl font-bold text-green-500 mb-1">
+                            R$ {(movie.discounted_price_cents / 100).toFixed(2)}
+                          </div>
+                          <div className="text-sm text-green-400 font-semibold">
+                            {movie.discount_percentage}% OFF
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-3xl sm:text-4xl tv:text-5xl font-bold text-primary-600 mb-2">
+                            R$ {(movie.price_cents / 100).toFixed(2)}
+                          </div>
+                          <div className="text-sm tv:text-base text-gray-400">
+                            Compra única
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

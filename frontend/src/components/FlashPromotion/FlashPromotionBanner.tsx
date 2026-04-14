@@ -78,49 +78,44 @@ export function FlashPromotionBanner() {
       : `R$ ${(promotion.discount_value / 100).toFixed(2)} OFF`;
 
   return (
-    <div className="relative overflow-hidden bg-gradient-to-r from-red-900 via-orange-800 to-red-900 border-b border-red-700/50">
-      {/* Animated background pulse */}
-      <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 via-orange-500/20 to-red-600/20 animate-pulse" />
+    <>
+      {/* Spacer to push content below the fixed banner */}
+      <div className="h-10 sm:h-11" />
+      {/* Fixed banner above header */}
+      <div className="fixed top-0 left-0 right-0 z-[60] overflow-hidden bg-gradient-to-r from-red-900 via-orange-800 to-red-900 border-b border-red-700/50">
+        {/* Animated background pulse */}
+        <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 via-orange-500/20 to-red-600/20 animate-pulse" />
 
-      <div className="relative z-10 container mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center">
-        {/* Lightning + Title */}
-        <div className="flex items-center gap-2">
-          <span className="text-2xl animate-bounce">&#9889;</span>
-          <span className="text-white font-extrabold text-lg tracking-wide uppercase">
-            Promo&ccedil;&atilde;o Rel&acirc;mpago
-          </span>
-          <span className="text-2xl animate-bounce">&#9889;</span>
-        </div>
+        <div className="relative z-10 container mx-auto px-4 py-2.5 flex items-center justify-center gap-3 sm:gap-5 text-center flex-wrap">
+          {/* Lightning + Title */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg animate-bounce">&#9889;</span>
+            <span className="text-white font-extrabold text-xs sm:text-sm tracking-wide uppercase">
+              Promo&ccedil;&atilde;o Rel&acirc;mpago
+            </span>
+          </div>
 
-        {/* Discount value */}
-        <div className="flex items-center gap-2">
-          <span className="bg-white text-red-700 font-black text-sm px-3 py-1 rounded-full shadow-lg">
+          {/* Discount value */}
+          <span className="bg-white text-red-700 font-black text-xs px-2.5 py-0.5 rounded-full shadow-lg">
             {discountText}
           </span>
-        </div>
 
-        {/* Description */}
-        {promotion.description && (
-          <p className="text-white/90 text-sm font-medium max-w-md">
-            {promotion.description}
-          </p>
-        )}
-
-        {/* Countdown */}
-        <div className="flex items-center gap-2">
-          <span className="text-white/70 text-xs font-medium uppercase">Termina em:</span>
-          <div className="flex items-center gap-1">
-            {timeLeft.split(':').map((unit, i) => (
-              <span key={i} className="flex items-center gap-1">
-                {i > 0 && <span className="text-white/50 font-bold">:</span>}
-                <span className="bg-black/60 text-white font-mono font-bold text-sm px-2 py-1 rounded min-w-[2rem] text-center">
-                  {unit}
+          {/* Countdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/70 text-[10px] font-medium uppercase">Termina em:</span>
+            <div className="flex items-center gap-0.5">
+              {timeLeft.split(':').map((unit, i) => (
+                <span key={i} className="flex items-center gap-0.5">
+                  {i > 0 && <span className="text-white/50 font-bold text-xs">:</span>}
+                  <span className="bg-black/60 text-white font-mono font-bold text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center">
+                    {unit}
+                  </span>
                 </span>
-              </span>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
