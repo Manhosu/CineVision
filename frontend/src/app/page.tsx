@@ -293,8 +293,8 @@ function HomePageContent() {
       {/* Rodapé */}
       <Footer />
 
-      {/* WhatsApp Popup */}
-      <WhatsAppPopup />
+      {/* WhatsApp Popup - desativado até Igor enviar link do grupo */}
+      {/* <WhatsAppPopup /> */}
     </div>
   );
 }
