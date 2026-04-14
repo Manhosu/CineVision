@@ -60,7 +60,7 @@ export class OasyfyService implements PixProvider {
       timeout: 30000,
     });
 
-    this.logger.log('OasyfyService initialized');
+    this.logger.log(`OasyfyService initialized | publicKey: ${publicKey ? publicKey.substring(0, 15) + '...' : 'MISSING'} | secretKey: ${secretKey ? 'SET' : 'MISSING'}`);
   }
 
   /**
@@ -103,11 +103,19 @@ export class OasyfyService implements PixProvider {
 
       this.logger.log(`Oasyfy PIX created: ${data.transactionId} | Status: ${data.status}`);
 
+      // Clean base64 - remove data:image/png;base64, prefix if present
+      let qrBase64 = data.pix?.base64 || data.pix?.image || '';
+      if (qrBase64.includes(',')) {
+        qrBase64 = qrBase64.split(',')[1];
+      }
+
+      this.logger.log(`Oasyfy PIX response: transactionId=${data.transactionId}, status=${data.status}, pixCode=${data.pix?.code?.length || 0} chars, base64=${qrBase64?.length || 0} chars`);
+
       return {
         paymentId: data.transactionId,
-        status: data.status === 'OK' ? 'pending' : data.status,
+        status: data.status === 'OK' || data.status === 'PENDING' ? 'pending' : data.status,
         qrCode: data.pix?.code || '',
-        qrCodeBase64: data.pix?.base64 || data.pix?.image || '',
+        qrCodeBase64: qrBase64,
         amount: options.amount,
       };
     } catch (error) {
