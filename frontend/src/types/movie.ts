@@ -36,6 +36,11 @@ export interface Movie {
   discounted_price_cents?: number;
   original_price_cents?: number;
   is_flash_promo?: boolean;
+  // Quality label set by admin
+  quality_label?: string; // 'HD CAM' | 'CINEMA' | 'FULL HD' | 'EXCLUSIVA'
+  // Content type
+  content_type?: string;
+  type?: string;
   // Purchase related fields (when movie is purchased)
   purchased_at?: string;
   access_token?: string;

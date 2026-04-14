@@ -115,11 +115,18 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
                 </div>
 
                 {/* Quality badge */}
-                <div className="absolute top-3 left-3">
-                  <span className="px-2 py-1 bg-green-600/80 text-green-100 text-xs font-bold rounded">
-                    HD
-                  </span>
-                </div>
+                {movie.quality_label && (
+                  <div className="absolute top-3 left-3">
+                    <span className={`px-2 py-1 text-xs font-bold rounded ${
+                      movie.quality_label === 'EXCLUSIVA' ? 'bg-red-600/80 text-red-100' :
+                      movie.quality_label === 'CINEMA' ? 'bg-purple-600/80 text-purple-100' :
+                      movie.quality_label === 'FULL HD' ? 'bg-blue-600/80 text-blue-100' :
+                      'bg-yellow-600/80 text-yellow-100'
+                    }`}>
+                      {movie.quality_label}
+                    </span>
+                  </div>
+                )}
 
                 {/* Price or Purchased badge */}
                 <div className="absolute top-3 right-3">
