@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import * as QRCode from 'qrcode';
+import { PixProvider, PixPaymentResult, PixPaymentStatus } from '../providers/pix-provider.interface';
 
 export interface CreatePixPaymentDto {
   amount: number; // in cents
@@ -11,14 +12,7 @@ export interface CreatePixPaymentDto {
   metadata?: Record<string, string>;
 }
 
-export interface PixPaymentResult {
-  paymentId: string;      // correlationID
-  status: string;         // ACTIVE, COMPLETED
-  qrCode: string;         // brCode (copia e cola)
-  qrCodeBase64: string;   // imagem do QR Code
-  expiresAt: Date;
-  amount: number;
-}
+export { PixPaymentResult };
 
 interface WooviCharge {
   status: string;
@@ -50,7 +44,7 @@ interface WooviChargeResponse {
 }
 
 @Injectable()
-export class WooviService {
+export class WooviService implements PixProvider {
   private readonly logger = new Logger(WooviService.name);
   private axiosInstance: AxiosInstance | null = null;
 
@@ -318,6 +312,31 @@ export class WooviService {
       this.logger.error(`Failed to check payment status: ${error.message}`);
       return false;
     }
+  }
+
+  /**
+   * Get payment status in the standardized PixPaymentStatus format
+   * Required by PixProvider interface
+   */
+  async getPaymentStatus(paymentId: string): Promise<PixPaymentStatus> {
+    const payment = await this.getPayment(paymentId);
+    const statusMap: Record<string, PixPaymentStatus['status']> = {
+      'ACTIVE': 'pending',
+      'COMPLETED': 'approved',
+      'EXPIRED': 'expired',
+    };
+    return {
+      status: statusMap[payment.originalStatus] || 'pending',
+      paidAt: payment.originalStatus === 'COMPLETED' ? new Date(payment.updatedAt) : undefined,
+    };
+  }
+
+  /**
+   * Get provider name identifier
+   * Required by PixProvider interface
+   */
+  getProviderName(): string {
+    return 'woovi';
   }
 
   /**

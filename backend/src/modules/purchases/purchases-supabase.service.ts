@@ -190,6 +190,36 @@ export class PurchasesSupabaseService {
 
     console.log('DEBUG: Incremented weekly_sales for content:', purchase.content_id);
 
+    // Track daily sales
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existingDaily } = await this.supabase
+      .from('daily_sales')
+      .select('id, sales_count, revenue_cents')
+      .eq('content_id', purchase.content_id)
+      .eq('sale_date', today)
+      .single();
+
+    if (existingDaily) {
+      await this.supabase
+        .from('daily_sales')
+        .update({
+          sales_count: (existingDaily.sales_count || 0) + 1,
+          revenue_cents: (existingDaily.revenue_cents || 0) + (purchase.amount_cents || 0),
+        })
+        .eq('id', existingDaily.id);
+    } else {
+      await this.supabase
+        .from('daily_sales')
+        .insert({
+          content_id: purchase.content_id,
+          sale_date: today,
+          sales_count: 1,
+          revenue_cents: purchase.amount_cents || 0,
+        });
+    }
+
+    console.log('DEBUG: Tracked daily sales for content:', purchase.content_id);
+
     if (purchase.preferred_delivery === PurchaseDeliveryType.SITE) {
       console.log('DEBUG: Generating JWT token for site delivery');
 

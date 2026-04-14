@@ -29,6 +29,7 @@ interface Content {
   release_year?: number;
   total_seasons?: number;
   total_episodes?: number;
+  quality_label?: string;
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +85,7 @@ export default function AdminContentEditPage() {
   const [priceInput, setPriceInput] = useState('');
   const [imdbRating, setImdbRating] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
+  const [qualityLabel, setQualityLabel] = useState('');
 
   // Image uploads
   const [posterUrl, setPosterUrl] = useState('');
@@ -147,6 +149,7 @@ export default function AdminContentEditPage() {
         setReleaseYear(data.release_year?.toString() || '');
         setPosterUrl(data.poster_url || '');
         setBackdropUrl(data.backdrop_url || '');
+        setQualityLabel(data.quality_label || '');
       } else {
         toast.error('Erro ao carregar conteúdo');
         router.push('/admin/content/manage');
@@ -255,6 +258,7 @@ export default function AdminContentEditPage() {
         price_cents: Math.round(parseFloat(priceInput) * 100),
         imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
+        quality_label: qualityLabel || null,
       };
 
       const response = await fetch(
@@ -418,6 +422,21 @@ export default function AdminContentEditPage() {
                   <div className="px-4 py-2 bg-dark-900/50 border border-white/10 rounded-lg text-gray-400">
                     {content.content_type === 'movie' ? 'Filme' : 'Série'} (não editável)
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Qualidade</label>
+                  <select
+                    value={qualityLabel}
+                    onChange={(e) => setQualityLabel(e.target.value)}
+                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  >
+                    <option value="">Selecione a qualidade</option>
+                    <option value="HD CAM">HD CAM</option>
+                    <option value="CINEMA">CINEMA</option>
+                    <option value="FULL HD">FULL HD</option>
+                    <option value="EXCLUSIVA">EXCLUSIVA</option>
+                  </select>
                 </div>
 
                 <div>

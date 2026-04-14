@@ -12,7 +12,6 @@ import {
   ShoppingBagIcon,
   FilmIcon
 } from '@heroicons/react/24/outline';
-import { RequestContentModal } from '@/components/RequestContentModal/RequestContentModal';
 
 interface HeaderProps {
   transparent?: boolean;
@@ -26,7 +25,6 @@ export function Header({ transparent = false }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
-  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -63,7 +61,7 @@ export function Header({ transparent = false }: HeaderProps) {
     { label: 'Categorias', href: '/categories' },
     ...(isTelegramUser ? [
       { label: 'Minhas Compras', href: '/dashboard', icon: ShoppingBagIcon },
-      { label: 'Fazer Pedido', onClick: () => setIsRequestModalOpen(true), icon: FilmIcon }
+      { label: 'Fazer Pedido', onClick: () => window.open('https://t.me/m/YAU1-zMrZDcx', '_blank'), icon: FilmIcon }
     ] : [])
   ];
 
@@ -335,11 +333,6 @@ export function Header({ transparent = false }: HeaderProps) {
         </div>
       )}
 
-      {/* Modal de Solicitação de Conteúdo */}
-      <RequestContentModal
-        isOpen={isRequestModalOpen}
-        onClose={() => setIsRequestModalOpen(false)}
-      />
     </>
   );
 }

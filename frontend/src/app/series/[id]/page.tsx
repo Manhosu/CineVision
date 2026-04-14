@@ -468,12 +468,26 @@ export default function SeriesDetailsPage() {
                     <div>
                       <dt className="text-sm tv:text-base font-medium text-gray-400 mb-1 tv:mb-2">Qualidade</dt>
                       <dd className="flex gap-2 tv:gap-3">
-                        <span className="px-2 py-1 tv:px-3 tv:py-2 bg-green-600/20 border border-green-600/30 text-green-400 text-xs tv:text-sm font-bold rounded">
-                          720p
-                        </span>
-                        <span className="px-2 py-1 tv:px-3 tv:py-2 bg-blue-600/20 border border-blue-600/30 text-blue-400 text-xs tv:text-sm font-bold rounded">
-                          1080p
-                        </span>
+                        {series.quality_label ? (
+                          <span className={`px-2 py-1 tv:px-3 tv:py-2 text-xs tv:text-sm font-bold rounded ${
+                            series.quality_label === 'HD CAM' ? 'bg-yellow-600/20 border border-yellow-600/30 text-yellow-400' :
+                            series.quality_label === 'CINEMA' ? 'bg-purple-600/20 border border-purple-600/30 text-purple-400' :
+                            series.quality_label === 'FULL HD' ? 'bg-blue-600/20 border border-blue-600/30 text-blue-400' :
+                            series.quality_label === 'EXCLUSIVA' ? 'bg-red-600/20 border border-red-600/30 text-red-400' :
+                            'bg-gray-600/20 border border-gray-600/30 text-gray-400'
+                          }`}>
+                            {series.quality_label}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="px-2 py-1 tv:px-3 tv:py-2 bg-green-600/20 border border-green-600/30 text-green-400 text-xs tv:text-sm font-bold rounded">
+                              720p
+                            </span>
+                            <span className="px-2 py-1 tv:px-3 tv:py-2 bg-blue-600/20 border border-blue-600/30 text-blue-400 text-xs tv:text-sm font-bold rounded">
+                              1080p
+                            </span>
+                          </>
+                        )}
                       </dd>
                     </div>
 

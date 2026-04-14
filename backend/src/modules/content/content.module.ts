@@ -5,6 +5,7 @@ import { ContentSupabaseService } from './services/content-supabase.service';
 import { TranscodeService } from './services/transcode.service';
 import { ContentLanguageService } from './services/content-language.service';
 import { ContentLanguageSupabaseService } from './services/content-language-supabase.service';
+import { WeeklyResetService } from './services/weekly-reset.service';
 import { Content } from './entities/content.entity';
 import { ContentLanguage } from './entities/content-language.entity';
 import { Category } from './entities/category.entity';
@@ -27,6 +28,7 @@ const conditionalProviders = isTypeOrmEnabled()
   : [
       ContentSupabaseService,
       ContentLanguageSupabaseService,
+      WeeklyResetService,
       {
         provide: ContentService,
         useExisting: ContentSupabaseService,

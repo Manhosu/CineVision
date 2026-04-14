@@ -7,6 +7,7 @@ import {
   Request,
   Logger,
   Query,
+  Param,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
@@ -31,7 +32,7 @@ export class BroadcastController {
   ) {}
 
   /**
-   * Send broadcast message to all users
+   * Send broadcast message to users (async fire-and-forget)
    */
   @Post('send')
   async sendBroadcast(@Request() req, @Body() broadcastData: SendBroadcastDto) {
@@ -43,13 +44,27 @@ export class BroadcastController {
         broadcastData,
       );
 
-      return {
-        success: true,
-        message: 'Broadcast enviado com sucesso',
-        ...result,
-      };
+      return result;
     } catch (error) {
       this.logger.error('Error in sendBroadcast:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get broadcast progress by ID
+   */
+  @Get('progress/:broadcastId')
+  async getBroadcastProgress(@Param('broadcastId') broadcastId: string) {
+    try {
+      const progress = await this.broadcastService.getBroadcastProgress(broadcastId);
+
+      return {
+        success: true,
+        ...progress,
+      };
+    } catch (error) {
+      this.logger.error('Error in getBroadcastProgress:', error);
       throw error;
     }
   }

@@ -17,6 +17,7 @@ import { TelegramsModule } from './modules/telegrams/telegrams.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { DiscountsModule } from './modules/discounts/discounts.module';
 import { ApiModule } from './api/api.module';
 import { HealthModule } from './health/health.module';
 // import { UploadProgressModule } from './modules/upload-progress/upload-progress.module';
@@ -129,6 +130,7 @@ import { AdminSettings } from './modules/admin/entities/admin-settings.entity';
     AdminModule,
     RequestsModule,
     AnalyticsModule,
+    DiscountsModule,
     ApiModule,
     HealthModule,
     // UploadProgressModule,

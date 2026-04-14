@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Outfit } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import { Providers } from '@/components/Providers';
 import './globals.css';
 
-const inter = Inter({
+const outfit = Outfit({
   subsets: ['latin'],
   variable: '--font-sans',
   display: 'swap',
@@ -79,7 +79,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <link rel="dns-prefetch" href={process.env.NEXT_PUBLIC_CDN_URL} />
       </head>
       <body
-        className={`${inter.variable} font-sans antialiased bg-dark-950 text-white min-h-screen`}
+        className={`${outfit.variable} font-sans antialiased bg-dark-950 text-white min-h-screen`}
         suppressHydrationWarning
       >
         <Providers>

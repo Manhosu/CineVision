@@ -7,6 +7,8 @@ import { HeroBanner } from '@/components/HeroBanner/HeroBanner';
 import { ContentRow } from '@/components/ContentRow/ContentRow';
 import { Footer } from '@/components/Footer/Footer';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
+import { FlashPromotionBanner } from '@/components/FlashPromotion/FlashPromotionBanner';
+import { WhatsAppPopup } from '@/components/WhatsApp/WhatsAppPopup';
 
 interface Movie {
   id: string;
@@ -238,12 +240,15 @@ function HomePageContent() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#0d0d0d' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#050508' }}>
       {/* Header fixo */}
       <Header />
 
       {/* Conteúdo principal */}
       <main className="relative">
+        {/* Flash Promotion Banner */}
+        <FlashPromotionBanner />
+
         {/* Banner Hero */}
         {isLoading ? (
           <LoadingSkeleton type="hero" />
@@ -252,7 +257,7 @@ function HomePageContent() {
         )}
 
         {/* Seções de conteúdo */}
-        <div className="relative z-10 -mt-32 pb-20">
+        <div className="relative z-10 -mt-16 md:-mt-32 pb-20">
           {isLoading ? (
             // Skeleton das seções
             <>
@@ -287,6 +292,9 @@ function HomePageContent() {
 
       {/* Rodapé */}
       <Footer />
+
+      {/* WhatsApp Popup */}
+      <WhatsAppPopup />
     </div>
   );
 }

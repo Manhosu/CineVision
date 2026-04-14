@@ -23,6 +23,7 @@ interface ContentFormData {
   is_featured: boolean;
   is_release: boolean;
   price_cents: number;
+  quality_label: string;
 }
 
 const AVAILABLE_GENRES = [
@@ -90,6 +91,7 @@ export default function AdminContentCreatePage() {
     is_featured: false,
     is_release: false,
     price_cents: 1990, // R$ 19.90 default
+    quality_label: '',
   });
 
   const [fileUpload, setFileUpload] = useState<FileUploadState>({
@@ -168,6 +170,7 @@ export default function AdminContentCreatePage() {
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
+        quality_label: formData.quality_label || undefined,
       };
 
       // Adicionar informações de série se aplicável
@@ -700,6 +703,22 @@ export default function AdminContentCreatePage() {
                     placeholder="Livre, 12, 14, 16, 18"
                     className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Qualidade</label>
+                  <select
+                    name="quality_label"
+                    value={formData.quality_label}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  >
+                    <option value="">Selecione a qualidade</option>
+                    <option value="HD CAM">HD CAM</option>
+                    <option value="CINEMA">CINEMA</option>
+                    <option value="FULL HD">FULL HD</option>
+                    <option value="EXCLUSIVA">EXCLUSIVA</option>
+                  </select>
                 </div>
 
                 <div>

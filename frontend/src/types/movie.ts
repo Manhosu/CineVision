@@ -31,6 +31,11 @@ export interface Movie {
   content_languages?: ContentLanguage[];
   created_at?: string;
   updated_at?: string;
+  // Discount related fields
+  discount_percentage?: number;
+  discounted_price_cents?: number;
+  original_price_cents?: number;
+  is_flash_promo?: boolean;
   // Purchase related fields (when movie is purchased)
   purchased_at?: string;
   access_token?: string;

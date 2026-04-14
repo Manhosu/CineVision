@@ -4,6 +4,7 @@ import { SupabaseService } from '../../config/supabase.service';
 import { StripeService } from './services/stripe.service';
 import { WooviService } from './services/woovi.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
+import { PixProviderFactory } from './providers/pix-provider.factory';
 import { PaymentMethod } from './providers/interfaces';
 import {
   CreatePaymentDto,
@@ -23,6 +24,7 @@ export class PaymentsSupabaseService {
     private readonly wooviService: WooviService,
     private readonly pixQRCodeService: PixQRCodeService,
     private readonly configService: ConfigService,
+    private readonly pixProviderFactory: PixProviderFactory,
   ) {
     this.logger.log('PaymentsSupabaseService initialized (Supabase mode)');
   }
@@ -304,10 +306,12 @@ export class PaymentsSupabaseService {
       const content = purchase.content;
       const amountCents = content.price_cents;
 
-      this.logger.log(`Creating PIX payment with Woovi for ${content.title} - R$ ${amountCents / 100}`);
+      const pixProvider = this.pixProviderFactory.getProvider();
+      const providerName = pixProvider.getProviderName();
+      this.logger.log(`Creating PIX payment with ${providerName} for ${content.title} - R$ ${amountCents / 100}`);
 
-      // Create PIX Payment with Woovi
-      const pixResult = await this.wooviService.createPixPayment({
+      // Create PIX Payment using the configured provider
+      const pixResult = await pixProvider.createPixPayment({
         amount: amountCents,
         description: `CineVision - ${content.title}`,
         email: purchase.user_email || 'cliente@cinevision.com',
@@ -318,7 +322,7 @@ export class PaymentsSupabaseService {
         },
       });
 
-      this.logger.log(`Woovi PIX payment created: ${pixResult.paymentId}`);
+      this.logger.log(`${providerName} PIX payment created: ${pixResult.paymentId}`);
 
       // Create payment record in database
       const { data: payment, error: paymentError } = await this.supabaseService.client
@@ -327,7 +331,7 @@ export class PaymentsSupabaseService {
           purchase_id: purchaseId,
           amount_cents: amountCents,
           payment_method: 'pix',
-          provider: 'woovi',
+          provider: providerName,
           provider_payment_id: pixResult.paymentId,
           status: 'pending',
         })

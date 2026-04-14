@@ -9,6 +9,109 @@ export class ContentSupabaseService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
   /**
+   * Fetches all active discounts and enriches content items with discount info.
+   * Uses direct Supabase queries to avoid circular dependency with DiscountsService.
+   */
+  private async enrichContentWithDiscounts(contentList: any[]): Promise<any[]> {
+    if (!contentList || contentList.length === 0) return contentList;
+
+    try {
+      const now = new Date().toISOString();
+
+      // Fetch all active discounts
+      const { data: activeDiscounts, error } = await this.supabaseService.client
+        .from('discounts')
+        .select('*')
+        .eq('is_active', true)
+        .lte('starts_at', now)
+        .gte('ends_at', now)
+        .order('discount_value', { ascending: false });
+
+      if (error || !activeDiscounts || activeDiscounts.length === 0) {
+        return contentList;
+      }
+
+      // Separate discounts by scope for efficient lookup
+      const individualDiscounts = activeDiscounts.filter(d => d.discount_scope === 'individual');
+      const categoryDiscounts = activeDiscounts.filter(d => d.discount_scope === 'category');
+      const globalDiscounts = activeDiscounts.filter(d => d.discount_scope === 'global');
+
+      // Build a map of content_id -> category_ids for category-based discounts
+      const contentIds = contentList.map(c => c.id);
+      let contentCategoryMap: Record<string, string[]> = {};
+
+      if (categoryDiscounts.length > 0 && contentIds.length > 0) {
+        const { data: contentCategories } = await this.supabaseService.client
+          .from('content_categories')
+          .select('content_id, category_id')
+          .in('content_id', contentIds);
+
+        if (contentCategories) {
+          for (const cc of contentCategories) {
+            if (!contentCategoryMap[cc.content_id]) {
+              contentCategoryMap[cc.content_id] = [];
+            }
+            contentCategoryMap[cc.content_id].push(cc.category_id);
+          }
+        }
+      }
+
+      // Enrich each content item
+      return contentList.map(content => {
+        let bestDiscount: any = null;
+
+        // 1. Check individual discount
+        const individual = individualDiscounts.find(d => d.scope_id === content.id);
+        if (individual) {
+          bestDiscount = individual;
+        }
+
+        // 2. Check category discount (only if no individual found)
+        if (!bestDiscount) {
+          const contentCatIds = contentCategoryMap[content.id] || [];
+          const category = categoryDiscounts.find(d => contentCatIds.includes(d.scope_id));
+          if (category) {
+            bestDiscount = category;
+          }
+        }
+
+        // 3. Check global discount (only if nothing else found)
+        if (!bestDiscount && globalDiscounts.length > 0) {
+          bestDiscount = globalDiscounts[0];
+        }
+
+        if (bestDiscount && content.price_cents) {
+          let discountPercentage: number;
+          let discountedPriceCents: number;
+
+          if (bestDiscount.discount_type === 'percentage') {
+            discountPercentage = bestDiscount.discount_value;
+            const discountAmount = Math.round(content.price_cents * (bestDiscount.discount_value / 100));
+            discountedPriceCents = Math.max(0, content.price_cents - discountAmount);
+          } else {
+            // Fixed discount
+            discountedPriceCents = Math.max(0, content.price_cents - bestDiscount.discount_value);
+            discountPercentage = Math.round(((content.price_cents - discountedPriceCents) / content.price_cents) * 100);
+          }
+
+          return {
+            ...content,
+            original_price_cents: content.price_cents,
+            discount_percentage: discountPercentage,
+            discounted_price_cents: discountedPriceCents,
+            is_flash_promo: bestDiscount.is_flash || false,
+          };
+        }
+
+        return content;
+      });
+    } catch (err) {
+      this.logger.warn(`Failed to enrich content with discounts: ${err}`);
+      return contentList;
+    }
+  }
+
+  /**
    * Smart search using PostgreSQL RPC function with fuzzy search, unaccent, and word splitting.
    * Falls back to improved ILIKE if RPC is not available.
    */
@@ -135,6 +238,9 @@ export class ContentSupabaseService {
   }
 
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
+    // Cap limit to prevent unbounded queries
+    limit = Math.min(limit, 100);
+
     // Use smart search when searching without genre filter
     if (search && search.trim() && !genre) {
       return this.smartSearch(search, ContentType.MOVIE, page, limit, sort);
@@ -245,8 +351,10 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch movies: ${error.message}`);
     }
 
+    const enrichedMovies = await this.enrichContentWithDiscounts(movies || []);
+
     return {
-      movies: movies || [],
+      movies: enrichedMovies,
       total: count || 0,
       page,
       limit,
@@ -300,6 +408,9 @@ export class ContentSupabaseService {
   }
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
+    // Cap limit to prevent unbounded queries
+    limit = Math.min(limit, 100);
+
     // Use smart search when searching without genre filter
     if (search && search.trim() && !genre) {
       return this.smartSearch(search, ContentType.SERIES, page, limit, sort);
@@ -426,8 +537,10 @@ export class ContentSupabaseService {
       return item;
     });
 
+    const enrichedSeries = await this.enrichContentWithDiscounts(seriesWithUrls);
+
     return {
-      movies: seriesWithUrls,
+      movies: enrichedSeries,
       total: count || 0,
       page,
       limit,
@@ -582,8 +695,8 @@ export class ContentSupabaseService {
       `)
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.MOVIE)
-      .order('views_count', { ascending: false })
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('views_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -591,7 +704,7 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch top 10 films: ${error.message}`);
     }
 
-    return films || [];
+    return this.enrichContentWithDiscounts(films || []);
   }
 
   async findTop10Series() {
@@ -612,8 +725,8 @@ export class ContentSupabaseService {
       `)
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.SERIES)
-      .order('views_count', { ascending: false })
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('views_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -621,7 +734,7 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch top 10 series: ${error.message}`);
     }
 
-    return series || [];
+    return this.enrichContentWithDiscounts(series || []);
   }
 
   async findFeaturedContent(limit = 10) {

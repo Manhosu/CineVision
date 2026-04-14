@@ -59,6 +59,9 @@ export class User {
   @Column({ default: false })
   blocked: boolean;
 
+  @Column({ default: false })
+  whatsapp_joined: boolean;
+
   @Column({ nullable: true })
   refresh_token?: string;
 

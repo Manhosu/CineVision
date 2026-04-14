@@ -93,6 +93,14 @@ export class UsersController {
     return this.usersService.unbanUser(id);
   }
 
+  @Patch(':id/whatsapp-joined')
+  @ApiOperation({ summary: 'Update user WhatsApp joined status' })
+  @ApiResponse({ status: 200, description: 'WhatsApp joined status updated successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  updateWhatsappJoined(@Param('id') id: string, @Body() body: { joined: boolean }) {
+    return this.usersService.updateWhatsappJoined(id, body.joined);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete user (Admin only)' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })

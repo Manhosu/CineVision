@@ -73,6 +73,13 @@ export class AdminSettingsService {
   }
 
   /**
+   * Update or create a setting by key (public accessor)
+   */
+  async updateSettingByKey(key: string, value: string): Promise<AdminSettings> {
+    return this.updateSetting(key, value);
+  }
+
+  /**
    * Get all settings as key-value map
    */
   async getAllSettings(): Promise<Record<string, string>> {

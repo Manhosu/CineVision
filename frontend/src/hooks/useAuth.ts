@@ -11,6 +11,7 @@ export interface User {
   name?: string;
   telegram_id?: string;
   telegram_username?: string;
+  whatsapp_joined?: boolean;
 }
 
 export interface AuthState {
@@ -61,7 +62,8 @@ export function useAuth(): AuthState & {
             role: userData.role || 'user',
             name: userData.name || userData.telegram_username || 'Usuário',
             telegram_id: userData.telegram_id,
-            telegram_username: userData.telegram_username
+            telegram_username: userData.telegram_username,
+            whatsapp_joined: userData.whatsapp_joined || false,
           });
           setIsAuthenticated(true);
           localStorage.setItem('auth_token', backendToken);

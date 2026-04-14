@@ -84,6 +84,12 @@ export class UsersService {
     return this.update(id, { status: 'active' as any });
   }
 
+  async updateWhatsappJoined(userId: string, joined: boolean): Promise<User> {
+    const user = await this.findById(userId);
+    user.whatsapp_joined = joined;
+    return this.userRepository.save(user);
+  }
+
   async getUserStats() {
     const total = await this.userRepository.count();
     const active = await this.userRepository.count({ where: { status: 'active' as any } });

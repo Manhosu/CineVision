@@ -145,12 +145,30 @@ export class UsersSupabaseService {
 
   async updateRefreshToken(id: string, refreshToken: string | null): Promise<void> {
     this.logger.log(`Updating refresh token for user: ${id}`);
-    
+
     try {
       await this.supabaseClient.update('users', { refresh_token: refreshToken }, { id });
     } catch (error) {
       this.logger.error('Failed to update refresh token:', error.message);
       throw new Error(`Failed to update refresh token: ${error.message}`);
+    }
+  }
+
+  async updateWhatsappJoined(userId: string, joined: boolean): Promise<any> {
+    this.logger.log(`Updating whatsapp_joined for user: ${userId} to ${joined}`);
+
+    try {
+      const result = await this.supabaseClient.update('users', { whatsapp_joined: joined }, { id: userId });
+      if (result.length === 0) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+      return result[0];
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error('Failed to update whatsapp_joined:', error.message);
+      throw new Error(`Failed to update whatsapp_joined: ${error.message}`);
     }
   }
 }

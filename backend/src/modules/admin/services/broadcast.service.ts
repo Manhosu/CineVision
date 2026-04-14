@@ -64,7 +64,7 @@ export class BroadcastService {
         }
       }
 
-      this.logger.log(`✅ Total users fetched: ${allUsers.length}`);
+      this.logger.log(`Total users fetched: ${allUsers.length}`);
       return allUsers;
     } catch (error) {
       this.logger.error('Error in getAllBotUsers:', error);
@@ -73,7 +73,7 @@ export class BroadcastService {
   }
 
   /**
-   * Send a message to a single Telegram user
+   * Send a text message to a single Telegram user
    */
   async sendMessageToUser(
     chatId: string,
@@ -87,10 +87,15 @@ export class BroadcastService {
     const endpoint = `${this.telegramApiUrl}/sendMessage`;
 
     try {
+      // Convert Markdown bold (*text*) to HTML bold (<b>text</b>) for better emoji support
+      const htmlText = messageText
+        .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+        .replace(/_([^_]+)_/g, '<i>$1</i>');
+
       const payload: any = {
         chat_id: chatId,
-        text: messageText,
-        parse_mode: 'Markdown',
+        text: htmlText,
+        parse_mode: 'HTML',
       };
 
       // Priority: use inline_buttons if provided, otherwise fall back to single button
@@ -148,20 +153,89 @@ export class BroadcastService {
   }
 
   /**
-   * Send broadcast to specific telegram IDs with rate limiting
-   * Telegram allows ~30 messages per second, we'll use 25 to be safe
+   * Send a photo with optional caption to a single Telegram user
+   */
+  async sendPhotoToUser(
+    chatId: string,
+    photoUrl: string,
+    caption?: string,
+    options?: {
+      buttonText?: string;
+      buttonUrl?: string;
+      inlineButtons?: Array<{ text: string; url: string }>;
+    },
+  ): Promise<boolean> {
+    const endpoint = `${this.telegramApiUrl}/sendPhoto`;
+
+    try {
+      // Convert Markdown to HTML for better emoji/accent support
+      const htmlCaption = caption
+        ? caption.replace(/\*([^*]+)\*/g, '<b>$1</b>').replace(/_([^_]+)_/g, '<i>$1</i>')
+        : undefined;
+
+      const payload: any = {
+        chat_id: chatId,
+        photo: photoUrl,
+        parse_mode: 'HTML',
+      };
+
+      if (htmlCaption) {
+        payload.caption = htmlCaption;
+      }
+
+      // Priority: use inline_buttons if provided, otherwise fall back to single button
+      if (options?.inlineButtons && Array.isArray(options.inlineButtons) && options.inlineButtons.length > 0) {
+        const inlineKeyboard = options.inlineButtons.map(button => [{
+          text: button.text,
+          url: button.url,
+        }]);
+
+        payload.reply_markup = {
+          inline_keyboard: inlineKeyboard,
+        };
+      } else if (options?.buttonText && options?.buttonUrl) {
+        const buttonText = typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
+        const buttonUrl = typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
+
+        if (buttonText && buttonUrl) {
+          payload.reply_markup = {
+            inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
+          };
+        }
+      }
+
+      const response = await axios.post(endpoint, payload);
+
+      if (response.data.ok) {
+        return true;
+      } else {
+        this.logger.warn(`Failed to send photo to ${chatId}:`, response.data);
+        return false;
+      }
+    } catch (error) {
+      this.logger.error(`Error sending photo to ${chatId}:`, error.message);
+
+      if (error.response?.data) {
+        this.logger.error(`Telegram API error response:`, JSON.stringify(error.response.data));
+      }
+
+      return false;
+    }
+  }
+
+  /**
+   * Send broadcast to specific telegram IDs or all users.
+   * Returns immediately with broadcast_id; sending continues in background.
    */
   async sendBroadcast(
     adminId: string,
     broadcastData: SendBroadcastDto,
   ): Promise<{
     success: boolean;
-    total_users: number;
-    successful_sends: number;
-    failed_sends: number;
     broadcast_id: string;
-    successful_telegram_ids: string[];
-    failed_telegram_ids: string[];
+    total_users: number;
+    status: string;
+    message: string;
   }> {
     try {
       // Validate that telegram_ids is provided and not empty
@@ -169,95 +243,48 @@ export class BroadcastService {
         throw new BadRequestException('telegram_ids é obrigatório e deve conter pelo menos um ID');
       }
 
-      // Ensure all telegram_ids are strings and trim them
-      const cleanedIds = broadcastData.telegram_ids
-        .map(id => String(id || '').trim())
-        .filter(id => id);
+      let users: any[];
 
-      if (cleanedIds.length === 0) {
-        throw new BadRequestException('Nenhum telegram_id válido foi fornecido');
+      // Support 'all' to send to every bot user
+      if (broadcastData.telegram_ids.length === 1 && broadcastData.telegram_ids[0] === 'all') {
+        this.logger.log('Broadcast target: ALL users');
+        users = await this.getAllBotUsers();
+      } else {
+        // Ensure all telegram_ids are strings and trim them
+        const cleanedIds = broadcastData.telegram_ids
+          .map(id => String(id || '').trim())
+          .filter(id => id);
+
+        if (cleanedIds.length === 0) {
+          throw new BadRequestException('Nenhum telegram_id válido foi fornecido');
+        }
+
+        this.logger.log(`Fetching users with specific telegram IDs: ${cleanedIds.join(', ')}`);
+
+        // Fetch users by telegram IDs
+        const { data, error } = await this.supabase
+          .from('users')
+          .select('id, telegram_id, telegram_chat_id, telegram_username, name')
+          .in('telegram_id', cleanedIds)
+          .not('telegram_chat_id', 'is', null);
+
+        if (error) {
+          this.logger.error('Error fetching specific users:', error);
+          throw new Error('Falha ao buscar usuários específicos');
+        }
+
+        users = data || [];
       }
-
-      this.logger.log(`Fetching users with specific telegram IDs: ${cleanedIds.join(', ')}`);
-
-      // Fetch users by telegram IDs
-      const { data, error } = await this.supabase
-        .from('users')
-        .select('id, telegram_id, telegram_chat_id, telegram_username, name')
-        .in('telegram_id', cleanedIds)
-        .not('telegram_chat_id', 'is', null);
-
-      if (error) {
-        this.logger.error('Error fetching specific users:', error);
-        throw new Error('Falha ao buscar usuários específicos');
-      }
-
-      const users = data || [];
 
       if (users.length === 0) {
         throw new BadRequestException('Nenhum usuário encontrado com os IDs fornecidos. Certifique-se de que os usuários iniciaram conversa com o bot.');
       }
 
-      // Log found users vs requested IDs
-      const foundIds = users.map(u => String(u.telegram_id || ''));
-      const notFoundIds = cleanedIds.filter(id => !foundIds.includes(id));
-      if (notFoundIds.length > 0) {
-        this.logger.warn(`Telegram IDs not found or without chat_id: ${notFoundIds.join(', ')}`);
-      }
+      // Filter users that have telegram_chat_id
+      const validUsers = users.filter(u => u.telegram_chat_id);
+      this.logger.log(`Starting broadcast to ${validUsers.length} users (${users.length} total, ${users.length - validUsers.length} without chat_id)`);
 
-      this.logger.log(`Starting broadcast to ${users.length} users`);
-      this.logger.log(`Users with telegram_chat_id: ${users.filter(u => u.telegram_chat_id).length}`);
-
-      // Log user details for debugging
-      users.forEach(user => {
-        this.logger.log(`User ${user.telegram_id}: chat_id=${user.telegram_chat_id || 'MISSING'}, username=${user.telegram_username || 'none'}`);
-      });
-
-      let successCount = 0;
-      let failCount = 0;
-      const successfulTelegramIds: string[] = [];
-      const failedTelegramIds: string[] = [];
-
-      // Rate limiting: 25 messages per second
-      const messagesPerSecond = 25;
-      const delayMs = 1000 / messagesPerSecond; // ~40ms between messages
-
-      // Send messages with rate limiting
-      for (const user of users) {
-        if (!user.telegram_chat_id) {
-          this.logger.warn(`User ${user.telegram_id} has no telegram_chat_id`);
-          failCount++;
-          failedTelegramIds.push(String(user.telegram_id || 'unknown'));
-          continue;
-        }
-
-        this.logger.log(`Sending message to user ${user.telegram_id} (chat_id: ${user.telegram_chat_id})`);
-
-        const success = await this.sendMessageToUser(
-          user.telegram_chat_id,
-          broadcastData.message_text,
-          {
-            inlineButtons: broadcastData.inline_buttons,
-            buttonText: broadcastData.button_text,
-            buttonUrl: broadcastData.button_url,
-          },
-        );
-
-        if (success) {
-          successCount++;
-          successfulTelegramIds.push(String(user.telegram_id));
-          this.logger.log(`✅ Message sent successfully to ${user.telegram_id}`);
-        } else {
-          failCount++;
-          failedTelegramIds.push(String(user.telegram_id));
-          this.logger.error(`❌ Failed to send message to ${user.telegram_id}`);
-        }
-
-        // Wait before sending next message (rate limiting)
-        await this.sleep(delayMs);
-      }
-
-      // Save broadcast record to database
+      // Create broadcast record with status 'sending'
       const { data: broadcast, error: broadcastError } = await this.supabase
         .from('broadcasts')
         .insert({
@@ -267,33 +294,244 @@ export class BroadcastService {
           video_url: null,
           button_text: broadcastData.button_text || null,
           button_url: broadcastData.button_url || null,
-          recipients_count: successCount,
-          recipient_telegram_ids: successfulTelegramIds.length > 0 ? successfulTelegramIds.join(',') : null,
+          recipients_count: 0,
+          recipient_telegram_ids: validUsers.map(u => String(u.telegram_id)).join(','),
+          status: 'sending',
+          total_users: validUsers.length,
+          successful_sends: 0,
+          failed_sends: 0,
+          progress_percent: 0,
+          failed_telegram_ids: null,
         })
         .select()
         .single();
 
-      if (broadcastError) {
-        this.logger.error('Error saving broadcast record:', broadcastError);
+      if (broadcastError || !broadcast) {
+        this.logger.error('Error creating broadcast record:', broadcastError);
+        throw new Error('Falha ao criar registro de broadcast');
       }
 
-      this.logger.log(
-        `Broadcast completed: ${successCount} successful, ${failCount} failed out of ${users.length} users`,
-      );
-      this.logger.log(`Successful IDs: ${successfulTelegramIds.join(', ')}`);
-      this.logger.log(`Failed IDs: ${failedTelegramIds.join(', ')}`);
+      const broadcastId = broadcast.id;
+
+      // Fire-and-forget: start async processing in background
+      this.processBroadcastAsync(broadcastId, validUsers, broadcastData).catch(err => {
+        this.logger.error(`Background broadcast ${broadcastId} crashed:`, err.message);
+      });
 
       return {
         success: true,
-        total_users: users.length,
-        successful_sends: successCount,
-        failed_sends: failCount,
-        broadcast_id: broadcast?.id || '',
-        successful_telegram_ids: successfulTelegramIds,
-        failed_telegram_ids: failedTelegramIds,
+        broadcast_id: broadcastId,
+        total_users: validUsers.length,
+        status: 'sending',
+        message: `Broadcast iniciado para ${validUsers.length} usuários. Acompanhe o progresso pelo ID.`,
       };
     } catch (error) {
       this.logger.error('Error in sendBroadcast:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process broadcast asynchronously in background with batched sending.
+   * 20 users per batch, 10 seconds between batches.
+   */
+  private async processBroadcastAsync(
+    broadcastId: string,
+    users: any[],
+    broadcastData: SendBroadcastDto,
+  ): Promise<void> {
+    const BATCH_SIZE = 20;
+    const BATCH_DELAY_MS = 10000;
+
+    let successCount = 0;
+    let failCount = 0;
+    const failedTelegramIds: string[] = [];
+
+    const totalUsers = users.length;
+    const hasImage = !!broadcastData.image_url;
+    const buttonOptions = {
+      inlineButtons: broadcastData.inline_buttons,
+      buttonText: broadcastData.button_text,
+      buttonUrl: broadcastData.button_url,
+    };
+
+    this.logger.log(`[Broadcast ${broadcastId}] Starting async processing for ${totalUsers} users (batch size: ${BATCH_SIZE}, delay: ${BATCH_DELAY_MS}ms)`);
+
+    try {
+      for (let i = 0; i < totalUsers; i += BATCH_SIZE) {
+        const batch = users.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(totalUsers / BATCH_SIZE);
+
+        this.logger.log(`[Broadcast ${broadcastId}] Processing batch ${batchNum}/${totalBatches} (${batch.length} users)`);
+
+        for (const user of batch) {
+          if (!user.telegram_chat_id) {
+            failCount++;
+            failedTelegramIds.push(String(user.telegram_id || 'unknown'));
+            continue;
+          }
+
+          let success: boolean;
+
+          if (hasImage) {
+            // Send photo with caption
+            success = await this.sendPhotoToUser(
+              user.telegram_chat_id,
+              broadcastData.image_url!,
+              broadcastData.message_text,
+              buttonOptions,
+            );
+          } else {
+            // Send text message
+            success = await this.sendMessageToUser(
+              user.telegram_chat_id,
+              broadcastData.message_text,
+              buttonOptions,
+            );
+          }
+
+          if (success) {
+            successCount++;
+          } else {
+            failCount++;
+            failedTelegramIds.push(String(user.telegram_id || 'unknown'));
+
+            // Check if user blocked the bot - mark as inactive
+            // This is handled inside the catch of send methods,
+            // but we also try to mark here based on failure
+            await this.handleBlockedUser(user.telegram_chat_id, user.telegram_id);
+          }
+        }
+
+        // Update progress in database after each batch
+        const processed = Math.min(i + BATCH_SIZE, totalUsers);
+        const progressPercent = Math.round((processed / totalUsers) * 100);
+
+        await this.updateBroadcastProgress(broadcastId, {
+          successful_sends: successCount,
+          failed_sends: failCount,
+          progress_percent: progressPercent,
+          recipients_count: successCount,
+          failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+        });
+
+        this.logger.log(`[Broadcast ${broadcastId}] Batch ${batchNum} done. Progress: ${progressPercent}% (success: ${successCount}, failed: ${failCount})`);
+
+        // Wait between batches (skip delay after last batch)
+        if (i + BATCH_SIZE < totalUsers) {
+          await this.sleep(BATCH_DELAY_MS);
+        }
+      }
+
+      // Mark broadcast as completed
+      await this.updateBroadcastProgress(broadcastId, {
+        status: 'completed',
+        successful_sends: successCount,
+        failed_sends: failCount,
+        progress_percent: 100,
+        recipients_count: successCount,
+        failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+      });
+
+      this.logger.log(`[Broadcast ${broadcastId}] Completed: ${successCount} successful, ${failCount} failed out of ${totalUsers} users`);
+    } catch (error) {
+      this.logger.error(`[Broadcast ${broadcastId}] Error during async processing:`, error.message);
+
+      // Mark broadcast as failed
+      await this.updateBroadcastProgress(broadcastId, {
+        status: 'failed',
+        successful_sends: successCount,
+        failed_sends: failCount,
+        progress_percent: Math.round(((successCount + failCount) / totalUsers) * 100),
+        failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+      });
+    }
+  }
+
+  /**
+   * Update broadcast progress in the database
+   */
+  private async updateBroadcastProgress(
+    broadcastId: string,
+    updates: {
+      status?: string;
+      successful_sends?: number;
+      failed_sends?: number;
+      progress_percent?: number;
+      recipients_count?: number;
+      failed_telegram_ids?: string | null;
+    },
+  ): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from('broadcasts')
+        .update(updates)
+        .eq('id', broadcastId);
+
+      if (error) {
+        this.logger.error(`Error updating broadcast ${broadcastId} progress:`, error);
+      }
+    } catch (error) {
+      this.logger.error(`Error in updateBroadcastProgress:`, error.message);
+    }
+  }
+
+  /**
+   * Check if a user has blocked the bot and mark them as inactive.
+   * Called when a send fails - verifies with a getChat call.
+   */
+  private async handleBlockedUser(chatId: string, telegramId: string): Promise<void> {
+    try {
+      // Try getChat to verify if user blocked the bot
+      const endpoint = `${this.telegramApiUrl}/getChat`;
+      await axios.post(endpoint, { chat_id: chatId });
+      // If getChat succeeds, user didn't block - failure was something else
+    } catch (error) {
+      const statusCode = error.response?.status;
+      const errorCode = error.response?.data?.error_code;
+
+      // 403 = bot blocked by user, 400 = chat not found / user deactivated
+      if (statusCode === 403 || errorCode === 403 || statusCode === 400 || errorCode === 400) {
+        this.logger.warn(`User ${telegramId} (chat: ${chatId}) appears to have blocked the bot or deactivated. Marking as inactive.`);
+
+        try {
+          const { error: updateError } = await this.supabase
+            .from('users')
+            .update({ is_active: false })
+            .eq('telegram_id', telegramId);
+
+          if (updateError) {
+            this.logger.error(`Error marking user ${telegramId} as inactive:`, updateError);
+          } else {
+            this.logger.log(`User ${telegramId} marked as inactive`);
+          }
+        } catch (dbError) {
+          this.logger.error(`Error updating user ${telegramId} inactive status:`, dbError.message);
+        }
+      }
+    }
+  }
+
+  /**
+   * Get broadcast progress by ID
+   */
+  async getBroadcastProgress(broadcastId: string): Promise<any> {
+    try {
+      const { data, error } = await this.supabase
+        .from('broadcasts')
+        .select('id, status, total_users, successful_sends, failed_sends, progress_percent, failed_telegram_ids, sent_at')
+        .eq('id', broadcastId)
+        .single();
+
+      if (error) {
+        this.logger.error('Error fetching broadcast progress:', error);
+        throw new Error('Falha ao buscar progresso do broadcast');
+      }
+
+      return data;
+    } catch (error) {
+      this.logger.error('Error in getBroadcastProgress:', error);
       throw error;
     }
   }

@@ -106,6 +106,13 @@ export class AdminSettingsSupabaseService {
   }
 
   /**
+   * Update or create a setting by key (public accessor)
+   */
+  async updateSettingByKey(key: string, value: string): Promise<any> {
+    return this.updateSetting(key, value);
+  }
+
+  /**
    * Get all settings as key-value map
    */
   async getAllSettings(): Promise<Record<string, string>> {

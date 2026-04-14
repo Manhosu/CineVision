@@ -130,9 +130,9 @@ export function HeroBanner({
   };
 
   return (
-    <div className="relative h-[70vh] min-h-[500px] overflow-hidden">
+    <div className="relative h-[80vh] md:h-[75vh] min-h-[550px] overflow-hidden">
       {/* Background Image */}
-      <div className="absolute inset-0 min-h-[500px]">
+      <div className="absolute inset-0">
         <NextImage
           src={currentMovie.backdrop_url || currentMovie.poster_url || '/placeholder-movie.jpg'}
           alt={currentMovie.title}
@@ -140,83 +140,85 @@ export function HeroBanner({
           className="object-cover"
           priority
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
+        {/* Gradient overlays - stronger on mobile for readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050508] via-[#050508]/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050508]/60 to-transparent md:from-[#050508]/40" />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 h-full flex items-center">
-        <div className="container mx-auto px-4 lg:px-8">
-          <div className="max-w-2xl">
-            <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
+      {/* Content - positioned at bottom for clean mobile look */}
+      <div className="relative z-10 h-full flex items-end pb-20 md:pb-16">
+        <div className="container mx-auto px-5 lg:px-8">
+          <div className="max-w-lg lg:max-w-2xl">
+            <h1 className="text-2xl md:text-4xl lg:text-5xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
               {currentMovie.title}
             </h1>
-            
-            <div className="flex items-center gap-4 mb-4 text-white/80">
-              {currentMovie.age_rating && (
-                <div className="border-2 border-yellow-500 text-yellow-500 px-3 py-1 rounded font-bold text-sm">
-                  {currentMovie.age_rating}
-                </div>
+
+            {/* Compact metadata row - FilmZone style */}
+            <div className="flex items-center gap-3 mb-2 text-xs md:text-sm text-white/60">
+              {currentMovie.imdb_rating && (
+                <span className="text-white/80 font-medium">IMDB {currentMovie.imdb_rating}</span>
               )}
-              <div className="flex items-center gap-1">
-                <ClockIcon className="w-5 h-5" />
-                <span>{currentMovie.duration_minutes ? `${currentMovie.duration_minutes} min` : 'N/A'}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <CalendarIcon className="w-5 h-5" />
-                <span>{currentMovie.release_year || 'N/A'}</span>
-              </div>
+              {currentMovie.release_year && (
+                <span>{currentMovie.release_year}</span>
+              )}
+              {currentMovie.duration_minutes && (
+                <span>{Math.floor(currentMovie.duration_minutes / 60)}h {currentMovie.duration_minutes % 60}m</span>
+              )}
+              {currentMovie.age_rating && (
+                <span className="border border-white/30 text-white/70 px-1.5 py-0.5 rounded text-xs font-medium">
+                  {currentMovie.age_rating}
+                </span>
+              )}
             </div>
 
-            <p className="text-lg text-white/90 mb-8 line-clamp-3">
+            <p className="text-sm text-white/60 mb-4 line-clamp-2 md:line-clamp-3 leading-relaxed">
               {currentMovie.description || 'Descrição não disponível.'}
             </p>
 
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => {
-                  const contentType = currentMovie.content_type || currentMovie.type;
-                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
-                  router.push(route);
-                }}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
-              >
-                <PlayIcon className="w-5 h-5" />
-                Assistir - {formatPrice(currentMovie.price_cents || 1999)}
-              </button>
-            </div>
+            {/* Clean white button - FilmZone style */}
+            <button
+              onClick={() => {
+                const contentType = currentMovie.content_type || currentMovie.type;
+                const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
+                router.push(route);
+              }}
+              className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
+            >
+              <PlayIcon className="w-4 h-4" />
+              Assistir
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Navigation Arrows */}
+      {/* Navigation Arrows - hidden on mobile for cleaner look */}
       {movies.length > 1 && (
         <>
           <button
             onClick={goToPrevious}
-            className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+            className="hidden md:block absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full transition-colors"
           >
-            <ChevronLeftIcon className="w-6 h-6" />
+            <ChevronLeftIcon className="w-5 h-5" />
           </button>
-          
+
           <button
             onClick={goToNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+            className="hidden md:block absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/60 text-white p-2 rounded-full transition-colors"
           >
-            <ChevronRightIcon className="w-6 h-6" />
+            <ChevronRightIcon className="w-5 h-5" />
           </button>
         </>
       )}
 
-      {/* Dots Indicator */}
+      {/* Dots Indicator - smaller and subtler */}
       {movies.length > 1 && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-2">
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
           {movies.map((_, index) => (
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-colors ${
-                index === currentIndex ? 'bg-white' : 'bg-white/50'
+              className={`transition-all duration-300 rounded-full ${
+                index === currentIndex ? 'w-6 h-2 bg-white' : 'w-2 h-2 bg-white/40'
               }`}
             />
           ))}

@@ -111,31 +111,26 @@ export function ContentRow({
 
   return (
     <section
-      className={`relative ${isTop10 ? 'py-16' : 'py-12'}`}
+      className={`relative ${isTop10 ? 'py-8 md:py-12' : 'py-6 md:py-10'}`}
       style={{
-        backgroundColor: '#0d0d0d'
+        backgroundColor: '#050508'
       }}
     >
       <div className="container mx-auto px-4 lg:px-6">
-        {/* Título da seção */}
-        <div className={`${isTop10 ? 'text-center mb-12' : 'flex items-center justify-between mb-8'}`}>
-          <h2
-            className="font-extrabold text-white"
-            style={{
-              fontSize: isTop10 ? 'clamp(2rem, 4vw, 3rem)' : 'clamp(1.5rem, 3vw, 2rem)',
-              textShadow: '0 4px 12px rgba(0,0,0,0.5)',
-              letterSpacing: '-0.02em'
-            }}
-          >
-            {title}
-          </h2>
-
-          {/* Contador de filmes (opcional) */}
-          {!isTop10 && (
-            <span className="hidden sm:block text-sm text-gray-400">
-              {movies.length} {movies.length === 1 ? 'filme' : 'filmes'}
-            </span>
-          )}
+        {/* Título da seção - estilo clean com barra vermelha */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-1 h-5 bg-red-600 rounded-full" />
+            <h2
+              className="font-bold text-white uppercase tracking-wide"
+              style={{
+                fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
+              }}
+            >
+              {title}
+            </h2>
+            {isTop10 && <span className="text-lg">🔥</span>}
+          </div>
         </div>
 
         {/* Container do carrossel */}

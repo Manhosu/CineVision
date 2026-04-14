@@ -7,6 +7,7 @@ import { AdminContentSimpleService } from './services/admin-content-simple.servi
 import { AdminStatsController } from './controllers/admin-stats.controller';
 import { AdminStatsService } from './services/admin-stats.service';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
+import { PublicSettingsController } from './controllers/public-settings.controller';
 import { AdminSettingsService } from './services/admin-settings.service';
 import { AdminSettingsSupabaseService } from './services/admin-settings-supabase.service';
 import { AdminImageUploadController } from './controllers/admin-image-upload.controller';
@@ -20,6 +21,8 @@ import { AdminUsersController } from './controllers/admin-users.controller';
 import { RequestsSupabaseService } from '../requests/requests-supabase.service';
 import { BroadcastController } from './controllers/broadcast.controller';
 import { BroadcastService } from './services/broadcast.service';
+import { AdminTop10Controller, AdminSalesController } from './controllers/admin-top10.controller';
+import { AdminTop10Service } from './services/admin-top10.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -52,6 +55,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminContentController,
   AdminStatsController,
   AdminSettingsController,
+  PublicSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
   AdminUsersController,
@@ -61,11 +65,14 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminContentController,
   AdminStatsController,
   AdminSettingsController,
+  PublicSettingsController,
   AdminImageUploadController,
   AdminPurchasesController,
   AdminUsersController,
   AdminRequestsPublicController,
   BroadcastController,
+  AdminTop10Controller,
+  AdminSalesController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -98,6 +105,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   BroadcastService,
   TelegramsEnhancedService,
   RequestsSupabaseService,
+  AdminTop10Service,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];

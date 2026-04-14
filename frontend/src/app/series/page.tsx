@@ -38,7 +38,7 @@ const fetchSeries = async (page: number, genre?: string, sort?: string) => {
   try {
     const searchParams = new URLSearchParams();
     searchParams.append('page', page.toString());
-    searchParams.append('limit', '20');
+    searchParams.append('limit', '40');
 
     if (genre) searchParams.append('genre', genre);
     if (sort) searchParams.append('sort', sort);
@@ -83,10 +83,11 @@ function SeriesPageContent() {
   const [seriesData, setSeriesData] = useState<SeriesData>({ movies: [], pagination: { page: 1, totalPages: 1, total: 0 } });
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
 
-  const page = parseInt(searchParams?.get('page') || '1');
   const genre = searchParams?.get('genre') || undefined;
   const sort = searchParams?.get('sort') || 'newest';
 
@@ -94,12 +95,12 @@ function SeriesPageContent() {
     const loadData = async () => {
       try {
         setLoading(true);
+        setCurrentPage(1);
         const [seriesResult, categoriesResult] = await Promise.all([
-          fetchSeries(page, genre, sort),
+          fetchSeries(1, genre, sort),
           fetchCategories()
         ]);
 
-        // Ensure seriesResult has correct structure
         const validSeriesData = {
           movies: seriesResult?.movies || [],
           pagination: seriesResult?.pagination || { page: 1, totalPages: 1, total: 0 }
@@ -116,7 +117,26 @@ function SeriesPageContent() {
     };
 
     loadData();
-  }, [page, genre, sort]);
+  }, [genre, sort]);
+
+  const handleLoadMore = async () => {
+    const nextPage = currentPage + 1;
+    setLoadingMore(true);
+    try {
+      const result = await fetchSeries(nextPage, genre, sort);
+      setSeriesData(prev => ({
+        movies: [...prev.movies, ...(result?.movies || [])],
+        pagination: result?.pagination || prev.pagination
+      }));
+      setCurrentPage(nextPage);
+    } catch (err) {
+      console.error('Error loading more series:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const hasMore = currentPage < (seriesData.pagination?.totalPages || 0);
 
   if (loading) {
     return (
@@ -208,9 +228,20 @@ function SeriesPageContent() {
               <MovieGrid
                 movies={seriesData.movies || []}
                 pagination={seriesData.pagination || { page: 1, totalPages: 1, total: 0 }}
-                currentPage={page}
+                currentPage={currentPage}
                 baseUrl="/series"
               />
+              {hasMore && (
+                <div className="flex justify-center mt-8">
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white font-medium rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                  >
+                    {loadingMore ? 'Carregando...' : `Carregar mais (${seriesData.pagination.total - seriesData.movies.length} restantes)`}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

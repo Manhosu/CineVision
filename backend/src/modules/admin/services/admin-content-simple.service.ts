@@ -70,6 +70,7 @@ export class AdminContentSimpleService {
       release_year: data.release_year || null,
       duration_minutes: data.duration_minutes || null,
       imdb_rating: data.imdb_rating || null,
+      quality_label: data.quality_label || null,
     };
 
     // Adicionar campos específicos de série se aplicável
@@ -422,7 +423,7 @@ export class AdminContentSimpleService {
       'trailer_url', 'telegram_group_link', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
-      'status', 'availability'
+      'status', 'availability', 'quality_label'
     ];
 
     for (const field of allowedFields) {

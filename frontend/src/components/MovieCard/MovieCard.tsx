@@ -135,6 +135,16 @@ const MovieCard = memo(function MovieCard({
           {/* Subtle Top Gradient for Badges */}
           <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10" />
 
+          {/* Top Left - Discount Badge */}
+          {movie.discount_percentage && movie.discount_percentage > 0 && (
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1">
+              <div className="flex items-center gap-1 px-2 py-1 bg-red-600 rounded-md shadow-lg text-white text-xs font-bold">
+                {movie.is_flash_promo && <span>&#9889;</span>}
+                <span>-{movie.discount_percentage}%</span>
+              </div>
+            </div>
+          )}
+
           {/* Top Right Badges - Minimalist */}
           <div className="absolute top-2 right-2 flex flex-col gap-1.5 z-20">
             {isPurchased && (
@@ -179,7 +189,14 @@ const MovieCard = memo(function MovieCard({
               ) : (
                 <>
                   <ShoppingCartIcon className="w-4 h-4" />
-                  <span className="text-xs">{formatPrice(movie.price_cents)}</span>
+                  {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+                    <span className="text-xs flex items-center gap-1.5">
+                      <span className="line-through text-gray-500">{formatPrice(movie.price_cents)}</span>
+                      <span className="text-red-600 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs">{formatPrice(movie.price_cents)}</span>
+                  )}
                 </>
               )}
             </button>

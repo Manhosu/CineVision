@@ -7,6 +7,7 @@ import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
+import { WhatsAppGate } from '@/components/WhatsApp/WhatsAppGate';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 
@@ -46,6 +47,7 @@ export default function DashboardPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [requests, setRequests] = useState<ContentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [whatsappJoined, setWhatsappJoined] = useState(true); // default true to avoid flash
 
   // Redirecionar se não autenticado
   useEffect(() => {
@@ -53,6 +55,13 @@ export default function DashboardPage() {
       router.push('/auth/login');
     }
   }, [authLoading, isAuthenticated, router]);
+
+  // Sync whatsapp_joined from user data
+  useEffect(() => {
+    if (user) {
+      setWhatsappJoined(user.whatsapp_joined ?? false);
+    }
+  }, [user]);
 
   // Função para renovar token usando refresh_token
   const refreshAccessToken = async (): Promise<string | null> => {
@@ -307,6 +316,12 @@ export default function DashboardPage() {
   };
 
   return (
+    <WhatsAppGate
+      userId={user.id}
+      whatsappJoined={whatsappJoined}
+      whatsappLink="https://chat.whatsapp.com/PLACEHOLDER"
+      onConfirmJoined={() => setWhatsappJoined(true)}
+    >
     <div className="min-h-screen bg-dark-950">
       <Header />
 
@@ -558,5 +573,6 @@ export default function DashboardPage() {
 
       <Footer />
     </div>
+    </WhatsAppGate>
   );
 }

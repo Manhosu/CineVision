@@ -38,7 +38,7 @@ const fetchMovies = async (page: number, genre?: string, sort?: string) => {
   try {
     const searchParams = new URLSearchParams();
     searchParams.append('page', page.toString());
-    searchParams.append('limit', '20');
+    searchParams.append('limit', '40');
 
     if (genre) searchParams.append('genre', genre);
     if (sort) searchParams.append('sort', sort);
@@ -83,10 +83,11 @@ function MoviesPageContent() {
   const [moviesData, setMoviesData] = useState<MoviesData>({ movies: [], pagination: { page: 1, totalPages: 1, total: 0 } });
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
 
-  const page = parseInt(searchParams?.get('page') || '1');
   const genre = searchParams?.get('genre') || undefined;
   const sort = searchParams?.get('sort') || 'newest';
 
@@ -94,8 +95,9 @@ function MoviesPageContent() {
     const loadData = async () => {
       try {
         setLoading(true);
+        setCurrentPage(1);
         const [moviesResult, categoriesResult] = await Promise.all([
-          fetchMovies(page, genre, sort),
+          fetchMovies(1, genre, sort),
           fetchCategories()
         ]);
         setMoviesData(moviesResult);
@@ -108,7 +110,26 @@ function MoviesPageContent() {
     };
 
     loadData();
-  }, [page, genre, sort]);
+  }, [genre, sort]);
+
+  const handleLoadMore = async () => {
+    const nextPage = currentPage + 1;
+    setLoadingMore(true);
+    try {
+      const result = await fetchMovies(nextPage, genre, sort);
+      setMoviesData(prev => ({
+        movies: [...prev.movies, ...result.movies],
+        pagination: result.pagination
+      }));
+      setCurrentPage(nextPage);
+    } catch (err) {
+      console.error('Error loading more movies:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const hasMore = currentPage < (moviesData.pagination?.totalPages || 0);
 
   if (loading) {
     return (
@@ -190,15 +211,28 @@ function MoviesPageContent() {
 
               {/* Movies Grid */}
               {moviesData.movies.length > 0 ? (
-                <MovieGrid
-                  movies={moviesData.movies}
-                  pagination={{
-                    ...moviesData.pagination,
-                    hasNext: page < (moviesData.pagination?.totalPages || 0),
-                    hasPrev: page > 1
-                  }}
-                  currentPage={page}
-                />
+                <>
+                  <MovieGrid
+                    movies={moviesData.movies}
+                    pagination={{
+                      ...moviesData.pagination,
+                      hasNext: hasMore,
+                      hasPrev: currentPage > 1
+                    }}
+                    currentPage={currentPage}
+                  />
+                  {hasMore && (
+                    <div className="flex justify-center mt-8">
+                      <button
+                        onClick={handleLoadMore}
+                        disabled={loadingMore}
+                        className="px-8 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 text-white font-medium rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                      >
+                        {loadingMore ? 'Carregando...' : `Carregar mais (${moviesData.pagination.total - moviesData.movies.length} restantes)`}
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="text-center py-16">
                   <div className="max-w-md mx-auto">

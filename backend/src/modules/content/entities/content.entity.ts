@@ -164,6 +164,9 @@ export class Content {
   @Column({ type: 'text', nullable: true })
   available_qualities?: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  quality_label?: string;
+
   @Column({ type: 'bigint', nullable: true })
   file_size_bytes?: number;
 
