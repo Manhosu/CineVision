@@ -92,7 +92,7 @@ export function Header({ transparent = false }: HeaderProps) {
                 width={450}
                 height={135}
                 priority
-                className="h-10 lg:h-12 w-auto transition-opacity duration-200 hover:opacity-80"
+                className="h-14 lg:h-16 w-auto transition-opacity duration-200 hover:opacity-80"
               />
             </Link>
 

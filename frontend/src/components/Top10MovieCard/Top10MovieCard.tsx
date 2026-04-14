@@ -149,19 +149,38 @@ const Top10MovieCard = memo(function Top10MovieCard({
             />
           </div>
 
-          {/* Minimal info below */}
-          <div className="pt-1.5 px-0.5 flex items-center justify-between">
-            <span className="text-[10px] text-gray-500">{movie.release_year || ''}</span>
-            {isPurchased ? (
-              <span className="text-[10px] text-emerald-400 font-semibold">Adquirido</span>
-            ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-gray-500 line-through">{formatPrice(movie.price_cents)}</span>
-                <span className="text-[11px] text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
-              </div>
-            ) : (
-              <span className="text-[11px] text-white/60 font-medium">{formatPrice(movie.price_cents)}</span>
-            )}
+          {/* Info + Buy button below poster */}
+          <div className="pt-2 px-0.5">
+            <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
+              {movie.release_year && <span>{movie.release_year}</span>}
+              {(movie as any).content_type === 'series' && (
+                <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-medium">Série</span>
+              )}
+            </div>
+
+            <button
+              onClick={isPurchased ? handleWatch : handlePurchase}
+              className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-2 px-3 rounded-lg transition-colors border border-white/10"
+            >
+              {isPurchased ? (
+                <>
+                  <PlayIcon className="w-4 h-4" />
+                  <span className="text-xs">Assistir</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingCartIcon className="w-4 h-4" />
+                  {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+                    <span className="text-xs flex items-center gap-1.5">
+                      <span className="line-through text-gray-500">{formatPrice(movie.price_cents)}</span>
+                      <span className="text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs">{formatPrice(movie.price_cents)}</span>
+                  )}
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
