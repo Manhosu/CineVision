@@ -453,86 +453,21 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-2xl font-bold text-white mb-6">Minhas Solicitações de Conteúdo</h2>
 
-            {/* Formulário de Nova Solicitação */}
-            <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
-              <h3 className="text-lg font-semibold text-white mb-4">Solicitar Novo Filme ou Série</h3>
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                const form = e.target as HTMLFormElement;
-                const title = (form.elements.namedItem('title') as HTMLInputElement).value;
-                const description = (form.elements.namedItem('description') as HTMLTextAreaElement).value;
-
-                try {
-                  const token = localStorage.getItem('auth_token');
-                  const response = await fetch('http://localhost:3001/api/v1/admin/requests', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      requested_title: title,
-                      description,
-                      user_id: user?.id,
-                      priority: 'medium'
-                    })
-                  });
-
-                  if (response.ok) {
-                    toast.success('Solicitação enviada com sucesso!');
-                    form.reset();
-                    // Reload requests
-                    const requestsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/requests/user/${user?.id}`, {
-                      headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (requestsRes.ok) {
-                      const requestsData = await requestsRes.json();
-                      setRequests(requestsData);
-                    }
-                  } else {
-                    const errorData = await response.json();
-                    toast.error(errorData.message || 'Erro ao enviar solicitação');
-                  }
-                } catch (error) {
-                  console.error('Error submitting request:', error);
-                  toast.error('Erro ao enviar solicitação');
-                }
-              }}>
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="title" className="block text-sm font-medium text-gray-300 mb-2">
-                      Título do Filme ou Série *
-                    </label>
-                    <input
-                      type="text"
-                      id="title"
-                      name="title"
-                      required
-                      placeholder="Ex: Vingadores: Ultimato"
-                      className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
-                      Descrição ou Comentário (opcional)
-                    </label>
-                    <textarea
-                      id="description"
-                      name="description"
-                      rows={3}
-                      placeholder="Adicione mais informações sobre o conteúdo que deseja..."
-                      className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition-colors"
-                  >
-                    Enviar Solicitação
-                  </button>
-                </div>
-              </form>
+            {/* Solicitar via Telegram */}
+            <div className="bg-gray-800/50 rounded-lg p-6 mb-6 text-center">
+              <h3 className="text-lg font-semibold text-white mb-3">Solicitar Novo Filme ou Série</h3>
+              <p className="text-gray-400 text-sm mb-5">
+                Envie uma mensagem no nosso Telegram informando o nome do filme ou série que deseja!
+              </p>
+              <button
+                onClick={() => window.open('https://t.me/m/YAU1-zMrZDcx', '_blank')}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                </svg>
+                Solicitar via Telegram
+              </button>
             </div>
 
             {/* Lista de Solicitações */}

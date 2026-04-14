@@ -63,21 +63,7 @@ function SearchResults() {
   };
 
   const handleRequestMovie = () => {
-    // Abrir Telegram com comando pré-preenchido e o título pesquisado
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
-    // Usar o parâmetro 'start' do Telegram para enviar dados ao bot
-    // O formato é: https://t.me/botname?start=PAYLOAD
-    // Vamos codificar o título pesquisado em base64 para enviar ao bot
-    const payload = btoa(encodeURIComponent(query)).replace(/=/g, '');
-    const deepLink = `https://t.me/${botUsername}?start=request_${payload}`;
-
-    toast.success('Abrindo Telegram...', {
-      duration: 3000,
-      icon: '📱'
-    });
-
-    // Abrir Telegram
-    window.open(deepLink, '_blank');
+    window.open('https://t.me/m/YAU1-zMrZDcx', '_blank');
   };
 
   if (!query) {
@@ -153,7 +139,7 @@ function SearchResults() {
                 </h4>
               </div>
               <p className="text-gray-300 text-sm mb-6">
-                Solicite e receba uma notificação pelo Telegram assim que o conteúdo for adicionado à plataforma!
+                Envie uma mensagem no nosso Telegram informando o nome do filme ou série que deseja!
               </p>
 
               <button
