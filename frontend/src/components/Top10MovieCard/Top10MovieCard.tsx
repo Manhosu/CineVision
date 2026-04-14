@@ -135,7 +135,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
           className="relative transition-all duration-300 ease-out hover:scale-[1.02] z-20"
           style={{ width: 'clamp(140px, 18vw, 200px)' }}
         >
-          {/* Clean Poster */}
+          {/* Poster - 100% clean */}
           <div className="relative aspect-[2/3] overflow-hidden rounded-xl w-full">
             <LazyImage
               src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
@@ -147,56 +147,21 @@ const Top10MovieCard = memo(function Top10MovieCard({
               fallbackSrc="/images/placeholder-poster.svg"
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
-
-            {/* Discount badge */}
-            {movie.discount_percentage && movie.discount_percentage > 0 && (
-              <div className="absolute top-2 left-2 z-20">
-                <div className="flex items-center gap-1 px-2 py-1 bg-red-600 rounded-md shadow-lg text-white text-[10px] font-bold">
-                  {movie.is_flash_promo && <span>&#9889;</span>}
-                  <span>-{movie.discount_percentage}%</span>
-                </div>
-              </div>
-            )}
-
-            {/* Purchased check */}
-            {isPurchased && (
-              <div className="absolute top-2 right-2 z-20">
-                <div className="flex items-center px-1.5 py-1 bg-emerald-500 rounded-md shadow-lg">
-                  <CheckIcon className="w-3 h-3 text-white" />
-                </div>
-              </div>
-            )}
-
-            {/* Year - small bottom left */}
-            {movie.release_year && (
-              <div className="absolute bottom-2 left-2 z-20">
-                <span className="text-[10px] text-white/70 bg-black/50 backdrop-blur-sm px-1.5 py-0.5 rounded">
-                  {movie.release_year}
-                </span>
-              </div>
-            )}
           </div>
 
-          {/* Info below poster */}
-          <div className="pt-2 px-0.5">
-            <h3 className="text-white font-semibold text-xs line-clamp-1 leading-tight mb-1">
-              {movie.title}
-            </h3>
-            <div className="flex items-center justify-between">
-              {(movie as any).content_type === 'series' && (
-                <span className="px-1 py-0.5 bg-blue-500/30 text-blue-400 rounded font-medium text-[10px]">Serie</span>
-              )}
-              {isPurchased ? (
-                <span className="text-[10px] text-emerald-400 font-semibold ml-auto">Adquirido</span>
-              ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
-                <div className="flex items-center gap-1 ml-auto">
-                  <span className="text-[10px] text-gray-500 line-through">{formatPrice(movie.price_cents)}</span>
-                  <span className="text-xs text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
-                </div>
-              ) : (
-                <span className="text-xs text-white/80 font-semibold ml-auto">{formatPrice(movie.price_cents)}</span>
-              )}
-            </div>
+          {/* Minimal info below */}
+          <div className="pt-1.5 px-0.5 flex items-center justify-between">
+            <span className="text-[10px] text-gray-500">{movie.release_year || ''}</span>
+            {isPurchased ? (
+              <span className="text-[10px] text-emerald-400 font-semibold">Adquirido</span>
+            ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] text-gray-500 line-through">{formatPrice(movie.price_cents)}</span>
+                <span className="text-[11px] text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
+              </div>
+            ) : (
+              <span className="text-[11px] text-white/60 font-medium">{formatPrice(movie.price_cents)}</span>
+            )}
           </div>
         </div>
       </div>
