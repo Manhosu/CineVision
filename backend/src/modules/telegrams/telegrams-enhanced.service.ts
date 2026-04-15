@@ -252,10 +252,52 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Calcula preco final com desconto ativo (se houver)
+   */
+  private async calculateFinalPrice(content: any): Promise<{ finalPrice: number; originalPrice: number; discountPercentage: number }> {
+    const originalPrice = content.price_cents;
+    try {
+      const now = new Date().toISOString();
+      const { data: activeDiscounts } = await this.supabase
+        .from('discounts')
+        .select('*')
+        .eq('is_active', true)
+        .lte('starts_at', now)
+        .gte('ends_at', now)
+        .order('discount_value', { ascending: false });
+
+      if (activeDiscounts && activeDiscounts.length > 0) {
+        const individual = activeDiscounts.find(d => d.discount_scope === 'individual' && d.scope_id === content.id);
+        const global = activeDiscounts.find(d => d.discount_scope === 'global');
+        const bestDiscount = individual || global;
+
+        if (bestDiscount) {
+          let finalPrice: number;
+          let pct: number;
+          if (bestDiscount.discount_type === 'percentage') {
+            pct = bestDiscount.discount_value;
+            finalPrice = Math.max(0, originalPrice - Math.round(originalPrice * (pct / 100)));
+          } else {
+            finalPrice = Math.max(0, originalPrice - bestDiscount.discount_value);
+            pct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
+          }
+          return { finalPrice, originalPrice, discountPercentage: pct };
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to check discounts: ${err}`);
+    }
+    return { finalPrice: originalPrice, originalPrice, discountPercentage: 0 };
+  }
+
+  /**
    * Envia menu de seleção de método de pagamento
    */
   private async sendPaymentMethodSelection(chatId: number, purchaseId: string, content: any) {
-    const priceText = (content.price_cents / 100).toFixed(2);
+    const { finalPrice, originalPrice, discountPercentage } = await this.calculateFinalPrice(content);
+    const priceText = discountPercentage > 0
+      ? `~R$ ${(originalPrice / 100).toFixed(2)}~ R$ ${(finalPrice / 100).toFixed(2)} (${discountPercentage}% OFF)`
+      : `R$ ${(originalPrice / 100).toFixed(2)}`;
 
     await this.sendMessage(chatId, `💳 *Escolha o método de pagamento:*\n\n🎬 ${content.title}\n💰 Valor: R$ ${priceText}\n\nSelecione uma opção:`, {
       parse_mode: 'Markdown',
@@ -282,13 +324,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
     dto: InitiateTelegramPurchaseDto,
     content: any,
   ): Promise<TelegramPurchaseResponseDto> {
+    // Calcular preco com desconto
+    const { finalPrice } = await this.calculateFinalPrice(content);
+
     // Criar registro de compra anônima (sem user_id)
     const { data: purchase, error: purchaseError } = await this.supabase
       .from('purchases')
       .insert({
         user_id: null, // Compra anônima
         content_id: content.id,
-        amount_cents: content.price_cents,
+        amount_cents: finalPrice,
         currency: content.currency || 'BRL',
         status: 'pending',
         preferred_delivery: 'telegram',
@@ -1311,13 +1356,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
         return;
       }
 
-      // Criar compra automaticamente
+      // Calcular preco com desconto
+      const { finalPrice } = await this.calculateFinalPrice(content);
+
+      // Criar compra com preco final (com desconto se houver)
       const { data: purchase, error: purchaseError } = await this.supabase
         .from('purchases')
         .insert({
           user_id: user.id,
           content_id: content.id,
-          amount_cents: content.price_cents,
+          amount_cents: finalPrice,
           currency: content.currency || 'BRL',
           status: 'pending',
           preferred_delivery: 'telegram',

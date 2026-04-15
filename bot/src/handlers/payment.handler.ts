@@ -25,9 +25,15 @@ export const paymentHandler = async (bot: TelegramBot, msg: TelegramBot.Message,
       return;
     }
 
+    const hasDiscount = movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents;
+    const finalPrice = hasDiscount ? movie.discounted_price_cents : movie.price_cents;
+    const priceText = hasDiscount
+      ? `~R$ ${(movie.price_cents / 100).toFixed(2)}~ R$ ${(finalPrice / 100).toFixed(2)} (${movie.discount_percentage || ''}% OFF)`
+      : `R$ ${(movie.price_cents / 100).toFixed(2)}`;
+
     const paymentMessage = `🎥 **${movie.title}**
 
-Preço: R$ ${(movie.price_cents / 100).toFixed(2)}
+Preço: ${priceText}
 
 💳 **Opções de Pagamento:**
 

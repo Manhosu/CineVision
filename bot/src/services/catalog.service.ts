@@ -4,6 +4,9 @@ interface Movie {
   id: string;
   title: string;
   price_cents: number;
+  discounted_price_cents?: number;
+  discount_percentage?: number;
+  is_flash_promo?: boolean;
   poster_url?: string;
   thumbnail_url?: string;
   trailer_url?: string;
@@ -232,11 +235,22 @@ export class CatalogService {
     description: string;
     poster?: string;
   } {
-    const priceBRL = (movie.price_cents / 100).toFixed(2).replace('.', ',');
+    const hasDiscount = movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents;
+    const finalPrice = hasDiscount ? movie.discounted_price_cents! : movie.price_cents;
+    const priceBRL = (finalPrice / 100).toFixed(2).replace('.', ',');
+
+    let priceText = `R$ ${priceBRL}`;
+    if (hasDiscount) {
+      const originalBRL = (movie.price_cents / 100).toFixed(2).replace('.', ',');
+      priceText = `~R$ ${originalBRL}~ R$ ${priceBRL}`;
+      if (movie.discount_percentage) {
+        priceText += ` (${movie.discount_percentage}% OFF)`;
+      }
+    }
 
     return {
       title: movie.title,
-      price: `R$ ${priceBRL}`,
+      price: priceText,
       description: movie.synopsis || movie.description || 'Sem descrição disponível',
       poster: movie.poster_url || movie.thumbnail_url,
     };

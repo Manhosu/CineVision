@@ -20,17 +20,38 @@ interface Discount {
   created_at?: string;
 }
 
-const emptyForm = {
+const emptyForm: {
+  name: string;
+  description: string;
+  discount_scope: 'global' | 'category' | 'individual';
+  scope_id: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  starts_at: string;
+  ends_at: string;
+  is_flash: boolean;
+} = {
   name: '',
   description: '',
-  discount_scope: 'global' as const,
+  discount_scope: 'global',
   scope_id: '',
-  discount_type: 'percentage' as const,
+  discount_type: 'percentage',
   discount_value: 0,
   starts_at: '',
   ends_at: '',
   is_flash: false,
 };
+
+interface ContentOption {
+  id: string;
+  title: string;
+  content_type: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
+}
 
 export default function AdminDiscountsPage() {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
@@ -38,6 +59,9 @@ export default function AdminDiscountsPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [contentOptions, setContentOptions] = useState<ContentOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
+  const [contentSearch, setContentSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -65,7 +89,31 @@ export default function AdminDiscountsPage() {
 
   useEffect(() => {
     fetchDiscounts();
+    fetchContentAndCategories();
   }, []);
+
+  const fetchContentAndCategories = async () => {
+    try {
+      // Fetch all content (movies + series)
+      const [moviesRes, seriesRes, catsRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/content/movies?limit=100`, { headers: getHeaders() }),
+        fetch(`${API_URL}/api/v1/content/series?limit=100`, { headers: getHeaders() }),
+        fetch(`${API_URL}/api/v1/content/categories`, { headers: getHeaders() }).catch(() => null),
+      ]);
+      const moviesData = await moviesRes.json();
+      const seriesData = await seriesRes.json();
+      const movies = (moviesData.movies || moviesData.data || []).map((m: any) => ({ id: m.id, title: m.title, content_type: 'movie' }));
+      const series = (seriesData.movies || seriesData.data || []).map((s: any) => ({ id: s.id, title: s.title, content_type: 'series' }));
+      setContentOptions([...movies, ...series]);
+
+      if (catsRes && catsRes.ok) {
+        const catsData = await catsRes.json();
+        setCategoryOptions(Array.isArray(catsData) ? catsData : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch content/categories:', err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -251,19 +299,63 @@ export default function AdminDiscountsPage() {
               </select>
             </div>
 
-            {/* Scope ID (only for category/individual) */}
-            {form.discount_scope !== 'global' && (
+            {/* Scope ID - Content or Category selector */}
+            {form.discount_scope === 'individual' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  {form.discount_scope === 'category' ? 'ID da Categoria' : 'ID do Conte\u00fado'}
-                </label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Selecionar Conteúdo</label>
                 <input
                   type="text"
-                  value={form.scope_id}
-                  onChange={(e) => setForm({ ...form, scope_id: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                  placeholder="UUID do escopo"
+                  value={contentSearch}
+                  onChange={(e) => setContentSearch(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent mb-2"
+                  placeholder="Buscar filme ou série..."
                 />
+                <div className="max-h-48 overflow-y-auto bg-gray-900/50 border border-gray-600 rounded-lg">
+                  {contentOptions
+                    .filter(c => !contentSearch || c.title.toLowerCase().includes(contentSearch.toLowerCase()))
+                    .slice(0, 20)
+                    .map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => { setForm({ ...form, scope_id: c.id }); setContentSearch(c.title); }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700/50 transition-colors flex items-center justify-between ${
+                          form.scope_id === c.id ? 'bg-red-600/20 text-red-400' : 'text-gray-300'
+                        }`}
+                      >
+                        <span>{c.title}</span>
+                        <span className="text-xs text-gray-500">{c.content_type === 'series' ? 'Série' : 'Filme'}</span>
+                      </button>
+                    ))}
+                  {contentOptions.filter(c => !contentSearch || c.title.toLowerCase().includes(contentSearch.toLowerCase())).length === 0 && (
+                    <p className="px-3 py-2 text-sm text-gray-500">Nenhum conteúdo encontrado</p>
+                  )}
+                </div>
+                {form.scope_id && (
+                  <p className="text-xs text-green-400 mt-1">
+                    Selecionado: {contentOptions.find(c => c.id === form.scope_id)?.title || form.scope_id}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {form.discount_scope === 'category' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Selecionar Categoria</label>
+                {categoryOptions.length > 0 ? (
+                  <select
+                    value={form.scope_id}
+                    onChange={(e) => setForm({ ...form, scope_id: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categoryOptions.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm text-gray-500 py-2">Nenhuma categoria encontrada</p>
+                )}
               </div>
             )}
 
