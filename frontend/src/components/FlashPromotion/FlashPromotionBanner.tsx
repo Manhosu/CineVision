@@ -78,44 +78,38 @@ export function FlashPromotionBanner() {
       : `R$ ${(promotion.discount_value / 100).toFixed(2)} OFF`;
 
   return (
-    <>
-      {/* Spacer to push content below the fixed banner */}
-      <div className="h-10" />
-      {/* Fixed banner above header */}
-      <div className="fixed top-0 left-0 right-0 z-[60] overflow-hidden bg-gradient-to-r from-red-900 via-orange-800 to-red-900 border-b border-red-700/50">
-        {/* Animated background pulse */}
-        <div className="absolute inset-0 bg-gradient-to-r from-red-600/20 via-orange-500/20 to-red-600/20 animate-pulse" />
-
-        <div className="relative z-10 container mx-auto px-3 sm:px-4 py-2 flex items-center justify-center gap-2 sm:gap-4 text-center overflow-hidden flex-nowrap whitespace-nowrap">
-          {/* Lightning + Title */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-lg animate-bounce">&#9889;</span>
-            <span className="text-white font-extrabold text-xs sm:text-sm tracking-wide uppercase">
-              Promo&ccedil;&atilde;o Rel&acirc;mpago
-            </span>
-          </div>
-
-          {/* Discount value */}
-          <span className="bg-white text-red-700 font-black text-xs px-2.5 py-0.5 rounded-full shadow-lg">
-            {discountText}
+    <div className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-b border-red-600/30">
+      <div className="container mx-auto px-4 py-2 flex items-center justify-center gap-3 sm:gap-5 text-center flex-wrap">
+        {/* Lightning + Title */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-base animate-bounce">&#9889;</span>
+          <span className="text-white font-bold text-xs sm:text-sm uppercase tracking-wide">
+            Promocao Relampago
           </span>
+        </div>
 
-          {/* Countdown */}
+        {/* Discount value */}
+        <span className="bg-white text-red-700 font-black text-xs px-2.5 py-0.5 rounded-full shadow-lg">
+          {discountText}
+        </span>
+
+        {/* Countdown */}
+        {timeLeft && (
           <div className="flex items-center gap-1.5">
-            <span className="text-white/70 text-[10px] font-medium uppercase">Termina em:</span>
+            <span className="text-white/60 text-[10px] font-medium uppercase hidden sm:inline">Termina em:</span>
             <div className="flex items-center gap-0.5">
               {timeLeft.split(':').map((unit, i) => (
                 <span key={i} className="flex items-center gap-0.5">
-                  {i > 0 && <span className="text-white/50 font-bold text-xs">:</span>}
-                  <span className="bg-black/60 text-white font-mono font-bold text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center">
+                  {i > 0 && <span className="text-white/40 font-bold text-xs">:</span>}
+                  <span className="bg-black/40 text-white font-mono font-bold text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center">
                     {unit}
                   </span>
                 </span>
               ))}
             </div>
           </div>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }
