@@ -1042,12 +1042,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       await this.sendMessage(chatId, '⏳ Verificando pagamento...');
 
-      // Buscar payment no banco
+      // Buscar payment no banco (any PIX provider: woovi, pix/oasyfy, etc)
       const { data: payment, error: paymentError } = await this.supabase
         .from('payments')
         .select('*')
         .eq('purchase_id', purchaseId)
-        .eq('provider', 'woovi')
         .eq('payment_method', 'pix')
         .order('created_at', { ascending: false })
         .limit(1)
