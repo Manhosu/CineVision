@@ -168,6 +168,6 @@ export class OasyfyService implements PixProvider {
    * Get provider name — implements PixProvider interface
    */
   getProviderName(): string {
-    return 'oasyfy';
+    return 'pix';
   }
 }
