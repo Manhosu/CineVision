@@ -62,6 +62,7 @@ export default function AdminDiscountsPage() {
   const [contentOptions, setContentOptions] = useState<ContentOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   const [contentSearch, setContentSearch] = useState('');
+  const [selectedContentIds, setSelectedContentIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -94,16 +95,20 @@ export default function AdminDiscountsPage() {
 
   const fetchContentAndCategories = async () => {
     try {
-      // Fetch all content (movies + series)
       const [moviesRes, seriesRes, catsRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/content/movies?limit=100`, { headers: getHeaders() }),
-        fetch(`${API_URL}/api/v1/content/series?limit=100`, { headers: getHeaders() }),
+        fetch(`${API_URL}/api/v1/content/movies?limit=200`, { headers: getHeaders() }),
+        fetch(`${API_URL}/api/v1/content/series?limit=200`, { headers: getHeaders() }),
         fetch(`${API_URL}/api/v1/content/categories`, { headers: getHeaders() }).catch(() => null),
       ]);
       const moviesData = await moviesRes.json();
       const seriesData = await seriesRes.json();
-      const movies = (moviesData.movies || moviesData.data || []).map((m: any) => ({ id: m.id, title: m.title, content_type: 'movie' }));
-      const series = (seriesData.movies || seriesData.data || []).map((s: any) => ({ id: s.id, title: s.title, content_type: 'series' }));
+
+      // Handle different API response formats
+      const moviesArr = moviesData.movies || moviesData.data || (Array.isArray(moviesData) ? moviesData : []);
+      const seriesArr = seriesData.movies || seriesData.data || (Array.isArray(seriesData) ? seriesData : []);
+
+      const movies = moviesArr.map((m: any) => ({ id: m.id, title: m.title, content_type: m.content_type || 'movie' }));
+      const series = seriesArr.map((s: any) => ({ id: s.id, title: s.title, content_type: s.content_type || 'series' }));
       setContentOptions([...movies, ...series]);
 
       if (catsRes && catsRes.ok) {
@@ -122,7 +127,7 @@ export default function AdminDiscountsPage() {
     setSaving(true);
 
     try {
-      const body: any = {
+      const baseBody: any = {
         name: form.name,
         description: form.description || undefined,
         discount_scope: form.discount_scope,
@@ -134,18 +139,44 @@ export default function AdminDiscountsPage() {
         is_flash: form.is_flash,
       };
 
+      // For individual scope with multiple selections, create one discount per content
+      if (form.discount_scope === 'individual' && selectedContentIds.size > 1 && !editingId) {
+        const ids = Array.from(selectedContentIds);
+        let allOk = true;
+        for (const contentId of ids) {
+          const itemName = contentOptions.find(c => c.id === contentId)?.title || '';
+          const res = await fetch(`${API_URL}/api/v1/discounts`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ ...baseBody, scope_id: contentId, name: `${form.name} - ${itemName}` }),
+          });
+          if (!res.ok) allOk = false;
+        }
+        if (allOk) {
+          setSuccess(`${ids.length} descontos individuais criados com sucesso!`);
+          setForm(emptyForm); setSelectedContentIds(new Set()); setContentSearch('');
+          setSelectedContentIds(new Set());
+          setContentSearch('');
+          fetchDiscounts();
+        } else {
+          setError('Alguns descontos falharam ao criar');
+        }
+        setSaving(false);
+        return;
+      }
+
       let res: Response;
       if (editingId) {
         res = await fetch(`${API_URL}/api/v1/discounts/${editingId}`, {
           method: 'PATCH',
           headers: getHeaders(),
-          body: JSON.stringify(body),
+          body: JSON.stringify(baseBody),
         });
       } else {
         res = await fetch(`${API_URL}/api/v1/discounts`, {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify(body),
+          body: JSON.stringify(baseBody),
         });
       }
 
@@ -155,7 +186,7 @@ export default function AdminDiscountsPage() {
       }
 
       setSuccess(editingId ? 'Desconto atualizado com sucesso!' : 'Desconto criado com sucesso!');
-      setForm(emptyForm);
+      setForm(emptyForm); setSelectedContentIds(new Set()); setContentSearch('');
       setEditingId(null);
       fetchDiscounts();
     } catch (err: any) {
@@ -199,7 +230,7 @@ export default function AdminDiscountsPage() {
 
   const handleCancel = () => {
     setEditingId(null);
-    setForm(emptyForm);
+    setForm(emptyForm); setSelectedContentIds(new Set()); setContentSearch('');
     setError(null);
     setSuccess(null);
   };
@@ -302,7 +333,9 @@ export default function AdminDiscountsPage() {
             {/* Scope ID - Content or Category selector */}
             {form.discount_scope === 'individual' && (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Selecionar Conteúdo</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Selecionar Conteúdos <span className="text-gray-500 text-xs">(múltipla seleção)</span>
+                </label>
                 <input
                   type="text"
                   value={contentSearch}
@@ -310,20 +343,49 @@ export default function AdminDiscountsPage() {
                   className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-red-500 focus:border-transparent mb-2"
                   placeholder="Buscar filme ou série..."
                 />
-                <div className="max-h-48 overflow-y-auto bg-gray-900/50 border border-gray-600 rounded-lg">
+                {/* Selected chips */}
+                {selectedContentIds.size > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {Array.from(selectedContentIds).map(id => {
+                      const item = contentOptions.find(c => c.id === id);
+                      return item ? (
+                        <span key={id} className="inline-flex items-center gap-1 px-2 py-1 bg-red-600/20 text-red-400 text-xs rounded-lg">
+                          {item.title}
+                          <button type="button" onClick={() => {
+                            const next = new Set(selectedContentIds);
+                            next.delete(id);
+                            setSelectedContentIds(next);
+                            setForm({ ...form, scope_id: Array.from(next)[0] || '' });
+                          }} className="hover:text-white">&times;</button>
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+                <div className="max-h-52 overflow-y-auto bg-gray-900/50 border border-gray-600 rounded-lg">
                   {contentOptions
                     .filter(c => !contentSearch || c.title.toLowerCase().includes(contentSearch.toLowerCase()))
-                    .slice(0, 20)
                     .map(c => (
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => { setForm({ ...form, scope_id: c.id }); setContentSearch(c.title); }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700/50 transition-colors flex items-center justify-between ${
-                          form.scope_id === c.id ? 'bg-red-600/20 text-red-400' : 'text-gray-300'
+                        onClick={() => {
+                          const next = new Set(selectedContentIds);
+                          if (next.has(c.id)) next.delete(c.id);
+                          else next.add(c.id);
+                          setSelectedContentIds(next);
+                          setForm({ ...form, scope_id: Array.from(next)[0] || '' });
+                        }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-700/50 transition-colors flex items-center gap-2 ${
+                          selectedContentIds.has(c.id) ? 'bg-red-600/20 text-red-400' : 'text-gray-300'
                         }`}
                       >
-                        <span>{c.title}</span>
+                        <span className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center text-xs ${
+                          selectedContentIds.has(c.id) ? 'bg-red-600 border-red-600 text-white' : 'border-gray-600'
+                        }`}>
+                          {selectedContentIds.has(c.id) ? '✓' : ''}
+                        </span>
+                        <span className="flex-1">{c.title}</span>
                         <span className="text-xs text-gray-500">{c.content_type === 'series' ? 'Série' : 'Filme'}</span>
                       </button>
                     ))}
@@ -331,11 +393,7 @@ export default function AdminDiscountsPage() {
                     <p className="px-3 py-2 text-sm text-gray-500">Nenhum conteúdo encontrado</p>
                   )}
                 </div>
-                {form.scope_id && (
-                  <p className="text-xs text-green-400 mt-1">
-                    Selecionado: {contentOptions.find(c => c.id === form.scope_id)?.title || form.scope_id}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mt-1">{selectedContentIds.size} selecionado(s)</p>
               </div>
             )}
 
