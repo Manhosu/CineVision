@@ -2,7 +2,7 @@ import { Controller, Post, Body, Logger, HttpCode } from '@nestjs/common';
 import { OasyfyService, OasyfyWebhookPayload } from '../services/oasyfy.service';
 import { SupabaseService } from '../../../config/supabase.service';
 
-@Controller('api/v1/webhooks')
+@Controller('webhooks')
 export class OasyfyWebhookController {
   private readonly logger = new Logger(OasyfyWebhookController.name);
 
