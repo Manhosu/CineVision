@@ -13,7 +13,7 @@ export class AdminTop10Service {
   async getCurrentTop10(type: 'movie' | 'series') {
     const { data, error } = await this.supabaseService.client
       .from('content')
-      .select('id, title, thumbnail_url, content_type, weekly_sales, views_count, price_cents, status')
+      .select('id, title, thumbnail_url, poster_url, content_type, weekly_sales, views_count, price_cents, status')
       .eq('content_type', type)
       .order('weekly_sales', { ascending: false, nullsFirst: false })
       .order('views_count', { ascending: false })

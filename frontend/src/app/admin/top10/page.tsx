@@ -11,7 +11,7 @@ interface Top10Item {
   poster_url?: string | null;
   weekly_sales: number;
   views_count: number;
-  price: number;
+  price_cents: number;
   status: string;
 }
 
@@ -262,8 +262,8 @@ export default function AdminTop10Page() {
                       {/* Price */}
                       <td className="px-6 py-4">
                         <span className="text-white font-semibold">
-                          {item.price != null
-                            ? `R$ ${(item.price / 100).toFixed(2)}`
+                          {item.price_cents != null
+                            ? `R$ ${(item.price_cents / 100).toFixed(2)}`
                             : 'N/A'}
                         </span>
                       </td>
