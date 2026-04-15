@@ -11,7 +11,8 @@ export function WhatsAppPopup() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const dismissed = localStorage.getItem(DISMISS_KEY);
+    // Usar sessionStorage para mostrar uma vez por sessao (aparece toda vez que abrir o site)
+    const dismissed = sessionStorage.getItem(DISMISS_KEY);
     if (dismissed) return;
 
     const timer = setTimeout(() => {
@@ -22,7 +23,7 @@ export function WhatsAppPopup() {
   }, []);
 
   const handleDismiss = () => {
-    localStorage.setItem(DISMISS_KEY, 'true');
+    sessionStorage.setItem(DISMISS_KEY, 'true');
     setIsVisible(false);
   };
 
