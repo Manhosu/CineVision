@@ -105,8 +105,8 @@ export default function SeriesDetailsPage() {
     <main className="bg-dark-950">
       <ContentHero
         content={series}
-        backHref="/series"
-        backLabel="Séries"
+        backHref="/"
+        backLabel="Início"
         contentType="series"
         isOwned={isOwned}
         checkingOwnership={checkingOwnership}

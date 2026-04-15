@@ -319,6 +319,8 @@ export default function AdminContentEditPage() {
       telegramGroupLink !== (originalContent.telegram_group_link || '') ||
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
+      backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
+      backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
       isFeatured !== (originalContent.is_featured || false) ||
       isRelease !== (originalContent.is_release || false) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||

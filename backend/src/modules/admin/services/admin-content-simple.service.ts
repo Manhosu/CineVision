@@ -56,6 +56,8 @@ export class AdminContentSimpleService {
       synopsis: data.synopsis || null,
       poster_url: data.poster_url || null,
       backdrop_url: data.backdrop_url || null,
+      backdrop_position: data.backdrop_position || null,
+      backdrop_position_mobile: data.backdrop_position_mobile || null,
       trailer_url: data.trailer_url || null,
       content_type: data.content_type || data.type || 'movie', // Mapeia para coluna content_type
       status: 'DRAFT', // Sempre começa como draft
@@ -420,6 +422,7 @@ export class AdminContentSimpleService {
     // Mapear campos permitidos
     const allowedFields = [
       'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
+      'backdrop_position', 'backdrop_position_mobile',
       'trailer_url', 'telegram_group_link', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
