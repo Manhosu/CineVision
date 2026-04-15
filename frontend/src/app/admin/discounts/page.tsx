@@ -95,21 +95,15 @@ export default function AdminDiscountsPage() {
 
   const fetchContentAndCategories = async () => {
     try {
-      const [moviesRes, seriesRes, catsRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/content/movies?limit=200`, { headers: getHeaders() }),
-        fetch(`${API_URL}/api/v1/content/series?limit=200`, { headers: getHeaders() }),
+      // Use admin endpoint that returns ALL content (no status filter, no limit)
+      const [contentRes, catsRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/admin/content`, { headers: getHeaders() }),
         fetch(`${API_URL}/api/v1/content/categories`, { headers: getHeaders() }).catch(() => null),
       ]);
-      const moviesData = await moviesRes.json();
-      const seriesData = await seriesRes.json();
-
-      // Handle different API response formats
-      const moviesArr = moviesData.movies || moviesData.data || (Array.isArray(moviesData) ? moviesData : []);
-      const seriesArr = seriesData.movies || seriesData.data || (Array.isArray(seriesData) ? seriesData : []);
-
-      const movies = moviesArr.map((m: any) => ({ id: m.id, title: m.title, content_type: m.content_type || 'movie' }));
-      const series = seriesArr.map((s: any) => ({ id: s.id, title: s.title, content_type: s.content_type || 'series' }));
-      setContentOptions([...movies, ...series]);
+      const contentData = await contentRes.json();
+      const allContent = (Array.isArray(contentData) ? contentData : contentData.data || [])
+        .map((c: any) => ({ id: c.id, title: c.title, content_type: c.content_type || 'movie' }));
+      setContentOptions(allContent);
 
       if (catsRes && catsRes.ok) {
         const catsData = await catsRes.json();
