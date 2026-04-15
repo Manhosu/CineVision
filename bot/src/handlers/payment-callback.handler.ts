@@ -171,7 +171,7 @@ export async function handleCheckPayment(
     const data = response.data;
 
     if (data.status === 'completed' || data.status === 'paid' || data.status === 'PAID') {
-      await bot.sendMessage(chatId, `\u2705 <b>Pagamento confirmado!</b>\n\n\uD83C\uDF89 Seu conte\u00FAdo est\u00E1 pronto!\nVoc\u00EA receber\u00E1 o acesso em breve.`, {
+      await bot.sendMessage(chatId, `\u2705 <b>Pagamento confirmado!</b>\n\n\uD83C\uDF89 Seu conte\u00FAdo est\u00E1 pronto!\nVoc\u00EA receber\u00E1 o acesso em breve.\n\n\uD83D\uDECD Para realizar novas compras no aplicativo, digite /start`, {
         parse_mode: 'HTML',
       });
       await bot.answerCallbackQuery(callbackQuery.id, { text: '\u2705 Pagamento confirmado!' });

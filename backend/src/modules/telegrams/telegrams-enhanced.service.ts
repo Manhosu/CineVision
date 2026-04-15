@@ -1105,13 +1105,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
           const buttons: any[][] = [];
 
-          // Botao do grupo Telegram se disponivel
-          if (content?.telegram_group_link) {
-            buttons.push([{ text: '🎬 Assistir Agora', url: content.telegram_group_link }]);
-          }
-
-          // Botao da dashboard
-          buttons.push([{ text: '📱 Minha Dashboard', url: dashboardUrl }]);
+          // Botao unico: Assistir Agora -> abre dashboard (onde tera pop-up WhatsApp)
+          buttons.push([{ text: '🎬 Assistir Agora', url: dashboardUrl }]);
 
           await this.sendMessage(chatId,
             `✅ *Pagamento Confirmado!*\n\n` +
@@ -1197,10 +1192,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
               const dashUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
 
               const btns: any[][] = [];
-              if (content?.telegram_group_link) {
-                btns.push([{ text: '🎬 Assistir Agora', url: content.telegram_group_link }]);
-              }
-              btns.push([{ text: '📱 Minha Dashboard', url: dashUrl }]);
+              // Botao unico: Assistir Agora -> abre dashboard
+              btns.push([{ text: '🎬 Assistir Agora', url: dashUrl }]);
 
               await this.sendMessage(chatId,
                 `✅ *Pagamento Confirmado!*\n\n` +

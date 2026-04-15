@@ -77,16 +77,15 @@ Clique no botão abaixo para assistir
 
 ⏰ **Acesso válido por 24 horas**
 
-🎆 Bom filme!`;
+🎆 Bom filme!
 
+🛍 Para realizar novas compras no aplicativo, digite /start`;
+
+      const dashboardUrl = `${frontendUrl}/dashboard`;
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '🎬 Assistir Agora', url: signedUrl }
-          ],
-          [
-            { text: '📱 Acessar Site', url: frontendUrl },
-            { text: '💳 Minhas Compras', callback_data: 'my_purchases' }
+            { text: '🎬 Assistir Agora', url: dashboardUrl }
           ]
         ]
       };
@@ -141,7 +140,9 @@ Clique no botão abaixo para assistir
 📁 **Download via Telegram:**
 Preparando arquivo... Por favor, aguarde.
 
-🎆 Bom filme!`;
+🎆 Bom filme!
+
+🛍 Para realizar novas compras no aplicativo, digite /start`;
 
       await this.bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 
@@ -231,7 +232,9 @@ Clique no botão abaixo para baixar
 ⏰ **Link válido por 24 horas**
 📱 **Compatível com todos os dispositivos**
 
-✅ Aproveite seu filme!`;
+✅ Aproveite seu filme!
+
+🛍 Para realizar novas compras no aplicativo, digite /start`;
 
     await this.bot.sendMessage(chatId, message, {
       parse_mode: 'Markdown',
@@ -241,8 +244,7 @@ Clique no botão abaixo para baixar
             { text: '📥 Baixar Filme', url: downloadUrl }
           ],
           [
-            { text: '🎬 Assistir Online', callback_data: `watch_${purchase.id}` },
-            { text: '💳 Minhas Compras', callback_data: 'my_purchases' }
+            { text: '🎬 Assistir Agora', url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard` }
           ]
         ]
       }
@@ -293,7 +295,9 @@ O filme "${purchase.content.title}" (${fileSizeMB.toFixed(1)}MB) excede o limite
 2. O download iniciará automaticamente
 3. Salve o arquivo em seu dispositivo
 
-✅ Aproveite seu filme!`;
+✅ Aproveite seu filme!
+
+🛍 Para realizar novas compras no aplicativo, digite /start`;
 
       await this.bot.sendMessage(chatId, downloadMessage, { parse_mode: 'Markdown' });
 

@@ -35,16 +35,18 @@ export class NotificationService {
     try {
       const message = `✅ **Pagamento Confirmado!**
 
-Seu pagamento foi processado com sucesso. 
+Seu pagamento foi processado com sucesso.
 Você receberá o link para assistir em instantes.
 
-🎬 Use /minhas-compras para ver todos os seus filmes.`;
+🎬 Use /minhas-compras para ver todos os seus filmes.
+
+🛍 Para realizar novas compras no aplicativo, digite /start`;
 
       await this.bot.sendMessage(telegramId, message, {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🎬 Minhas Compras', callback_data: 'my_purchases' }]
+            [{ text: '🎬 Assistir Agora', url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard` }]
           ]
         }
       });

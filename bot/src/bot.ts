@@ -532,13 +532,11 @@ Obrigado pela sugestão! 🙏`, {
 
 🔗 Clique no botão abaixo para começar:`;
       
+      const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard`;
       const keyboard = {
         inline_keyboard: [
           [
-            { text: '▶️ Assistir Agora', url: streamingUrl }
-          ],
-          [
-            { text: '📱 Baixar no Telegram', callback_data: `download_${purchaseId}` }
+            { text: '🎬 Assistir Agora', url: dashboardUrl }
           ],
           [
             { text: '🔙 Voltar', callback_data: 'my_movies' }

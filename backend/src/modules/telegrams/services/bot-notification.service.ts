@@ -165,38 +165,14 @@ Seu conteúdo está pronto! Escolha como deseja assistir:`;
   }
 
   private async buildPurchaseKeyboard(content: Content, purchase: Purchase): Promise<any> {
-    const buttons: any[][] = [];
+    const frontendUrl = process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br';
+    const dashboardUrl = `${frontendUrl}/dashboard`;
 
-    if (content.availability === 'site' || content.availability === 'both') {
-      buttons.push([
-        {
-          text: '▶️ Assistir Online',
-          callback_data: `watch_${content.id}`,
-        },
-      ]);
-    }
-
-    if (content.availability === 'telegram' || content.availability === 'both') {
-      buttons.push([
-        {
-          text: '💾 Baixar Arquivo',
-          callback_data: `download_${content.id}`,
-        },
-      ]);
-    }
-
-    buttons.push([
-      {
-        text: '📱 Minhas Compras',
-        callback_data: 'my_purchases',
-      },
-      {
-        text: '🎬 Ver Catálogo',
-        callback_data: 'catalog',
-      },
-    ]);
-
-    return { inline_keyboard: buttons };
+    return {
+      inline_keyboard: [
+        [{ text: '🎬 Assistir Agora', url: dashboardUrl }],
+      ],
+    };
   }
 
   private buildNewContentMessage(content: Content): string {
