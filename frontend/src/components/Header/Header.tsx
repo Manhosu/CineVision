@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { Movie } from '@/types/movie';
 import {
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -12,6 +13,8 @@ import {
   ShoppingBagIcon,
   FilmIcon
 } from '@heroicons/react/24/outline';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface HeaderProps {
   transparent?: boolean;
@@ -22,6 +25,10 @@ export function Header({ transparent = false }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchResults, setSearchResults] = useState<Movie[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
@@ -48,8 +55,50 @@ export function Header({ transparent = false }: HeaderProps) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
       setIsSearchOpen(false);
       setSearchQuery('');
+      setSearchResults([]);
     }
   };
+
+  // Live search - debounced
+  const liveSearch = useCallback(async (query: string) => {
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const [moviesRes, seriesRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/content/movies?search=${encodeURIComponent(query)}&limit=5`, { cache: 'no-store' }),
+        fetch(`${API_URL}/api/v1/content/series?search=${encodeURIComponent(query)}&limit=5`, { cache: 'no-store' }),
+      ]);
+      const moviesData = moviesRes.ok ? await moviesRes.json() : { movies: [] };
+      const seriesData = seriesRes.ok ? await seriesRes.json() : { movies: [] };
+      const combined = [...(moviesData.movies || []), ...(seriesData.movies || [])].slice(0, 8);
+      setSearchResults(combined);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  const handleSearchInput = (value: string) => {
+    setSearchQuery(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => liveSearch(value), 300);
+  };
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+        setSearchResults([]);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Verificar se usuário tem telegram_id (autologin do Telegram)
   const isTelegramUser = isAuthenticated && user?.telegram_id;
@@ -135,20 +184,20 @@ export function Header({ transparent = false }: HeaderProps) {
 
             {/* Ações estilo Netflix - Simples e Clean */}
             <div className="flex items-center space-x-4 lg:space-x-6">
-              {/* Busca Desktop Expansível */}
-              <div className="hidden lg:block">
+              {/* Busca Desktop Expansível com Live Search */}
+              <div className="hidden lg:block relative" ref={searchDropdownRef}>
                 <div className={`flex items-center transition-all duration-300 ${
                   isSearchOpen
-                    ? 'bg-black border border-white w-64'
+                    ? 'bg-black/90 backdrop-blur-sm border border-white/30 w-72 rounded-lg'
                     : 'w-auto'
                 }`}>
                   {isSearchOpen && (
                     <form onSubmit={handleSearch} className="flex items-center flex-1">
                       <input
                         type="text"
-                        placeholder="Títulos, pessoas, gêneros"
+                        placeholder="Buscar filmes, series..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => handleSearchInput(e.target.value)}
                         autoFocus
                         className="flex-1 bg-transparent px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none"
                       />
@@ -160,7 +209,7 @@ export function Header({ transparent = false }: HeaderProps) {
                         handleSearch(new Event('submit') as any);
                       }
                       setIsSearchOpen(!isSearchOpen);
-                      if (isSearchOpen) setSearchQuery('');
+                      if (isSearchOpen) { setSearchQuery(''); setSearchResults([]); }
                     }}
                     className="p-2 text-white hover:text-gray-300 transition-colors duration-200"
                     aria-label="Buscar"
@@ -172,6 +221,52 @@ export function Header({ transparent = false }: HeaderProps) {
                     )}
                   </button>
                 </div>
+
+                {/* Live Search Dropdown */}
+                {isSearchOpen && searchResults.length > 0 && (
+                  <div className="absolute top-full right-0 mt-1 w-80 bg-zinc-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]">
+                    {searchResults.map((movie) => (
+                      <button
+                        key={movie.id}
+                        onClick={() => {
+                          const type = (movie as any).content_type === 'series' ? 'series' : 'movies';
+                          router.push(`/${type}/${movie.id}`);
+                          setIsSearchOpen(false);
+                          setSearchQuery('');
+                          setSearchResults([]);
+                        }}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-white/10 transition-colors text-left"
+                      >
+                        {movie.poster_url && (
+                          <img src={movie.poster_url} alt="" className="w-8 h-12 object-cover rounded" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-medium truncate">{movie.title}</p>
+                          <p className="text-gray-400 text-xs">
+                            {movie.release_year}
+                            {(movie as any).content_type === 'series' && ' · Serie'}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                      }}
+                      className="w-full px-4 py-2.5 text-center text-sm text-red-400 hover:bg-white/10 border-t border-white/10 transition-colors"
+                    >
+                      Ver todos os resultados
+                    </button>
+                  </div>
+                )}
+                {isSearchOpen && isSearching && searchQuery.length >= 2 && (
+                  <div className="absolute top-full right-0 mt-1 w-80 bg-zinc-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-4 z-[60]">
+                    <p className="text-gray-400 text-sm text-center">Buscando...</p>
+                  </div>
+                )}
               </div>
 
               {/* Busca Mobile */}
@@ -297,16 +392,16 @@ export function Header({ transparent = false }: HeaderProps) {
         )}
       </header>
 
-      {/* Busca Modal Mobile */}
+      {/* Busca Modal Mobile com Live Search */}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-50 bg-black lg:hidden">
+        <div className="fixed inset-0 z-50 bg-black/95 lg:hidden overflow-y-auto">
           <div className="container mx-auto px-4 pt-4">
             <form onSubmit={handleSearch} className="relative">
               <input
                 type="text"
-                placeholder="Títulos, pessoas, gêneros"
+                placeholder="Buscar filmes, series..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchInput(e.target.value)}
                 autoFocus
                 className="w-full bg-transparent border-b border-white/20 px-12 py-4 text-white text-lg placeholder-gray-400 focus:outline-none focus:border-white"
               />
@@ -322,12 +417,63 @@ export function Header({ transparent = false }: HeaderProps) {
                 onClick={() => {
                   setIsSearchOpen(false);
                   setSearchQuery('');
+                  setSearchResults([]);
                 }}
                 className="absolute right-0 top-1/2 transform -translate-y-1/2 text-white hover:text-gray-300"
               >
                 <XMarkIcon className="w-6 h-6" />
               </button>
             </form>
+
+            {/* Live Search Results Mobile */}
+            {isSearching && searchQuery.length >= 2 && (
+              <div className="py-8 text-center">
+                <div className="animate-spin w-6 h-6 border-2 border-white/30 border-t-white rounded-full mx-auto"></div>
+                <p className="text-gray-400 text-sm mt-3">Buscando...</p>
+              </div>
+            )}
+            {searchResults.length > 0 && (
+              <div className="mt-4 space-y-1">
+                {searchResults.map((movie) => (
+                  <button
+                    key={movie.id}
+                    onClick={() => {
+                      const type = (movie as any).content_type === 'series' ? 'series' : 'movies';
+                      router.push(`/${type}/${movie.id}`);
+                      setIsSearchOpen(false);
+                      setSearchQuery('');
+                      setSearchResults([]);
+                    }}
+                    className="flex items-center gap-3 w-full px-3 py-3 hover:bg-white/10 rounded-lg transition-colors text-left"
+                  >
+                    {movie.poster_url && (
+                      <img src={movie.poster_url} alt="" className="w-10 h-14 object-cover rounded" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{movie.title}</p>
+                      <p className="text-gray-400 text-xs">
+                        {movie.release_year}
+                        {(movie as any).content_type === 'series' && ' · Serie'}
+                      </p>
+                    </div>
+                    <span className="text-gray-500 text-xs">
+                      {movie.price_cents ? `R$ ${(movie.price_cents / 100).toFixed(2)}` : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {!isSearching && searchQuery.length >= 2 && searchResults.length === 0 && (
+              <div className="py-8 text-center">
+                <p className="text-gray-400 text-sm">Nenhum resultado encontrado</p>
+                <button
+                  onClick={() => { window.open('https://t.me/m/YAU1-zMrZDcx', '_blank'); }}
+                  className="mt-3 text-red-400 text-sm hover:text-red-300"
+                >
+                  Solicitar este conteudo
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
