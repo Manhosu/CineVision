@@ -149,12 +149,12 @@ const Top10MovieCard = memo(function Top10MovieCard({
             />
           </div>
 
-          {/* Info + Buy button below poster */}
-          <div className="pt-2 px-0.5">
-            <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
-              {movie.release_year && <span>{movie.release_year}</span>}
+          {/* Info + Buy button below poster - z-30 to stay above ranking number */}
+          <div className="pt-2 px-0.5 relative z-30">
+            <div className="flex items-center gap-2 text-sm text-gray-300 mb-2">
+              {movie.release_year && <span className="font-medium">{movie.release_year}</span>}
               {(movie as any).content_type === 'series' && (
-                <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-medium">Série</span>
+                <span className="px-1.5 py-0.5 bg-blue-500/30 text-blue-400 rounded text-[10px] font-medium">Série</span>
               )}
             </div>
 
