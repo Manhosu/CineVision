@@ -76,6 +76,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private isPolling = false;
   private conflictRetries = 0;
   private readonly MAX_CONFLICT_RETRIES = 10;
+  // Deduplication: track processed update IDs to prevent duplicate handling
+  private processedUpdates = new Set<number>();
+  private readonly MAX_PROCESSED_CACHE = 500;
 
   constructor(
     private configService: ConfigService,
@@ -991,6 +994,19 @@ export class TelegramsEnhancedService implements OnModuleInit {
     try {
       const purchaseId = data.replace('pay_pix_', '');
 
+      // Prevent duplicate PIX generation for the same purchase
+      if (this.pendingPixPayments.has(purchaseId)) {
+        this.logger.warn(`PIX already being generated for purchase ${purchaseId}, skipping duplicate`);
+        return;
+      }
+      // Mark as in-progress immediately
+      this.pendingPixPayments.set(purchaseId, {
+        purchase_id: purchaseId,
+        chat_id: chatId,
+        transaction_id: 'generating',
+        timestamp: Date.now(),
+      });
+
       await this.sendMessage(chatId, '⏳ Gerando QR Code PIX...');
 
       this.logger.log(`Creating PIX payment for purchase ${purchaseId} via ${this.apiUrl}`);
@@ -1083,6 +1099,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
         this.logger.error('🚨 PIX CREDENTIALS INVALID');
       }
 
+      // Remove from cache so user can retry
+      this.pendingPixPayments.delete(purchaseId);
       await this.sendMessage(chatId, userMessage);
     }
   }
@@ -2425,6 +2443,20 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   }
 
   private async handleUpdate(update: any) {
+    // Deduplication: skip if already processed
+    if (update.update_id && this.processedUpdates.has(update.update_id)) {
+      this.logger.debug(`Skipping duplicate update ${update.update_id}`);
+      return;
+    }
+    if (update.update_id) {
+      this.processedUpdates.add(update.update_id);
+      // Evict old entries to prevent memory leak
+      if (this.processedUpdates.size > this.MAX_PROCESSED_CACHE) {
+        const first = this.processedUpdates.values().next().value;
+        this.processedUpdates.delete(first);
+      }
+    }
+
     try {
       if (update.message) {
         await this.handleMessage(update.message);
