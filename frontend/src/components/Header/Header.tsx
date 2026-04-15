@@ -33,6 +33,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
   const [isSearching, setIsSearching] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchDropdownRef = useRef<HTMLDivElement>(null);
+  const mobileSearchRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
@@ -96,7 +97,10 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
   // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (searchDropdownRef.current && !searchDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inDesktop = searchDropdownRef.current?.contains(target);
+      const inMobile = mobileSearchRef.current?.contains(target);
+      if (!inDesktop && !inMobile) {
         setSearchResults([]);
       }
     };
@@ -421,7 +425,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
 
       {/* Busca Modal Mobile com Live Search */}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-[55] bg-black/95 lg:hidden overflow-y-auto">
+        <div ref={mobileSearchRef} className="fixed inset-0 z-[55] bg-black/95 lg:hidden overflow-y-auto">
           <div className="container mx-auto px-4 pt-6">
             <form onSubmit={handleSearch} className="relative">
               <input
