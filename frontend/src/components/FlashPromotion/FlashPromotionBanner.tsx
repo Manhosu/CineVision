@@ -14,7 +14,7 @@ interface FlashPromotion {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export function FlashPromotionBanner() {
+export function FlashPromotionBanner({ onActiveChange }: { onActiveChange?: (active: boolean) => void } = {}) {
   const [promotion, setPromotion] = useState<FlashPromotion | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isExpired, setIsExpired] = useState(false);
@@ -29,6 +29,7 @@ export function FlashPromotionBanner() {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
             setPromotion(data[0]);
+            onActiveChange?.(true);
           }
         }
       } catch (err) {
@@ -78,7 +79,7 @@ export function FlashPromotionBanner() {
       : `R$ ${(promotion.discount_value / 100).toFixed(2)} OFF`;
 
   return (
-    <div className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-b border-red-600/30 relative z-40">
+    <><div className="h-10" /><div className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-b border-red-600/30 fixed top-0 left-0 right-0 z-[60]">
       <div className="container mx-auto px-4 py-2 flex items-center justify-center gap-3 sm:gap-5 text-center flex-wrap">
         {/* Lightning + Title */}
         <div className="flex items-center gap-1.5">
@@ -110,6 +111,6 @@ export function FlashPromotionBanner() {
           </div>
         )}
       </div>
-    </div>
+    </div></>
   );
 }

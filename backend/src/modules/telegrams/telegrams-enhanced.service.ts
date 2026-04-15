@@ -75,7 +75,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private pollingOffset = 0;
   private isPolling = false;
   private conflictRetries = 0;
-  private readonly MAX_CONFLICT_RETRIES = 3;
+  private readonly MAX_CONFLICT_RETRIES = 10;
 
   constructor(
     private configService: ConfigService,
@@ -2348,8 +2348,14 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         this.conflictRetries++;
 
         if (this.conflictRetries >= this.MAX_CONFLICT_RETRIES) {
-          this.logger.warn(`Max conflict retries (${this.MAX_CONFLICT_RETRIES}) reached. Stopping polling to avoid conflicts with other instance.`);
+          this.logger.warn(`Max conflict retries (${this.MAX_CONFLICT_RETRIES}) reached. Auto-restarting in 60s...`);
           this.isPolling = false;
+          // Auto-restart after 60 seconds cooldown
+          setTimeout(() => {
+            this.conflictRetries = 0;
+            this.logger.log('Auto-restarting polling after cooldown...');
+            this.startPolling();
+          }, 60000);
           return;
         }
 

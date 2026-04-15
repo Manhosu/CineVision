@@ -18,9 +18,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 interface HeaderProps {
   transparent?: boolean;
+  hasFlashBanner?: boolean;
 }
 
-export function Header({ transparent = false }: HeaderProps) {
+export function Header({ transparent = false, hasFlashBanner = false }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,7 +118,9 @@ export function Header({ transparent = false }: HeaderProps) {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-700 ease-in-out ${
+        className={`fixed left-0 right-0 z-50 transition-all duration-700 ease-in-out ${
+          hasFlashBanner ? 'top-10' : 'top-0'
+        } ${
           isScrolled
             ? 'bg-black shadow-lg'
             : 'bg-transparent'
@@ -230,7 +233,7 @@ export function Header({ transparent = false }: HeaderProps) {
                         key={movie.id}
                         onClick={() => {
                           const type = (movie as any).content_type === 'series' ? 'series' : 'movies';
-                          router.push(`/${type}/${movie.id}`);
+                          window.location.href = `/${type}/${movie.id}`;
                           setIsSearchOpen(false);
                           setSearchQuery('');
                           setSearchResults([]);
@@ -248,7 +251,16 @@ export function Header({ transparent = false }: HeaderProps) {
                           </p>
                         </div>
                         {movie.price_cents && (
-                          <span className="text-gray-500 text-xs flex-shrink-0">R$ {(movie.price_cents / 100).toFixed(2)}</span>
+                          <span className="text-xs flex-shrink-0">
+                            {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+                              <>
+                                <span className="text-gray-600 line-through mr-1">R$ {(movie.price_cents / 100).toFixed(2)}</span>
+                                <span className="text-green-400 font-bold">R$ {(movie.discounted_price_cents / 100).toFixed(2)}</span>
+                              </>
+                            ) : (
+                              <span className="text-gray-500">R$ {(movie.price_cents / 100).toFixed(2)}</span>
+                            )}
+                          </span>
                         )}
                       </button>
                     ))}

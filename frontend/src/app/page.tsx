@@ -61,6 +61,7 @@ function AutoLoginHandler() {
 function HomePageContent() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [hasFlashBanner, setHasFlashBanner] = useState(false);
   const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
   const [contentSections, setContentSections] = useState<ContentSection[]>([]);
   const [purchasedMovies, setPurchasedMovies] = useState<Set<string>>(new Set());
@@ -241,13 +242,13 @@ function HomePageContent() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#050508' }}>
-      <Header />
+      <Header hasFlashBanner={hasFlashBanner} />
 
       {/* Conteúdo principal */}
       <main className="relative">
 
         {/* Flash Promotion Banner - below header, above hero */}
-        <FlashPromotionBanner />
+        <FlashPromotionBanner onActiveChange={setHasFlashBanner} />
 
         {/* Banner Hero */}
         {isLoading ? (

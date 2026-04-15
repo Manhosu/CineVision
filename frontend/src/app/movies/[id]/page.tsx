@@ -24,7 +24,7 @@ async function getMovie(id: string): Promise<Movie | null> {
     }
 
     const response = await fetch(`${apiUrl}/api/v1/content/movies/${id}`, {
-      next: { revalidate: 3600 },
+      next: { revalidate: 60 },
       cache: 'force-cache'
     });
 
@@ -49,7 +49,7 @@ async function getRelatedMovies(movieId: string, genres?: string[]): Promise<Mov
 
     const response = await fetch(
       `${apiUrl}/api/v1/content/movies/related/${movieId}?genres=${genres?.join(',')}`,
-      { next: { revalidate: 3600 }, cache: 'force-cache' }
+      { next: { revalidate: 60 }, cache: 'force-cache' }
     );
 
     if (!response.ok) return [];
@@ -229,6 +229,31 @@ export default async function MoviePage({ params }: MoviePageProps) {
                   </p>
 
                   <ActionButtons movie={movie} />
+
+                  {/* Cast Section - FilmZone style */}
+                  {movie.cast && (
+                    <div className="mt-8">
+                      <h3 className="text-white font-semibold text-lg mb-4">Elenco</h3>
+                      <div className="flex flex-wrap gap-4">
+                        {(typeof movie.cast === 'string' ? movie.cast.split(',') : movie.cast).map((actor: string, i: number) => (
+                          <div key={i} className="flex items-center gap-3 bg-white/5 rounded-full pr-4 pl-1 py-1">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                              {actor.trim().charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-gray-300 text-sm">{actor.trim()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Director */}
+                  {movie.director && (
+                    <div className="mt-4">
+                      <span className="text-gray-500 text-sm">Diretor: </span>
+                      <span className="text-white text-sm font-medium">{movie.director}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Trailer Section */}
