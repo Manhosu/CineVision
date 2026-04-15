@@ -1059,18 +1059,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       // Verificar status do pagamento
       if (payment.status === 'completed' || payment.status === 'paid') {
-        // Pagamento confirmado!
-        await this.sendMessage(chatId, '🎉 *Pagamento Confirmado!*\n\n✅ Seu pagamento PIX foi aprovado!\n\n⏳ Preparando seu filme...', {
-          parse_mode: 'Markdown'
-        });
-
         // Atualizar status da purchase
         await this.supabase
           .from('purchases')
           .update({ status: 'paid' })
           .eq('id', purchaseId);
 
-        // Entregar conteúdo
+        // Buscar dados da compra
         const { data: purchase } = await this.supabase
           .from('purchases')
           .select('*, content(*)')
@@ -1101,9 +1096,36 @@ export class TelegramsEnhancedService implements OnModuleInit {
             this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
           }
 
-          await this.deliverContentAfterPayment({
-            ...purchase,
-            provider_meta: { telegram_chat_id: chatId.toString() }
+          // Enviar mensagem UNICA de confirmacao com link do Telegram group
+          const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+          const contentTitle = content?.title || 'Conteudo';
+          const priceText = (purchase.amount_cents / 100).toFixed(2);
+          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+
+          const buttons: any[][] = [];
+
+          // Botao do grupo Telegram se disponivel
+          if (content?.telegram_group_link) {
+            buttons.push([{ text: '🎬 Assistir Agora', url: content.telegram_group_link }]);
+          }
+
+          // Botao da dashboard
+          buttons.push([{ text: '📱 Minha Dashboard', url: dashboardUrl }]);
+
+          await this.sendMessage(chatId,
+            `✅ *Pagamento Confirmado!*\n\n` +
+            `🎬 *${contentTitle}*\n` +
+            `💰 Valor: R$ ${priceText}\n\n` +
+            `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: buttons },
+            }
+          );
+        } else {
+          await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.', {
+            parse_mode: 'Markdown'
           });
         }
 
@@ -1139,12 +1161,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
               })
               .eq('id', purchaseId);
 
-            // Enviar mensagem de confirmação
-            await this.sendMessage(chatId, '🎉 *PAGAMENTO CONFIRMADO!*\n\n✅ Seu pagamento PIX foi aprovado com sucesso!\n\n⏳ Preparando seu conteúdo...', {
-              parse_mode: 'Markdown'
-            });
-
-            // Entregar conteúdo
+            // Buscar dados da compra e enviar mensagem unica
             const { data: purchase } = await this.supabase
               .from('purchases')
               .select('*, content(*)')
@@ -1154,13 +1171,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
             if (purchase) {
               // Increment sales counters
               try {
-                this.logger.log(`Incrementing sales counters for content ${purchase.content_id}`);
                 const { error: rpcError } = await this.supabase.rpc('increment_content_sales', {
                   content_id: purchase.content_id,
                 });
-
                 if (rpcError) {
-                  this.logger.warn('RPC increment_content_sales not found, using manual update');
                   const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
                   await this.supabase
                     .from('content')
@@ -1175,10 +1189,29 @@ export class TelegramsEnhancedService implements OnModuleInit {
                 this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
               }
 
-              await this.deliverContentAfterPayment({
-                ...purchase,
-                provider_meta: { telegram_chat_id: chatId.toString() }
-              });
+              // Enviar mensagem UNICA de confirmacao
+              const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+              const contentTitle = content?.title || 'Conteudo';
+              const priceText = (purchase.amount_cents / 100).toFixed(2);
+              const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+              const dashUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+
+              const btns: any[][] = [];
+              if (content?.telegram_group_link) {
+                btns.push([{ text: '🎬 Assistir Agora', url: content.telegram_group_link }]);
+              }
+              btns.push([{ text: '📱 Minha Dashboard', url: dashUrl }]);
+
+              await this.sendMessage(chatId,
+                `✅ *Pagamento Confirmado!*\n\n` +
+                `🎬 *${contentTitle}*\n` +
+                `💰 Valor: R$ ${priceText}\n\n` +
+                `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.`,
+                {
+                  parse_mode: 'Markdown',
+                  reply_markup: { inline_keyboard: btns },
+                }
+              );
             }
 
             // Limpar cache
@@ -2205,33 +2238,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         }
       }
 
-      // Send unified confirmation message - user chooses viewing option in dashboard
-      const message = hasLanguages
-        ? `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n🌐 **Como assistir:**\n✨ Acesse seu dashboard para escolher entre:\n   • Assistir no Site (streaming online)\n   • Assistir no Telegram (grupo privado)\n\n👇 Clique no botão abaixo:`
-        : `🎉 **Pagamento Confirmado!**\n\n✅ Sua compra de "${content.title}" foi aprovada!\n💰 Valor: R$ ${priceText}\n\n⚠️ **Atenção:** O vídeo ainda não foi adicionado ao sistema.\n\n🌐 **Dashboard:**\n✨ Acesse seu painel para visualizar quando disponível\n🔔 Você será notificado quando o conteúdo estiver pronto!`;
-
-      await this.sendMessage(parseInt(chatId), message,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '🌐 Abrir Dashboard', url: dashboardUrl }]
-            ]
-          }
-        }
-      );
-
-      // Log successful delivery
+      // Log successful delivery (mensagem de confirmacao ja enviada pelo handleCheckPixPayment)
       await this.supabase.from('system_logs').insert({
         type: 'delivery',
         level: 'info',
         message: `Delivered content ${content.id} to user ${purchase.user_id} for purchase ${purchase.id} (hasLanguages: ${hasLanguages}, telegramGroupAvailable: ${telegramGroupAvailable})`,
       });
-
-      // Send message to prompt user to use /start for new purchases
-      await this.sendMessage(parseInt(chatId),
-        '🛍 Para realizar novas compras no aplicativo, digite /start'
-      );
 
       // Log de entrega
       this.logger.log(`Content delivered to purchase ${purchase.id}: dashboard=${dashboardUrl}, telegram=${telegramGroupAvailable ? 'yes' : 'no'}`);
