@@ -21,6 +21,7 @@ interface ContentFormData {
   poster_url: string;
   backdrop_url: string;
   backdrop_position: string;
+  backdrop_position_mobile: string;
   content_type: 'movie' | 'series';
   is_featured: boolean;
   is_release: boolean;
@@ -90,6 +91,7 @@ export default function AdminContentCreatePage() {
     poster_url: '',
     backdrop_url: '',
     backdrop_position: '50% 50%',
+    backdrop_position_mobile: '50% 50%',
     content_type: 'movie',
     is_featured: false,
     is_release: false,
@@ -177,6 +179,7 @@ export default function AdminContentCreatePage() {
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
         quality_label: formData.quality_label || undefined,
         backdrop_position: formData.backdrop_position !== '50% 50%' ? formData.backdrop_position : undefined,
+        backdrop_position_mobile: formData.backdrop_position_mobile !== '50% 50%' ? formData.backdrop_position_mobile : undefined,
       };
 
       // Adicionar informações de série se aplicável
@@ -1011,12 +1014,20 @@ export default function AdminContentCreatePage() {
         {showBackdropEditor && fileUpload.backdropUrl && (
           <BackdropEditor
             imageUrl={fileUpload.backdropUrl}
-            initialPosition={{
+            initialDesktop={{
               x: parseInt(formData.backdrop_position.split('%')[0]) || 50,
               y: parseInt(formData.backdrop_position.split(' ')[1]) || 50,
             }}
-            onPositionChange={(pos) => {
-              setFormData(prev => ({ ...prev, backdrop_position: `${Math.round(pos.x)}% ${Math.round(pos.y)}%` }));
+            initialMobile={{
+              x: parseInt(formData.backdrop_position_mobile.split('%')[0]) || 50,
+              y: parseInt(formData.backdrop_position_mobile.split(' ')[1]) || 50,
+            }}
+            onSave={(desktop, mobile) => {
+              setFormData(prev => ({
+                ...prev,
+                backdrop_position: `${Math.round(desktop.x)}% ${Math.round(desktop.y)}%`,
+                backdrop_position_mobile: `${Math.round(mobile.x)}% ${Math.round(mobile.y)}%`,
+              }));
             }}
             onClose={() => setShowBackdropEditor(false)}
             contentTitle={formData.title || 'Título do Filme'}

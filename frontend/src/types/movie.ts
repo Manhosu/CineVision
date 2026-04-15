@@ -43,6 +43,7 @@ export interface Movie {
   director?: string;
   // Backdrop focal point position (e.g. "50% 30%")
   backdrop_position?: string;
+  backdrop_position_mobile?: string;
   // Content type
   content_type?: string;
   type?: string;

@@ -35,6 +35,8 @@ export default function ContentHero({
   const [saved, setSaved] = useState(false);
 
   const backdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
+  const desktopPos = content.backdrop_position || '50% 50%';
+  const mobilePos = content.backdrop_position_mobile || desktopPos;
 
   const formatDuration = (mins?: number) => {
     if (!mins) return null;
@@ -96,11 +98,20 @@ export default function ContentHero({
       {/* Backdrop - fullscreen */}
       {backdropUrl && (
         <div className="absolute inset-0 z-0">
+          {/* Desktop backdrop */}
           <img
             src={backdropUrl}
             alt=""
-            className="w-full h-full object-cover"
-            style={{ objectPosition: content.backdrop_position || '50% 50%' }}
+            className="hidden sm:block w-full h-full object-cover"
+            style={{ objectPosition: desktopPos }}
+            loading="eager"
+          />
+          {/* Mobile backdrop */}
+          <img
+            src={backdropUrl}
+            alt=""
+            className="block sm:hidden w-full h-full object-cover"
+            style={{ objectPosition: mobilePos }}
             loading="eager"
           />
           {/* Cinematic gradients */}

@@ -146,6 +146,9 @@ export class Content {
   @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
   backdrop_position?: string;
 
+  @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
+  backdrop_position_mobile?: string;
+
   @Column({ nullable: true })
   storage_path?: string;
 

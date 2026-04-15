@@ -96,6 +96,7 @@ export default function AdminContentEditPage() {
   const [posterUploading, setPosterUploading] = useState(false);
   const [backdropUploading, setBackdropUploading] = useState(false);
   const [backdropPosition, setBackdropPosition] = useState('50% 50%');
+  const [backdropPositionMobile, setBackdropPositionMobile] = useState('50% 50%');
   const [showBackdropEditor, setShowBackdropEditor] = useState(false);
 
   useEffect(() => {
@@ -153,6 +154,7 @@ export default function AdminContentEditPage() {
         setPosterUrl(data.poster_url || '');
         setBackdropUrl(data.backdrop_url || '');
         setBackdropPosition(data.backdrop_position || '50% 50%');
+        setBackdropPositionMobile(data.backdrop_position_mobile || data.backdrop_position || '50% 50%');
         setQualityLabel(data.quality_label || '');
       } else {
         toast.error('Erro ao carregar conteúdo');
@@ -259,6 +261,7 @@ export default function AdminContentEditPage() {
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
+        backdrop_position_mobile: backdropPositionMobile,
         is_featured: isFeatured,
         is_release: isRelease,
         price_cents: Math.round(parseFloat(priceInput) * 100),
@@ -750,12 +753,17 @@ export default function AdminContentEditPage() {
       {showBackdropEditor && backdropUrl && (
         <BackdropEditor
           imageUrl={backdropUrl}
-          initialPosition={{
+          initialDesktop={{
             x: parseInt(backdropPosition.split('%')[0]) || 50,
             y: parseInt(backdropPosition.split(' ')[1]) || 50,
           }}
-          onPositionChange={(pos) => {
-            setBackdropPosition(`${Math.round(pos.x)}% ${Math.round(pos.y)}%`);
+          initialMobile={{
+            x: parseInt(backdropPositionMobile.split('%')[0]) || 50,
+            y: parseInt(backdropPositionMobile.split(' ')[1]) || 50,
+          }}
+          onSave={(desktop, mobile) => {
+            setBackdropPosition(`${Math.round(desktop.x)}% ${Math.round(desktop.y)}%`);
+            setBackdropPositionMobile(`${Math.round(mobile.x)}% ${Math.round(mobile.y)}%`);
           }}
           onClose={() => setShowBackdropEditor(false)}
           contentTitle={title || 'Título do Filme'}
