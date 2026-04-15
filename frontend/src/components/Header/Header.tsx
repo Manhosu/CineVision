@@ -86,7 +86,7 @@ export function Header({ transparent = false }: HeaderProps) {
   const handleSearchInput = (value: string) => {
     setSearchQuery(value);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(() => liveSearch(value), 300);
+    searchTimeoutRef.current = setTimeout(() => liveSearch(value), 100);
   };
 
   // Close dropdown on click outside

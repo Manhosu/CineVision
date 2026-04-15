@@ -135,7 +135,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
           className="relative transition-all duration-300 ease-out hover:scale-[1.02] z-20"
           style={{ width: 'clamp(140px, 18vw, 200px)' }}
         >
-          {/* Poster - 100% clean */}
+          {/* Poster with year overlay */}
           <div className="relative aspect-[2/3] overflow-hidden rounded-xl w-full">
             <LazyImage
               src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
@@ -147,17 +147,22 @@ const Top10MovieCard = memo(function Top10MovieCard({
               fallbackSrc="/images/placeholder-poster.svg"
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
+
+            {/* Year + badge overlay at bottom-left of poster */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 z-10">
+              <div className="flex items-center gap-1.5">
+                {movie.release_year && (
+                  <span className="text-white text-xs font-semibold drop-shadow-lg">{movie.release_year}</span>
+                )}
+                {(movie as any).content_type === 'series' && (
+                  <span className="px-1.5 py-0.5 bg-blue-500/30 text-blue-400 rounded text-[10px] font-medium">Série</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Info + Buy button below poster - z-30 to stay above ranking number */}
+          {/* Buy button below poster - z-30 to stay above ranking number */}
           <div className="pt-2 px-0.5 relative z-30">
-            <div className="flex items-center gap-2 text-sm text-gray-300 mb-2">
-              {movie.release_year && <span className="font-medium">{movie.release_year}</span>}
-              {(movie as any).content_type === 'series' && (
-                <span className="px-1.5 py-0.5 bg-blue-500/30 text-blue-400 rounded text-[10px] font-medium">Série</span>
-              )}
-            </div>
-
             <button
               onClick={isPurchased ? handleWatch : handlePurchase}
               className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-2 px-3 rounded-lg transition-colors border border-white/10"
