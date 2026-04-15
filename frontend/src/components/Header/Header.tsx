@@ -141,7 +141,7 @@ export function Header({ transparent = false }: HeaderProps) {
                 width={450}
                 height={135}
                 priority
-                className="h-12 md:h-16 lg:h-20 xl:h-24 w-auto transition-opacity duration-200 hover:opacity-80"
+                className="h-14 md:h-20 lg:h-24 xl:h-28 w-auto transition-opacity duration-200 hover:opacity-80"
               />
             </Link>
 
@@ -186,9 +186,9 @@ export function Header({ transparent = false }: HeaderProps) {
             <div className="flex items-center space-x-4 lg:space-x-6">
               {/* Busca Desktop Expansível com Live Search */}
               <div className="hidden lg:block relative" ref={searchDropdownRef}>
-                <div className={`flex items-center transition-all duration-300 ${
+                <div className={`flex items-center transition-all duration-500 ease-in-out ${
                   isSearchOpen
-                    ? 'bg-black/90 backdrop-blur-sm border border-white/30 w-72 rounded-lg'
+                    ? 'bg-black/90 backdrop-blur-sm border border-white/30 w-96 rounded-lg'
                     : 'w-auto'
                 }`}>
                   {isSearchOpen && (
@@ -224,7 +224,7 @@ export function Header({ transparent = false }: HeaderProps) {
 
                 {/* Live Search Dropdown */}
                 {isSearchOpen && searchResults.length > 0 && (
-                  <div className="absolute top-full right-0 mt-1 w-80 bg-zinc-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]">
+                  <div className="absolute top-full right-0 mt-1 w-96 bg-zinc-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60] max-h-[70vh] overflow-y-auto">
                     {searchResults.map((movie) => (
                       <button
                         key={movie.id}
@@ -235,18 +235,21 @@ export function Header({ transparent = false }: HeaderProps) {
                           setSearchQuery('');
                           setSearchResults([]);
                         }}
-                        className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-white/10 transition-colors text-left"
+                        className="flex items-center gap-3 w-full px-4 py-3 hover:bg-white/10 transition-colors text-left"
                       >
                         {movie.poster_url && (
-                          <img src={movie.poster_url} alt="" className="w-8 h-12 object-cover rounded" />
+                          <img src={movie.poster_url} alt="" className="w-12 h-16 object-cover rounded-lg" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-white text-sm font-medium truncate">{movie.title}</p>
+                          <p className="text-white text-sm font-semibold truncate">{movie.title}</p>
                           <p className="text-gray-400 text-xs">
                             {movie.release_year}
                             {(movie as any).content_type === 'series' && ' · Serie'}
                           </p>
                         </div>
+                        {movie.price_cents && (
+                          <span className="text-gray-500 text-xs flex-shrink-0">R$ {(movie.price_cents / 100).toFixed(2)}</span>
+                        )}
                       </button>
                     ))}
                     <button
@@ -389,8 +392,8 @@ export function Header({ transparent = false }: HeaderProps) {
 
       {/* Busca Modal Mobile com Live Search */}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-50 bg-black/95 lg:hidden overflow-y-auto">
-          <div className="container mx-auto px-4 pt-4">
+        <div className="fixed inset-0 z-[55] bg-black/95 lg:hidden overflow-y-auto">
+          <div className="container mx-auto px-4 pt-6">
             <form onSubmit={handleSearch} className="relative">
               <input
                 type="text"

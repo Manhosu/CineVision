@@ -78,7 +78,7 @@ export function FlashPromotionBanner() {
       : `R$ ${(promotion.discount_value / 100).toFixed(2)} OFF`;
 
   return (
-    <div className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-b border-red-600/30">
+    <div className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-b border-red-600/30 relative z-40">
       <div className="container mx-auto px-4 py-2 flex items-center justify-center gap-3 sm:gap-5 text-center flex-wrap">
         {/* Lightning + Title */}
         <div className="flex items-center gap-1.5">

@@ -124,7 +124,7 @@ export function ContentRow({
             <h2
               className="font-bold text-white uppercase tracking-wide"
               style={{
-                fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
+                fontSize: 'clamp(0.875rem, 3vw, 1.25rem)',
               }}
             >
               {title}

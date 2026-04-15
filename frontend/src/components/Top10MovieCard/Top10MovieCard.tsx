@@ -106,14 +106,14 @@ const Top10MovieCard = memo(function Top10MovieCard({
         <div
           className="relative flex items-end justify-center select-none pointer-events-none z-10 flex-shrink-0"
           style={{
-            width: 'clamp(60px, 8vw, 100px)',
-            marginRight: '-20px'
+            width: 'clamp(40px, 7vw, 100px)',
+            marginRight: '-15px'
           }}
         >
           <div
             className="font-black leading-none transition-all duration-500"
             style={{
-              fontSize: 'clamp(100px, 15vw, 180px)',
+              fontSize: 'clamp(60px, 12vw, 180px)',
               fontFamily: 'Impact, system-ui, -apple-system, sans-serif',
               background: 'linear-gradient(180deg, #ffffff 0%, #888888 100%)',
               WebkitBackgroundClip: 'text',

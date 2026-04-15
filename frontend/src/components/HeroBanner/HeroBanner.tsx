@@ -131,7 +131,7 @@ export function HeroBanner({
   };
 
   return (
-    <div className="relative h-[70vh] md:h-[70vh] lg:h-[80vh] min-h-[450px] lg:min-h-[550px] overflow-hidden">
+    <div className="relative h-[60vh] md:h-[70vh] lg:h-[80vh] min-h-[400px] lg:min-h-[550px] overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
         <NextImage
@@ -147,7 +147,7 @@ export function HeroBanner({
       </div>
 
       {/* Content - positioned at bottom */}
-      <div className="relative z-10 h-full flex items-end pb-16 md:pb-14 lg:pb-16">
+      <div className="relative z-10 h-full flex items-end pb-10 md:pb-12 lg:pb-16">
         <div className="container mx-auto px-5 lg:px-8">
           <div className="max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl">
             <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
@@ -229,7 +229,7 @@ export function HeroBanner({
 
       {/* Dots Indicator - inside hero, above overlap zone */}
       {movies.length > 1 && (
-        <div className="absolute bottom-8 md:bottom-6 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+        <div className="absolute bottom-3 md:bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
           {movies.map((_, index) => (
             <button
               key={index}
