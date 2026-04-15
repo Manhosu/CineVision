@@ -230,28 +230,49 @@ export default async function MoviePage({ params }: MoviePageProps) {
 
                   <ActionButtons movie={movie} />
 
-                  {/* Cast Section - FilmZone style */}
-                  {movie.cast && (
-                    <div className="mt-8">
-                      <h3 className="text-white font-semibold text-lg mb-4">Elenco</h3>
-                      <div className="flex flex-wrap gap-4">
-                        {(typeof movie.cast === 'string' ? movie.cast.split(',') : movie.cast).map((actor: string, i: number) => (
-                          <div key={i} className="flex items-center gap-3 bg-white/5 rounded-full pr-4 pl-1 py-1">
-                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                              {actor.trim().charAt(0).toUpperCase()}
-                            </div>
-                            <span className="text-gray-300 text-sm">{actor.trim()}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Cast & Director Section - FilmZone style */}
+                  {(movie.cast || movie.director) && (
+                    <div className="mt-8 border-t border-white/10 pt-6">
+                      {/* Director */}
+                      {movie.director && (
+                        <div className="mb-5">
+                          <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-2">Direção</h3>
+                          <p className="text-white text-sm font-medium">{movie.director}</p>
+                        </div>
+                      )}
 
-                  {/* Director */}
-                  {movie.director && (
-                    <div className="mt-4">
-                      <span className="text-gray-500 text-sm">Diretor: </span>
-                      <span className="text-white text-sm font-medium">{movie.director}</span>
+                      {/* Cast */}
+                      {movie.cast && (() => {
+                        let actors: string[] = [];
+                        try {
+                          const parsed = typeof movie.cast === 'string' && movie.cast.startsWith('[')
+                            ? JSON.parse(movie.cast)
+                            : typeof movie.cast === 'string'
+                              ? movie.cast.split(',')
+                              : movie.cast;
+                          actors = Array.isArray(parsed) ? parsed : [parsed];
+                        } catch { actors = typeof movie.cast === 'string' ? movie.cast.split(',') : []; }
+
+                        return actors.length > 0 ? (
+                          <div>
+                            <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">Elenco</h3>
+                            <div className="flex flex-wrap gap-3">
+                              {actors.map((actor: string, i: number) => {
+                                const name = actor.trim();
+                                if (!name) return null;
+                                return (
+                                  <div key={i} className="flex items-center gap-2.5 bg-white/5 hover:bg-white/10 transition-colors rounded-lg px-3 py-2">
+                                    <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                      {name.charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="text-gray-200 text-sm">{name}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   )}
                 </div>
