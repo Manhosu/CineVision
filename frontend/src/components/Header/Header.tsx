@@ -162,9 +162,8 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                     <button
                       key={`nav-item-${index}`}
                       onClick={item.onClick}
-                      className="text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 text-gray-300 hover:text-gray-200"
+                      className="text-sm font-medium transition-colors duration-200 text-gray-300 hover:text-gray-200"
                     >
-                      {ItemIcon && <ItemIcon className="w-4 h-4" />}
                       {item.label}
                     </button>
                   );
@@ -175,13 +174,12 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`text-sm font-medium transition-colors duration-200 flex items-center gap-1.5 ${
+                    className={`text-sm font-medium transition-colors duration-200 ${
                       isActiveLink(item.href)
                         ? 'text-white font-semibold'
                         : 'text-gray-300 hover:text-gray-200'
                     }`}
                   >
-                    {ItemIcon && <ItemIcon className="w-4 h-4" />}
                     {item.label}
                   </Link>
                 );
