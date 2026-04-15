@@ -38,6 +38,8 @@ export interface Movie {
   is_flash_promo?: boolean;
   // Quality label set by admin
   quality_label?: string; // 'HD CAM' | 'CINEMA' | 'FULL HD' | 'EXCLUSIVA'
+  // Audio type
+  audio_type?: string; // 'dubbed' | 'subtitled' | 'dubbed_subtitled'
   // Cast and director
   cast?: string;
   director?: string;

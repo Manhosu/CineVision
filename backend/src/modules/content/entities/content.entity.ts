@@ -143,6 +143,9 @@ export class Content {
   @Column({ nullable: true })
   imdb_rating?: number;
 
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  audio_type?: string; // 'dubbed' | 'subtitled' | 'dubbed_subtitled'
+
   @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
   backdrop_position?: string;
 

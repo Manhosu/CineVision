@@ -27,6 +27,7 @@ interface ContentFormData {
   is_release: boolean;
   price_cents: number;
   quality_label: string;
+  audio_type: string;
 }
 
 const AVAILABLE_GENRES = [
@@ -97,6 +98,7 @@ export default function AdminContentCreatePage() {
     is_release: false,
     price_cents: 1990, // R$ 19.90 default
     quality_label: '',
+    audio_type: '',
   });
 
   const [showBackdropEditor, setShowBackdropEditor] = useState(false);
@@ -178,6 +180,7 @@ export default function AdminContentCreatePage() {
         duration_minutes: formData.duration_minutes || undefined,
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
         quality_label: formData.quality_label || undefined,
+        audio_type: formData.audio_type || undefined,
         backdrop_position: formData.backdrop_position !== '50% 50%' ? formData.backdrop_position : undefined,
         backdrop_position_mobile: formData.backdrop_position_mobile !== '50% 50%' ? formData.backdrop_position_mobile : undefined,
       };
@@ -728,6 +731,21 @@ export default function AdminContentCreatePage() {
                     <option value="CINEMA">CINEMA</option>
                     <option value="FULL HD">FULL HD</option>
                     <option value="EXCLUSIVA">EXCLUSIVA</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Áudio / Legenda</label>
+                  <select
+                    name="audio_type"
+                    value={formData.audio_type}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  >
+                    <option value="">Selecione</option>
+                    <option value="dubbed">Dublado</option>
+                    <option value="subtitled">Legendado</option>
+                    <option value="dubbed_subtitled">Dublado e Legendado</option>
                   </select>
                 </div>
 

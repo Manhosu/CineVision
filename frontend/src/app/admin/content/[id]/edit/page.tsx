@@ -87,6 +87,7 @@ export default function AdminContentEditPage() {
   const [imdbRating, setImdbRating] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
   const [qualityLabel, setQualityLabel] = useState('');
+  const [audioType, setAudioType] = useState('');
 
   // Image uploads
   const [posterUrl, setPosterUrl] = useState('');
@@ -156,6 +157,7 @@ export default function AdminContentEditPage() {
         setBackdropPosition(data.backdrop_position || '50% 50%');
         setBackdropPositionMobile(data.backdrop_position_mobile || data.backdrop_position || '50% 50%');
         setQualityLabel(data.quality_label || '');
+        setAudioType(data.audio_type || '');
       } else {
         toast.error('Erro ao carregar conteúdo');
         router.push('/admin/content/manage');
@@ -268,6 +270,7 @@ export default function AdminContentEditPage() {
         imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
         quality_label: qualityLabel || null,
+        audio_type: audioType || null,
       };
 
       const response = await fetch(
@@ -447,6 +450,20 @@ export default function AdminContentEditPage() {
                     <option value="CINEMA">CINEMA</option>
                     <option value="FULL HD">FULL HD</option>
                     <option value="EXCLUSIVA">EXCLUSIVA</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Áudio / Legenda</label>
+                  <select
+                    value={audioType}
+                    onChange={(e) => setAudioType(e.target.value)}
+                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  >
+                    <option value="">Selecione</option>
+                    <option value="dubbed">Dublado</option>
+                    <option value="subtitled">Legendado</option>
+                    <option value="dubbed_subtitled">Dublado e Legendado</option>
                   </select>
                 </div>
 

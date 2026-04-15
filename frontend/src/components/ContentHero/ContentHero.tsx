@@ -172,6 +172,17 @@ export default function ContentHero({
                 {content.quality_label}
               </span>
             )}
+            {content.audio_type && (
+              <span className={`px-1.5 py-0 rounded text-xs sm:text-sm font-medium ${
+                content.audio_type === 'dubbed' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                content.audio_type === 'subtitled' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                'bg-green-500/20 text-green-400 border border-green-500/30'
+              }`}>
+                {content.audio_type === 'dubbed' ? 'Dublado' :
+                 content.audio_type === 'subtitled' ? 'Legendado' :
+                 'Dub · Leg'}
+              </span>
+            )}
           </div>
 
           {/* Genres */}
