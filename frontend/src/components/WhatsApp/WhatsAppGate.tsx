@@ -27,7 +27,7 @@ export function WhatsAppGate({
   }
 
   const handleOpenGroup = () => {
-    window.open(whatsappLink || 'https://chat.whatsapp.com/PLACEHOLDER', '_blank');
+    window.open(whatsappLink || 'https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy', '_blank');
   };
 
   const handleConfirmJoined = async () => {

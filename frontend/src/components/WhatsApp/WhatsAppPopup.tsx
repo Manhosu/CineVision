@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const WHATSAPP_LINK = 'https://chat.whatsapp.com/PLACEHOLDER';
+const WHATSAPP_LINK = 'https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy';
 const DISMISS_KEY = 'whatsapp_popup_dismissed';
 const SHOW_DELAY_MS = 3000;
 

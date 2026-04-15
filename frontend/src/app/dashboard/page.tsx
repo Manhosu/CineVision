@@ -319,6 +319,12 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-dark-950">
       <Header />
 
+      <WhatsAppGate
+        userId={user.id}
+        whatsappJoined={whatsappJoined}
+        whatsappLink="https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy"
+        onConfirmJoined={() => setWhatsappJoined(true)}
+      >
       <div className="container mx-auto px-4 lg:px-6 py-12 mt-20">
         {/* Header do Dashboard */}
         <div className="mb-8 bg-gradient-to-r from-red-900/20 to-purple-900/20 rounded-xl p-6 border border-red-500/20">
@@ -499,6 +505,8 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      </WhatsAppGate>
 
       <Footer />
     </div>

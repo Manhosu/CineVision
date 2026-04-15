@@ -294,8 +294,7 @@ function HomePageContent() {
       {/* Rodapé */}
       <Footer />
 
-      {/* WhatsApp Popup - desativado até Igor enviar link do grupo */}
-      {/* <WhatsAppPopup /> */}
+      <WhatsAppPopup />
     </div>
   );
 }
