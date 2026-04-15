@@ -74,6 +74,8 @@ export class AdminContentSimpleService {
       imdb_rating: data.imdb_rating || null,
       quality_label: data.quality_label || null,
       audio_type: data.audio_type || null,
+      telegram_group_link: data.telegram_group_link || null,
+      age_rating: data.age_rating || null,
     };
 
     // Adicionar campos específicos de série se aplicável

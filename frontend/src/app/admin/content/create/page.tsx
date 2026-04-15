@@ -13,7 +13,8 @@ interface ContentFormData {
   release_date: string;
   duration_minutes: number;
   genres: string[];
-  rating: string;
+  age_rating: string;
+  imdb_rating: string;
   director: string;
   cast: string;
   trailer_url: string;
@@ -84,7 +85,8 @@ export default function AdminContentCreatePage() {
     release_date: '',
     duration_minutes: 0,
     genres: [],
-    rating: '',
+    age_rating: '',
+    imdb_rating: '',
     director: '',
     cast: '',
     trailer_url: '',
@@ -178,7 +180,8 @@ export default function AdminContentCreatePage() {
         cast: formData.cast || undefined,
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
-        imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
+        age_rating: formData.age_rating || undefined,
+        imdb_rating: formData.imdb_rating ? parseFloat(formData.imdb_rating) : undefined,
         quality_label: formData.quality_label || undefined,
         audio_type: formData.audio_type || undefined,
         backdrop_position: formData.backdrop_position !== '50% 50%' ? formData.backdrop_position : undefined,
@@ -707,13 +710,32 @@ export default function AdminContentCreatePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Classificação</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Classificação Indicativa</label>
+                  <select
+                    name="age_rating"
+                    value={formData.age_rating}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  >
+                    <option value="">Selecione</option>
+                    <option value="L">Livre</option>
+                    <option value="10">10 anos</option>
+                    <option value="12">12 anos</option>
+                    <option value="14">14 anos</option>
+                    <option value="16">16 anos</option>
+                    <option value="18">18 anos</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Nota IMDb</label>
                   <input
                     type="text"
-                    name="rating"
-                    value={formData.rating}
+                    inputMode="decimal"
+                    name="imdb_rating"
+                    value={formData.imdb_rating}
                     onChange={handleChange}
-                    placeholder="Livre, 12, 14, 16, 18"
+                    placeholder="Ex: 7.5"
                     className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   />
                 </div>
