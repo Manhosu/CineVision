@@ -262,11 +262,6 @@ export function Header({ transparent = false }: HeaderProps) {
                     </button>
                   </div>
                 )}
-                {isSearchOpen && isSearching && searchQuery.length >= 2 && (
-                  <div className="absolute top-full right-0 mt-1 w-80 bg-zinc-900/95 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl p-4 z-[60]">
-                    <p className="text-gray-400 text-sm text-center">Buscando...</p>
-                  </div>
-                )}
               </div>
 
               {/* Busca Mobile */}
@@ -426,12 +421,6 @@ export function Header({ transparent = false }: HeaderProps) {
             </form>
 
             {/* Live Search Results Mobile */}
-            {isSearching && searchQuery.length >= 2 && (
-              <div className="py-8 text-center">
-                <div className="animate-spin w-6 h-6 border-2 border-white/30 border-t-white rounded-full mx-auto"></div>
-                <p className="text-gray-400 text-sm mt-3">Buscando...</p>
-              </div>
-            )}
             {searchResults.length > 0 && (
               <div className="mt-4 space-y-1">
                 {searchResults.map((movie) => (
