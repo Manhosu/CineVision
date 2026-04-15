@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import BackdropEditor from '@/components/Admin/BackdropEditor';
 
 interface ContentFormData {
   title: string;
@@ -19,6 +20,7 @@ interface ContentFormData {
   telegram_group_link: string;
   poster_url: string;
   backdrop_url: string;
+  backdrop_position: string;
   content_type: 'movie' | 'series';
   is_featured: boolean;
   is_release: boolean;
@@ -87,12 +89,15 @@ export default function AdminContentCreatePage() {
     telegram_group_link: '',
     poster_url: '',
     backdrop_url: '',
+    backdrop_position: '50% 50%',
     content_type: 'movie',
     is_featured: false,
     is_release: false,
     price_cents: 1990, // R$ 19.90 default
     quality_label: '',
   });
+
+  const [showBackdropEditor, setShowBackdropEditor] = useState(false);
 
   const [fileUpload, setFileUpload] = useState<FileUploadState>({
     posterFile: null,
@@ -171,6 +176,7 @@ export default function AdminContentCreatePage() {
         duration_minutes: formData.duration_minutes || undefined,
         imdb_rating: formData.rating ? parseFloat(formData.rating) : undefined,
         quality_label: formData.quality_label || undefined,
+        backdrop_position: formData.backdrop_position !== '50% 50%' ? formData.backdrop_position : undefined,
       };
 
       // Adicionar informações de série se aplicável
@@ -297,7 +303,8 @@ export default function AdminContentCreatePage() {
       const backdropUrl = await uploadBackdropFile(file);
       setFileUpload(prev => ({ ...prev, backdropUrl, backdropUploading: false }));
       setFormData(prev => ({ ...prev, backdrop_url: backdropUrl }));
-      toast.success('Backdrop enviado com sucesso!');
+      setShowBackdropEditor(true);
+      toast.success('Backdrop enviado! Ajuste o enquadramento.');
     } catch (error) {
       console.error('Erro no upload do backdrop:', error);
       alert('Erro no upload do backdrop. Tente novamente.');
@@ -865,6 +872,28 @@ export default function AdminContentCreatePage() {
                       {fileUpload.backdropFile.name} ({(fileUpload.backdropFile.size / 1024 / 1024).toFixed(2)} MB)
                     </div>
                   )}
+                  {/* Backdrop preview with position */}
+                  {fileUpload.backdropUrl && (
+                    <div className="space-y-2">
+                      <div className="relative rounded-xl overflow-hidden border border-white/10" style={{ aspectRatio: '16/7' }}>
+                        <img
+                          src={fileUpload.backdropUrl}
+                          alt="Backdrop preview"
+                          className="w-full h-full object-cover"
+                          style={{ objectPosition: formData.backdrop_position }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                        <div className="absolute bottom-3 left-3 text-white text-sm font-bold">{formData.title || 'Título do Filme'}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowBackdropEditor(true)}
+                        className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 rounded-lg text-sm font-medium transition-all"
+                      >
+                        Ajustar enquadramento
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -977,6 +1006,22 @@ export default function AdminContentCreatePage() {
             </button>
           </div>
         </form>
+
+        {/* Backdrop Editor Modal */}
+        {showBackdropEditor && fileUpload.backdropUrl && (
+          <BackdropEditor
+            imageUrl={fileUpload.backdropUrl}
+            initialPosition={{
+              x: parseInt(formData.backdrop_position.split('%')[0]) || 50,
+              y: parseInt(formData.backdrop_position.split(' ')[1]) || 50,
+            }}
+            onPositionChange={(pos) => {
+              setFormData(prev => ({ ...prev, backdrop_position: `${Math.round(pos.x)}% ${Math.round(pos.y)}%` }));
+            }}
+            onClose={() => setShowBackdropEditor(false)}
+            contentTitle={formData.title || 'Título do Filme'}
+          />
+        )}
 
         {/* Episode Manager - shown after series creation */}
         {showEpisodeManager && createdContentId && (

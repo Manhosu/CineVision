@@ -143,6 +143,9 @@ export class Content {
   @Column({ nullable: true })
   imdb_rating?: number;
 
+  @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
+  backdrop_position?: string;
+
   @Column({ nullable: true })
   storage_path?: string;
 

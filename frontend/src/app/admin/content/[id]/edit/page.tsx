@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
+import BackdropEditor from '@/components/Admin/BackdropEditor';
 
 interface Content {
   id: string;
@@ -94,6 +95,8 @@ export default function AdminContentEditPage() {
   const [backdropFile, setBackdropFile] = useState<File | null>(null);
   const [posterUploading, setPosterUploading] = useState(false);
   const [backdropUploading, setBackdropUploading] = useState(false);
+  const [backdropPosition, setBackdropPosition] = useState('50% 50%');
+  const [showBackdropEditor, setShowBackdropEditor] = useState(false);
 
   useEffect(() => {
     if (contentId) {
@@ -149,6 +152,7 @@ export default function AdminContentEditPage() {
         setReleaseYear(data.release_year?.toString() || '');
         setPosterUrl(data.poster_url || '');
         setBackdropUrl(data.backdrop_url || '');
+        setBackdropPosition(data.backdrop_position || '50% 50%');
         setQualityLabel(data.quality_label || '');
       } else {
         toast.error('Erro ao carregar conteúdo');
@@ -199,7 +203,8 @@ export default function AdminContentEditPage() {
         throw new Error(result.error);
       }
       setBackdropUrl(result.publicUrl);
-      toast.success('Backdrop enviado com sucesso!');
+      setShowBackdropEditor(true);
+      toast.success('Backdrop enviado! Ajuste o enquadramento.');
     } catch (error: any) {
       console.error('Erro ao fazer upload do backdrop:', error);
       toast.error(error.message || 'Erro ao fazer upload do backdrop');
@@ -253,6 +258,7 @@ export default function AdminContentEditPage() {
         telegram_group_link: telegramGroupLink.trim(),
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
+        backdrop_position: backdropPosition,
         is_featured: isFeatured,
         is_release: isRelease,
         price_cents: Math.round(parseFloat(priceInput) * 100),
@@ -655,17 +661,30 @@ export default function AdminContentEditPage() {
                 <div>
                   <label className="block text-sm font-medium mb-2">Backdrop</label>
                   {backdropUrl && (
-                    <div className="relative mb-3">
-                      <img
-                        src={backdropUrl}
-                        alt="Backdrop"
-                        className="w-full h-64 object-cover rounded-lg border border-white/10"
-                      />
+                    <div className="space-y-2 mb-3">
+                      <div className="relative rounded-lg overflow-hidden border border-white/10" style={{ aspectRatio: '16/7' }}>
+                        <img
+                          src={backdropUrl}
+                          alt="Backdrop"
+                          className="w-full h-full object-cover"
+                          style={{ objectPosition: backdropPosition }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                        <div className="absolute bottom-2 left-3 text-white text-sm font-bold">{title || 'Preview'}</div>
+                        <button
+                          type="button"
+                          onClick={() => setBackdropUrl('')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                       <button
-                        onClick={() => setBackdropUrl('')}
-                        className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full transition-colors"
+                        type="button"
+                        onClick={() => setShowBackdropEditor(true)}
+                        className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 rounded-lg text-sm font-medium transition-all"
                       >
-                        <X className="w-4 h-4" />
+                        Ajustar enquadramento
                       </button>
                     </div>
                   )}
@@ -727,6 +746,21 @@ export default function AdminContentEditPage() {
             </div>
         </div>
       </div>
+      {/* Backdrop Editor Modal */}
+      {showBackdropEditor && backdropUrl && (
+        <BackdropEditor
+          imageUrl={backdropUrl}
+          initialPosition={{
+            x: parseInt(backdropPosition.split('%')[0]) || 50,
+            y: parseInt(backdropPosition.split(' ')[1]) || 50,
+          }}
+          onPositionChange={(pos) => {
+            setBackdropPosition(`${Math.round(pos.x)}% ${Math.round(pos.y)}%`);
+          }}
+          onClose={() => setShowBackdropEditor(false)}
+          contentTitle={title || 'Título do Filme'}
+        />
+      )}
     </div>
   );
 }

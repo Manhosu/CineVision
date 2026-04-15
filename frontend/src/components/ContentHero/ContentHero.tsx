@@ -100,6 +100,7 @@ export default function ContentHero({
             src={backdropUrl}
             alt=""
             className="w-full h-full object-cover"
+            style={{ objectPosition: content.backdrop_position || '50% 50%' }}
             loading="eager"
           />
           {/* Cinematic gradients */}

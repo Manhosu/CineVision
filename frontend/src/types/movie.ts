@@ -41,6 +41,8 @@ export interface Movie {
   // Cast and director
   cast?: string;
   director?: string;
+  // Backdrop focal point position (e.g. "50% 30%")
+  backdrop_position?: string;
   // Content type
   content_type?: string;
   type?: string;
