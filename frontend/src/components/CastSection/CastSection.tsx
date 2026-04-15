@@ -1,0 +1,130 @@
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+
+interface CastSectionProps {
+  cast?: string | string[];
+  director?: string;
+}
+
+function parseCast(cast?: string | string[]): string[] {
+  if (!cast) return [];
+  if (Array.isArray(cast)) return cast.map(s => s.trim()).filter(Boolean);
+  try {
+    const parsed = cast.startsWith('[') ? JSON.parse(cast) : null;
+    if (Array.isArray(parsed)) return parsed.map((s: string) => s.trim()).filter(Boolean);
+  } catch { /* ignore */ }
+  return cast.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+const COLORS = [
+  'from-red-500 to-red-700',
+  'from-blue-500 to-blue-700',
+  'from-emerald-500 to-emerald-700',
+  'from-purple-500 to-purple-700',
+  'from-amber-500 to-amber-700',
+  'from-pink-500 to-pink-700',
+  'from-indigo-500 to-indigo-700',
+  'from-teal-500 to-teal-700',
+  'from-orange-500 to-orange-700',
+  'from-cyan-500 to-cyan-700',
+  'from-rose-500 to-rose-700',
+  'from-violet-500 to-violet-700',
+  'from-lime-500 to-lime-700',
+  'from-fuchsia-500 to-fuchsia-700',
+  'from-sky-500 to-sky-700',
+];
+
+export default function CastSection({ cast, director }: CastSectionProps) {
+  const actors = parseCast(cast);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+  };
+
+  useEffect(() => {
+    updateScroll();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateScroll, { passive: true });
+    const ro = new ResizeObserver(updateScroll);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', updateScroll); ro.disconnect(); };
+  }, [actors]);
+
+  const scroll = (dir: 'left' | 'right') => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir === 'left' ? -el.clientWidth * 0.6 : el.clientWidth * 0.6, behavior: 'smooth' });
+  };
+
+  if (actors.length === 0 && !director) return null;
+
+  return (
+    <div className="py-8 tv:py-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 tv:px-16">
+        <div className="flex items-baseline gap-4 mb-5 tv:mb-7">
+          <h2 className="text-lg sm:text-xl tv:text-2xl font-bold text-white">
+            Elenco
+          </h2>
+          {director && (
+            <span className="text-white/40 text-sm tv:text-base">
+              Direção: <span className="text-white/60">{director}</span>
+            </span>
+          )}
+        </div>
+
+        {actors.length > 0 && (
+          <div className="relative group/cast">
+            {/* Arrows */}
+            {canScrollLeft && (
+              <button
+                onClick={() => scroll('left')}
+                className="hidden sm:flex absolute -left-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-dark-950/80 backdrop-blur border border-white/10 items-center justify-center text-white/70 hover:text-white hover:bg-dark-800 transition-all opacity-0 group-hover/cast:opacity-100"
+              >
+                <ChevronLeftIcon className="w-4 h-4" />
+              </button>
+            )}
+            {canScrollRight && (
+              <button
+                onClick={() => scroll('right')}
+                className="hidden sm:flex absolute -right-4 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-dark-950/80 backdrop-blur border border-white/10 items-center justify-center text-white/70 hover:text-white hover:bg-dark-800 transition-all opacity-0 group-hover/cast:opacity-100"
+              >
+                <ChevronRightIcon className="w-4 h-4" />
+              </button>
+            )}
+
+            <div
+              ref={scrollRef}
+              className="flex gap-5 sm:gap-6 tv:gap-8 overflow-x-auto pb-2 snap-x snap-mandatory"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {actors.map((name, i) => (
+                <div
+                  key={`${name}-${i}`}
+                  className="flex-shrink-0 w-[72px] sm:w-[88px] tv:w-[104px] text-center snap-start"
+                >
+                  <div className={`w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] tv:w-[104px] tv:h-[104px] rounded-full bg-gradient-to-br ${COLORS[i % COLORS.length]} flex items-center justify-center mx-auto mb-2.5 shadow-lg`}>
+                    <span className="text-white font-bold text-xl sm:text-2xl tv:text-3xl select-none drop-shadow">
+                      {name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <p className="text-white/80 text-xs sm:text-sm tv:text-base font-medium leading-snug line-clamp-2">
+                    {name}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
