@@ -19,9 +19,17 @@ export class TelegramBot {
 
   constructor(token?: string) {
     this.token = token || process.env.TELEGRAM_BOT_TOKEN!;
-    
+
     if (!this.token) {
       throw new Error('TELEGRAM_BOT_TOKEN is required');
+    }
+
+    // Skip if NestJS backend handles Telegram (avoids duplicate messages)
+    if (process.env.DISABLE_BOT_POLLING === 'true') {
+      console.log('Bot standalone DISABLED (DISABLE_BOT_POLLING=true). NestJS backend handles Telegram.');
+      this.bot = new TelegramBotAPI(this.token, { polling: false });
+      this.notificationService = new NotificationService(this.bot);
+      return;
     }
 
     // Determine bot mode: polling (development) or webhook (production)

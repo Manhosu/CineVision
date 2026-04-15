@@ -123,6 +123,23 @@ export function HeroBanner({
     window.open(deepLink, '_blank');
   };
 
+  // Touch swipe for mobile
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goToNext();
+      else goToPrevious();
+    }
+  }, [goToNext, goToPrevious]);
+
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -131,7 +148,11 @@ export function HeroBanner({
   };
 
   return (
-    <div className="relative h-[60vh] md:h-[70vh] lg:h-[80vh] min-h-[400px] lg:min-h-[550px] overflow-hidden">
+    <div
+      className="relative h-[60vh] md:h-[70vh] lg:h-[80vh] min-h-[400px] lg:min-h-[550px] overflow-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Background Image */}
       <div className="absolute inset-0">
         <NextImage

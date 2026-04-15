@@ -98,10 +98,10 @@ export function WhatsAppGate({
                   </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-white mb-2">
-                  Entre no nosso grupo do WhatsApp!
+                  Bem-vindo à comunidade Cine Vision!
                 </h2>
                 <p className="text-gray-300 text-sm leading-relaxed max-w-sm">
-                  Para acessar seus filmes, entre no nosso grupo exclusivo do WhatsApp!
+                  Entre no nosso grupo do WhatsApp para receber promoções exclusivas, lançamentos em primeira mão e novidades!
                 </p>
               </div>
 
@@ -111,11 +111,11 @@ export function WhatsAppGate({
                   Beneficios do grupo
                 </h3>
                 {[
-                  { icon: '🎬', text: 'Acesso imediato a todos os seus filmes e series' },
-                  { icon: '💰', text: 'Promocoes e descontos exclusivos para membros' },
-                  { icon: '🎁', text: 'Sorteios e conteudos gratuitos' },
-                  { icon: '🚀', text: 'Lancamentos em primeira mao' },
-                  { icon: '💬', text: 'Suporte direto e rapido' },
+                  { icon: '🔥', text: 'Promoções relâmpago direto no seu WhatsApp' },
+                  { icon: '🎬', text: 'Lançamentos antes de todo mundo' },
+                  { icon: '💰', text: 'Descontos exclusivos para membros' },
+                  { icon: '🎁', text: 'Sorteios e brindes especiais' },
+                  { icon: '📢', text: 'Novidades e atualizações da plataforma' },
                 ].map((benefit, i) => (
                   <div key={i} className="flex items-center gap-3">
                     <span className="text-base">{benefit.icon}</span>
