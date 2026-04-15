@@ -76,8 +76,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private isPolling = false;
   private conflictRetries = 0;
   private readonly MAX_CONFLICT_RETRIES = 10;
-  // Deduplication: track processed update IDs to prevent duplicate handling
+  // Deduplication: track processed update/callback IDs to prevent duplicate handling
   private processedUpdates = new Set<number>();
+  private processedCallbacks = new Set<string>();
   private readonly MAX_PROCESSED_CACHE = 500;
 
   constructor(
@@ -692,6 +693,19 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const chatId = message.chat.id;
     const text = message.text;
     const telegramUserId = message.from.id;
+    const messageId = message.message_id;
+
+    // Deduplicate messages
+    const msgKey = `msg_${chatId}_${messageId}`;
+    if (this.processedCallbacks.has(msgKey)) {
+      this.logger.debug(`Skipping duplicate message ${msgKey}`);
+      return;
+    }
+    this.processedCallbacks.add(msgKey);
+    if (this.processedCallbacks.size > this.MAX_PROCESSED_CACHE) {
+      const first = this.processedCallbacks.values().next().value;
+      this.processedCallbacks.delete(first);
+    }
 
     this.logger.log(`📨 processMessage called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
 
@@ -907,13 +921,25 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const chatId = callbackQuery.message.chat.id;
     const data = callbackQuery.data;
     const telegramUserId = callbackQuery.from.id;
+    const callbackId = callbackQuery.id;
+
+    // Deduplicate callback queries
+    if (this.processedCallbacks.has(callbackId)) {
+      this.logger.debug(`Skipping duplicate callback ${callbackId}`);
+      return;
+    }
+    this.processedCallbacks.add(callbackId);
+    if (this.processedCallbacks.size > this.MAX_PROCESSED_CACHE) {
+      const first = this.processedCallbacks.values().next().value;
+      this.processedCallbacks.delete(first);
+    }
 
     // Register user as active for catalog sync notifications
     if (this.catalogSyncService) {
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
     }
 
-    await this.answerCallbackQuery(callbackQuery.id);
+    await this.answerCallbackQuery(callbackId);
 
     if (data === 'catalog') {
       await this.showCatalog(chatId);
