@@ -57,8 +57,13 @@ export class OasyfyService implements PixProvider {
         'x-public-key': publicKey,
         'x-secret-key': secretKey,
       },
-      timeout: 30000,
+      timeout: 45000,
     });
+
+    if (!publicKey || !secretKey) {
+      this.logger.error('🚨 OASYFY CREDENTIALS MISSING! PIX payments will NOT work.');
+      this.logger.error('Set OASYFY_PUBLIC_KEY and OASYFY_SECRET_KEY in environment variables.');
+    }
 
     this.logger.log(`OasyfyService initialized | publicKey: ${publicKey ? publicKey.substring(0, 15) + '...' : 'MISSING'} | secretKey: ${secretKey ? 'SET' : 'MISSING'}`);
   }

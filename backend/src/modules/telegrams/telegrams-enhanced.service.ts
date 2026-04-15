@@ -993,7 +993,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       await this.sendMessage(chatId, '⏳ Gerando QR Code PIX...');
 
-      // Chamar endpoint para criar pagamento PIX
+      this.logger.log(`Creating PIX payment for purchase ${purchaseId} via ${this.apiUrl}`);
+
+      // Chamar endpoint para criar pagamento PIX (com timeout maior para cold start do Render)
       const response = await axios.post(
         `${this.apiUrl}/api/v1/payments/pix/create`,
         { purchase_id: purchaseId },
@@ -1001,8 +1003,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
           headers: {
             'Content-Type': 'application/json',
           },
+          timeout: 60000, // 60s timeout para cold start
         }
       );
+
+      this.logger.log(`PIX payment response received: ${JSON.stringify(response.data?.provider_payment_id || 'no id')}`);
 
       const pixData = response.data;
 
@@ -1058,23 +1063,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
       });
 
     } catch (error) {
-      this.logger.error('Error handling PIX payment:');
-      this.logger.error(error);
-
-      // Check if it's a Woovi configuration error
-      let errorMessage = '❌ Erro ao gerar QR Code PIX.';
-
-      if (error.message && (error.message.includes('not configured') || error.message.includes('não está configurado'))) {
-        errorMessage = '❌ Sistema de pagamento PIX temporariamente indisponível. Por favor, contate o suporte.';
-        this.logger.error('🚨 WOOVI NOT CONFIGURED! Admin needs to set Woovi credentials');
-      } else if (error.message && (error.message.includes('UNAUTHORIZED') || error.message.includes('inválido') || error.message.includes('expirado') || error.message.includes('certificado'))) {
-        errorMessage = '❌ Erro de autenticação com Woovi. Por favor, contate o suporte.';
-        this.logger.error('🚨 WOOVI CREDENTIALS INVALID! Admin needs to update Woovi credentials');
-      } else {
-        errorMessage = '❌ Erro ao gerar QR Code PIX. Por favor, tente novamente ou contate o suporte.';
+      const errorMsg = error.response?.data?.message || error.message || 'Erro desconhecido';
+      const statusCode = error.response?.status || 'N/A';
+      this.logger.error(`PIX payment error [${statusCode}]: ${errorMsg}`);
+      if (error.response?.data) {
+        this.logger.error(`PIX API response: ${JSON.stringify(error.response.data)}`);
       }
 
-      await this.sendMessage(chatId, errorMessage);
+      let userMessage = '❌ Erro ao gerar QR Code PIX. Por favor, tente novamente ou contate o suporte.';
+
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        userMessage = '❌ O servidor demorou para responder. Tente novamente em alguns segundos.';
+        this.logger.error('🚨 PIX TIMEOUT - Server may be cold starting');
+      } else if (errorMsg.includes('not configured') || errorMsg.includes('não está configurado')) {
+        userMessage = '❌ Sistema de pagamento PIX temporariamente indisponível. Contate o suporte.';
+        this.logger.error('🚨 PIX PROVIDER NOT CONFIGURED');
+      } else if (statusCode === 401 || statusCode === 403 || errorMsg.includes('UNAUTHORIZED')) {
+        userMessage = '❌ Erro de autenticação com o provedor de pagamento. Contate o suporte.';
+        this.logger.error('🚨 PIX CREDENTIALS INVALID');
+      }
+
+      await this.sendMessage(chatId, userMessage);
     }
   }
 
