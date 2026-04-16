@@ -425,7 +425,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
 
       {/* Busca Modal Mobile com Live Search */}
       {isSearchOpen && (
-        <div ref={mobileSearchRef} className="fixed inset-0 z-[55] bg-black/95 lg:hidden overflow-y-auto">
+        <div ref={mobileSearchRef} className="fixed inset-0 z-[70] bg-black/95 lg:hidden overflow-y-auto">
           <div className="container mx-auto px-4 pt-6">
             <form onSubmit={handleSearch} className="relative">
               <input
