@@ -36,6 +36,7 @@ interface ContentSection {
   title: string;
   movies: Movie[];
   type: 'featured' | 'latest' | 'popular' | 'top10';
+  viewAllUrl?: string;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -84,7 +85,7 @@ function HomePageContent() {
         }
 
         // Fetch real data from API
-        const [featuredRes, top10Res, top10SeriesRes, releasesRes, allMoviesRes, allSeriesRes] = await Promise.all([
+        const [featuredRes, top10Res, top10SeriesRes, releasesRes, allMoviesRes, allSeriesRes, categoriesRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/content/featured?limit=5`, {
             cache: 'no-store',
             headers
@@ -108,6 +109,10 @@ function HomePageContent() {
           fetch(`${API_URL}/api/v1/content/series?limit=20`, {
             cache: 'no-store',
             headers
+          }),
+          fetch(`${API_URL}/api/v1/content/categories`, {
+            cache: 'no-store',
+            headers
           })
         ]);
 
@@ -121,6 +126,20 @@ function HomePageContent() {
         const releasesData = await releasesRes.json();
         const allMoviesData = await allMoviesRes.json();
         const allSeriesData = await allSeriesRes.json();
+        const categories = categoriesRes.ok ? await categoriesRes.json() : [];
+
+        // Fetch content for each category (up to 8 categories, 15 items each)
+        const activeCategories = (Array.isArray(categories) ? categories : [])
+          .filter((c: any) => c.is_active !== false)
+          .slice(0, 8);
+
+        const genreResults = await Promise.all(
+          activeCategories.map((cat: any) =>
+            fetch(`${API_URL}/api/v1/content/movies?genre=${encodeURIComponent(cat.name)}&limit=15`, {
+              cache: 'no-store', headers
+            }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] }))
+          )
+        );
 
         // Use featured content for hero banner - API already returns only featured items
         const heroMoviesData = (Array.isArray(featuredData) ? featuredData.slice(0, 5) : []) as Movie[];
@@ -133,7 +152,40 @@ function HomePageContent() {
           setHeroMovies(heroMoviesData);
         }
 
-        // Organize content sections with real data - ORDEM CORRETA
+        // Genre display names (more engaging titles)
+        const genreTitles: Record<string, string> = {
+          'Ação': 'Adrenalina Pura',
+          'Aventura': 'Aventuras Épicas',
+          'Animação': 'Animações para Todos',
+          'Comédia': 'Para Rir Muito',
+          'Crime': 'Crimes & Mistérios',
+          'Documentário': 'Documentários',
+          'Drama': 'Dramas Imperdíveis',
+          'Fantasia': 'Mundos Fantásticos',
+          'Ficção Científica': 'Ficção Científica',
+          'Guerra': 'Filmes de Guerra',
+          'História': 'Baseados em Fatos Reais',
+          'Horror': 'Para Quem Tem Coragem',
+          'Musical': 'Musicais',
+          'Mistério': 'Suspense & Mistério',
+          'Romance': 'Romances',
+          'Suspense': 'De Tirar o Fôlego',
+          'Terror': 'Terror que Arrepia',
+          'Thriller': 'Thrillers Tensos',
+          'Western': 'Velho Oeste',
+        };
+
+        // Build genre sections from fetched data
+        const genreSections: ContentSection[] = activeCategories
+          .map((cat: any, i: number) => ({
+            title: genreTitles[cat.name] || cat.name,
+            type: 'latest' as const,
+            movies: genreResults[i]?.movies || [],
+            viewAllUrl: `/movies?genre=${encodeURIComponent(cat.name)}`,
+          }))
+          .filter((s: ContentSection) => s.movies.length > 0);
+
+        // Organize content sections - ORDEM: Top10 → Lançamentos → Gêneros → Todos
         const sections: ContentSection[] = [
           {
             title: 'Brasil: Top 10 em Filmes Hoje',
@@ -150,6 +202,8 @@ function HomePageContent() {
             type: 'latest' as const,
             movies: Array.isArray(releasesData) ? releasesData : []
           },
+          // Genre carousels inserted here
+          ...genreSections,
           {
             title: 'Filmes',
             type: 'latest' as const,
@@ -276,6 +330,7 @@ function HomePageContent() {
                 priority={index === 0}
                 purchasedMovieIds={purchasedMovies}
                 onMovieClick={handleMovieClick}
+                viewAllUrl={section.viewAllUrl}
               />
             ))
           ) : (

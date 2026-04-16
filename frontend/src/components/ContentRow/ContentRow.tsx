@@ -10,10 +10,11 @@ import { Movie } from '@/types/movie';
 interface ContentRowProps {
   title: string;
   movies: Movie[];
-  priority?: boolean; // Para otimização de imagens
+  priority?: boolean;
   onMovieClick?: (movie: Movie) => void;
-  type?: 'featured' | 'latest' | 'popular' | 'top10'; // Section type
-  purchasedMovieIds?: Set<string>; // IDs dos filmes comprados pelo usuário
+  type?: 'featured' | 'latest' | 'popular' | 'top10';
+  purchasedMovieIds?: Set<string>;
+  viewAllUrl?: string; // Custom URL for "Ver todos" button
 }
 
 export function ContentRow({
@@ -22,7 +23,8 @@ export function ContentRow({
   priority = false,
   onMovieClick,
   type,
-  purchasedMovieIds = new Set()
+  purchasedMovieIds = new Set(),
+  viewAllUrl,
 }: ContentRowProps) {
   const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -48,7 +50,7 @@ export function ContentRow({
   };
 
   const handleViewAll = () => {
-    const url = getViewAllUrl(title);
+    const url = viewAllUrl || getViewAllUrl(title);
     router.push(url);
   };
 
