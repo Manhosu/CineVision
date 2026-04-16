@@ -21,19 +21,15 @@ export class TelegramsController {
     this.logger.log('TelegramsController initialized');
   }
 
-  // WEBHOOK ENDPOINTS DISABLED - Using polling mode instead
-  // Polling mode works better with free tier servers that sleep after 15 min
-
-  // @Post('webhook')
-  // @ApiOperation({ summary: 'Telegram bot webhook handler' })
-  // @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
-  // async handleWebhook(
-  //   @Body() webhookData: any,
-  //   @Headers('x-telegram-bot-api-secret-token') signature?: string
-  // ) {
-  //   // Use enhanced service which has Mini App support
-  //   return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
-  // }
+  @Post('webhook')
+  @ApiOperation({ summary: 'Telegram bot webhook handler' })
+  @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
+  async handleWebhook(
+    @Body() webhookData: any,
+    @Headers('x-telegram-bot-api-secret-token') signature?: string
+  ) {
+    return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
+  }
 
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })

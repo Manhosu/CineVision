@@ -2391,17 +2391,35 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   // ==================== POLLING METHODS ====================
 
   async onModuleInit() {
-    this.logger.log('🤖 Starting Telegram bot in POLLING mode...');
+    this.logger.log('🤖 Starting Telegram bot...');
 
-    // Delete any existing webhook and drop pending updates
+    // Use webhook mode if BACKEND_URL is available (production)
+    const backendUrl = this.configService.get('RENDER_EXTERNAL_URL') || this.configService.get('BACKEND_URL');
+    if (backendUrl) {
+      // Webhook mode — no 409 conflicts, no duplicate messages
+      const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
+      try {
+        const url = `${this.botApiUrl}/setWebhook`;
+        const response = await axios.post(url, {
+          url: webhookUrl,
+          allowed_updates: ['message', 'callback_query'],
+          drop_pending_updates: true,
+        });
+        if (response.data.ok) {
+          this.logger.log(`✅ Webhook set: ${webhookUrl}`);
+          return; // Don't start polling — webhook handles everything
+        }
+        this.logger.warn('Failed to set webhook, falling back to polling:', response.data);
+      } catch (error) {
+        this.logger.warn(`Webhook setup failed (${error.message}), falling back to polling`);
+      }
+    }
+
+    // Fallback: polling mode (local dev or webhook failed)
+    this.logger.log('Using POLLING mode (no webhook URL available)');
     await this.deleteWebhook();
-
-    // Skip all old updates to prevent duplicate messages after restart
     await this.skipPendingUpdates();
-
-    // Start polling for updates
     this.startPolling();
-
     this.logger.log('✅ Telegram bot polling started successfully');
   }
 
