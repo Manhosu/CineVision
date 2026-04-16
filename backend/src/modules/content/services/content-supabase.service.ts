@@ -6,7 +6,26 @@ import { ContentStatus, ContentType } from '../entities/content.entity';
 export class ContentSupabaseService {
   private readonly logger = new Logger(ContentSupabaseService.name);
 
+  // In-memory cache for frequently accessed data
+  private cache = new Map<string, { data: any; expires: number }>();
+
   constructor(private readonly supabaseService: SupabaseService) {}
+
+  private getCached<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (entry && Date.now() < entry.expires) return entry.data as T;
+    if (entry) this.cache.delete(key);
+    return null;
+  }
+
+  private setCache(key: string, data: any, ttlMs: number): void {
+    this.cache.set(key, { data, expires: Date.now() + ttlMs });
+    // Evict old entries if cache grows too large
+    if (this.cache.size > 100) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest) this.cache.delete(oldest);
+    }
+  }
 
   /**
    * Fetches all active discounts and enriches content items with discount info.
@@ -396,6 +415,9 @@ export class ContentSupabaseService {
   }
 
   async findAllCategories() {
+    const cached = this.getCached<any[]>('categories');
+    if (cached) return cached;
+
     const { data: categories, error } = await this.supabaseService.client
       .from('categories')
       .select('*')
@@ -405,7 +427,9 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch categories: ${error.message}`);
     }
 
-    return categories || [];
+    const result = categories || [];
+    this.setCache('categories', result, 10 * 60 * 1000); // 10 min cache
+    return result;
   }
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
@@ -741,6 +765,10 @@ export class ContentSupabaseService {
   }
 
   async findFeaturedContent(limit = 10) {
+    const cacheKey = `featured_${limit}`;
+    const cached = this.getCached<any[]>(cacheKey);
+    if (cached) return cached;
+
     const { data: featured, error } = await this.supabaseService.client
       .from('content')
       .select(`
@@ -765,7 +793,9 @@ export class ContentSupabaseService {
       throw new Error(`Failed to fetch featured content: ${error.message}`);
     }
 
-    return this.enrichContentWithDiscounts(featured || []);
+    const result = await this.enrichContentWithDiscounts(featured || []);
+    this.setCache(cacheKey, result, 2 * 60 * 1000); // 2 min cache
+    return result;
   }
 
   async findRelatedMovies(movieId: string, genres: string[] = [], limit = 6) {

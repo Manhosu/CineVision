@@ -119,15 +119,20 @@ function SeriesPageContent() {
     loadData();
   }, [genre, sort]);
 
+  const MAX_ITEMS_IN_MEMORY = 200;
+
   const handleLoadMore = async () => {
     const nextPage = currentPage + 1;
     setLoadingMore(true);
     try {
       const result = await fetchSeries(nextPage, genre, sort);
-      setSeriesData(prev => ({
-        movies: [...prev.movies, ...(result?.movies || [])],
-        pagination: result?.pagination || prev.pagination
-      }));
+      setSeriesData(prev => {
+        const combined = [...prev.movies, ...(result?.movies || [])];
+        const trimmed = combined.length > MAX_ITEMS_IN_MEMORY
+          ? combined.slice(combined.length - MAX_ITEMS_IN_MEMORY)
+          : combined;
+        return { movies: trimmed, pagination: result?.pagination || prev.pagination };
+      });
       setCurrentPage(nextPage);
     } catch (err) {
       console.error('Error loading more series:', err);

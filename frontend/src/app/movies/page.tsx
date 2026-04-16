@@ -112,15 +112,22 @@ function MoviesPageContent() {
     loadData();
   }, [genre, sort]);
 
+  // Limit: keep max 200 items in memory (5 pages of 40) to avoid browser slowdown at scale
+  const MAX_ITEMS_IN_MEMORY = 200;
+
   const handleLoadMore = async () => {
     const nextPage = currentPage + 1;
     setLoadingMore(true);
     try {
       const result = await fetchMovies(nextPage, genre, sort);
-      setMoviesData(prev => ({
-        movies: [...prev.movies, ...result.movies],
-        pagination: result.pagination
-      }));
+      setMoviesData(prev => {
+        const combined = [...prev.movies, ...result.movies];
+        // If exceeding limit, trim oldest items to prevent memory bloat
+        const trimmed = combined.length > MAX_ITEMS_IN_MEMORY
+          ? combined.slice(combined.length - MAX_ITEMS_IN_MEMORY)
+          : combined;
+        return { movies: trimmed, pagination: result.pagination };
+      });
       setCurrentPage(nextPage);
     } catch (err) {
       console.error('Error loading more movies:', err);
