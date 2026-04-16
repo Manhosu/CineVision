@@ -1017,8 +1017,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * Handler para pagamento com PIX
    */
   private async handlePixPayment(chatId: number, data: string) {
+    const purchaseId = data.replace('pay_pix_', '');
     try {
-      const purchaseId = data.replace('pay_pix_', '');
 
       // Prevent duplicate PIX generation for the same purchase
       if (this.pendingPixPayments.has(purchaseId)) {
