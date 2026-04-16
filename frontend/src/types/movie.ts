@@ -36,6 +36,7 @@ export interface Movie {
   discounted_price_cents?: number;
   original_price_cents?: number;
   is_flash_promo?: boolean;
+  promo_ends_at?: string; // ISO timestamp of when the promotion ends
   // Quality label set by admin
   quality_label?: string; // 'HD CAM' | 'CINEMA' | 'FULL HD' | 'EXCLUSIVA'
   // Audio type

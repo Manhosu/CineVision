@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
 import {
@@ -33,6 +33,24 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const [isHovered, setIsHovered] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [promoTimeLeft, setPromoTimeLeft] = useState('');
+
+  const isFlashPromo = movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
+
+  useEffect(() => {
+    if (!isFlashPromo || !movie.promo_ends_at) return;
+    const tick = () => {
+      const diff = new Date(movie.promo_ends_at!).getTime() - Date.now();
+      if (diff <= 0) { setPromoTimeLeft(''); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setPromoTimeLeft(h > 0 ? `${h}h${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isFlashPromo, movie.promo_ends_at]);
 
   // Debug log
   if (isPurchased) {
@@ -135,8 +153,16 @@ const Top10MovieCard = memo(function Top10MovieCard({
           className="relative transition-all duration-300 ease-out hover:scale-[1.02] z-20"
           style={{ width: 'clamp(140px, 18vw, 200px)' }}
         >
+          {/* Flash promo badge */}
+          {isFlashPromo && promoTimeLeft && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap animate-pulse">
+              <span>&#9889;</span>
+              <span>{promoTimeLeft}</span>
+            </div>
+          )}
+
           {/* Poster with year overlay */}
-          <div className="relative aspect-[2/3] overflow-hidden rounded-xl w-full">
+          <div className={`relative aspect-[2/3] overflow-hidden rounded-xl w-full ${isFlashPromo ? 'ring-2 ring-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : ''}`}>
             <LazyImage
               src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
               alt={`#${ranking} - ${movie.title}`}

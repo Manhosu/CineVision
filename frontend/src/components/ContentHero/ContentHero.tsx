@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, BookmarkIcon, ShareIcon, PlayIcon } from '@heroicons/react/24/solid';
-import { BookmarkIcon as BookmarkOutline } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, BookmarkIcon, ShareIcon, PlayIcon, EyeIcon } from '@heroicons/react/24/solid';
+import { BookmarkIcon as BookmarkOutline, FireIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 
@@ -33,6 +33,51 @@ export default function ContentHero({
   onPurchase,
 }: ContentHeroProps) {
   const [saved, setSaved] = useState(false);
+  const [urgencyTimer, setUrgencyTimer] = useState('');
+  const [fakeViewers, setFakeViewers] = useState(0);
+  const [fakeUnits, setFakeUnits] = useState(0);
+
+  const isFlashPromo = content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
+
+  // Urgency: compressed countdown (shows less time than real to create urgency)
+  useEffect(() => {
+    if (!isFlashPromo || !content.promo_ends_at) return;
+    const tick = () => {
+      const realDiff = new Date(content.promo_ends_at!).getTime() - Date.now();
+      if (realDiff <= 0) { setUrgencyTimer(''); return; }
+      // Compress: show max 5 min even if real time is more
+      const displayDiff = Math.min(realDiff, 5 * 60 * 1000);
+      const m = Math.floor(displayDiff / 60000);
+      const s = Math.floor((displayDiff % 60000) / 1000);
+      setUrgencyTimer(`${m}:${String(s).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isFlashPromo, content.promo_ends_at]);
+
+  // Fake viewers that fluctuate (60-120 range)
+  useEffect(() => {
+    if (!isFlashPromo) return;
+    setFakeViewers(Math.floor(Math.random() * 40) + 70);
+    const id = setInterval(() => {
+      setFakeViewers(prev => {
+        const change = Math.floor(Math.random() * 11) - 5; // -5 to +5
+        return Math.max(55, Math.min(130, prev + change));
+      });
+    }, 3000 + Math.random() * 4000);
+    return () => clearInterval(id);
+  }, [isFlashPromo]);
+
+  // Fake units remaining (3-7, slowly decreasing)
+  useEffect(() => {
+    if (!isFlashPromo) return;
+    setFakeUnits(Math.floor(Math.random() * 3) + 5); // 5-7
+    const id = setInterval(() => {
+      setFakeUnits(prev => Math.max(2, prev - (Math.random() > 0.6 ? 1 : 0)));
+    }, 15000 + Math.random() * 20000);
+    return () => clearInterval(id);
+  }, [isFlashPromo]);
 
   const backdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
   const desktopPos = content.backdrop_position || '50% 50%';
@@ -238,6 +283,25 @@ export default function ContentHero({
                 </span>
               )}
             </div>
+
+            {/* Flash Promo Urgency Block */}
+            {isFlashPromo && !isOwned && (
+              <div className="flex flex-col gap-1.5 px-3 py-2 bg-red-950/40 border border-red-500/30 rounded-xl animate-[pulse_3s_ease-in-out_infinite]">
+                {urgencyTimer && (
+                  <div className="flex items-center gap-1.5 text-red-400 text-sm font-bold">
+                    <FireIcon className="w-4 h-4" />
+                    <span>Termina em {urgencyTimer}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1.5 text-amber-400 text-xs">
+                  <EyeIcon className="w-3.5 h-3.5" />
+                  <span>{fakeViewers} pessoas vendo agora</span>
+                </div>
+                <div className="text-red-300 text-xs font-semibold">
+                  Apenas {fakeUnits} unidades restantes
+                </div>
+              </div>
+            )}
 
             {/* Divider */}
             <div className="hidden sm:block w-px h-10 bg-white/10" />

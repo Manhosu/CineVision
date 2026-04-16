@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LazyImage from '@/components/ui/LazyImage';
@@ -34,8 +34,27 @@ const MovieCard = memo(function MovieCard({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [isFavorited, setIsFavorited] = useState(false); // TODO: Integrar com estado global
-  const [isInWatchlist, setIsInWatchlist] = useState(false); // TODO: Integrar com estado global
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [promoTimeLeft, setPromoTimeLeft] = useState('');
+
+  const isFlashPromo = movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
+
+  // Flash promo countdown
+  useEffect(() => {
+    if (!isFlashPromo || !movie.promo_ends_at) return;
+    const tick = () => {
+      const diff = new Date(movie.promo_ends_at!).getTime() - Date.now();
+      if (diff <= 0) { setPromoTimeLeft(''); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setPromoTimeLeft(h > 0 ? `${h}h${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [isFlashPromo, movie.promo_ends_at]);
 
   // Debug log
   if (isPurchased) {
@@ -114,10 +133,20 @@ const MovieCard = memo(function MovieCard({
       onMouseLeave={() => setIsHovered(false)}
       onClick={handleCardClick}
     >
-      {/* Clean Card - Poster + Info Below */}
-      <div className="relative w-full transition-all duration-300 ease-out hover:scale-[1.02]">
+      {/* Card container */}
+      <div className={`relative w-full transition-all duration-300 ease-out hover:scale-[1.02] ${
+        isFlashPromo ? 'ring-2 ring-amber-500/60 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.15)]' : ''
+      }`}>
 
-        {/* Poster - clean */}
+        {/* Flash promo badge */}
+        {isFlashPromo && promoTimeLeft && (
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap animate-pulse">
+            <span>&#9889;</span>
+            <span>{promoTimeLeft}</span>
+          </div>
+        )}
+
+        {/* Poster */}
         <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: '2/3', minHeight: '280px' }}>
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}

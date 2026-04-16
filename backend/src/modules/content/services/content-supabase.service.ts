@@ -119,6 +119,7 @@ export class ContentSupabaseService {
             discount_percentage: discountPercentage,
             discounted_price_cents: discountedPriceCents,
             is_flash_promo: bestDiscount.is_flash || false,
+            promo_ends_at: bestDiscount.ends_at || null,
           };
         }
 
