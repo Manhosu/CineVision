@@ -244,6 +244,41 @@ function HomePageContent() {
 
                   console.log('✅ IDs de conteúdos comprados:', Array.from(purchasedIds));
                   setPurchasedMovies(purchasedIds);
+
+                  // Build "Suggestions for You" based on purchased content genres
+                  if (contentData.length > 0) {
+                    const genreCount: Record<string, number> = {};
+                    for (const c of contentData) {
+                      const genres = Array.isArray(c.genres) ? c.genres : (typeof c.genres === 'string' ? (() => { try { return JSON.parse(c.genres); } catch { return c.genres.split(',').map((g: string) => g.trim()); } })() : []);
+                      for (const g of genres) {
+                        if (g) genreCount[g] = (genreCount[g] || 0) + 1;
+                      }
+                    }
+                    // Get top 2 genres
+                    const topGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0]);
+                    if (topGenres.length > 0) {
+                      const suggestionsRes = await Promise.all(
+                        topGenres.map(g => fetch(`${API_URL}/api/v1/content/movies?genre=${encodeURIComponent(g)}&limit=15`, { cache: 'no-store', headers }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] })))
+                      );
+                      const suggestedMovies = suggestionsRes.flatMap(r => r.movies || []);
+                      // Dedupe and exclude already purchased
+                      const seen = new Set<string>();
+                      const uniqueSuggestions = suggestedMovies.filter((m: any) => {
+                        if (seen.has(m.id) || purchasedIds.has(m.id)) return false;
+                        seen.add(m.id);
+                        return true;
+                      }).slice(0, 20);
+
+                      if (uniqueSuggestions.length > 0) {
+                        setContentSections(prev => [
+                          prev[0], // Top 10 Filmes
+                          prev[1], // Top 10 Séries
+                          { title: '👍 Sugestões para Você', type: 'latest' as const, movies: uniqueSuggestions, viewAllUrl: `/movies?genre=${encodeURIComponent(topGenres[0])}` },
+                          ...prev.slice(2),
+                        ].filter(Boolean));
+                      }
+                    }
+                  }
                 } else {
                   console.error('❌ Erro ao buscar conteúdos:', contentRes.status, contentRes.statusText);
                   const errorText = await contentRes.text();

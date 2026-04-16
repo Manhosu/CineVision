@@ -264,8 +264,8 @@ export default function AdminContentEditPage() {
       // Validate IMDB rating (must be between 0-10)
       let validatedImdbRating = undefined;
       if (imdbRating) {
-        const rating = parseFloat(imdbRating);
-        if (rating >= 0 && rating <= 10) {
+        const rating = parseFloat(imdbRating.replace(',', '.'));
+        if (!isNaN(rating) && rating >= 0 && rating <= 10) {
           validatedImdbRating = rating;
         }
       }
@@ -556,14 +556,12 @@ export default function AdminContentEditPage() {
                 <div>
                   <label className="block text-sm font-medium mb-2">Nota IMDb</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     value={imdbRating}
                     onChange={(e) => setImdbRating(e.target.value)}
                     className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
-                    placeholder="8.5"
-                    step="0.1"
-                    min="0"
-                    max="10"
+                    placeholder="Ex: 7.5"
                   />
                 </div>
 

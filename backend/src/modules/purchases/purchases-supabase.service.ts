@@ -58,10 +58,30 @@ export class PurchasesSupabaseService {
         .order('discount_value', { ascending: false });
 
       if (activeDiscounts && activeDiscounts.length > 0) {
-        // Find best discount: individual > category > global
+        let bestDiscount: any = null;
+
+        // 1. Individual discount
         const individual = activeDiscounts.find(d => d.discount_scope === 'individual' && d.scope_id === content.id);
-        const global = activeDiscounts.find(d => d.discount_scope === 'global');
-        const bestDiscount = individual || global;
+        if (individual) bestDiscount = individual;
+
+        // 2. Category discount
+        if (!bestDiscount) {
+          const { data: contentCats } = await this.supabase
+            .from('content_categories')
+            .select('category_id')
+            .eq('content_id', content.id);
+          const catIds = (contentCats || []).map((cc: any) => cc.category_id);
+          if (catIds.length > 0) {
+            const catDiscount = activeDiscounts.find(d => d.discount_scope === 'category' && catIds.includes(d.scope_id));
+            if (catDiscount) bestDiscount = catDiscount;
+          }
+        }
+
+        // 3. Global discount
+        if (!bestDiscount) {
+          const global = activeDiscounts.find(d => d.discount_scope === 'global');
+          if (global) bestDiscount = global;
+        }
 
         if (bestDiscount) {
           if (bestDiscount.discount_type === 'percentage') {

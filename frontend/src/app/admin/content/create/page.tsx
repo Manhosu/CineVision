@@ -184,7 +184,7 @@ export default function AdminContentCreatePage() {
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
         age_rating: formData.age_rating || undefined,
-        imdb_rating: formData.imdb_rating ? parseFloat(formData.imdb_rating) : undefined,
+        imdb_rating: formData.imdb_rating ? parseFloat(formData.imdb_rating.replace(',', '.')) : undefined,
         quality_label: formData.quality_label || undefined,
         audio_type: formData.audio_type || undefined,
         backdrop_position: formData.backdrop_position !== '50% 50%' ? formData.backdrop_position : undefined,

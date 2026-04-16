@@ -274,9 +274,30 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .order('discount_value', { ascending: false });
 
       if (activeDiscounts && activeDiscounts.length > 0) {
+        let bestDiscount: any = null;
+
+        // 1. Individual discount (for this specific content)
         const individual = activeDiscounts.find(d => d.discount_scope === 'individual' && d.scope_id === content.id);
-        const global = activeDiscounts.find(d => d.discount_scope === 'global');
-        const bestDiscount = individual || global;
+        if (individual) bestDiscount = individual;
+
+        // 2. Category discount (for any category this content belongs to)
+        if (!bestDiscount) {
+          const { data: contentCats } = await this.supabase
+            .from('content_categories')
+            .select('category_id')
+            .eq('content_id', content.id);
+          const catIds = (contentCats || []).map((cc: any) => cc.category_id);
+          if (catIds.length > 0) {
+            const categoryDiscount = activeDiscounts.find(d => d.discount_scope === 'category' && catIds.includes(d.scope_id));
+            if (categoryDiscount) bestDiscount = categoryDiscount;
+          }
+        }
+
+        // 3. Global discount
+        if (!bestDiscount) {
+          const global = activeDiscounts.find(d => d.discount_scope === 'global');
+          if (global) bestDiscount = global;
+        }
 
         if (bestDiscount) {
           let finalPrice: number;
