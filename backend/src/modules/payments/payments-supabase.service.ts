@@ -307,6 +307,28 @@ export class PaymentsSupabaseService {
       // Use purchase amount (already has discount applied) instead of content.price_cents
       const amountCents = purchase.amount_cents || content.price_cents;
 
+      // Prevent duplicate PIX generation — return existing payment if one exists
+      const { data: existingPayment } = await this.supabaseService.client
+        .from('payments')
+        .select('id, provider_payment_id, status, provider_meta')
+        .eq('purchase_id', purchaseId)
+        .eq('payment_method', 'pix')
+        .in('status', ['pending', 'pago', 'paid', 'completed'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (existingPayment) {
+        this.logger.log(`PIX payment already exists for purchase ${purchaseId} (status: ${existingPayment.status}), returning existing`);
+        return {
+          provider_payment_id: existingPayment.provider_payment_id,
+          qr_code_image: existingPayment.provider_meta?.qr_code_image || null,
+          copy_paste_code: existingPayment.provider_meta?.copy_paste_code || null,
+          amount_brl: (amountCents / 100).toFixed(2),
+          status: existingPayment.status,
+        };
+      }
+
       const pixProvider = this.pixProviderFactory.getProvider();
       const providerName = pixProvider.getProviderName();
       this.logger.log(`Creating PIX payment with ${providerName} for ${content.title} - R$ ${amountCents / 100}`);
@@ -325,7 +347,7 @@ export class PaymentsSupabaseService {
 
       this.logger.log(`${providerName} PIX payment created: ${pixResult.paymentId}`);
 
-      // Create payment record in database
+      // Create payment record in database (store QR code for idempotent retries)
       const { data: payment, error: paymentError } = await this.supabaseService.client
         .from('payments')
         .insert({
@@ -335,6 +357,10 @@ export class PaymentsSupabaseService {
           provider: providerName,
           provider_payment_id: pixResult.paymentId,
           status: 'pending',
+          provider_meta: {
+            qr_code_image: pixResult.qrCodeBase64 || null,
+            copy_paste_code: pixResult.qrCode || null,
+          },
         })
         .select()
         .single();
