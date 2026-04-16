@@ -1020,6 +1020,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const purchaseId = data.replace('pay_pix_', '');
     try {
 
+      // Cleanup expired cache entries (> 5 min) to prevent stale locks
+      const FIVE_MINUTES = 5 * 60 * 1000;
+      for (const [key, val] of this.pendingPixPayments.entries()) {
+        if (Date.now() - val.timestamp > FIVE_MINUTES) {
+          this.logger.log(`🧹 Removing expired PIX cache entry: ${key}`);
+          this.pendingPixPayments.delete(key);
+        }
+      }
+
       // Prevent duplicate PIX generation for the same purchase
       if (this.pendingPixPayments.has(purchaseId)) {
         this.logger.warn(`PIX already being generated for purchase ${purchaseId}, skipping duplicate`);
@@ -1156,19 +1165,32 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
 
       // Verificar status do pagamento
-      if (payment.status === 'completed' || payment.status === 'paid') {
-        // Atualizar status da purchase
-        await this.supabase
-          .from('purchases')
-          .update({ status: 'paid' })
-          .eq('id', purchaseId);
-
+      if (payment.status === 'completed' || payment.status === 'paid' || payment.status === 'pago') {
         // Buscar dados da compra
         const { data: purchase } = await this.supabase
           .from('purchases')
           .select('*, content(*)')
           .eq('id', purchaseId)
           .single();
+
+        // Idempotency: if already delivered, just confirm to user without re-sending
+        if (purchase?.delivery_sent) {
+          this.logger.log(`📦 Purchase ${purchaseId} already delivered, sending short confirmation`);
+          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+          await this.sendMessage(chatId,
+            `✅ *Pagamento já confirmado!*\n\nSeu conteudo ja foi entregue. Acesse pelo botao abaixo.\n\n🛍 Para realizar novas compras no aplicativo, digite /start`,
+            { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashboardUrl }]] } }
+          );
+          this.pendingPixPayments.delete(purchaseId);
+          return;
+        }
+
+        // Atualizar status da purchase
+        await this.supabase
+          .from('purchases')
+          .update({ status: 'paid', delivery_sent: true })
+          .eq('id', purchaseId);
 
         if (purchase) {
           // Increment sales counters
@@ -1194,17 +1216,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
             this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
           }
 
-          // Enviar mensagem UNICA de confirmacao com link do Telegram group
+          // Enviar mensagem UNICA de confirmacao
           const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
           const contentTitle = content?.title || 'Conteudo';
           const priceText = (purchase.amount_cents / 100).toFixed(2);
           const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
           const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
-
-          const buttons: any[][] = [];
-
-          // Botao unico: Assistir Agora -> abre dashboard (onde tera pop-up WhatsApp)
-          buttons.push([{ text: '🎬 Assistir Agora', url: dashboardUrl }]);
 
           await this.sendMessage(chatId,
             `✅ *Pagamento Confirmado!*\n\n` +
@@ -1214,7 +1231,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
             `🛍 Para realizar novas compras no aplicativo, digite /start`,
             {
               parse_mode: 'Markdown',
-              reply_markup: { inline_keyboard: buttons },
+              reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashboardUrl }]] },
             }
           );
         } else {
@@ -1227,95 +1244,6 @@ export class TelegramsEnhancedService implements OnModuleInit {
         this.pendingPixPayments.delete(purchaseId);
 
       } else if (payment.status === 'pending') {
-        // Consultar o Woovi para ver o status atualizado
-        this.logger.log(`Checking payment status in Woovi: ${payment.provider_payment_id}`);
-
-        try {
-          const wooviPayment = await this.wooviService.getPayment(payment.provider_payment_id);
-          this.logger.log(`Woovi status for ${payment.provider_payment_id}: ${wooviPayment.originalStatus}`);
-
-          if (wooviPayment.originalStatus === 'COMPLETED' || wooviPayment.status === 'approved') {
-            // Pagamento foi aprovado! Atualizar banco
-            this.logger.log(`Payment ${payment.provider_payment_id} approved in Woovi. Updating database...`);
-
-            await this.supabase
-              .from('payments')
-              .update({
-                status: 'paid',
-                processed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', payment.id);
-
-            await this.supabase
-              .from('purchases')
-              .update({
-                status: 'paid',
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', purchaseId);
-
-            // Buscar dados da compra e enviar mensagem unica
-            const { data: purchase } = await this.supabase
-              .from('purchases')
-              .select('*, content(*)')
-              .eq('id', purchaseId)
-              .single();
-
-            if (purchase) {
-              // Increment sales counters
-              try {
-                const { error: rpcError } = await this.supabase.rpc('increment_content_sales', {
-                  content_id: purchase.content_id,
-                });
-                if (rpcError) {
-                  const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
-                  await this.supabase
-                    .from('content')
-                    .update({
-                      weekly_sales: (content?.weekly_sales || 0) + 1,
-                      total_sales: (content?.total_sales || 0) + 1,
-                      purchases_count: (content?.purchases_count || 0) + 1,
-                    })
-                    .eq('id', purchase.content_id);
-                }
-              } catch (salesError) {
-                this.logger.error(`Failed to increment sales counters: ${salesError.message}`);
-              }
-
-              // Enviar mensagem UNICA de confirmacao
-              const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
-              const contentTitle = content?.title || 'Conteudo';
-              const priceText = (purchase.amount_cents / 100).toFixed(2);
-              const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
-              const dashUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
-
-              const btns: any[][] = [];
-              // Botao unico: Assistir Agora -> abre dashboard
-              btns.push([{ text: '🎬 Assistir Agora', url: dashUrl }]);
-
-              await this.sendMessage(chatId,
-                `✅ *Pagamento Confirmado!*\n\n` +
-                `🎬 *${contentTitle}*\n` +
-                `💰 Valor: R$ ${priceText}\n\n` +
-                `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n` +
-                `🛍 Para realizar novas compras no aplicativo, digite /start`,
-                {
-                  parse_mode: 'Markdown',
-                  reply_markup: { inline_keyboard: btns },
-                }
-              );
-            }
-
-            // Limpar cache
-            this.pendingPixPayments.delete(purchaseId);
-            return;
-          }
-        } catch (error) {
-          this.logger.error(`Error checking Woovi status: ${error.message}`);
-          // Continue com a mensagem de pendente se houver erro na consulta
-        }
-
         // Pagamento ainda não confirmado
         await this.sendMessage(chatId, `⏳ *Pagamento Pendente*\n\n⚠️ Ainda não identificamos seu pagamento.\n\n*Possíveis motivos:*\n• O pagamento ainda está sendo processado\n• Você ainda não finalizou o pagamento no app bancário\n\n💡 *O que fazer:*\n• Aguarde alguns minutos e clique em "Já paguei" novamente\n• Certifique-se de ter confirmado o pagamento no app\n• Se o problema persistir, entre em contato com o suporte\n\n📱 ID da transação: \`${payment.provider_payment_id}\``, {
           parse_mode: 'Markdown',
@@ -2211,11 +2139,20 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    */
   public async deliverContentAfterPayment(purchase: any): Promise<void> {
     try {
+      // Idempotency: skip if already delivered
+      if (purchase.delivery_sent) {
+        this.logger.log(`📦 Content already delivered for purchase ${purchase.id}, skipping (idempotency)`);
+        return;
+      }
+
       const chatId = purchase.provider_meta?.telegram_chat_id;
       if (!chatId) {
         this.logger.warn(`No telegram chat_id found in purchase ${purchase.id} provider_meta`);
         return;
       }
+
+      // Mark as delivered BEFORE sending to prevent race conditions
+      await this.supabase.from('purchases').update({ delivery_sent: true }).eq('id', purchase.id);
 
       this.logger.log(`Delivering content to Telegram chat ${chatId} for purchase ${purchase.id}`);
 
@@ -2407,17 +2344,39 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   // ==================== POLLING METHODS ====================
 
   async onModuleInit() {
-    // Always use polling mode (works on free tier servers)
     this.logger.log('🤖 Starting Telegram bot in POLLING mode...');
-    this.logger.log('ℹ️  Polling mode works on free tier servers (no webhook timeout issues)');
 
-    // Delete any existing webhook before starting polling
+    // Delete any existing webhook and drop pending updates
     await this.deleteWebhook();
+
+    // Skip all old updates to prevent duplicate messages after restart
+    await this.skipPendingUpdates();
 
     // Start polling for updates
     this.startPolling();
 
     this.logger.log('✅ Telegram bot polling started successfully');
+  }
+
+  /**
+   * Skip all pending Telegram updates so restarts don't reprocess old messages.
+   * Calls getUpdates with offset=-1 to get the latest update_id, then sets
+   * pollingOffset to lastUpdateId+1 so only NEW updates are processed.
+   */
+  private async skipPendingUpdates() {
+    try {
+      const url = `${this.botApiUrl}/getUpdates`;
+      const response = await axios.post(url, { offset: -1, limit: 1, timeout: 0 });
+      if (response.data.ok && response.data.result.length > 0) {
+        const lastUpdate = response.data.result[response.data.result.length - 1];
+        this.pollingOffset = lastUpdate.update_id + 1;
+        this.logger.log(`⏭️ Skipped pending updates. Polling from offset ${this.pollingOffset}`);
+      } else {
+        this.logger.log('No pending updates to skip');
+      }
+    } catch (error) {
+      this.logger.error('Error skipping pending updates:', error.message);
+    }
   }
 
   private async deleteWebhook() {

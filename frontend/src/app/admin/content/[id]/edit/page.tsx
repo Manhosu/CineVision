@@ -663,7 +663,7 @@ export default function AdminContentEditPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => posterInputRef.current?.click()}
+                    onClick={() => { if (posterInputRef.current) { posterInputRef.current.value = ''; posterInputRef.current.click(); } }}
                     disabled={posterUploading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-dark-700 hover:bg-dark-600 border border-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -721,7 +721,7 @@ export default function AdminContentEditPage() {
                   />
                   <button
                     type="button"
-                    onClick={() => backdropInputRef.current?.click()}
+                    onClick={() => { if (backdropInputRef.current) { backdropInputRef.current.value = ''; backdropInputRef.current.click(); } }}
                     disabled={backdropUploading}
                     className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-dark-700 hover:bg-dark-600 border border-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
