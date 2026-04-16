@@ -15,8 +15,7 @@ async function getMovie(id: string): Promise<Movie | null> {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     if (!apiUrl) return null;
     const res = await fetch(`${apiUrl}/api/v1/content/movies/${id}`, {
-      next: { revalidate: 60 },
-      cache: 'force-cache',
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     return res.json();
@@ -31,7 +30,7 @@ async function getRelatedMovies(movieId: string, genres?: string[]): Promise<Mov
     if (!apiUrl) return [];
     const res = await fetch(
       `${apiUrl}/api/v1/content/movies/related/${movieId}?genres=${genres?.join(',')}`,
-      { next: { revalidate: 60 }, cache: 'force-cache' }
+      { cache: 'no-store' }
     );
     if (!res.ok) return [];
     return res.json();
