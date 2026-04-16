@@ -328,7 +328,9 @@ export default function AdminContentEditPage() {
       isRelease !== (originalContent.is_release || false) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
       imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
-      releaseYear !== (originalContent.release_year?.toString() || '')
+      releaseYear !== (originalContent.release_year?.toString() || '') ||
+      audioType !== (originalContent.audio_type || '') ||
+      qualityLabel !== (originalContent.quality_label || '')
     );
   };
 
