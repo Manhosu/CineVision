@@ -37,6 +37,8 @@ export class AdminPurchasesController {
   @ApiQuery({ name: 'status', required: false, description: 'Filter by order status (paid, pending, failed)' })
   @ApiQuery({ name: 'search', required: false, description: 'Search by user email, name, telegram username, or content title' })
   @ApiQuery({ name: 'syncWithStripe', required: false, description: 'Sync payment status with Stripe in real-time (default: true)' })
+  @ApiQuery({ name: 'dateFrom', required: false, description: 'Filter orders created on or after this ISO date (e.g. 2024-01-01T00:00:00Z)' })
+  @ApiQuery({ name: 'dateTo', required: false, description: 'Filter orders created on or before this ISO date (e.g. 2024-12-31T23:59:59Z)' })
   @ApiResponse({ status: 200, description: 'Orders retrieved successfully with real Telegram data and real-time payment status' })
   async getAllOrders(
     @Query('page') page = '1',
@@ -44,6 +46,8 @@ export class AdminPurchasesController {
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('syncWithStripe') syncWithStripe = 'true',
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
   ) {
     return this.adminPurchasesService.getAllOrders(
       parseInt(page),
@@ -51,6 +55,8 @@ export class AdminPurchasesController {
       status,
       search,
       syncWithStripe === 'true',
+      dateFrom,
+      dateTo,
     );
   }
 
@@ -71,11 +77,16 @@ export class AdminPurchasesController {
   @Get('stats')
   @ApiOperation({
     summary: 'Get purchase statistics (Admin only)',
-    description: 'Retrieve overall statistics about purchases and revenue. Requires admin authentication.'
+    description: 'Retrieve overall statistics about purchases and revenue. Optionally filter by date range. Requires admin authentication.'
   })
+  @ApiQuery({ name: 'dateFrom', required: false, description: 'Filter stats from this ISO date (e.g. 2024-01-01T00:00:00Z)' })
+  @ApiQuery({ name: 'dateTo', required: false, description: 'Filter stats up to this ISO date (e.g. 2024-12-31T23:59:59Z)' })
   @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
-  async getOrderStats() {
-    return this.adminPurchasesService.getOrderStats();
+  async getOrderStats(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.adminPurchasesService.getOrderStats(dateFrom, dateTo);
   }
 
   @Delete('orders/:id')

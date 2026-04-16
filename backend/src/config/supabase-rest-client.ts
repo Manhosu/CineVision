@@ -5,6 +5,10 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 export interface SupabaseQueryOptions {
   select?: string;
   where?: Record<string, any>;
+  /** Additional PostgREST AND filters for compound conditions on the same column.
+   *  Each entry is a raw PostgREST filter expression, e.g. 'created_at.gte.2024-01-01'
+   *  These are combined into a single `and=(...)` query param. */
+  andFilters?: string[];
   order?: { column: string; ascending?: boolean };
   limit?: number;
   offset?: number;
@@ -101,6 +105,22 @@ export class SupabaseRestClient {
               config.params[key] = `in.(${values})`;
               this.logger.log(`[SupabaseRestClient] Added IN filter: ${key}=in.(${values})`);
             }
+            // Support for NOT IN operator: { user_id: { not_in: [val1, val2] } }
+            else if (typeof value === 'object' && value.not_in && Array.isArray(value.not_in)) {
+              const values = value.not_in.join(',');
+              config.params[key] = `not.in.(${values})`;
+              this.logger.log(`[SupabaseRestClient] Added NOT IN filter: ${key}=not.in.(${values})`);
+            }
+            // Support for GTE operator: { created_at: { gte: '2024-01-01' } }
+            else if (typeof value === 'object' && value.gte !== undefined) {
+              config.params[key] = `gte.${value.gte}`;
+              this.logger.log(`[SupabaseRestClient] Added GTE filter: ${key}=gte.${value.gte}`);
+            }
+            // Support for LTE operator: { created_at: { lte: '2024-12-31' } }
+            else if (typeof value === 'object' && value.lte !== undefined) {
+              config.params[key] = `lte.${value.lte}`;
+              this.logger.log(`[SupabaseRestClient] Added LTE filter: ${key}=lte.${value.lte}`);
+            }
             // Support for ILIKE operator: { title: { ilike: '*search*' } }
             else if (typeof value === 'object' && value.ilike !== undefined) {
               // PostgREST ILIKE syntax: title=ilike.*search*
@@ -112,6 +132,12 @@ export class SupabaseRestClient {
             }
           }
         });
+      }
+
+      // Compound AND filters for multiple conditions on the same column
+      if (options.andFilters && options.andFilters.length > 0) {
+        config.params['and'] = `(${options.andFilters.join(',')})`;
+        this.logger.log(`[SupabaseRestClient] Added AND filter: and=(${options.andFilters.join(',')})`);
       }
 
       this.logger.log(`[SupabaseRestClient] Final query params: ${JSON.stringify(config.params)}`);
@@ -136,6 +162,89 @@ export class SupabaseRestClient {
       return response.data;
     } catch (error) {
       this.logger.error(`Error selecting from ${table}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Buscar registros com contagem total (para paginação)
+   * Suporta filtros OR via PostgREST
+   */
+  async selectWithCount<T = any>(
+    table: string,
+    options: SupabaseQueryOptions & { or?: string; rawFilters?: Record<string, string> } = {}
+  ): Promise<{ data: T[]; count: number }> {
+    try {
+      const config: AxiosRequestConfig = {
+        method: 'GET',
+        url: `/${table}`,
+        params: {},
+        headers: {
+          'Prefer': 'count=exact'
+        }
+      };
+
+      // Select columns
+      if (options.select) {
+        config.params.select = options.select;
+      }
+
+      // Where conditions
+      if (options.where) {
+        Object.entries(options.where).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
+              const values = value.in.join(',');
+              config.params[key] = `in.(${values})`;
+            } else if (typeof value === 'object' && value.ilike !== undefined) {
+              config.params[key] = `ilike.${value.ilike}`;
+            } else {
+              config.params[key] = `eq.${value}`;
+            }
+          }
+        });
+      }
+
+      // OR filter (PostgREST syntax)
+      if (options.or) {
+        config.params.or = options.or;
+      }
+
+      // Raw filters (already formatted for PostgREST)
+      if (options.rawFilters) {
+        Object.entries(options.rawFilters).forEach(([key, value]) => {
+          config.params[key] = value;
+        });
+      }
+
+      // Order by
+      if (options.order) {
+        const direction = options.order.ascending !== false ? 'asc' : 'desc';
+        config.params.order = `${options.order.column}.${direction}`;
+      }
+
+      // Limit
+      if (options.limit) {
+        config.params.limit = options.limit;
+      }
+
+      // Offset
+      if (options.offset) {
+        config.params.offset = options.offset;
+      }
+
+      const response = await this.client.request(config);
+      const contentRange = response.headers['content-range'];
+      let count = 0;
+
+      if (contentRange) {
+        const match = contentRange.match(/\/(\d+)$/);
+        count = match ? parseInt(match[1], 10) : 0;
+      }
+
+      return { data: response.data, count };
+    } catch (error) {
+      this.logger.error(`Error selectWithCount from ${table}:`, error.message);
       throw error;
     }
   }
@@ -272,7 +381,8 @@ export class SupabaseRestClient {
    */
   async count(
     table: string,
-    where: Record<string, any> = {}
+    where: Record<string, any> = {},
+    andFilters?: string[]
   ): Promise<number> {
     try {
       const config: AxiosRequestConfig = {
@@ -289,19 +399,35 @@ export class SupabaseRestClient {
         if (value !== undefined && value !== null) {
           // Support for IN operator: { id: { in: [val1, val2, val3] } }
           if (typeof value === 'object' && value.in && Array.isArray(value.in)) {
-            // PostgREST IN syntax: id=in.(val1,val2,val3) - no quotes for UUIDs
             const values = value.in.join(',');
             config.params[key] = `in.(${values})`;
           }
+          // Support for NOT IN operator: { user_id: { not_in: [val1, val2] } }
+          else if (typeof value === 'object' && value.not_in && Array.isArray(value.not_in)) {
+            const values = value.not_in.join(',');
+            config.params[key] = `not.in.(${values})`;
+          }
+          // Support for GTE operator: { created_at: { gte: '2024-01-01' } }
+          else if (typeof value === 'object' && value.gte !== undefined) {
+            config.params[key] = `gte.${value.gte}`;
+          }
+          // Support for LTE operator: { created_at: { lte: '2024-12-31' } }
+          else if (typeof value === 'object' && value.lte !== undefined) {
+            config.params[key] = `lte.${value.lte}`;
+          }
           // Support for ILIKE operator: { title: { ilike: '*search*' } }
           else if (typeof value === 'object' && value.ilike !== undefined) {
-            // PostgREST ILIKE syntax: title=ilike.*search*
             config.params[key] = `ilike.${value.ilike}`;
           } else {
             config.params[key] = `eq.${value}`;
           }
         }
       });
+
+      // Compound AND filters for multiple conditions on the same column
+      if (andFilters && andFilters.length > 0) {
+        config.params['and'] = `(${andFilters.join(',')})`;
+      }
 
       const response = await this.client.request(config);
       const contentRange = response.headers['content-range'];

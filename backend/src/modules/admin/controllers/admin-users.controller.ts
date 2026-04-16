@@ -1,5 +1,5 @@
-import { Controller, Get, Delete, Param, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Put, Delete, Param, Query, Logger } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { SupabaseRestClient } from '../../../config/supabase-rest-client';
 
 @ApiTags('admin-users')
@@ -10,49 +10,121 @@ export class AdminUsersController {
   constructor(private readonly supabaseClient: SupabaseRestClient) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all Telegram users (Admin endpoint - no auth required)' })
-  async getAllUsers() {
-    // Use pagination to fetch ALL users (Supabase REST API has max 1000 per request)
-    const allUsers: any[] = [];
-    const pageSize = 1000;
-    let offset = 0;
-    let hasMore = true;
+  @ApiOperation({ summary: 'Get paginated users with search and filter' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 50)' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by telegram_id, telegram_username, or name' })
+  @ApiQuery({ name: 'blocked', required: false, description: 'Filter blocked users only (true)' })
+  async getUsers(
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+    @Query('search') search?: string,
+    @Query('blocked') blocked?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50));
+    const offset = (pageNum - 1) * limitNum;
 
-    while (hasMore) {
-      this.logger.log(`Fetching users page ${Math.floor(offset / pageSize) + 1} (offset: ${offset})...`);
+    this.logger.log(`Fetching users page=${pageNum} limit=${limitNum} search=${search || ''} blocked=${blocked || ''}`);
 
-      const pageUsers = await this.supabaseClient.select('users', {
-        select: 'id, telegram_id, telegram_username, telegram_chat_id, name, role, created_at',
-        order: { column: 'created_at', ascending: false },
-        limit: pageSize,
-        offset: offset
-      });
+    // Build query options
+    const queryOptions: any = {
+      select: 'id, telegram_id, telegram_username, telegram_chat_id, name, role, blocked, created_at',
+      order: { column: 'created_at', ascending: false },
+      limit: limitNum,
+      offset: offset,
+      where: {} as Record<string, any>,
+    };
 
-      if (pageUsers && pageUsers.length > 0) {
-        allUsers.push(...pageUsers);
-        this.logger.log(`Fetched ${pageUsers.length} users (total so far: ${allUsers.length})`);
-      }
+    // Filter: only users with telegram_id
+    queryOptions.rawFilters = {
+      telegram_id: 'not.is.null',
+    };
 
-      // Check if there are more pages
-      hasMore = pageUsers && pageUsers.length === pageSize;
-      offset += pageSize;
-
-      // Safety check: stop after 20 pages (20,000 users max)
-      if (offset >= 20000) {
-        this.logger.warn('Reached maximum pagination limit of 20,000 users');
-        break;
-      }
+    // Filter: blocked users
+    if (blocked === 'true') {
+      queryOptions.where.blocked = true;
     }
 
-    this.logger.log(`✅ Total users fetched: ${allUsers.length}`);
+    // Search: use PostgREST OR syntax across multiple fields
+    if (search && search.trim()) {
+      const term = search.trim();
+      // PostgREST or syntax: or=(field1.ilike.*term*,field2.ilike.*term*,field3.ilike.*term*)
+      queryOptions.or = `(telegram_id.ilike.*${term}*,telegram_username.ilike.*${term}*,name.ilike.*${term}*)`;
+    }
 
-    // Filter only users with telegram_id
-    const telegramUsers = allUsers.filter(user => user.telegram_id);
+    const { data: users, count: total } = await this.supabaseClient.selectWithCount('users', queryOptions);
 
-    // Return users list along with total count
+    const totalPages = Math.ceil(total / limitNum);
+
+    this.logger.log(`Found ${total} users total, returning page ${pageNum}/${totalPages} (${users.length} items)`);
+
     return {
-      users: telegramUsers,
-      totalSystemUsers: allUsers.length
+      users,
+      total,
+      page: pageNum,
+      totalPages,
+    };
+  }
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Get user statistics (counts only, no data loaded)' })
+  async getUserStats() {
+    this.logger.log('Fetching user stats...');
+
+    // Run all count queries in parallel - no data is loaded
+    const [totalUsers, totalAdmins, totalBlocked] = await Promise.all([
+      this.supabaseClient.count('users', { telegram_id: { ilike: '*' } }),
+      this.supabaseClient.count('users', { role: 'admin' }),
+      this.supabaseClient.count('users', { blocked: true }),
+    ]);
+
+    this.logger.log(`Stats: total=${totalUsers} admins=${totalAdmins} blocked=${totalBlocked}`);
+
+    return {
+      totalUsers,
+      totalAdmins,
+      totalBlocked,
+    };
+  }
+
+  @Put(':id/block')
+  @ApiOperation({ summary: 'Block a user' })
+  async blockUser(@Param('id') id: string) {
+    this.logger.log(`Blocking user ${id}...`);
+
+    const result = await this.supabaseClient.update(
+      'users',
+      { blocked: true },
+      { id },
+      { returning: 'id, name, telegram_id, telegram_username, blocked' },
+    );
+
+    this.logger.log(`User ${id} blocked successfully`);
+
+    return {
+      message: 'User blocked successfully',
+      user: result[0] || null,
+    };
+  }
+
+  @Put(':id/unblock')
+  @ApiOperation({ summary: 'Unblock a user' })
+  async unblockUser(@Param('id') id: string) {
+    this.logger.log(`Unblocking user ${id}...`);
+
+    const result = await this.supabaseClient.update(
+      'users',
+      { blocked: false },
+      { id },
+      { returning: 'id, name, telegram_id, telegram_username, blocked' },
+    );
+
+    this.logger.log(`User ${id} unblocked successfully`);
+
+    return {
+      message: 'User unblocked successfully',
+      user: result[0] || null,
     };
   }
 
@@ -81,7 +153,7 @@ export class AdminUsersController {
     return {
       message: 'User and all related data deleted successfully',
       id,
-      deleted: ['user', 'purchases', 'favorites', 'watch_history']
+      deleted: ['user', 'purchases', 'favorites', 'watch_history'],
     };
   }
 }

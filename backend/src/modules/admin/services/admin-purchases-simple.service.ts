@@ -142,8 +142,8 @@ export class AdminPurchasesSimpleService {
     return statusMap;
   }
 
-  async getAllOrders(page: number = 1, limit: number = 20, status?: string, search?: string, syncWithStripe: boolean = true) {
-    this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}, syncWithStripe: ${syncWithStripe}`);
+  async getAllOrders(page: number = 1, limit: number = 20, status?: string, search?: string, syncWithStripe: boolean = true, dateFrom?: string, dateTo?: string) {
+    this.logger.log(`Fetching orders - page: ${page}, limit: ${limit}, status: ${status || 'all'}, search: ${search || 'none'}, syncWithStripe: ${syncWithStripe}, dateFrom: ${dateFrom || 'none'}, dateTo: ${dateTo || 'none'}`);
 
     try {
       // Use UUIDs directly for O(1) lookup performance
@@ -186,11 +186,21 @@ export class AdminPurchasesSimpleService {
 
         this.logger.log(`Found ${matchingUserIds.length} users and ${matchingContentIds.length} contents matching search`);
 
-        // Fetch all purchases (we'll filter in memory)
-        let allPurchases = await this.supabaseClient.select('purchases', {
+        // Fetch all purchases (we'll filter in memory for search)
+        const searchQueryOptions: any = {
           select: '*',
           order: { column: 'created_at', ascending: false },
-        });
+        };
+
+        // Apply date filters at DB level when possible
+        const searchAndFilters: string[] = [];
+        if (dateFrom) searchAndFilters.push(`created_at.gte.${dateFrom}`);
+        if (dateTo) searchAndFilters.push(`created_at.lte.${dateTo}`);
+        if (searchAndFilters.length > 0) {
+          searchQueryOptions.andFilters = searchAndFilters;
+        }
+
+        let allPurchases = await this.supabaseClient.select('purchases', searchQueryOptions);
 
         // Filter by status if provided
         if (status && status !== 'all') {
@@ -223,6 +233,15 @@ export class AdminPurchasesSimpleService {
           this.logger.log(`Filtering by status: ${status}`);
         } else {
           this.logger.log('Fetching ALL purchases (no status filter)');
+        }
+
+        // Apply date filters at DB level
+        const normalAndFilters: string[] = [];
+        if (dateFrom) normalAndFilters.push(`created_at.gte.${dateFrom}`);
+        if (dateTo) normalAndFilters.push(`created_at.lte.${dateTo}`);
+        if (normalAndFilters.length > 0) {
+          queryOptions.andFilters = normalAndFilters;
+          this.logger.log(`Date filter: dateFrom=${dateFrom || 'none'}, dateTo=${dateTo || 'none'}`);
         }
 
         // Fetch ALL purchases
@@ -573,64 +592,86 @@ export class AdminPurchasesSimpleService {
     }
   }
 
-  async getOrderStats() {
-    this.logger.log('Calculating purchase statistics');
+  async getOrderStats(dateFrom?: string, dateTo?: string) {
+    this.logger.log(`Calculating purchase statistics (dateFrom=${dateFrom || 'none'}, dateTo=${dateTo || 'none'})`);
 
     try {
-      // Use UUIDs directly
       const blockedUserIds = this.BLOCKED_USER_IDS;
 
-      // Fetch all purchases for statistics
-      const allPurchasesRaw = await this.supabaseClient.select('purchases', {
-        select: 'id,status,payment_method,amount_cents,created_at,user_id',
-      });
+      // Build base where clause: exclude blocked test users
+      const baseWhere: Record<string, any> = {
+        user_id: { not_in: blockedUserIds },
+      };
 
-      // Filter out blocked users
-      const allPurchases = allPurchasesRaw.filter((p: any) => !blockedUserIds.includes(p.user_id));
-      this.logger.log(`Statistics: ${allPurchases.length} real purchases (${allPurchasesRaw.length - allPurchases.length} test purchases filtered)`);
+      // Build date range AND filters (compound conditions on created_at)
+      const dateAndFilters: string[] = [];
+      if (dateFrom) {
+        dateAndFilters.push(`created_at.gte.${dateFrom}`);
+      }
+      if (dateTo) {
+        dateAndFilters.push(`created_at.lte.${dateTo}`);
+      }
+      const andFilters = dateAndFilters.length > 0 ? dateAndFilters : undefined;
 
-      // Calculate total orders
-      const totalOrders = allPurchases.length;
+      // Build status-specific where clauses
+      const paidStatuses = ['pago', 'paid', 'completed'];
+      const pendingStatuses = ['pendente', 'pending'];
+      const failedStatuses = ['falhou', 'failed'];
 
-      // Calculate total revenue (only from paid orders - status in Portuguese)
-      const totalRevenueCents = allPurchases
-        .filter((p: any) => p.status === 'pago')
-        .reduce((sum: number, p: any) => sum + (p.amount_cents || 0), 0);
+      const paidWhere = { ...baseWhere, status: { in: paidStatuses } };
+      const pendingWhere = { ...baseWhere, status: { in: pendingStatuses } };
+      const failedWhere = { ...baseWhere, status: { in: failedStatuses } };
 
-      // Count orders by status (database has Portuguese status)
-      const ordersByStatus = allPurchases.reduce((acc: any, p: any) => {
-        acc[p.status] = (acc[p.status] || 0) + 1;
-        return acc;
-      }, {});
+      // Execute all count queries + revenue query in parallel (no full table scan)
+      const [
+        totalOrders,
+        paidCount,
+        pendingCount,
+        failedCount,
+        recentOrdersCount,
+        paidAmounts,
+      ] = await Promise.all([
+        // 1. Total purchases count
+        this.supabaseClient.count('purchases', baseWhere, andFilters),
+        // 2. Paid purchases count
+        this.supabaseClient.count('purchases', paidWhere, andFilters),
+        // 3. Pending purchases count
+        this.supabaseClient.count('purchases', pendingWhere, andFilters),
+        // 4. Failed purchases count
+        this.supabaseClient.count('purchases', failedWhere, andFilters),
+        // 5. Recent orders (last 24h) - always uses last 24h regardless of date filter
+        this.supabaseClient.count('purchases', {
+          ...baseWhere,
+          created_at: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+        }),
+        // 6. Fetch only amount_cents from paid purchases for revenue sum (lightweight)
+        this.supabaseClient.select('purchases', {
+          select: 'amount_cents',
+          where: paidWhere,
+          andFilters,
+        }),
+      ]);
 
-      // Count orders by payment method
-      const ordersByPaymentMethod = allPurchases.reduce((acc: any, p: any) => {
-        const method = p.payment_method || 'unknown';
-        acc[method] = (acc[method] || 0) + 1;
-        return acc;
-      }, {});
+      // Sum revenue from the lightweight paid-only query
+      const totalRevenueCents = paidAmounts.reduce(
+        (sum: number, p: any) => sum + (p.amount_cents || 0), 0
+      );
 
-      // Count recent orders (last 24h)
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const recentOrdersCount = allPurchases.filter(
-        (p: any) => new Date(p.created_at) >= yesterday
-      ).length;
+      // Conversion rate: paid vs total
+      const conversionRate = totalOrders > 0 ? paidCount / totalOrders : 0;
 
-      // Calculate conversion rate (paid vs total)
-      const paidOrders = ordersByStatus.pago || 0;
-      const conversionRate = totalOrders > 0 ? paidOrders / totalOrders : 0;
+      this.logger.log(
+        `Statistics: total=${totalOrders}, paid=${paidCount}, pending=${pendingCount}, ` +
+        `failed=${failedCount}, revenue=${totalRevenueCents}c, recent24h=${recentOrdersCount}`
+      );
 
-      // Return in format expected by frontend (English field names)
       return {
         total_purchases: totalOrders,
         total_revenue_cents: totalRevenueCents,
-        pending_purchases: ordersByStatus.pendente || 0,  // Portuguese DB value
-        paid_purchases: ordersByStatus.pago || 0,         // Portuguese DB value
-        failed_purchases: ordersByStatus.falhou || 0,     // Portuguese DB value
-        refunded_purchases: ordersByStatus.refunded || 0,
-        // Additional stats for reference
-        orders_by_payment_method: ordersByPaymentMethod,
+        pending_purchases: pendingCount,
+        paid_purchases: paidCount,
+        failed_purchases: failedCount,
+        refunded_purchases: 0, // can be added as a separate count if needed
         recent_orders_count: recentOrdersCount,
         conversion_rate: parseFloat(conversionRate.toFixed(2)),
       };

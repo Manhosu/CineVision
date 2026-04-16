@@ -44,6 +44,8 @@ export default function AdminPurchasesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const router = useRouter();
 
   const fetchPurchases = async (page = 1) => {
@@ -53,7 +55,9 @@ export default function AdminPurchasesPage() {
         page: page.toString(),
         limit: '20',
         ...(searchTerm && { search: searchTerm }),
-        ...(statusFilter !== 'all' && { status: statusFilter })
+        ...(statusFilter !== 'all' && { status: statusFilter }),
+        ...(dateFrom && { dateFrom }),
+        ...(dateTo && { dateTo }),
       });
 
       // Get token from localStorage (access_token or auth_token for compatibility)
@@ -110,8 +114,12 @@ export default function AdminPurchasesPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
+      const statsParams = new URLSearchParams({
+        ...(dateFrom && { dateFrom }),
+        ...(dateTo && { dateTo }),
+      });
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/purchases/stats`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/purchases/stats?${statsParams}`,
         {
           headers,
           credentials: 'include',
@@ -129,11 +137,11 @@ export default function AdminPurchasesPage() {
 
   useEffect(() => {
     fetchPurchases(currentPage);
-  }, [currentPage, searchTerm, statusFilter]);
+  }, [currentPage, searchTerm, statusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [dateFrom, dateTo]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -333,6 +341,25 @@ export default function AdminPurchasesPage() {
                 <option value="refunded">Reembolsado</option>
               </select>
             </div>
+            {/* Date Range Filter */}
+            <div className="flex flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-400">De:</label>
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-400">Até:</label>
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                  className="px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+              </div>
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+                  className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 transition-colors">
+                  Limpar datas
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -439,26 +466,34 @@ export default function AdminPurchasesPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-between">
-            <div className="text-sm text-gray-400">
-              Página {currentPage} de {totalPages}
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-2 bg-dark-800 border border-white/10 text-gray-300 rounded-lg hover:bg-dark-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Anterior
-              </button>
-              <button
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-2 bg-dark-800 border border-white/10 text-gray-300 rounded-lg hover:bg-dark-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Próxima
-              </button>
-            </div>
+          <div className="mt-8 flex items-center justify-center gap-2">
+            <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
+              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm">
+              Anterior
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(page => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+              .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('...');
+                acc.push(page);
+                return acc;
+              }, [])
+              .map((item, idx) =>
+                item === '...' ? (
+                  <span key={`dots-${idx}`} className="px-2 text-white/30">...</span>
+                ) : (
+                  <button key={item} onClick={() => setCurrentPage(item as number)}
+                    className={`min-w-[40px] h-10 rounded-lg text-sm font-medium transition-all ${
+                      currentPage === item ? 'bg-red-600 text-white' : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white'
+                    }`}>
+                    {item}
+                  </button>
+                )
+              )}
+            <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}
+              className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm">
+              Próxima
+            </button>
           </div>
         )}
       </div>

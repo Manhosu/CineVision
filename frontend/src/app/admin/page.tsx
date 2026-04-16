@@ -76,21 +76,19 @@ export default function AdminDashboard() {
         }
 
         // Buscar todas as estatísticas em paralelo
-        const [contentRes, usersRes, requestsRes] = await Promise.all([
+        const [contentRes, usersRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/admin/stats/content`, { headers }),
           fetch(`${API_URL}/api/v1/admin/stats/users`, { headers }),
-          fetch(`${API_URL}/api/v1/admin/stats/requests`, { headers })
         ]);
 
         const contentData = await contentRes.json();
         const usersData = await usersRes.json();
-        const requestsData = await requestsRes.json();
 
         setStats({
           totalContent: contentData.total || 0,
           totalUsers: usersData.total || 0,
-          totalRequests: requestsData.pending || 0,
-          recentUploads: contentData.totalViews || 0,
+          totalRequests: 0,
+          recentUploads: 0,
           contentChange: contentData.contentChange || '0%',
           usersChange: usersData.usersChange || '0%',
           requestsChange: requestsData.requestsChange || '0%',
@@ -152,18 +150,6 @@ export default function AdminDashboard() {
       ),
       gradient: 'from-purple-600 to-purple-700',
       shadow: 'shadow-purple-500/50'
-    },
-    {
-      title: 'Solicitações',
-      description: 'Ver solicitações de usuários',
-      href: '/admin/requests',
-      icon: (
-        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-      gradient: 'from-yellow-600 to-yellow-700',
-      shadow: 'shadow-yellow-500/50'
     },
     {
       title: 'Compras',
@@ -250,29 +236,6 @@ export default function AdminDashboard() {
       gradient: 'from-green-500 to-emerald-500',
       change: stats.usersChange || '0%'
     },
-    {
-      title: 'Solicitações Pendentes',
-      value: stats.totalRequests,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-      ),
-      gradient: 'from-yellow-500 to-orange-500',
-      change: stats.requestsChange || '0%'
-    },
-    {
-      title: 'Visualizações',
-      value: stats.recentUploads,
-      icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-        </svg>
-      ),
-      gradient: 'from-purple-500 to-pink-500',
-      change: stats.viewsChange || '0%'
-    }
   ];
 
   if (!mounted) {
@@ -281,8 +244,8 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse space-y-6">
             <div className="h-8 bg-gray-800 rounded w-1/3"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[1, 2, 3, 4].map((i) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[1, 2].map((i) => (
                 <div key={i} className="h-32 bg-gray-800 rounded-2xl"></div>
               ))}
             </div>
@@ -333,7 +296,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {statCards.map((stat, index) => (
             <div
               key={index}
