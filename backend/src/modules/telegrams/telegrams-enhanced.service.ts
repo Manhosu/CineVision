@@ -6,7 +6,7 @@ import axios from 'axios';
 // AWS SDK removed - content delivery via Telegram only
 import * as bcrypt from 'bcrypt';
 import { AutoLoginService } from '../auth/services/auto-login.service';
-import { WooviService } from '../payments/services/woovi.service';
+import { PixProviderFactory } from '../payments/providers/pix-provider.factory';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -84,7 +84,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   constructor(
     private configService: ConfigService,
     private autoLoginService: AutoLoginService,
-    private wooviService: WooviService,
+    private pixProviderFactory: PixProviderFactory,
   ) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.webhookSecret = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
@@ -210,13 +210,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
       throw new NotFoundException('Usuário não encontrado. Use a opção "Não possuo conta"');
     }
 
+    // Calcular preco com desconto
+    const { finalPrice } = await this.calculateFinalPrice(content);
+
     // Criar registro de compra no Supabase
     const { data: purchase, error: purchaseError } = await this.supabase
       .from('purchases')
       .insert({
         user_id: verification.user_id,
         content_id: content.id,
-        amount_cents: content.price_cents,
+        amount_cents: finalPrice,
         currency: content.currency || 'BRL',
         status: 'pending',
         preferred_delivery: 'telegram',
@@ -249,7 +252,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     return {
       purchase_id: purchase.id,
       payment_url: '', // Será gerado quando usuário escolher método
-      amount_cents: content.price_cents,
+      amount_cents: finalPrice,
       status: 'pending',
       message: `Compra criada! Escolha o método de pagamento.`,
     };
@@ -370,7 +373,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     return {
       purchase_id: purchase.id,
       payment_url: paymentUrl,
-      amount_cents: content.price_cents,
+      amount_cents: finalPrice,
       status: 'pending',
       message: 'Compra sem cadastro. Após o pagamento, você receberá o filme diretamente aqui no chat. Os dados não serão salvos no sistema.',
     };
@@ -1244,6 +1247,50 @@ export class TelegramsEnhancedService implements OnModuleInit {
         this.pendingPixPayments.delete(purchaseId);
 
       } else if (payment.status === 'pending') {
+        // Consultar provider PIX diretamente como fallback (webhook pode não ter chegado)
+        try {
+          const pixProvider = this.pixProviderFactory.getProvider();
+          const providerStatus = await pixProvider.getPaymentStatus(payment.provider_payment_id);
+          this.logger.log(`Provider status for ${payment.provider_payment_id}: ${providerStatus.status}`);
+
+          if (providerStatus.status === 'approved') {
+            // Pagamento confirmado no provider! Atualizar banco
+            this.logger.log(`Payment ${payment.provider_payment_id} confirmed by provider. Updating DB...`);
+
+            await this.supabase.from('payments').update({
+              status: 'pago',
+              paid_at: new Date().toISOString(),
+            }).eq('id', payment.id);
+
+            await this.supabase.from('purchases').update({
+              status: 'paid',
+              delivery_sent: true,
+            }).eq('id', purchaseId);
+
+            // Buscar purchase e enviar confirmação
+            const { data: confirmedPurchase } = await this.supabase
+              .from('purchases').select('*, content(*)').eq('id', purchaseId).single();
+
+            if (confirmedPurchase) {
+              const content = Array.isArray(confirmedPurchase.content) ? confirmedPurchase.content[0] : confirmedPurchase.content;
+              const contentTitle = content?.title || 'Conteudo';
+              const priceText = (confirmedPurchase.amount_cents / 100).toFixed(2);
+              const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+              const dashUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+
+              await this.sendMessage(chatId,
+                `✅ *Pagamento Confirmado!*\n\n🎬 *${contentTitle}*\n💰 Valor: R$ ${priceText}\n\nSeu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n🛍 Para realizar novas compras no aplicativo, digite /start`,
+                { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashUrl }]] } }
+              );
+            }
+
+            this.pendingPixPayments.delete(purchaseId);
+            return;
+          }
+        } catch (providerError) {
+          this.logger.error(`Error checking provider status: ${providerError.message}`);
+        }
+
         // Pagamento ainda não confirmado
         await this.sendMessage(chatId, `⏳ *Pagamento Pendente*\n\n⚠️ Ainda não identificamos seu pagamento.\n\n*Possíveis motivos:*\n• O pagamento ainda está sendo processado\n• Você ainda não finalizou o pagamento no app bancário\n\n💡 *O que fazer:*\n• Aguarde alguns minutos e clique em "Já paguei" novamente\n• Certifique-se de ter confirmado o pagamento no app\n• Se o problema persistir, entre em contato com o suporte\n\n📱 ID da transação: \`${payment.provider_payment_id}\``, {
           parse_mode: 'Markdown',
@@ -2535,13 +2582,16 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         throw new NotFoundException('Movie not found');
       }
 
+      // Calculate price with active discounts
+      const { finalPrice: miniAppFinalPrice } = await this.calculateFinalPrice(content);
+
       // Create purchase
       const { data: purchase, error: purchaseError } = await this.supabase
         .from('purchases')
         .insert({
           user_id: user.id,
           content_id: content.id,
-          amount_cents: content.price_cents,
+          amount_cents: miniAppFinalPrice,
           currency: content.currency || 'BRL',
           status: 'pending',
           preferred_delivery: 'telegram',
