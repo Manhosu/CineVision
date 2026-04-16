@@ -83,7 +83,6 @@ function SeriesPageContent() {
   const [seriesData, setSeriesData] = useState<SeriesData>({ movies: [], pagination: { page: 1, totalPages: 1, total: 0 } });
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const searchParams = useSearchParams();
@@ -91,57 +90,34 @@ function SeriesPageContent() {
   const genre = searchParams?.get('genre') || undefined;
   const sort = searchParams?.get('sort') || 'newest';
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setCurrentPage(1);
-        const [seriesResult, categoriesResult] = await Promise.all([
-          fetchSeries(1, genre, sort),
-          fetchCategories()
-        ]);
-
-        const validSeriesData = {
-          movies: seriesResult?.movies || [],
-          pagination: seriesResult?.pagination || { page: 1, totalPages: 1, total: 0 }
-        };
-
-        setSeriesData(validSeriesData);
-        setCategories(categoriesResult || []);
-      } catch (err) {
-        console.error('[SeriesPage] Error loading data:', err);
-        setError(err instanceof Error ? err.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, [genre, sort]);
-
-  const MAX_ITEMS_IN_MEMORY = 200;
-
-  const handleLoadMore = async () => {
-    const nextPage = currentPage + 1;
-    setLoadingMore(true);
+  const loadPage = async (page: number) => {
     try {
-      const result = await fetchSeries(nextPage, genre, sort);
-      setSeriesData(prev => {
-        const combined = [...prev.movies, ...(result?.movies || [])];
-        const trimmed = combined.length > MAX_ITEMS_IN_MEMORY
-          ? combined.slice(combined.length - MAX_ITEMS_IN_MEMORY)
-          : combined;
-        return { movies: trimmed, pagination: result?.pagination || prev.pagination };
+      setLoading(true);
+      const [seriesResult, categoriesResult] = await Promise.all([
+        fetchSeries(page, genre, sort),
+        categories.length > 0 ? Promise.resolve(categories) : fetchCategories()
+      ]);
+
+      setSeriesData({
+        movies: seriesResult?.movies || [],
+        pagination: seriesResult?.pagination || { page: 1, totalPages: 1, total: 0 }
       });
-      setCurrentPage(nextPage);
+      if (Array.isArray(categoriesResult)) setCategories(categoriesResult);
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      console.error('Error loading more series:', err);
+      console.error('[SeriesPage] Error loading data:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setLoadingMore(false);
+      setLoading(false);
     }
   };
 
-  const hasMore = currentPage < (seriesData.pagination?.totalPages || 0);
+  useEffect(() => {
+    loadPage(1);
+  }, [genre, sort]);
+
+  const totalPages = seriesData.pagination?.totalPages || 1;
 
   if (loading) {
     return (
@@ -236,14 +212,51 @@ function SeriesPageContent() {
                 currentPage={currentPage}
                 baseUrl="/series"
               />
-              {hasMore && (
-                <div className="flex justify-center mt-8">
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-10">
                   <button
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="px-8 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white font-medium rounded-xl transition-all duration-300 hover:scale-105 disabled:hover:scale-100"
+                    onClick={() => loadPage(currentPage - 1)}
+                    disabled={currentPage <= 1 || loading}
+                    className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm"
                   >
-                    {loadingMore ? 'Carregando...' : `Carregar mais (${seriesData.pagination.total - seriesData.movies.length} restantes)`}
+                    Anterior
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(page => {
+                      if (page === 1 || page === totalPages) return true;
+                      if (Math.abs(page - currentPage) <= 1) return true;
+                      return false;
+                    })
+                    .reduce<(number | string)[]>((acc, page, idx, arr) => {
+                      if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('...');
+                      acc.push(page);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === '...' ? (
+                        <span key={`dots-${idx}`} className="px-2 text-white/30">...</span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => loadPage(item as number)}
+                          disabled={loading}
+                          className={`min-w-[40px] h-10 rounded-lg text-sm font-medium transition-all ${
+                            currentPage === item
+                              ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                              : 'bg-white/5 hover:bg-white/10 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+                  <button
+                    onClick={() => loadPage(currentPage + 1)}
+                    disabled={currentPage >= totalPages || loading}
+                    className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm"
+                  >
+                    Próxima
                   </button>
                 </div>
               )}
