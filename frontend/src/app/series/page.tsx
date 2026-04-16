@@ -54,7 +54,15 @@ const fetchSeries = async (page: number, genre?: string, sort?: string) => {
       throw new Error('Failed to fetch series');
     }
 
-    return response.json();
+    const data = await response.json();
+    return {
+      movies: data.movies || [],
+      pagination: data.pagination || {
+        page: data.page || 1,
+        totalPages: data.totalPages || 1,
+        total: data.total || 0,
+      },
+    };
   } catch (error) {
     console.error('Error fetching series:', error);
     return { movies: [], pagination: { page: 1, totalPages: 1, total: 0 } };

@@ -882,6 +882,19 @@ export default function AdminContentCreatePage() {
                       {fileUpload.posterFile.name} ({(fileUpload.posterFile.size / 1024 / 1024).toFixed(2)} MB)
                     </div>
                   )}
+                  {/* Poster Preview */}
+                  {fileUpload.posterUrl && (
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                      <div className="relative w-32 rounded-xl overflow-hidden shadow-lg border border-white/10" style={{ aspectRatio: '2/3' }}>
+                        <img
+                          src={fileUpload.posterUrl}
+                          alt="Preview do pôster"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Backdrop Upload */}

@@ -54,7 +54,16 @@ const fetchMovies = async (page: number, genre?: string, sort?: string) => {
       throw new Error('Failed to fetch movies');
     }
 
-    return response.json();
+    const data = await response.json();
+    // Normalize: API returns flat {movies, total, page, limit, totalPages}
+    return {
+      movies: data.movies || [],
+      pagination: data.pagination || {
+        page: data.page || 1,
+        totalPages: data.totalPages || 1,
+        total: data.total || 0,
+      },
+    };
   } catch (error) {
     console.error('Error fetching movies:', error);
     return { movies: [], pagination: { page: 1, totalPages: 1, total: 0 } };
