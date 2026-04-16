@@ -36,7 +36,15 @@ export class AdminContentSimpleService {
 
     const { data, error } = await this.supabaseService.client
       .from('content')
-      .select('*')
+      .select(`
+        *,
+        content_people(
+          role,
+          character_name,
+          display_order,
+          person:people(id, name, photo_url, role)
+        )
+      `)
       .eq('id', id)
       .single();
 
