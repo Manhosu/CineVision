@@ -1651,14 +1651,43 @@ export class TelegramsEnhancedService implements OnModuleInit {
         const purchaseId = param.replace('payment_success_', '');
         this.logger.log(`✅ Payment success redirect for purchase ${purchaseId}`);
 
-        await this.sendMessage(chatId,
-          '✅ *Pagamento Confirmado!*\n\n' +
-          '🎬 Seu conteúdo está sendo preparado...\n' +
-          'Você receberá os vídeos em instantes!\n\n' +
-          '💡 O processamento pode demorar alguns segundos.\n\n' +
-          '🛍 Para realizar novas compras no aplicativo, digite /start',
-          { parse_mode: 'Markdown' }
-        );
+        // Buscar dados da compra para mensagem completa
+        const { data: purchase } = await this.supabase
+          .from('purchases')
+          .select('*, content(*)')
+          .eq('id', purchaseId)
+          .single();
+
+        if (purchase) {
+          const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+          const contentTitle = content?.title || 'Conteudo';
+          const priceText = (purchase.amount_cents / 100).toFixed(2);
+          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+
+          await this.sendMessage(chatId,
+            `✅ *Pagamento Confirmado!*\n\n` +
+            `🎬 *${contentTitle}*\n` +
+            `💰 Valor: R$ ${priceText}\n\n` +
+            `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n` +
+            `🛍 Para realizar novas compras no aplicativo, digite /start`,
+            {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: '🎬 Assistir Agora', url: dashboardUrl }],
+                ],
+              },
+            }
+          );
+        } else {
+          await this.sendMessage(chatId,
+            '✅ *Pagamento Confirmado!*\n\n' +
+            'Seu conteudo esta sendo preparado.\n\n' +
+            '🛍 Para realizar novas compras no aplicativo, digite /start',
+            { parse_mode: 'Markdown' }
+          );
+        }
         return;
       }
       // Handle payment cancellation redirect from Stripe

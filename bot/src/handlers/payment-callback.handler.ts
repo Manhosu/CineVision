@@ -66,7 +66,7 @@ export async function handlePixPayment(
         await axios.post(`https://api.telegram.org/bot${botToken}/sendPhoto`, form, {
           headers: form.getHeaders(),
         });
-      } catch (photoError) {
+      } catch (photoError: any) {
         console.error('Error sending QR Code photo:', photoError.message);
       }
     }
