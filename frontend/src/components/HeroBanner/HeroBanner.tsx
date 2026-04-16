@@ -155,11 +155,22 @@ export function HeroBanner({
     >
       {/* Background Image */}
       <div className="absolute inset-0">
+        {/* Desktop */}
         <NextImage
           src={currentMovie.backdrop_url || currentMovie.poster_url || '/placeholder-movie.jpg'}
           alt={currentMovie.title}
           fill
-          className="object-cover"
+          className="object-cover hidden sm:block"
+          style={{ objectPosition: currentMovie.backdrop_position || '50% 50%' }}
+          priority
+        />
+        {/* Mobile */}
+        <NextImage
+          src={currentMovie.backdrop_url || currentMovie.poster_url || '/placeholder-movie.jpg'}
+          alt={currentMovie.title}
+          fill
+          className="object-cover block sm:hidden"
+          style={{ objectPosition: currentMovie.backdrop_position_mobile || currentMovie.backdrop_position || '50% 50%' }}
           priority
         />
         {/* Gradient overlays */}
