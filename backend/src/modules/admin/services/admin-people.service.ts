@@ -8,6 +8,7 @@ export class AdminPeopleService {
   constructor(private readonly supabaseService: SupabaseService) {}
 
   async findAll(search?: string, role?: string) {
+    // Fetch people and content counts in parallel (2 queries instead of N+1)
     let query = this.supabaseService.client
       .from('people')
       .select('*')
@@ -20,20 +21,27 @@ export class AdminPeopleService {
       query = query.eq('role', role);
     }
 
-    const { data, error } = await query;
+    const [{ data, error }, { data: counts }] = await Promise.all([
+      query,
+      this.supabaseService.client
+        .from('content_people')
+        .select('person_id'),
+    ]);
+
     if (error) throw new Error(`Failed to fetch people: ${error.message}`);
 
-    // Add content count for each person
-    const people = data || [];
-    for (const person of people) {
-      const { count } = await this.supabaseService.client
-        .from('content_people')
-        .select('*', { count: 'exact', head: true })
-        .eq('person_id', person.id);
-      person.content_count = count || 0;
+    // Build count map from all links in one pass
+    const countMap = new Map<string, number>();
+    if (counts) {
+      for (const row of counts) {
+        countMap.set(row.person_id, (countMap.get(row.person_id) || 0) + 1);
+      }
     }
 
-    return people;
+    return (data || []).map(person => ({
+      ...person,
+      content_count: countMap.get(person.id) || 0,
+    }));
   }
 
   async findById(id: string) {
