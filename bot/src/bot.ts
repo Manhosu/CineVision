@@ -24,22 +24,12 @@ export class TelegramBot {
       throw new Error('TELEGRAM_BOT_TOKEN is required');
     }
 
-    // By default, standalone bot does NOT poll — NestJS backend handles Telegram polling.
-    // Only enable polling if explicitly set via ENABLE_BOT_POLLING=true (for local dev without backend).
-    const enablePolling = process.env.ENABLE_BOT_POLLING === 'true';
-
-    if (!enablePolling) {
-      console.log('⚠️ Bot standalone polling DISABLED (default). NestJS backend handles Telegram.');
-      console.log('   Set ENABLE_BOT_POLLING=true to enable polling for local dev.');
-      this.bot = new TelegramBotAPI(this.token, { polling: false });
-      this.notificationService = new NotificationService(this.bot);
-      return;
-    }
-
-    console.log('Bot starting in POLLING mode (ENABLE_BOT_POLLING=true)');
-    this.bot = new TelegramBotAPI(this.token, {
-      polling: true
-    });
+    // Polling DESATIVADO — o NestJS backend é o único que faz polling do Telegram.
+    // Este bot standalone existe apenas para endpoints HTTP (webhooks).
+    this.bot = new TelegramBotAPI(this.token, { polling: false });
+    this.notificationService = new NotificationService(this.bot);
+    console.log('Bot standalone iniciado SEM polling. NestJS backend processa mensagens do Telegram.');
+    return;
 
     this.notificationService = new NotificationService(this.bot);
     this.setupCommands();
