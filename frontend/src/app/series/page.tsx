@@ -211,6 +211,8 @@ function SeriesPageContent() {
                 categories={categories}
                 currentGenre={genre}
                 currentSort={sort}
+                totalMovies={seriesData.pagination?.total || 0}
+                contentLabel="série"
               />
 
               {/* Series Grid */}

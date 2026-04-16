@@ -81,7 +81,7 @@ export class AdminContentSimpleService {
       cast: data.cast ? (Array.isArray(data.cast) ? data.cast : data.cast.split(',').map((c: string) => c.trim())) : null, // Tipo array
       release_year: data.release_year || null,
       duration_minutes: data.duration_minutes || null,
-      imdb_rating: data.imdb_rating || null,
+      imdb_rating: data.imdb_rating && !isNaN(Number(data.imdb_rating)) ? Number(data.imdb_rating) : null,
       quality_label: data.quality_label || null,
       audio_type: data.audio_type || null,
       telegram_group_link: data.telegram_group_link || null,

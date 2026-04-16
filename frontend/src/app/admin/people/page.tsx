@@ -40,6 +40,7 @@ export default function PeopleManagePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
+  const [sortOrder, setSortOrder] = useState<'name' | 'recent'>('name');
 
   // Create / Edit form
   const [showForm, setShowForm] = useState(false);
@@ -77,9 +78,13 @@ export default function PeopleManagePage() {
       if (response.ok) {
         const data = await response.json();
         setPeople(data);
+      } else {
+        console.error(`API Error ${response.status}`);
+        setPeople([]);
       }
     } catch (error) {
       console.error('Error fetching people:', error);
+      setPeople([]);
     } finally {
       setLoading(false);
     }
@@ -217,11 +222,16 @@ export default function PeopleManagePage() {
   };
 
   // ---------- Filtering ----------
-  const filteredPeople = people.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTab = activeTab === 'all' || p.role === activeTab;
-    return matchesSearch && matchesTab;
-  });
+  const filteredPeople = people
+    .filter((p) => {
+      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesTab = activeTab === 'all' || p.role === activeTab;
+      return matchesSearch && matchesTab;
+    })
+    .sort((a, b) => {
+      if (sortOrder === 'recent') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      return a.name.localeCompare(b.name);
+    });
 
   const stats = {
     total: people.length,
@@ -348,6 +358,16 @@ export default function PeopleManagePage() {
               </button>
             ))}
           </div>
+
+          {/* Sort */}
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'name' | 'recent')}
+            className="bg-dark-800/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-primary-500"
+          >
+            <option value="name">A-Z</option>
+            <option value="recent">Recentes primeiro</option>
+          </select>
         </div>
 
         {/* People Table */}

@@ -52,46 +52,47 @@ export class PaymentsSupabaseService {
         throw new BadRequestException('Purchase is already paid');
       }
 
-      // Create or get Stripe product/price for this content
+      // Always create a fresh Stripe Price with the current purchase amount
+      // (Stripe Prices are immutable — cached stripe_price_id may have old price)
       const content = purchase.content;
+      const currentAmount = purchase.amount_cents || content.price_cents;
       let stripeProductId = content.stripe_product_id;
-      let stripePriceId = content.stripe_price_id;
+      let stripePriceId: string;
 
-      // Create Stripe product if doesn't exist
-      if (!stripeProductId || !stripePriceId) {
-        this.logger.log(`Creating Stripe product for content ${content.id}`);
+      this.logger.log(`Creating Stripe checkout for ${content.title} - R$ ${currentAmount / 100}`);
 
+      if (stripeProductId) {
+        // Product exists — just create a new Price with current amount
+        stripePriceId = await this.stripeService.createPrice(
+          stripeProductId,
+          currentAmount,
+          content.currency?.toLowerCase() || 'brl',
+          { content_id: content.id },
+        );
+      } else {
+        // No product — create product + price
         const stripeResult = await this.stripeService.createProductWithPrice(
           {
             name: content.title,
             description: content.description,
             images: content.thumbnail_url ? [content.thumbnail_url] : [],
-            metadata: {
-              content_id: content.id,
-              content_type: content.content_type,
-            },
+            metadata: { content_id: content.id, content_type: content.content_type },
           },
           {
-            unitAmount: purchase.amount_cents || content.price_cents,
+            unitAmount: currentAmount,
             currency: content.currency?.toLowerCase() || 'brl',
-            metadata: {
-              content_id: content.id,
-            },
+            metadata: { content_id: content.id },
           },
         );
-
         stripeProductId = stripeResult.productId;
         stripePriceId = stripeResult.priceId;
-
-        // Update content with Stripe IDs
-        await this.supabaseService.client
-          .from('content')
-          .update({
-            stripe_product_id: stripeProductId,
-            stripe_price_id: stripePriceId,
-          })
-          .eq('id', content.id);
       }
+
+      // Update content with latest Stripe IDs
+      await this.supabaseService.client
+        .from('content')
+        .update({ stripe_product_id: stripeProductId, stripe_price_id: stripePriceId })
+        .eq('id', content.id);
 
       // Create Stripe Checkout Session
       // Redirect to Telegram bot instead of frontend to avoid errors

@@ -95,6 +95,19 @@ export class StripeService {
   }
 
   /**
+   * Create a Stripe Price for an existing product (used when price changes)
+   */
+  async createPrice(productId: string, unitAmount: number, currency = 'brl', metadata?: Record<string, string>): Promise<string> {
+    const price = await this.stripe.prices.create({
+      product: productId,
+      unit_amount: unitAmount,
+      currency,
+      metadata: { ...metadata, source: 'cine-vision' },
+    });
+    return price.id;
+  }
+
+  /**
    * Create a checkout session for payment
    * Supports both PIX and Card payments in Brazil
    */

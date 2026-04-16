@@ -39,45 +39,62 @@ export default function ContentHero({
 
   const isFlashPromo = content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
 
-  // Urgency: compressed countdown (shows less time than real to create urgency)
+  // Simple hash from content ID for consistent pseudo-random per content
+  const idHash = (content.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+
+  // Urgency countdown: 2-4 min per content (seeded by content ID), resets on page visit
+  const urgencyStartRef = useRef<number>(0);
+  const urgencyDurationRef = useRef<number>(0);
+
   useEffect(() => {
-    if (!isFlashPromo || !content.promo_ends_at) return;
+    if (!isFlashPromo) return;
+    // Duration: 2-4 min based on content ID hash
+    const durationMs = (120 + (idHash % 120)) * 1000; // 120s-240s (2-4 min)
+    urgencyDurationRef.current = durationMs;
+    urgencyStartRef.current = Date.now();
+
     const tick = () => {
-      const realDiff = new Date(content.promo_ends_at!).getTime() - Date.now();
-      if (realDiff <= 0) { setUrgencyTimer(''); return; }
-      // Compress: show max 5 min even if real time is more
-      const displayDiff = Math.min(realDiff, 5 * 60 * 1000);
-      const m = Math.floor(displayDiff / 60000);
-      const s = Math.floor((displayDiff % 60000) / 1000);
+      const elapsed = Date.now() - urgencyStartRef.current;
+      const remaining = Math.max(0, urgencyDurationRef.current - elapsed);
+      if (remaining <= 0) {
+        // Reset timer to simulate new urgency cycle
+        urgencyStartRef.current = Date.now();
+        urgencyDurationRef.current = (120 + (idHash % 120)) * 1000;
+        return;
+      }
+      const m = Math.floor(remaining / 60000);
+      const s = Math.floor((remaining % 60000) / 1000);
       setUrgencyTimer(`${m}:${String(s).padStart(2, '0')}`);
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [isFlashPromo, content.promo_ends_at]);
+  }, [isFlashPromo, idHash]);
 
-  // Fake viewers that fluctuate (60-120 range)
+  // Fake viewers — seeded by content ID for variation between content
   useEffect(() => {
     if (!isFlashPromo) return;
-    setFakeViewers(Math.floor(Math.random() * 40) + 70);
+    const base = 60 + (idHash % 50); // 60-109 base, different per content
+    setFakeViewers(base);
     const id = setInterval(() => {
       setFakeViewers(prev => {
-        const change = Math.floor(Math.random() * 11) - 5; // -5 to +5
-        return Math.max(55, Math.min(130, prev + change));
+        const change = Math.floor(Math.random() * 9) - 4;
+        return Math.max(40, Math.min(150, prev + change));
       });
-    }, 3000 + Math.random() * 4000);
+    }, 4000 + (idHash % 3000));
     return () => clearInterval(id);
-  }, [isFlashPromo]);
+  }, [isFlashPromo, idHash]);
 
-  // Fake units remaining (3-7, slowly decreasing)
+  // Fake units — seeded by content ID
   useEffect(() => {
     if (!isFlashPromo) return;
-    setFakeUnits(Math.floor(Math.random() * 3) + 5); // 5-7
+    const base = 3 + (idHash % 5); // 3-7, different per content
+    setFakeUnits(base);
     const id = setInterval(() => {
-      setFakeUnits(prev => Math.max(2, prev - (Math.random() > 0.6 ? 1 : 0)));
-    }, 15000 + Math.random() * 20000);
+      setFakeUnits(prev => Math.max(1, prev - (Math.random() > 0.65 ? 1 : 0)));
+    }, 18000 + (idHash % 12000));
     return () => clearInterval(id);
-  }, [isFlashPromo]);
+  }, [isFlashPromo, idHash]);
 
   const backdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
   const desktopPos = content.backdrop_position || '50% 50%';

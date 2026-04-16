@@ -126,14 +126,7 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
         })}
       </div>
 
-      {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={pagination.totalPages}
-          baseUrl={baseUrl}
-        />
-      )}
+      {/* Pagination is handled by parent page */}
     </div>
   );
 }

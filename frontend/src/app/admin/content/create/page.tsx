@@ -674,7 +674,7 @@ export default function AdminContentCreatePage() {
                   )}
 
                   {/* Genre Selection Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-gray-900/50 border border-gray-600/50 rounded-xl max-h-64 overflow-y-auto">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-4 bg-gray-900/50 border border-gray-600/50 rounded-xl sm:max-h-64 sm:overflow-y-auto">
                     {AVAILABLE_GENRES.map((genre) => {
                       const isSelected = formData.genres.includes(genre);
                       return (
@@ -997,28 +997,26 @@ export default function AdminContentCreatePage() {
                 </div>
 
                 <div className="flex flex-col gap-4">
-                  <label className="relative inline-flex items-center cursor-pointer group">
+                  <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
                     <input
                       type="checkbox"
                       name="is_featured"
                       checked={formData.is_featured}
                       onChange={handleChange}
-                      className="sr-only peer"
+                      className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-red-600 focus:ring-red-500 cursor-pointer"
                     />
-                    <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-red-600 peer-checked:to-red-700"></div>
-                    <span className="ms-3 text-sm font-medium text-gray-300">Destacar na página inicial</span>
+                    <span className="text-sm font-medium text-gray-300">Destacar na página inicial</span>
                   </label>
 
-                  <label className="relative inline-flex items-center cursor-pointer group">
+                  <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
                     <input
                       type="checkbox"
                       name="is_release"
                       checked={formData.is_release}
                       onChange={handleChange}
-                      className="sr-only peer"
+                      className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
-                    <div className="w-14 h-7 bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-600 peer-checked:to-blue-700"></div>
-                    <span className="ms-3 text-sm font-medium text-gray-300">Marcar como Lançamento</span>
+                    <span className="text-sm font-medium text-gray-300">Marcar como Lançamento</span>
                   </label>
                 </div>
               </div>

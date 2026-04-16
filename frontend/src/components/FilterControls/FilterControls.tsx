@@ -8,13 +8,15 @@ interface FilterControlsProps {
   currentGenre?: string;
   currentSort?: string;
   totalMovies: number;
+  contentLabel?: string; // 'filme' | 'série' — default 'filme'
 }
 
 export default function FilterControls({
   categories,
   currentGenre,
   currentSort,
-  totalMovies
+  totalMovies,
+  contentLabel = 'filme'
 }: FilterControlsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -95,7 +97,7 @@ export default function FilterControls({
         {/* Results Count & Clear Filters */}
         <div className="flex items-center gap-4">
           <div className="text-sm text-gray-400">
-            {totalMovies} {totalMovies === 1 ? 'filme encontrado' : 'filmes encontrados'}
+            {totalMovies} {totalMovies === 1 ? `${contentLabel} encontrado` : `${contentLabel}s encontrados`}
           </div>
 
           {(currentGenre || currentSort !== 'newest') && (
