@@ -53,12 +53,13 @@ export class StripeService {
     priceDto: Omit<CreatePriceDto, 'productId'>,
   ): Promise<StripeProductResult> {
     try {
-      // Create product
+      // Create product (sanitize fields to avoid Stripe validation errors)
       this.logger.log(`Creating Stripe product: ${productDto.name}`);
+      const validImages = (productDto.images || []).filter(url => url && url.startsWith('http')).slice(0, 8);
       const product = await this.stripe.products.create({
-        name: productDto.name,
-        description: productDto.description,
-        images: productDto.images,
+        name: productDto.name || 'Conteudo',
+        ...(productDto.description ? { description: productDto.description.substring(0, 500) } : {}),
+        ...(validImages.length > 0 ? { images: validImages } : {}),
         metadata: {
           ...productDto.metadata,
           source: 'cine-vision',

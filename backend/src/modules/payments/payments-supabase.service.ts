@@ -61,22 +61,31 @@ export class PaymentsSupabaseService {
 
       this.logger.log(`Creating Stripe checkout for ${content.title} - R$ ${currentAmount / 100}`);
 
+      // Try to create Price for existing product, fallback to creating both
+      let created = false;
       if (stripeProductId) {
-        // Product exists — just create a new Price with current amount
-        stripePriceId = await this.stripeService.createPrice(
-          stripeProductId,
-          currentAmount,
-          content.currency?.toLowerCase() || 'brl',
-          { content_id: content.id },
-        );
-      } else {
-        // No product — create product + price
+        try {
+          stripePriceId = await this.stripeService.createPrice(
+            stripeProductId,
+            currentAmount,
+            content.currency?.toLowerCase() || 'brl',
+            { content_id: content.id },
+          );
+          created = true;
+        } catch (priceErr) {
+          this.logger.warn(`Failed to create price for product ${stripeProductId}: ${priceErr.message}. Creating new product.`);
+          stripeProductId = null;
+        }
+      }
+
+      if (!created) {
+        // Create product + price from scratch
         const stripeResult = await this.stripeService.createProductWithPrice(
           {
             name: content.title,
-            description: content.description,
-            images: content.thumbnail_url ? [content.thumbnail_url] : [],
-            metadata: { content_id: content.id, content_type: content.content_type },
+            description: content.description || '',
+            images: content.poster_url ? [content.poster_url] : [],
+            metadata: { content_id: content.id, content_type: content.content_type || 'movie' },
           },
           {
             unitAmount: currentAmount,
