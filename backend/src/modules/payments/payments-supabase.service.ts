@@ -308,15 +308,16 @@ export class PaymentsSupabaseService {
       const amountCents = purchase.amount_cents || content.price_cents;
 
       // Prevent duplicate PIX generation — return existing payment if one exists
-      const { data: existingPayment } = await this.supabaseService.client
+      const { data: existingPayments } = await this.supabaseService.client
         .from('payments')
         .select('id, provider_payment_id, status, provider_meta')
         .eq('purchase_id', purchaseId)
         .eq('payment_method', 'pix')
         .in('status', ['pending', 'pago', 'paid', 'completed'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+
+      const existingPayment = existingPayments?.[0] || null;
 
       if (existingPayment) {
         this.logger.log(`PIX payment already exists for purchase ${purchaseId} (status: ${existingPayment.status}), returning existing`);
