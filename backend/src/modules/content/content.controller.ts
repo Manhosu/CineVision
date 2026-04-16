@@ -149,4 +149,10 @@ export class ContentController {
   async deleteAllContent() {
     return this.contentService.deleteAllContent();
   }
+
+  @Get('people/:id')
+  @ApiOperation({ summary: 'Get person (actor/director) with their content' })
+  async getPersonWithContent(@Param('id') id: string) {
+    return this.contentService.findPersonWithContent(id);
+  }
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
+import PeopleTagInput from '@/components/Admin/PeopleTagInput';
 
 interface ContentFormData {
   title: string;
@@ -78,6 +79,8 @@ export default function AdminContentCreatePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdContentId, setCreatedContentId] = useState<string | null>(null);
+  const [selectedActors, setSelectedActors] = useState<{ id: string; name: string; photo_url?: string; role: string }[]>([]);
+  const [selectedDirectors, setSelectedDirectors] = useState<{ id: string; name: string; photo_url?: string; role: string }[]>([]);
   const [formData, setFormData] = useState<ContentFormData>({
     title: '',
     description: '',
@@ -176,8 +179,8 @@ export default function AdminContentCreatePage() {
         is_featured: formData.is_featured,
         is_release: formData.is_release,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
-        director: formData.director || undefined,
-        cast: formData.cast || undefined,
+        director: selectedDirectors.length > 0 ? selectedDirectors[0].name : (formData.director || undefined),
+        cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : (formData.cast || undefined),
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
         age_rating: formData.age_rating || undefined,
@@ -771,29 +774,22 @@ export default function AdminContentCreatePage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Diretor</label>
-                  <input
-                    type="text"
-                    name="director"
-                    value={formData.director}
-                    onChange={handleChange}
-                    placeholder="Nome do diretor"
-                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  />
-                </div>
+                <PeopleTagInput
+                  value={selectedDirectors}
+                  onChange={setSelectedDirectors}
+                  role="director"
+                  label="Diretor"
+                  placeholder="Buscar diretor..."
+                  single
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Elenco</label>
-                  <input
-                    type="text"
-                    name="cast"
-                    value={formData.cast}
-                    onChange={handleChange}
-                    placeholder="Separado por vírgulas"
-                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  />
-                </div>
+                <PeopleTagInput
+                  value={selectedActors}
+                  onChange={setSelectedActors}
+                  role="actor"
+                  label="Elenco"
+                  placeholder="Buscar ator..."
+                />
               </div>
             </div>
           </div>

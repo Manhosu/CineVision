@@ -114,7 +114,11 @@ export default function SeriesDetailsPage() {
         onPurchase={handlePurchase}
       />
 
-      <CastSection cast={castString} director={series.director} />
+      <CastSection
+        cast={castString}
+        director={series.director}
+        people={(series as any).content_people?.map((cp: any) => cp.person).filter(Boolean)}
+      />
 
       {series.trailer_url && (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 tv:px-16 pb-10 tv:pb-14">

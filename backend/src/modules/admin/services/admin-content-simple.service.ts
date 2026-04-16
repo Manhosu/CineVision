@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
 import { ConfigService } from '@nestjs/config';
+import { AdminPeopleService } from './admin-people.service';
 
 @Injectable()
 export class AdminContentSimpleService {
@@ -9,6 +10,7 @@ export class AdminContentSimpleService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly configService: ConfigService,
+    private readonly peopleService: AdminPeopleService,
   ) {
     console.log('AdminContentSimpleService instantiated successfully');
   }
@@ -102,6 +104,14 @@ export class AdminContentSimpleService {
     // Associar categorias se fornecidas
     if (data.genres && Array.isArray(data.genres) && data.genres.length > 0) {
       await this.associateCategories(insertedContent.id, data.genres);
+    }
+
+    // Sync people (cast + director) with content_people table
+    try {
+      const castArray = data.cast ? (Array.isArray(data.cast) ? data.cast : data.cast.split(',').map((c: string) => c.trim())) : [];
+      await this.peopleService.syncContentPeople(insertedContent.id, castArray, data.director);
+    } catch (e) {
+      this.logger.warn(`Failed to sync people for content ${insertedContent.id}: ${e.message}`);
     }
 
     return insertedContent;
@@ -452,6 +462,18 @@ export class AdminContentSimpleService {
     }
 
     this.logger.log(`Content ${contentId} updated successfully`);
+
+    // Sync people (cast + director) if provided
+    try {
+      const cast = updateData.cast;
+      const director = updateData.director;
+      if (cast !== undefined || director !== undefined) {
+        const castArray = cast ? (Array.isArray(cast) ? cast : cast.split(',').map((c: string) => c.trim())) : [];
+        await this.peopleService.syncContentPeople(contentId, castArray, director);
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to sync people for content ${contentId}: ${e.message}`);
+    }
 
     return {
       success: true,

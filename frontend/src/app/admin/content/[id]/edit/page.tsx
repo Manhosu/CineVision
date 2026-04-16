@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
+import PeopleTagInput from '@/components/Admin/PeopleTagInput';
 
 interface Content {
   id: string;
@@ -89,6 +90,12 @@ export default function AdminContentEditPage() {
   const [qualityLabel, setQualityLabel] = useState('');
   const [audioType, setAudioType] = useState('');
 
+  // People (actors/directors) from content_people
+  const [selectedActors, setSelectedActors] = useState<{ id: string; name: string; photo_url?: string; role: string }[]>([]);
+  const [selectedDirectors, setSelectedDirectors] = useState<{ id: string; name: string; photo_url?: string; role: string }[]>([]);
+  const [originalActorIds, setOriginalActorIds] = useState<string>('');
+  const [originalDirectorIds, setOriginalDirectorIds] = useState<string>('');
+
   // Image uploads
   const [posterUrl, setPosterUrl] = useState('');
   const [backdropUrl, setBackdropUrl] = useState('');
@@ -158,6 +165,20 @@ export default function AdminContentEditPage() {
         setBackdropPositionMobile(data.backdrop_position_mobile || data.backdrop_position || '50% 50%');
         setQualityLabel(data.quality_label || '');
         setAudioType(data.audio_type || '');
+
+        // Load people (actors/directors) from content_people join
+        if (data.content_people && Array.isArray(data.content_people)) {
+          const actors = data.content_people
+            .filter((cp: any) => cp.role === 'actor' && cp.person)
+            .map((cp: any) => cp.person);
+          const directors = data.content_people
+            .filter((cp: any) => cp.role === 'director' && cp.person)
+            .map((cp: any) => cp.person);
+          setSelectedActors(actors);
+          setSelectedDirectors(directors);
+          setOriginalActorIds(actors.map((a: any) => a.id).sort().join(','));
+          setOriginalDirectorIds(directors.map((d: any) => d.id).sort().join(','));
+        }
       } else {
         toast.error('Erro ao carregar conteúdo');
         router.push('/admin/content/manage');
@@ -256,8 +277,8 @@ export default function AdminContentEditPage() {
         duration_minutes: Number(durationMinutes),
         genres: selectedGenres, // Send as array, not string
         age_rating: rating.trim(), // Database column is age_rating, not rating
-        director: director.trim(),
-        cast: cast.trim(),
+        director: selectedDirectors.length > 0 ? selectedDirectors[0].name : director.trim(),
+        cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : cast.trim(),
         trailer_url: trailerUrl.trim(),
         telegram_group_link: telegramGroupLink.trim(),
         poster_url: posterUrl,
@@ -330,7 +351,9 @@ export default function AdminContentEditPage() {
       imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
       releaseYear !== (originalContent.release_year?.toString() || '') ||
       audioType !== (originalContent.audio_type || '') ||
-      qualityLabel !== (originalContent.quality_label || '')
+      qualityLabel !== (originalContent.quality_label || '') ||
+      selectedActors.map(a => a.id).sort().join(',') !== originalActorIds ||
+      selectedDirectors.map(d => d.id).sort().join(',') !== originalDirectorIds
     );
   };
 
@@ -469,16 +492,14 @@ export default function AdminContentEditPage() {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">Diretor</label>
-                  <input
-                    type="text"
-                    value={director}
-                    onChange={(e) => setDirector(e.target.value)}
-                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                    placeholder="Nome do diretor"
-                  />
-                </div>
+                <PeopleTagInput
+                  value={selectedDirectors}
+                  onChange={setSelectedDirectors}
+                  role="director"
+                  label="Diretor"
+                  placeholder="Buscar diretor..."
+                  single
+                />
 
                 <div>
                   <label className="block text-sm font-medium mb-2">Classificação</label>
@@ -623,16 +644,13 @@ export default function AdminContentEditPage() {
               </div>
 
               {/* Cast */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Elenco</label>
-                <textarea
-                  value={cast}
-                  onChange={(e) => setCast(e.target.value)}
-                  rows={3}
-                  className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                  placeholder="Nome dos atores separados por vírgula"
-                />
-              </div>
+              <PeopleTagInput
+                value={selectedActors}
+                onChange={setSelectedActors}
+                role="actor"
+                label="Elenco"
+                placeholder="Buscar ator..."
+              />
 
               {/* Images */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

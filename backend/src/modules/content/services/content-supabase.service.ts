@@ -383,7 +383,7 @@ export class ContentSupabaseService {
   }
 
   async findMovieById(id: string) {
-    // Include content_languages to check if video is uploaded
+    // Include content_languages and people (cast/directors)
     const { data: movie, error } = await this.supabaseService.client
       .from('content')
       .select(`
@@ -397,6 +397,12 @@ export class ContentSupabaseService {
           video_url,
           hls_master_url,
           upload_status
+        ),
+        content_people(
+          role,
+          character_name,
+          display_order,
+          person:people(id, name, photo_url, role, bio)
         )
       `)
       .eq('id', id)
@@ -575,7 +581,6 @@ export class ContentSupabaseService {
   }
 
   async findSeriesById(id: string) {
-    // Include content_languages to check if video is uploaded
     const { data: series, error } = await this.supabaseService.client
       .from('content')
       .select(`
@@ -589,6 +594,12 @@ export class ContentSupabaseService {
           video_url,
           hls_master_url,
           upload_status
+        ),
+        content_people(
+          role,
+          character_name,
+          display_order,
+          person:people(id, name, photo_url, role, bio)
         )
       `)
       .eq('id', id)
@@ -913,5 +924,36 @@ export class ContentSupabaseService {
     } catch (error) {
       throw error;
     }
+  }
+
+  async findPersonWithContent(personId: string) {
+    const { data: person, error: personError } = await this.supabaseService.client
+      .from('people')
+      .select('*')
+      .eq('id', personId)
+      .single();
+
+    if (personError || !person) {
+      throw new NotFoundException(`Person not found`);
+    }
+
+    const { data: links } = await this.supabaseService.client
+      .from('content_people')
+      .select('content_id, role, character_name')
+      .eq('person_id', personId);
+
+    if (!links || links.length === 0) {
+      return { ...person, contents: [] };
+    }
+
+    const contentIds = links.map(l => l.content_id);
+    const { data: contents } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .in('id', contentIds)
+      .eq('status', 'PUBLISHED');
+
+    const enriched = await this.enrichContentWithDiscounts(contents || []);
+    return { ...person, contents: enriched };
   }
 }

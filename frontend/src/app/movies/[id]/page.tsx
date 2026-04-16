@@ -94,7 +94,11 @@ export default async function MoviePage({ params }: MoviePageProps) {
         <ContentHero content={movie} backHref="/" backLabel="Início" contentType="movie" />
 
         {/* Cast */}
-        <CastSection cast={movie.cast} director={movie.director} />
+        <CastSection
+          cast={movie.cast}
+          director={movie.director}
+          people={(movie as any).content_people?.map((cp: any) => cp.person).filter(Boolean)}
+        />
 
         {/* Trailer */}
         {movie.trailer_url && (

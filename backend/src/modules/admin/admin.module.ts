@@ -23,6 +23,8 @@ import { BroadcastController } from './controllers/broadcast.controller';
 import { BroadcastService } from './services/broadcast.service';
 import { AdminTop10Controller, AdminSalesController } from './controllers/admin-top10.controller';
 import { AdminTop10Service } from './services/admin-top10.service';
+import { AdminPeopleController } from './controllers/admin-people.controller';
+import { AdminPeopleService } from './services/admin-people.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -73,6 +75,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   BroadcastController,
   AdminTop10Controller,
   AdminSalesController,
+  AdminPeopleController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -106,6 +109,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   TelegramsEnhancedService,
   RequestsSupabaseService,
   AdminTop10Service,
+  AdminPeopleService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];

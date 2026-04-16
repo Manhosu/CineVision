@@ -1,11 +1,21 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+
+interface PersonEntry {
+  id: string;
+  name: string;
+  photo_url?: string;
+  role: string;
+}
 
 interface CastSectionProps {
   cast?: string | string[];
   director?: string;
+  people?: PersonEntry[];
 }
 
 function parseCast(cast?: string | string[]): string[] {
@@ -36,11 +46,22 @@ const COLORS = [
   'from-sky-500 to-sky-700',
 ];
 
-export default function CastSection({ cast, director }: CastSectionProps) {
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('');
+}
+
+export default function CastSection({ cast, director, people }: CastSectionProps) {
   const actors = parseCast(cast);
+  const hasPeople = people && people.length > 0;
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [imgErrors, setImgErrors] = useState<Record<string, boolean>>({});
 
   const updateScroll = () => {
     const el = scrollRef.current;
@@ -57,7 +78,7 @@ export default function CastSection({ cast, director }: CastSectionProps) {
     const ro = new ResizeObserver(updateScroll);
     ro.observe(el);
     return () => { el.removeEventListener('scroll', updateScroll); ro.disconnect(); };
-  }, [actors]);
+  }, [actors, people]);
 
   const scroll = (dir: 'left' | 'right') => {
     const el = scrollRef.current;
@@ -65,7 +86,13 @@ export default function CastSection({ cast, director }: CastSectionProps) {
     el.scrollBy({ left: dir === 'left' ? -el.clientWidth * 0.6 : el.clientWidth * 0.6, behavior: 'smooth' });
   };
 
-  if (actors.length === 0 && !director) return null;
+  const handleImgError = (id: string) => {
+    setImgErrors((prev) => ({ ...prev, [id]: true }));
+  };
+
+  const showItems = hasPeople || actors.length > 0;
+
+  if (!showItems && !director) return null;
 
   return (
     <div className="py-8 tv:py-12">
@@ -76,12 +103,12 @@ export default function CastSection({ cast, director }: CastSectionProps) {
           </h2>
           {director && (
             <span className="text-white/40 text-sm tv:text-base">
-              Direção: <span className="text-white/60">{director}</span>
+              Direcao: <span className="text-white/60">{director}</span>
             </span>
           )}
         </div>
 
-        {actors.length > 0 && (
+        {showItems && (
           <div className="relative group/cast">
             {/* Arrows */}
             {canScrollLeft && (
@@ -106,21 +133,58 @@ export default function CastSection({ cast, director }: CastSectionProps) {
               className="flex gap-5 sm:gap-6 tv:gap-8 overflow-x-auto pb-2 snap-x snap-mandatory"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-              {actors.map((name, i) => (
-                <div
-                  key={`${name}-${i}`}
-                  className="flex-shrink-0 w-[72px] sm:w-[88px] tv:w-[104px] text-center snap-start"
-                >
-                  <div className={`w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] tv:w-[104px] tv:h-[104px] rounded-full bg-gradient-to-br ${COLORS[i % COLORS.length]} flex items-center justify-center mx-auto mb-2.5 shadow-lg`}>
-                    <span className="text-white font-bold text-xl sm:text-2xl tv:text-3xl select-none drop-shadow">
-                      {name.charAt(0).toUpperCase()}
-                    </span>
+              {/* Rich people mode: photos + clickable links */}
+              {hasPeople &&
+                people!.map((person, i) => {
+                  const showPhoto = person.photo_url && !imgErrors[person.id];
+                  return (
+                    <Link
+                      key={person.id}
+                      href={`/people/${person.id}`}
+                      className="flex-shrink-0 w-[72px] sm:w-[88px] tv:w-[104px] text-center snap-start group/person"
+                    >
+                      <div className="relative w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] tv:w-[104px] tv:h-[104px] rounded-full overflow-hidden mx-auto mb-2.5 shadow-lg ring-2 ring-transparent group-hover/person:ring-white/30 transition-all">
+                        {showPhoto ? (
+                          <Image
+                            src={person.photo_url!}
+                            alt={person.name}
+                            fill
+                            className="object-cover transition-transform duration-300 group-hover/person:scale-110"
+                            sizes="104px"
+                            onError={() => handleImgError(person.id)}
+                          />
+                        ) : (
+                          <div className={`w-full h-full bg-gradient-to-br ${COLORS[i % COLORS.length]} flex items-center justify-center`}>
+                            <span className="text-white font-bold text-xl sm:text-2xl tv:text-3xl select-none drop-shadow">
+                              {getInitials(person.name)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-white/80 text-xs sm:text-sm tv:text-base font-medium leading-snug line-clamp-2 group-hover/person:text-white transition-colors">
+                        {person.name}
+                      </p>
+                    </Link>
+                  );
+                })}
+
+              {/* Fallback: plain cast strings (no links, colored initials) */}
+              {!hasPeople &&
+                actors.map((name, i) => (
+                  <div
+                    key={`${name}-${i}`}
+                    className="flex-shrink-0 w-[72px] sm:w-[88px] tv:w-[104px] text-center snap-start"
+                  >
+                    <div className={`w-[72px] h-[72px] sm:w-[88px] sm:h-[88px] tv:w-[104px] tv:h-[104px] rounded-full bg-gradient-to-br ${COLORS[i % COLORS.length]} flex items-center justify-center mx-auto mb-2.5 shadow-lg`}>
+                      <span className="text-white font-bold text-xl sm:text-2xl tv:text-3xl select-none drop-shadow">
+                        {name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-white/80 text-xs sm:text-sm tv:text-base font-medium leading-snug line-clamp-2">
+                      {name}
+                    </p>
                   </div>
-                  <p className="text-white/80 text-xs sm:text-sm tv:text-base font-medium leading-snug line-clamp-2">
-                    {name}
-                  </p>
-                </div>
-              ))}
+                ))}
             </div>
           </div>
         )}

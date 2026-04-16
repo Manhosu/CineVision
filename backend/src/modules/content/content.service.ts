@@ -315,4 +315,8 @@ export class ContentService {
       throw error;
     }
   }
+
+  async findPersonWithContent(personId: string): Promise<any> {
+    throw new NotFoundException('People feature requires Supabase mode');
+  }
 }
