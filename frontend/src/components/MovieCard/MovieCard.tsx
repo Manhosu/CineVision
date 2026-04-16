@@ -135,19 +135,28 @@ const MovieCard = memo(function MovieCard({
     >
       {/* Card container */}
       <div className={`relative w-full transition-all duration-300 ease-out hover:scale-[1.02] ${
-        isFlashPromo ? 'ring-2 ring-amber-500/60 rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.15)]' : ''
+        isFlashPromo ? 'rounded-xl shadow-[0_0_20px_rgba(245,158,11,0.25)]' : ''
       }`}>
 
-        {/* Flash promo badge */}
-        {isFlashPromo && promoTimeLeft && (
-          <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap animate-pulse">
-            <span>&#9889;</span>
-            <span>{promoTimeLeft}</span>
-          </div>
-        )}
-
         {/* Poster */}
-        <div className="relative w-full rounded-xl overflow-hidden" style={{ aspectRatio: '2/3', minHeight: '280px' }}>
+        <div className={`relative w-full rounded-xl overflow-hidden ${
+          isFlashPromo ? 'ring-2 ring-amber-500/70' : ''
+        }`} style={{ aspectRatio: '2/3', minHeight: '280px' }}>
+
+          {/* Flash promo overlay badge - TOP */}
+          {isFlashPromo && promoTimeLeft && (
+            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 px-3 py-1.5 flex items-center justify-center gap-1.5">
+              <span className="text-white text-xs font-black uppercase tracking-wide">&#9889; Oferta</span>
+              <span className="bg-white/20 text-white text-xs font-mono font-bold px-1.5 py-0.5 rounded">{promoTimeLeft}</span>
+            </div>
+          )}
+
+          {/* Flash promo discount badge - BOTTOM */}
+          {isFlashPromo && movie.discount_percentage && (
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-red-600/90 to-transparent pt-6 pb-2 px-3 flex items-center justify-center">
+              <span className="text-white text-sm font-black">{movie.discount_percentage}% OFF</span>
+            </div>
+          )}
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}

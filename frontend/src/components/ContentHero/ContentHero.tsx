@@ -244,6 +244,32 @@ export default function ContentHero({
             </p>
           )}
 
+          {/* Flash Promo Banner */}
+          {isFlashPromo && !isOwned && urgencyTimer && (
+            <div className="mb-4 max-w-md">
+              <div className="bg-gradient-to-r from-amber-600/20 via-red-600/20 to-amber-600/20 border border-amber-500/40 rounded-xl px-4 py-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">&#9889;</span>
+                  <span className="text-amber-400 text-sm font-black uppercase tracking-wide">Oferta Relâmpago</span>
+                  <span className="bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full ml-auto">{content.discount_percentage}% OFF</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1 text-red-400 font-bold">
+                      <FireIcon className="w-3.5 h-3.5" />
+                      Termina em {urgencyTimer}
+                    </span>
+                    <span className="flex items-center gap-1 text-amber-400/80">
+                      <EyeIcon className="w-3.5 h-3.5" />
+                      {fakeViewers} vendo
+                    </span>
+                  </div>
+                  <span className="text-red-300 font-semibold">{fakeUnits} restantes</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Actions row */}
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Main CTA */}
@@ -255,11 +281,13 @@ export default function ContentHero({
                 className={`flex items-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 ${
                   isOwned
                     ? 'bg-white text-dark-950 hover:bg-white/90 shadow-lg shadow-white/20'
-                    : 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-600/30'
+                    : isFlashPromo
+                      ? 'bg-gradient-to-r from-amber-500 to-red-600 text-white hover:from-amber-600 hover:to-red-700 shadow-lg shadow-red-600/30 animate-[pulse_2s_ease-in-out_infinite]'
+                      : 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-600/30'
                 }`}
               >
                 <PlayIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                {isOwned ? 'Assistir' : 'Comprar'}
+                {isOwned ? 'Assistir' : isFlashPromo ? 'Comprar Agora' : 'Comprar'}
               </button>
             )}
 
@@ -283,25 +311,6 @@ export default function ContentHero({
                 </span>
               )}
             </div>
-
-            {/* Flash Promo Urgency Block */}
-            {isFlashPromo && !isOwned && (
-              <div className="flex flex-col gap-1.5 px-3 py-2 bg-red-950/40 border border-red-500/30 rounded-xl animate-[pulse_3s_ease-in-out_infinite]">
-                {urgencyTimer && (
-                  <div className="flex items-center gap-1.5 text-red-400 text-sm font-bold">
-                    <FireIcon className="w-4 h-4" />
-                    <span>Termina em {urgencyTimer}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-1.5 text-amber-400 text-xs">
-                  <EyeIcon className="w-3.5 h-3.5" />
-                  <span>{fakeViewers} pessoas vendo agora</span>
-                </div>
-                <div className="text-red-300 text-xs font-semibold">
-                  Apenas {fakeUnits} unidades restantes
-                </div>
-              </div>
-            )}
 
             {/* Divider */}
             <div className="hidden sm:block w-px h-10 bg-white/10" />

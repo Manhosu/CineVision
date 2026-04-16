@@ -153,16 +153,24 @@ const Top10MovieCard = memo(function Top10MovieCard({
           className="relative transition-all duration-300 ease-out hover:scale-[1.02] z-20"
           style={{ width: 'clamp(140px, 18vw, 200px)' }}
         >
-          {/* Flash promo badge */}
-          {isFlashPromo && promoTimeLeft && (
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-lg whitespace-nowrap animate-pulse">
-              <span>&#9889;</span>
-              <span>{promoTimeLeft}</span>
-            </div>
-          )}
-
           {/* Poster with year overlay */}
-          <div className={`relative aspect-[2/3] overflow-hidden rounded-xl w-full ${isFlashPromo ? 'ring-2 ring-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.15)]' : ''}`}>
+          <div className={`relative aspect-[2/3] overflow-hidden rounded-xl w-full ${isFlashPromo ? 'ring-2 ring-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.25)]' : ''}`}>
+
+            {/* Flash promo overlay - TOP */}
+            {isFlashPromo && promoTimeLeft && (
+              <div className="absolute top-0 left-0 right-0 z-30 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 px-2 py-1 flex items-center justify-center gap-1">
+                <span className="text-white text-[10px] font-black uppercase">&#9889; Oferta</span>
+                <span className="bg-white/20 text-white text-[10px] font-mono font-bold px-1 py-0.5 rounded">{promoTimeLeft}</span>
+              </div>
+            )}
+
+            {/* Flash promo discount - BOTTOM */}
+            {isFlashPromo && movie.discount_percentage && (
+              <div className="absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-red-600/90 to-transparent pt-5 pb-1.5 px-2 flex items-center justify-center">
+                <span className="text-white text-xs font-black">{movie.discount_percentage}% OFF</span>
+              </div>
+            )}
+
             <LazyImage
               src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
               alt={`#${ranking} - ${movie.title}`}
