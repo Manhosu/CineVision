@@ -1210,14 +1210,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
             `✅ *Pagamento Confirmado!*\n\n` +
             `🎬 *${contentTitle}*\n` +
             `💰 Valor: R$ ${priceText}\n\n` +
-            `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.`,
+            `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n` +
+            `🛍 Para realizar novas compras no aplicativo, digite /start`,
             {
               parse_mode: 'Markdown',
               reply_markup: { inline_keyboard: buttons },
             }
           );
         } else {
-          await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.', {
+          await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.\n\n🛍 Para realizar novas compras no aplicativo, digite /start', {
             parse_mode: 'Markdown'
           });
         }
@@ -1297,7 +1298,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
                 `✅ *Pagamento Confirmado!*\n\n` +
                 `🎬 *${contentTitle}*\n` +
                 `💰 Valor: R$ ${priceText}\n\n` +
-                `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.`,
+                `Seu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n` +
+                `🛍 Para realizar novas compras no aplicativo, digite /start`,
                 {
                   parse_mode: 'Markdown',
                   reply_markup: { inline_keyboard: btns },
@@ -1653,7 +1655,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           '✅ *Pagamento Confirmado!*\n\n' +
           '🎬 Seu conteúdo está sendo preparado...\n' +
           'Você receberá os vídeos em instantes!\n\n' +
-          '💡 O processamento pode demorar alguns segundos.',
+          '💡 O processamento pode demorar alguns segundos.\n\n' +
+          '🛍 Para realizar novas compras no aplicativo, digite /start',
           { parse_mode: 'Markdown' }
         );
         return;
