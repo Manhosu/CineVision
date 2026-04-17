@@ -21,6 +21,28 @@ export class BroadcastService {
   }
 
   /**
+   * Fast count of users who can receive broadcasts (no data fetched)
+   */
+  async getBotUsersCount(): Promise<number> {
+    try {
+      const { count, error } = await this.supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .not('telegram_chat_id', 'is', null);
+
+      if (error) {
+        this.logger.error('Error counting bot users:', error);
+        return 0;
+      }
+
+      return count || 0;
+    } catch (error) {
+      this.logger.error('Error in getBotUsersCount:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Get all users who have started the bot (have telegram_chat_id)
    * Uses pagination to fetch ALL users (Supabase has max 1000 per request)
    */

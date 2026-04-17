@@ -97,11 +97,11 @@ export class BroadcastController {
   @Get('users-count')
   async getUsersCount() {
     try {
-      const users = await this.broadcastService.getAllBotUsers();
+      const total = await this.broadcastService.getBotUsersCount();
 
       return {
         success: true,
-        total_users: users.length,
+        total_users: total,
       };
     } catch (error) {
       this.logger.error('Error in getUsersCount:', error);
