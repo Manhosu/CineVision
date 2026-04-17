@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -144,29 +145,17 @@ export default function BroadcastPage() {
     reader.onload = (e) => setImagePreview(e.target?.result as string);
     reader.readAsDataURL(file);
 
-    // Upload to server
+    // Upload to Supabase Storage (same as posters/backdrops - always works)
     setUploadingImage(true);
     try {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-      const formData = new FormData();
-      formData.append('image', file);
+      const result = await uploadImageToSupabase(file, 'cinevision-capas', 'broadcast');
 
-      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/upload-image`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setImageUrl(data.image_url);
-        toast.success('Imagem carregada');
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        const errorMsg = errorData.message || `Erro ${res.status}`;
-        console.error('Upload error:', res.status, errorData);
-        toast.error(`Falha ao enviar imagem: ${errorMsg}`);
+      if (result.error || !result.publicUrl) {
+        toast.error(`Falha ao enviar imagem: ${result.error || 'Erro desconhecido'}`);
         setImagePreview('');
+      } else {
+        setImageUrl(result.publicUrl);
+        toast.success('Imagem carregada');
       }
     } catch (err: any) {
       console.error('Upload exception:', err);
