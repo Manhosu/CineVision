@@ -41,6 +41,7 @@ export default function PeopleManagePage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [sortOrder, setSortOrder] = useState<'name' | 'recent'>('name');
+  const [showWithoutPhoto, setShowWithoutPhoto] = useState(false);
 
   // Create / Edit form
   const [showForm, setShowForm] = useState(false);
@@ -226,7 +227,8 @@ export default function PeopleManagePage() {
     .filter((p) => {
       const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesTab = activeTab === 'all' || p.role === activeTab;
-      return matchesSearch && matchesTab;
+      const matchesPhoto = !showWithoutPhoto || !p.photo_url;
+      return matchesSearch && matchesTab && matchesPhoto;
     })
     .sort((a, b) => {
       if (sortOrder === 'recent') return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
@@ -358,6 +360,18 @@ export default function PeopleManagePage() {
               </button>
             ))}
           </div>
+
+          {/* Without Photo filter */}
+          <button
+            onClick={() => setShowWithoutPhoto(!showWithoutPhoto)}
+            className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors whitespace-nowrap border ${
+              showWithoutPhoto
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+                : 'bg-dark-800/50 text-gray-400 border-white/10 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Sem foto ({people.filter(p => !p.photo_url).length})
+          </button>
 
           {/* Sort */}
           <select

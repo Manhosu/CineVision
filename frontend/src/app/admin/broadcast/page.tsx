@@ -162,11 +162,15 @@ export default function BroadcastPage() {
         setImageUrl(data.image_url);
         toast.success('Imagem carregada');
       } else {
-        toast.error('Falha ao enviar imagem');
+        const errorData = await res.json().catch(() => ({}));
+        const errorMsg = errorData.message || `Erro ${res.status}`;
+        console.error('Upload error:', res.status, errorData);
+        toast.error(`Falha ao enviar imagem: ${errorMsg}`);
         setImagePreview('');
       }
-    } catch (err) {
-      toast.error('Erro ao enviar imagem');
+    } catch (err: any) {
+      console.error('Upload exception:', err);
+      toast.error(`Erro ao enviar imagem: ${err.message || 'Verifique sua conexão'}`);
       setImagePreview('');
     } finally {
       setUploadingImage(false);

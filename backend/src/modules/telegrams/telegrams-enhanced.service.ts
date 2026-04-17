@@ -767,14 +767,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.handleStartCommand(chatId, text, telegramUserId);
     } else if (text === '/catalogo' || text === '/catalog') {
       await this.showCatalog(chatId);
-    } else if (text === '/minhas-compras' || text === '/my-purchases') {
+    } else if (text === '/minhas_compras' || text === '/minhas-compras' || text === '/my-purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
-    } else if (text === '/meu-id' || text === '/my-id') {
+    } else if (text === '/meu_id' || text === '/meu-id' || text === '/my-id') {
       await this.handleMyIdCommand(chatId, telegramUserId);
     } else if (text === '/solicitar' || text === '/request') {
       await this.handleRequestCommand(chatId, telegramUserId);
-    } else if (text === '/minhas-solicitacoes' || text === '/my-requests') {
-      await this.handleMyRequestsCommand(chatId, telegramUserId);
+    } else if (text === '/suporte' || text === '/support') {
+      await this.handleSupportCommand(chatId);
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
     }
@@ -1030,6 +1030,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
       });
     } else if (data === 'request_new') {
       await this.handleRequestCommand(chatId, telegramUserId);
+    } else if (data === 'start' || data === 'menu') {
+      await this.handleStartCommand(chatId, '/start', telegramUserId);
     }
   }
 
@@ -1842,7 +1844,6 @@ export class TelegramsEnhancedService implements OnModuleInit {
 🎬 Acesse sua dashboard para ver todos os filmes e séries que você comprou!
 
 ✨ *Recursos da Dashboard:*
-• 🎥 Assistir online com player HD
 • 📥 Baixar conteúdo
 • 📊 Histórico de compras
 • 🔐 Acesso automático sem senha
@@ -1897,22 +1898,17 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    */
   private async handleRequestCommand(chatId: number, telegramUserId: number) {
     try {
-      const requestKey = `request_${chatId}`;
-
-      // Iniciar novo processo de solicitação
-      this.pendingContentRequests.set(requestKey, {
-        chat_id: chatId,
-        telegram_user_id: telegramUserId,
-        step: 'title',
-        data: {},
-        timestamp: Date.now(),
-      });
-
       await this.sendMessage(chatId,
-        `📝 **Solicitar Conteúdo**\n\n` +
-        `Por favor, digite o nome do filme ou série que você gostaria de assistir:\n\n` +
-        `💡 _Exemplo: Superman 2025, Breaking Bad, etc._`,
-        { parse_mode: 'Markdown' }
+        `📝 *Solicitar Conteúdo*\n\nPara solicitar um filme ou série, entre em contato diretamente com nosso suporte:\n\n👇 Clique no botão abaixo:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📩 Solicitar Conteúdo', url: 'https://t.me/m/YAU1-zMrZDcx' }],
+              [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
+            ],
+          },
+        }
       );
     } catch (error) {
       this.logger.error('Error in handleRequestCommand:', error);
@@ -2129,26 +2125,21 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   }
 
   private async handleHelpCommand(chatId: number) {
-    const helpMessage = `🤖 **Comandos Disponíveis:**
+    const helpMessage = `🤖 *Comandos Disponíveis:*
 
 /start - Iniciar o bot
 /catalogo - Ver filmes disponíveis
-/minhas-compras - Ver suas compras
+/minhas\\_compras - Ver suas compras
 /solicitar - Solicitar filme ou série
-/minhas-solicitacoes - Ver suas solicitações
-/meu-id - Ver seu ID do Telegram
+/meu\\_id - Ver seu ID do Telegram
+/suporte - Falar com o suporte
 /ajuda - Mostrar esta ajuda
 
-💡 **Como funciona:**
+💡 *Como funciona:*
 1️⃣ Escolha um filme do catálogo
-2️⃣ Sua conta é criada automaticamente usando seu ID do Telegram
+2️⃣ Sua conta é criada automaticamente
 3️⃣ Escolha o método de pagamento (PIX ou Cartão)
 4️⃣ Receba o filme aqui no chat e no dashboard!
-
-🔐 **Segurança:**
-• Não precisa criar login ou senha
-• Seu ID do Telegram funciona como login automático
-• Todas as compras ficam vinculadas ao seu perfil
 
 🎬 Aproveite nosso catálogo!`;
 
@@ -2161,6 +2152,21 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         ],
       },
     });
+  }
+
+  private async handleSupportCommand(chatId: number) {
+    await this.sendMessage(chatId,
+      `🛟 *Suporte CineVision*\n\nPrecisa de ajuda? Fale diretamente com nosso suporte:\n\n👇 Clique no botão abaixo:`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📩 Falar com Suporte', url: 'https://t.me/CineVisionOfc' }],
+            [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
+          ],
+        },
+      }
+    );
   }
 
   // Helper methods
