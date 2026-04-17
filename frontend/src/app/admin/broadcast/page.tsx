@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import {
-  PaperAirplaneIcon,
-  LinkIcon,
-  UsersIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ArrowLeftIcon,
-  HomeIcon,
-} from '@heroicons/react/24/outline';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
+interface BroadcastProgress {
+  id: string;
+  status: 'sending' | 'completed' | 'failed';
+  total_users: number;
+  successful_sends: number;
+  failed_sends: number;
+  progress_percent: number;
+}
 
 interface BroadcastHistory {
   id: string;
@@ -21,640 +23,587 @@ interface BroadcastHistory {
   button_text?: string;
   button_url?: string;
   recipients_count: number;
+  total_users?: number;
+  successful_sends?: number;
+  failed_sends?: number;
+  status?: string;
   sent_at: string;
-  recipient_telegram_ids?: string;
 }
 
-interface TelegramUser {
-  telegram_id: string;
-  name?: string;
-  telegram_username?: string;
+function getHeaders() {
+  const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
 }
 
 export default function BroadcastPage() {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const [mounted, setMounted] = useState(false);
+  const { isLoading: authLoading } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Form state
   const [messageText, setMessageText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [buttons, setButtons] = useState([{ text: '', url: '' }]);
+  const [sendMode, setSendMode] = useState<'all' | 'specific'>('all');
+  const [telegramIds, setTelegramIds] = useState('');
+
+  // Data state
   const [usersCount, setUsersCount] = useState(0);
   const [isSending, setIsSending] = useState(false);
+  const [activeBroadcast, setActiveBroadcast] = useState<BroadcastProgress | null>(null);
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // Send mode: 'specific' or 'all'
-  const [sendMode, setSendMode] = useState<'specific' | 'all'>('all');
-  const [telegramIds, setTelegramIds] = useState('');
-  const [allUsers, setAllUsers] = useState<TelegramUser[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  // Multiple inline buttons support (up to 3)
-  const [buttons, setButtons] = useState([
-    { text: '', url: '' },
-    { text: '', url: '' },
-    { text: '', url: '' },
-  ]);
-
-  // Mark component as mounted
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Debug localStorage tokens
+  // Load initial data
   useEffect(() => {
     if (!mounted) return;
-
-    console.log('=== BROADCAST PAGE LOADED ===');
-    console.log('access_token:', localStorage.getItem('access_token') ? 'EXISTS' : 'NOT FOUND');
-    console.log('auth_token:', localStorage.getItem('auth_token') ? 'EXISTS' : 'NOT FOUND');
-    console.log('user:', localStorage.getItem('user') ? 'EXISTS' : 'NOT FOUND');
-    console.log('============================');
-  }, [mounted]);
-
-  // Load users count - NO AUTH REDIRECT HERE
-  // User coming from /admin is already verified as admin
-  useEffect(() => {
-    if (!mounted) return;
-
-    // Check if has token, if yes, try to load data
     const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
     if (token) {
       fetchUsersCount();
-      fetchAllUsers();
-      fetchBroadcastHistory();
-    } else {
-      console.error('No token found in localStorage - cannot load data');
+      fetchHistory();
     }
   }, [mounted]);
 
+  // Poll broadcast progress
+  useEffect(() => {
+    if (!activeBroadcast || activeBroadcast.status !== 'sending') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/admin/broadcast/progress/${activeBroadcast.id}`, {
+          headers: getHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setActiveBroadcast(data);
+          if (data.status !== 'sending') {
+            clearInterval(interval);
+            if (data.status === 'completed') {
+              toast.success(`Broadcast concluído! ${data.successful_sends} enviados com sucesso.`);
+            } else {
+              toast.error(`Broadcast falhou. ${data.successful_sends} enviados, ${data.failed_sends} falharam.`);
+            }
+            fetchHistory();
+          }
+        }
+      } catch (err) {
+        console.error('Error polling progress:', err);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [activeBroadcast?.id, activeBroadcast?.status]);
+
   const fetchUsersCount = async () => {
     try {
-      // Try access_token first, then fallback to auth_token
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-
-      console.log('Fetching users count with token:', token ? 'Token exists' : 'NO TOKEN');
-
-      if (!token) {
-        console.error('No access token found in localStorage');
-        toast.error('Token não encontrado. Por favor, faça login novamente.');
-        return;
-      }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/users-count`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      console.log('Users count response status:', response.status);
-
-      if (response.status === 401) {
-        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
-        return;
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Users count data:', data);
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/users-count`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
         setUsersCount(data.total_users || 0);
-      } else {
-        console.error('Failed to fetch users count:', response.status);
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Error data:', errorData);
       }
-    } catch (error) {
-      console.error('Error fetching users count:', error);
+    } catch (err) {
+      console.error('Error fetching users count:', err);
     }
   };
 
-  const fetchAllUsers = async () => {
-    try {
-      setLoadingUsers(true);
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-
-      if (!token) {
-        console.error('No access token found in localStorage');
-        return;
-      }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/users-list`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.status === 401) {
-        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
-        return;
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        setAllUsers(data.users || []);
-      } else {
-        console.error('Failed to fetch users list:', response.status);
-      }
-    } catch (error) {
-      console.error('Error fetching users list:', error);
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
-
-  const fetchBroadcastHistory = async () => {
+  const fetchHistory = async () => {
     try {
       setLoadingHistory(true);
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-
-      console.log('Fetching broadcast history with token:', token ? 'Token exists' : 'NO TOKEN');
-
-      if (!token) {
-        console.error('No access token found in localStorage');
-        return;
-      }
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/history?limit=10`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      console.log('Broadcast history response status:', response.status);
-
-      if (response.status === 401) {
-        toast.error('Sessão expirada. Por favor, faça logout e login novamente.');
-        return;
-      }
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Broadcast history data:', data);
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/history?limit=10`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
         setHistory(data.broadcasts || []);
-      } else {
-        console.error('Failed to fetch broadcast history:', response.status);
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Error data:', errorData);
       }
-    } catch (error) {
-      console.error('Error fetching broadcast history:', error);
+    } catch (err) {
+      console.error('Error fetching history:', err);
     } finally {
       setLoadingHistory(false);
     }
   };
 
-
-  const handleSendBroadcast = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!messageText.trim()) {
-      toast.error('A mensagem não pode estar vazia');
+  const handleImageUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Imagem muito grande (máx. 10MB)');
       return;
     }
 
-    // Determine recipients
-    let recipientIds: string[] = [];
-    if (sendMode === 'all') {
-      recipientIds = allUsers.map(u => u.telegram_id);
-      if (recipientIds.length === 0) {
-        toast.error('Nenhum usuário encontrado');
-        return;
+    // Show local preview
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+
+    // Upload to server
+    setUploadingImage(true);
+    try {
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/upload-image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setImageUrl(data.image_url);
+        toast.success('Imagem carregada');
+      } else {
+        toast.error('Falha ao enviar imagem');
+        setImagePreview('');
       }
+    } catch (err) {
+      toast.error('Erro ao enviar imagem');
+      setImagePreview('');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setImageUrl('');
+    setImagePreview('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const addButton = () => {
+    if (buttons.length < 3) {
+      setButtons([...buttons, { text: '', url: '' }]);
+    }
+  };
+
+  const removeButton = (index: number) => {
+    setButtons(buttons.filter((_, i) => i !== index));
+  };
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!messageText.trim()) {
+      toast.error('Escreva a mensagem');
+      return;
+    }
+
+    // Get recipient IDs
+    let recipientIds: string[];
+    if (sendMode === 'all') {
+      recipientIds = ['all'];
     } else {
-      recipientIds = telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id);
+      recipientIds = telegramIds.split(',').map(id => id.trim()).filter(Boolean);
       if (recipientIds.length === 0) {
         toast.error('Adicione pelo menos um Telegram ID');
         return;
       }
     }
 
-    // Confirm before sending
-    const confirmMessage = sendMode === 'all'
-      ? `🚨 ATENÇÃO! Tem certeza que deseja enviar esta mensagem para TODOS OS ${recipientIds.length} usuários?\n\nEsta ação não pode ser desfeita!`
-      : `Tem certeza que deseja enviar esta mensagem para ${recipientIds.length} usuário(s)?`;
+    const targetCount = sendMode === 'all' ? usersCount : recipientIds.length;
+    if (!confirm(`Enviar para ${targetCount} usuário(s)?\n\nEsta ação não pode ser desfeita.`)) return;
 
-    if (!confirm(confirmMessage)) {
-      return;
-    }
-
+    setIsSending(true);
     try {
-      setIsSending(true);
-
-      // Get auth token
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-
-      if (!token) {
-        throw new Error('Token de autenticação não encontrado. Por favor, faça logout e login novamente.');
-      }
-
-      // Filter buttons that have both text and URL
       const validButtons = buttons.filter(b => b.text.trim() && b.url.trim());
-
       const payload: any = {
         message_text: messageText,
         telegram_ids: recipientIds,
       };
-
-      // Add buttons if any are valid
+      if (imageUrl) payload.image_url = imageUrl;
       if (validButtons.length > 0) {
-        payload.inline_buttons = validButtons.map(b => ({
-          text: b.text.trim(),
-          url: b.url.trim(),
-        }));
+        payload.inline_buttons = validButtons.map(b => ({ text: b.text.trim(), url: b.url.trim() }));
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/broadcast/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/send`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(payload),
+      });
 
-      if (response.status === 401) {
-        throw new Error('Sessão expirada. Por favor, faça logout e login novamente.');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Falha ao enviar');
       }
 
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || 'Falha ao enviar broadcast');
-      }
+      const result = await res.json();
+      toast.success(`Broadcast iniciado para ${result.total_users} usuários`);
 
-      const result = await response.json();
-
-      toast.success(
-        `Broadcast enviado! ${result.successful_sends} de ${result.total_users} mensagens enviadas com sucesso.`
-      );
+      // Start polling progress
+      setActiveBroadcast({
+        id: result.broadcast_id,
+        status: 'sending',
+        total_users: result.total_users,
+        successful_sends: 0,
+        failed_sends: 0,
+        progress_percent: 0,
+      });
 
       // Clear form
       setMessageText('');
-      setButtons([
-        { text: '', url: '' },
-        { text: '', url: '' },
-        { text: '', url: '' },
-      ]);
+      removeImage();
+      setButtons([{ text: '', url: '' }]);
       setTelegramIds('');
-
-      // Refresh history
-      fetchBroadcastHistory();
-    } catch (error: any) {
-      console.error('Error sending broadcast:', error);
-      toast.error(error.message || 'Erro ao enviar broadcast');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao enviar');
     } finally {
       setIsSending(false);
     }
   };
 
-  // Show loading only briefly during initial mount
+  // Format message preview (Markdown-like)
+  const formatPreview = (text: string) => {
+    return text
+      .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+      .replace(/_([^_]+)_/g, '<i>$1</i>')
+      .replace(/\n/g, '<br/>');
+  };
+
   if (!mounted || authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-500" />
       </div>
     );
   }
 
-  // No auth check here - user coming from /admin is already verified
+  const validButtonsCount = buttons.filter(b => b.text.trim() && b.url.trim()).length;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-6">
+      <div className="max-w-6xl mx-auto">
+
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-red-500 via-red-600 to-red-700 bg-clip-text text-transparent mb-2">
-                Marketing via Telegram
-              </h1>
-              <p className="text-gray-400 text-lg">
-                Envie mensagens de marketing para usuários do Telegram com botões personalizados
-              </p>
-            </div>
-
-            {/* Navigation Buttons */}
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.push('/admin')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
-              >
-                <ArrowLeftIcon className="w-5 h-5" />
-                Voltar
-              </button>
-
-              <button
-                onClick={() => router.push('/')}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"
-              >
-                <HomeIcon className="w-5 h-5" />
-                Home
-              </button>
-            </div>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Marketing Telegram</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {usersCount} usuários disponíveis
+            </p>
           </div>
+          <button
+            onClick={() => router.push('/admin')}
+            className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+          >
+            Voltar
+          </button>
         </div>
 
-        {/* Users Count Card */}
-        <div className="mb-6">
-          <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 group overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-700 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
-
-            <div className="relative z-10 flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="p-4 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-700 shadow-lg">
-                  <UsersIcon className="w-8 h-8 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-400">Usuários cadastrados</p>
-                  <p className="text-3xl font-bold text-white">{usersCount}</p>
-                </div>
+        {/* Progress Bar (when sending) */}
+        {activeBroadcast && (
+          <div className="mb-6 bg-[#111] rounded-xl border border-gray-800 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                {activeBroadcast.status === 'sending' ? (
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                ) : activeBroadcast.status === 'completed' ? (
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                ) : (
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                )}
+                <span className="text-sm font-medium text-white">
+                  {activeBroadcast.status === 'sending' ? 'Enviando...' :
+                   activeBroadcast.status === 'completed' ? 'Concluído' : 'Falhou'}
+                </span>
               </div>
-              <button
-                onClick={fetchUsersCount}
-                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 rounded-lg transition-colors text-sm font-medium"
-              >
-                Atualizar
-              </button>
+              <span className="text-sm text-gray-400">
+                {activeBroadcast.successful_sends} / {activeBroadcast.total_users}
+                {activeBroadcast.failed_sends > 0 && (
+                  <span className="text-red-400 ml-2">({activeBroadcast.failed_sends} falhas)</span>
+                )}
+              </span>
             </div>
+            <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  activeBroadcast.status === 'completed' ? 'bg-green-500' :
+                  activeBroadcast.status === 'failed' ? 'bg-red-500' :
+                  'bg-blue-500'
+                }`}
+                style={{ width: `${activeBroadcast.progress_percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-2 text-right">{activeBroadcast.progress_percent}%</p>
           </div>
-        </div>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Form */}
-          <div className="lg:col-span-2">
-            <form onSubmit={handleSendBroadcast} className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 space-y-6">
-              <h2 className="text-2xl font-bold text-white flex items-center">
-                <PaperAirplaneIcon className="w-6 h-6 mr-2 text-red-500" />
-                Compor Mensagem
-              </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-              {/* Send Mode Toggle */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-3">
-                  Destinatários *
-                </label>
-                <div className="flex items-center gap-4 p-4 bg-gray-900/30 rounded-lg border border-gray-700/50">
-                  <button
-                    type="button"
-                    onClick={() => setSendMode('all')}
-                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                      sendMode === 'all'
-                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30'
-                        : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    <UsersIcon className="w-5 h-5 inline-block mr-2" />
-                    Todos os Usuários ({allUsers.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSendMode('specific')}
-                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-all ${
-                      sendMode === 'specific'
-                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30'
-                        : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    IDs Específicos
-                  </button>
-                </div>
-              </div>
+          {/* Form — 3/5 */}
+          <form onSubmit={handleSend} className="lg:col-span-3 space-y-5">
 
-              {/* Specific IDs Input (if sendMode === 'specific') */}
-              {sendMode === 'specific' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Telegram IDs *
-                  </label>
-                  <textarea
-                    value={telegramIds}
-                    onChange={(e) => setTelegramIds(e.target.value)}
-                    placeholder="Digite os Telegram IDs separados por vírgula. Ex: 123456789, 987654321"
-                    rows={3}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                    required
-                  />
-                  <p className="mt-2 text-xs text-gray-500">
-                    Separe múltiplos IDs com vírgula
-                  </p>
-                </div>
-              )}
-
-              {/* All Users List (if sendMode === 'all') */}
-              {sendMode === 'all' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Usuários que receberão a mensagem
-                  </label>
-                  <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-4 max-h-48 overflow-y-auto">
-                    {loadingUsers ? (
-                      <div className="text-center py-4">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-500 mx-auto"></div>
-                      </div>
-                    ) : allUsers.length === 0 ? (
-                      <p className="text-sm text-gray-500 text-center py-4">
-                        Nenhum usuário encontrado
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        {allUsers.map((user, index) => (
-                          <div
-                            key={user.telegram_id}
-                            className="flex items-center gap-2 text-xs text-gray-400 bg-gray-800/30 rounded px-2 py-1"
-                          >
-                            <span className="text-gray-600">#{index + 1}</span>
-                            <span className="font-mono text-gray-300">{user.telegram_id}</span>
-                            {user.name && (
-                              <span className="text-gray-500 truncate">
-                                - {user.name}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-yellow-500 flex items-center">
-                    ⚠️ Envio em massa para {allUsers.length} usuários
-                  </p>
-                </div>
-              )}
-
-              {/* Message Text */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Mensagem *
-                </label>
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="Digite a mensagem que será enviada aos usuários..."
-                  rows={6}
-                  maxLength={4000}
-                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
-                  required
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  {messageText.length}/4000 caracteres • Suporta Markdown
-                </p>
-              </div>
-
-              {/* Inline Buttons Configuration */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2 flex items-center">
-                  <LinkIcon className="w-4 h-4 mr-2" />
-                  Botões Inline (Opcional)
-                </label>
-                <p className="text-xs text-gray-500 mb-3">
-                  Adicione até 3 botões que serão exibidos abaixo da mensagem
-                </p>
-                <div className="space-y-3">
-                  {buttons.map((button, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-gray-900/30 rounded-lg border border-gray-700/50">
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">
-                          Botão {index + 1} - Texto
-                        </label>
-                        <input
-                          type="text"
-                          value={button.text}
-                          onChange={(e) => {
-                            const newButtons = [...buttons];
-                            newButtons[index].text = e.target.value;
-                            setButtons(newButtons);
-                          }}
-                          placeholder={`Ex: ${index === 0 ? 'Acessar Site' : index === 1 ? 'Ver Catálogo' : 'Suporte'}`}
-                          maxLength={50}
-                          className="w-full bg-gray-900/50 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">
-                          Botão {index + 1} - URL
-                        </label>
-                        <input
-                          type="url"
-                          value={button.url}
-                          onChange={(e) => {
-                            const newButtons = [...buttons];
-                            newButtons[index].url = e.target.value;
-                            setButtons(newButtons);
-                          }}
-                          placeholder="https://..."
-                          className="w-full bg-gray-900/50 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Send Button */}
-              <div className="flex items-center justify-between pt-4 border-t border-gray-700">
-                <p className="text-sm text-gray-400">
-                  {sendMode === 'all' ? (
-                    <>Enviando para <strong className="text-white">{allUsers.length}</strong> usuário(s)</>
-                  ) : telegramIds.trim() ? (
-                    <>Enviando para <strong className="text-white">{telegramIds.split(',').map(id => String(id || '').trim()).filter(id => id).length}</strong> ID(s) específico(s)</>
-                  ) : (
-                    <>Nenhum ID especificado</>
-                  )}
-                </p>
+            {/* Recipients */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Destinatários</label>
+              <div className="flex gap-2">
                 <button
-                  type="submit"
-                  disabled={isSending || (sendMode === 'specific' && !telegramIds.trim()) || (sendMode === 'all' && allUsers.length === 0)}
-                  className="px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-300 shadow-lg hover:shadow-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none flex items-center space-x-2"
+                  type="button"
+                  onClick={() => setSendMode('all')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    sendMode === 'all'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  }`}
                 >
-                  {isSending ? (
-                    <>
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      <span>Enviando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <PaperAirplaneIcon className="w-5 h-5" />
-                      <span>Enviar Marketing</span>
-                    </>
-                  )}
+                  Todos ({usersCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSendMode('specific')}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    sendMode === 'specific'
+                      ? 'bg-red-600 text-white'
+                      : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                  }`}
+                >
+                  IDs Específicos
                 </button>
               </div>
-            </form>
-          </div>
+              {sendMode === 'specific' && (
+                <textarea
+                  value={telegramIds}
+                  onChange={(e) => setTelegramIds(e.target.value)}
+                  placeholder="IDs separados por vírgula: 123456, 789012..."
+                  rows={2}
+                  className="w-full mt-3 bg-black/30 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                />
+              )}
+            </div>
 
-          {/* Sidebar - History */}
-          <div className="lg:col-span-1">
-            <div className="relative bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 sticky top-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-white flex items-center">
-                  <ClockIcon className="w-5 h-5 mr-2 text-red-500" />
-                  Histórico
-                </h2>
+            {/* Image Upload */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">
+                Imagem (opcional)
+              </label>
+              {imagePreview ? (
+                <div className="relative">
+                  <img src={imagePreview} alt="Preview" className="w-full max-h-48 object-cover rounded-lg" />
+                  <button
+                    type="button"
+                    onClick={removeImage}
+                    className="absolute top-2 right-2 w-7 h-7 bg-black/70 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition-colors"
+                  >
+                    ✕
+                  </button>
+                  {uploadingImage && (
+                    <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white" />
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <button
-                  onClick={fetchBroadcastHistory}
-                  className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-8 border-2 border-dashed border-gray-700 rounded-lg hover:border-gray-600 transition-colors flex flex-col items-center gap-2 text-gray-500 hover:text-gray-400"
+                >
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm">Clique para adicionar imagem</span>
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleImageUpload(file);
+                }}
+              />
+            </div>
+
+            {/* Message */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Mensagem</label>
+              <textarea
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                placeholder="Escreva sua mensagem aqui...&#10;&#10;Use *negrito* e _itálico_ para formatação"
+                rows={6}
+                maxLength={4000}
+                className="w-full bg-black/30 border border-gray-700/50 rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500/50 resize-none"
+                required
+              />
+              <p className="text-xs text-gray-600 mt-2 text-right">{messageText.length}/4000</p>
+            </div>
+
+            {/* Inline Buttons */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Botões (opcional)</label>
+                {buttons.length < 3 && (
+                  <button
+                    type="button"
+                    onClick={addButton}
+                    className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    + Adicionar
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {buttons.map((btn, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={btn.text}
+                      onChange={(e) => {
+                        const next = [...buttons];
+                        next[i].text = e.target.value;
+                        setButtons(next);
+                      }}
+                      placeholder="Texto do botão"
+                      maxLength={50}
+                      className="flex-1 bg-black/30 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                    />
+                    <input
+                      type="url"
+                      value={btn.url}
+                      onChange={(e) => {
+                        const next = [...buttons];
+                        next[i].url = e.target.value;
+                        setButtons(next);
+                      }}
+                      placeholder="https://..."
+                      className="flex-1 bg-black/30 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-red-500/50"
+                    />
+                    {buttons.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeButton(i)}
+                        className="px-2 text-gray-600 hover:text-red-400 transition-colors"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Send Button */}
+            <button
+              type="submit"
+              disabled={isSending || !messageText.trim() || uploadingImage || (activeBroadcast?.status === 'sending')}
+              className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
+            >
+              {isSending ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  Enviar Broadcast
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Sidebar — 2/5: Preview + History */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* Preview */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider mb-3">Preview</label>
+              <div className="bg-[#1a2332] rounded-xl overflow-hidden max-w-sm mx-auto">
+                {/* Image preview */}
+                {imagePreview && (
+                  <img src={imagePreview} alt="Preview" className="w-full max-h-40 object-cover" />
+                )}
+                {/* Message */}
+                <div className="p-3">
+                  {messageText ? (
+                    <p
+                      className="text-sm text-white leading-relaxed break-words"
+                      dangerouslySetInnerHTML={{ __html: formatPreview(messageText) }}
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-600 italic">Sua mensagem aparecerá aqui...</p>
+                  )}
+                </div>
+                {/* Buttons preview */}
+                {validButtonsCount > 0 && (
+                  <div className="px-3 pb-3 space-y-1">
+                    {buttons.filter(b => b.text.trim()).map((btn, i) => (
+                      <div
+                        key={i}
+                        className="w-full py-2 bg-[#2b5278] text-[#64b5ef] text-sm text-center rounded font-medium"
+                      >
+                        {btn.text}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Timestamp */}
+                <div className="px-3 pb-2 text-right">
+                  <span className="text-[10px] text-gray-500">
+                    {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* History */}
+            <div className="bg-[#111] rounded-xl border border-gray-800 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Histórico</label>
+                <button
+                  onClick={fetchHistory}
+                  className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
                 >
                   Atualizar
                 </button>
               </div>
-
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
                 {loadingHistory ? (
-                  <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
+                  <div className="text-center py-6">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-500 mx-auto" />
                   </div>
                 ) : history.length === 0 ? (
-                  <div className="text-center py-8">
-                    <ClockIcon className="w-12 h-12 text-gray-600 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">
-                      Nenhum broadcast enviado ainda
-                    </p>
-                  </div>
+                  <p className="text-center text-sm text-gray-600 py-6">Nenhum envio ainda</p>
                 ) : (
                   history.map((item) => (
-                    <div
-                      key={item.id}
-                      className="bg-gray-900/50 rounded-lg p-4 border border-gray-700/50 hover:border-gray-600 transition-all duration-300 hover:scale-105"
-                    >
-                      <p className="text-sm text-gray-300 line-clamp-2 mb-3">
-                        {item.message_text}
-                      </p>
-                      <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                        <span className="flex items-center">
-                          <CheckCircleIcon className="w-3 h-3 mr-1 text-green-500" />
-                          {item.recipients_count} enviados
+                    <div key={item.id} className="bg-black/30 rounded-lg p-3 border border-gray-800/50">
+                      {item.image_url && (
+                        <img src={item.image_url} alt="" className="w-full h-20 object-cover rounded mb-2" />
+                      )}
+                      <p className="text-xs text-gray-300 line-clamp-2 mb-2">{item.message_text}</p>
+                      <div className="flex items-center justify-between text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1">
+                          {item.status === 'completed' ? (
+                            <span className="text-green-500">●</span>
+                          ) : item.status === 'sending' ? (
+                            <span className="text-blue-500 animate-pulse">●</span>
+                          ) : item.status === 'failed' ? (
+                            <span className="text-red-500">●</span>
+                          ) : (
+                            <span className="text-gray-500">●</span>
+                          )}
+                          {item.successful_sends ?? item.recipients_count} enviados
+                          {item.failed_sends ? ` · ${item.failed_sends} falhas` : ''}
                         </span>
                         <span>
                           {new Date(item.sent_at).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                            day: '2-digit', month: '2-digit',
+                            hour: '2-digit', minute: '2-digit',
                           })}
                         </span>
                       </div>
-                      {item.recipient_telegram_ids && (
-                        <div className="text-xs text-gray-600 mb-2 bg-gray-800/50 rounded px-2 py-1">
-                          <span className="text-gray-500">IDs: </span>
-                          <span className="text-gray-400 font-mono">
-                            {item.recipient_telegram_ids}
-                          </span>
-                        </div>
-                      )}
-                      {item.button_text && (
-                        <div className="flex items-center text-xs text-gray-600">
-                          <LinkIcon className="w-3 h-3 mr-1" />
-                          {item.button_text}
-                        </div>
-                      )}
                     </div>
                   ))
                 )}
