@@ -340,8 +340,12 @@ export class BroadcastService {
     users: any[],
     broadcastData: SendBroadcastDto,
   ): Promise<void> {
-    const BATCH_SIZE = 20;
-    const BATCH_DELAY_MS = 10000;
+    // Telegram safe limits: max 30 msg/sec, but recommended ~25/sec to avoid 429
+    // 25 users per batch + 50ms between each message + 3s between batches
+    // = ~1.5 sec per batch = ~16 msg/sec (well under 30 limit)
+    const BATCH_SIZE = 25;
+    const BATCH_DELAY_MS = 3000;
+    const MESSAGE_DELAY_MS = 50; // delay between individual messages within a batch
 
     let successCount = 0;
     let failCount = 0;
@@ -365,7 +369,8 @@ export class BroadcastService {
 
         this.logger.log(`[Broadcast ${broadcastId}] Processing batch ${batchNum}/${totalBatches} (${batch.length} users)`);
 
-        for (const user of batch) {
+        for (let j = 0; j < batch.length; j++) {
+          const user = batch[j];
           if (!user.telegram_chat_id) {
             failCount++;
             failedTelegramIds.push(String(user.telegram_id || 'unknown'));
@@ -375,7 +380,6 @@ export class BroadcastService {
           let success: boolean;
 
           if (hasImage) {
-            // Send photo with caption
             success = await this.sendPhotoToUser(
               user.telegram_chat_id,
               broadcastData.image_url!,
@@ -383,7 +387,6 @@ export class BroadcastService {
               buttonOptions,
             );
           } else {
-            // Send text message
             success = await this.sendMessageToUser(
               user.telegram_chat_id,
               broadcastData.message_text,
@@ -396,11 +399,12 @@ export class BroadcastService {
           } else {
             failCount++;
             failedTelegramIds.push(String(user.telegram_id || 'unknown'));
-
-            // Check if user blocked the bot - mark as inactive
-            // This is handled inside the catch of send methods,
-            // but we also try to mark here based on failure
             await this.handleBlockedUser(user.telegram_chat_id, user.telegram_id);
+          }
+
+          // Small delay between individual messages to stay under rate limit
+          if (j < batch.length - 1) {
+            await this.sleep(MESSAGE_DELAY_MS);
           }
         }
 
