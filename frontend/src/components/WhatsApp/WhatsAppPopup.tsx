@@ -15,11 +15,20 @@ export function WhatsAppPopup() {
     const dismissed = sessionStorage.getItem(DISMISS_KEY);
     if (dismissed) return;
 
-    const timer = setTimeout(() => {
-      setIsVisible(true);
-    }, SHOW_DELAY_MS);
+    // Wait for splash screen to finish before showing popup
+    const checkSplash = () => {
+      const splashDone = sessionStorage.getItem('splash_shown');
+      if (splashDone) {
+        const timer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
+        return () => clearTimeout(timer);
+      }
+      // Splash still showing — check again shortly
+      const retry = setTimeout(checkSplash, 500);
+      return () => clearTimeout(retry);
+    };
 
-    return () => clearTimeout(timer);
+    const cleanup = checkSplash();
+    return () => { if (cleanup) cleanup(); };
   }, []);
 
   const handleDismiss = () => {

@@ -86,62 +86,35 @@ function HomePageContent() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        // Fetch real data from API
-        const [featuredRes, top10Res, top10SeriesRes, releasesRes, allMoviesRes, allSeriesRes, categoriesRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/content/featured?limit=5`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/top10/films`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/top10/series`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/releases?limit=20`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/movies?limit=20`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/series?limit=20`, {
-            cache: 'no-store',
-            headers
-          }),
-          fetch(`${API_URL}/api/v1/content/categories`, {
-            cache: 'no-store',
-            headers
-          })
-        ]);
-
-        if (!featuredRes.ok || !top10Res.ok || !top10SeriesRes.ok || !releasesRes.ok || !allMoviesRes.ok || !allSeriesRes.ok) {
-          throw new Error('Erro ao carregar dados da API');
-        }
-
-        const featuredData = await featuredRes.json();
-        const top10Films = await top10Res.json();
-        const top10Series = await top10SeriesRes.json();
-        const releasesData = await releasesRes.json();
-        const allMoviesData = await allMoviesRes.json();
-        const allSeriesData = await allSeriesRes.json();
+        // Fetch ALL data in a single parallel batch for maximum speed
+        // First, get categories to know which genres to fetch
+        const categoriesRes = await fetch(`${API_URL}/api/v1/content/categories`, { headers });
         const categories = categoriesRes.ok ? await categoriesRes.json() : [];
-
-        // Fetch content for each category (up to 8 categories, 15 items each)
         const activeCategories = (Array.isArray(categories) ? categories : [])
           .filter((c: any) => c.is_active !== false)
-          .slice(0, 8);
+          .slice(0, 6);
 
-        const genreResults = await Promise.all(
-          activeCategories.map((cat: any) =>
-            fetch(`${API_URL}/api/v1/content/movies?genre=${encodeURIComponent(cat.name)}&limit=15`, {
-              cache: 'no-store', headers
-            }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] }))
-          )
-        );
+        // Now fetch EVERYTHING in one single Promise.all — main content + all genres at once
+        const allFetches = await Promise.all([
+          fetch(`${API_URL}/api/v1/content/featured?limit=5`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetch(`${API_URL}/api/v1/content/top10/films`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetch(`${API_URL}/api/v1/content/top10/series`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetch(`${API_URL}/api/v1/content/releases?limit=20`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetch(`${API_URL}/api/v1/content/movies?limit=20`, { headers }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] })),
+          fetch(`${API_URL}/api/v1/content/series?limit=20`, { headers }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] })),
+          ...activeCategories.map((cat: any) =>
+            fetch(`${API_URL}/api/v1/content/movies?genre=${encodeURIComponent(cat.name)}&limit=15`, { headers })
+              .then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] }))
+          ),
+        ]);
+
+        const featuredData = allFetches[0];
+        const top10Films = allFetches[1];
+        const top10Series = allFetches[2];
+        const releasesData = allFetches[3];
+        const allMoviesData = allFetches[4];
+        const allSeriesData = allFetches[5];
+        const genreResults = allFetches.slice(6);
 
         // Use featured content for hero banner - API already returns only featured items
         const heroMoviesData = (Array.isArray(featuredData) ? featuredData.slice(0, 5) : []) as Movie[];
