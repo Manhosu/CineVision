@@ -9,6 +9,7 @@ import { Footer } from '@/components/Footer/Footer';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
 import { FlashPromotionBanner } from '@/components/FlashPromotion/FlashPromotionBanner';
 import { WhatsAppPopup } from '@/components/WhatsApp/WhatsAppPopup';
+import { useSplash } from '@/contexts/SplashContext';
 
 interface Movie {
   id: string;
@@ -61,6 +62,7 @@ function AutoLoginHandler() {
 
 function HomePageContent() {
   const router = useRouter();
+  const { notifyContentReady } = useSplash();
   const [isLoading, setIsLoading] = useState(true);
   const [hasFlashBanner, setHasFlashBanner] = useState(false);
   const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
@@ -230,7 +232,32 @@ function HomePageContent() {
                 const contentUrl = `${API_URL}/api/v1/purchases/user/${user.id}/content`;
                 console.log('🔍 Buscando conteúdos comprados:', contentUrl);
 
-                const contentRes = await fetch(contentUrl, { headers });
+                let contentRes = await fetch(contentUrl, { headers });
+
+                // If 401, try refreshing the token
+                if (contentRes.status === 401) {
+                  const refreshToken = localStorage.getItem('refresh_token');
+                  if (refreshToken && user.telegram_id) {
+                    try {
+                      const loginRes = await fetch(`${API_URL}/api/v1/auth/telegram-login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ telegram_id: user.telegram_id }),
+                      });
+                      if (loginRes.ok) {
+                        const loginData = await loginRes.json();
+                        localStorage.setItem('access_token', loginData.access_token);
+                        localStorage.setItem('refresh_token', loginData.refresh_token);
+                        localStorage.setItem('auth_token', loginData.access_token);
+                        headers['Authorization'] = `Bearer ${loginData.access_token}`;
+                        contentRes = await fetch(contentUrl, { headers });
+                        console.log('🔄 Token renovado com sucesso');
+                      }
+                    } catch (refreshErr) {
+                      console.error('Erro ao renovar token:', refreshErr);
+                    }
+                  }
+                }
 
                 if (contentRes.ok) {
                   const contentData = await contentRes.json();
@@ -270,12 +297,17 @@ function HomePageContent() {
                       }).slice(0, 20);
 
                       if (uniqueSuggestions.length > 0) {
-                        setContentSections(prev => [
-                          prev[0], // Top 10 Filmes
-                          prev[1], // Top 10 Séries
-                          { title: '👍 Sugestões para Você', type: 'latest' as const, movies: uniqueSuggestions, viewAllUrl: `/movies?genre=${encodeURIComponent(topGenres[0])}` },
-                          ...prev.slice(2),
-                        ].filter(Boolean));
+                        setContentSections(prev => {
+                          // Insert after the last top10 section, or at the beginning
+                          const lastTop10Idx = prev.reduce((acc, s, i) => s.type === 'top10' ? i : acc, -1);
+                          const insertIdx = lastTop10Idx + 1;
+                          const suggestion: ContentSection = { title: 'Sugestões para Você 👍', type: 'latest' as const, movies: uniqueSuggestions, viewAllUrl: `/movies?genre=${encodeURIComponent(topGenres[0])}` };
+                          return [
+                            ...prev.slice(0, insertIdx),
+                            suggestion,
+                            ...prev.slice(insertIdx),
+                          ];
+                        });
                       }
                     }
                   }
@@ -296,11 +328,12 @@ function HomePageContent() {
         setError('Erro ao carregar o conteúdo. Tente novamente mais tarde.');
       } finally {
         setIsLoading(false);
+        notifyContentReady();
       }
     }
 
     loadContent();
-  }, []);
+  }, [notifyContentReady]);
 
   const handleMovieClick = (movie: Movie) => {
     // Navigate to detail page based on content type
