@@ -1022,7 +1022,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
       // Gerar URL de pagamento Stripe
       const paymentUrl = await this.generatePaymentUrl(purchaseId, purchase.content);
 
-      await this.sendMessage(chatId, `💳 *Pagamento com Cartão*\n\n🎬 ${purchase.content.title}\n💰 Valor: R$ ${(purchase.amount_cents / 100).toFixed(2)}\n\nClique no botão abaixo para pagar:`, {
+      const content = purchase.content;
+      const originalPrice = content.price_cents;
+      const finalPrice = purchase.amount_cents;
+      const hasDiscount = finalPrice < originalPrice;
+      const priceText = hasDiscount
+        ? `~R$ ${(originalPrice / 100).toFixed(2)}~ *R$ ${(finalPrice / 100).toFixed(2)}* (${Math.round(((originalPrice - finalPrice) / originalPrice) * 100)}% OFF)`
+        : `R$ ${(finalPrice / 100).toFixed(2)}`;
+
+      await this.sendMessage(chatId, `💳 *Pagamento com Cartão*\n\n🎬 ${content.title}\n💰 Valor: ${priceText}\n\nClique no botão abaixo para pagar:`, {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
@@ -2414,8 +2422,8 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   async onModuleInit() {
     this.logger.log('🤖 Starting Telegram bot...');
 
-    // Use webhook mode if BACKEND_URL is available (production)
-    const backendUrl = this.configService.get('RENDER_EXTERNAL_URL') || this.configService.get('BACKEND_URL');
+    // Use webhook mode in production
+    const backendUrl = this.configService.get('BACKEND_URL') || this.configService.get('RENDER_EXTERNAL_URL') || (this.configService.get('NODE_ENV') === 'production' ? 'https://cinevisionn.onrender.com' : null);
     if (backendUrl) {
       // Webhook mode — no 409 conflicts, no duplicate messages
       const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;

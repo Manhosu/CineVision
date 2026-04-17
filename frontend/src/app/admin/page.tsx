@@ -91,8 +91,8 @@ export default function AdminDashboard() {
           recentUploads: 0,
           contentChange: contentData.contentChange || '0%',
           usersChange: usersData.usersChange || '0%',
-          requestsChange: requestsData.requestsChange || '0%',
-          viewsChange: contentData.viewsChange || '0%'
+          requestsChange: '0%',
+          viewsChange: '0%'
         });
 
         // Buscar conteúdos recentes para a lista

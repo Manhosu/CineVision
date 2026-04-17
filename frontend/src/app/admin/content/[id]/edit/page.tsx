@@ -277,7 +277,7 @@ export default function AdminContentEditPage() {
         duration_minutes: Number(durationMinutes),
         genres: selectedGenres, // Send as array, not string
         age_rating: rating.trim(), // Database column is age_rating, not rating
-        director: selectedDirectors.length > 0 ? selectedDirectors[0].name : director.trim(),
+        director: selectedDirectors.length > 0 ? selectedDirectors.map(d => d.name).join(', ') : director.trim(),
         cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : cast.trim(),
         trailer_url: trailerUrl.trim(),
         telegram_group_link: telegramGroupLink.trim(),
@@ -496,9 +496,8 @@ export default function AdminContentEditPage() {
                   value={selectedDirectors}
                   onChange={setSelectedDirectors}
                   role="director"
-                  label="Diretor"
+                  label="Diretor(es)"
                   placeholder="Buscar diretor..."
-                  single
                 />
 
                 <div>

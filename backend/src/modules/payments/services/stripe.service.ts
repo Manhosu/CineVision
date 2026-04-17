@@ -99,6 +99,9 @@ export class StripeService {
    * Create a Stripe Price for an existing product (used when price changes)
    */
   async createPrice(productId: string, unitAmount: number, currency = 'brl', metadata?: Record<string, string>): Promise<string> {
+    if (unitAmount < 50) {
+      throw new BadRequestException(`Valor mínimo do Stripe é R$0.50. Valor enviado: R$${(unitAmount / 100).toFixed(2)}`);
+    }
     const price = await this.stripe.prices.create({
       product: productId,
       unit_amount: unitAmount,

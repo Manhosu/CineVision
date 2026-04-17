@@ -213,7 +213,7 @@ export function RealtimeAnalytics() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Total Online */}
         <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border border-blue-500/30 rounded-xl p-6">
           <div className="flex items-center justify-between">
@@ -225,21 +225,6 @@ export function RealtimeAnalytics() {
             </div>
             <div className="w-14 h-14 bg-blue-500/20 rounded-full flex items-center justify-center">
               <Users className="w-8 h-8 text-blue-400" />
-            </div>
-          </div>
-        </div>
-
-        {/* Watching */}
-        <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 border border-green-500/30 rounded-xl p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-green-300 mb-1">Assistindo</p>
-              <p className="text-4xl font-bold text-white">
-                {stats?.total_watching || 0}
-              </p>
-            </div>
-            <div className="w-14 h-14 bg-green-500/20 rounded-full flex items-center justify-center">
-              <Film className="w-8 h-8 text-green-400" />
             </div>
           </div>
         </div>

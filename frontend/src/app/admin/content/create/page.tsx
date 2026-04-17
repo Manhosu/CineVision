@@ -179,7 +179,7 @@ export default function AdminContentCreatePage() {
         is_featured: formData.is_featured,
         is_release: formData.is_release,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
-        director: selectedDirectors.length > 0 ? selectedDirectors[0].name : (formData.director || undefined),
+        director: selectedDirectors.length > 0 ? selectedDirectors.map(d => d.name).join(', ') : (formData.director || undefined),
         cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : (formData.cast || undefined),
         release_year: formData.release_date ? new Date(formData.release_date).getFullYear() : undefined,
         duration_minutes: formData.duration_minutes || undefined,
@@ -778,9 +778,8 @@ export default function AdminContentCreatePage() {
                   value={selectedDirectors}
                   onChange={setSelectedDirectors}
                   role="director"
-                  label="Diretor"
+                  label="Diretor(es)"
                   placeholder="Buscar diretor..."
-                  single
                 />
 
                 <PeopleTagInput

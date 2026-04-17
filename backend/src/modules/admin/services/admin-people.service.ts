@@ -183,16 +183,19 @@ export class AdminPeopleService {
       }
     }
 
-    // Process director
+    // Process director(s) — may be comma-separated
     if (director?.trim()) {
-      const person = await this.findOrCreate(director.trim(), 'director');
-      if (person) {
-        inserts.push({
-          content_id: contentId,
-          person_id: person.id,
-          role: 'director',
-          display_order: 0,
-        });
+      const directors = director.split(',').map(d => d.trim()).filter(Boolean);
+      for (let i = 0; i < directors.length; i++) {
+        const person = await this.findOrCreate(directors[i], 'director');
+        if (person) {
+          inserts.push({
+            content_id: contentId,
+            person_id: person.id,
+            role: 'director',
+            display_order: i,
+          });
+        }
       }
     }
 
