@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function TelegramLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'blocked'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
@@ -33,6 +33,10 @@ function TelegramLoginContent() {
 
         if (!response.ok) {
           const error = await response.json();
+          if (error.message === 'ACCOUNT_BLOCKED') {
+            setStatus('blocked');
+            return;
+          }
           throw new Error(error.message || 'Falha na autenticação com Telegram');
         }
 
@@ -129,6 +133,25 @@ function TelegramLoginContent() {
               </h2>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                 Redirecionando você...
+              </p>
+            </>
+          )}
+
+          {status === 'blocked' && (
+            <>
+              <div className="mx-auto h-16 w-16 text-red-500">
+                <svg className="h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </div>
+              <h2 className="mt-6 text-3xl font-extrabold text-white">
+                Conta Bloqueada
+              </h2>
+              <p className="mt-3 text-gray-400">
+                Sua conta foi bloqueada e você não pode acessar a plataforma.
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                Entre em contato com o suporte para mais informações.
               </p>
             </>
           )}

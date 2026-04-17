@@ -128,6 +128,12 @@ export class AutoLoginService {
         throw new UnauthorizedException('User not found');
       }
 
+      // Check if user is blocked/banned
+      if (user.blocked === true || user.status === 'banned') {
+        this.logger.warn(`Blocked user attempted auto-login: ${user.id}`);
+        throw new UnauthorizedException('ACCOUNT_BLOCKED');
+      }
+
       // Generate JWT tokens
       const tokens = await this.generateJwtTokens(user);
 
@@ -217,6 +223,12 @@ export class AutoLoginService {
       if (userError || !user) {
         this.logger.error(`User not found for telegram_id: ${telegramId}`);
         throw new UnauthorizedException('User not found');
+      }
+
+      // Check if user is blocked/banned
+      if (user.blocked === true || user.status === 'banned') {
+        this.logger.warn(`Blocked user attempted login: ${user.id} (telegram_id: ${telegramId})`);
+        throw new UnauthorizedException('ACCOUNT_BLOCKED');
       }
 
       // Update user's last login timestamp

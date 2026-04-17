@@ -129,9 +129,15 @@ export function ContentRow({
                 fontSize: 'clamp(0.875rem, 3vw, 1.25rem)',
               }}
             >
-              {title}
+              {title.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/u, '')}
             </h2>
-            {isTop10 && <span className="text-lg">🔥</span>}
+            {/* Emoji from title or Top10 fire — always on the right */}
+            {(() => {
+              const emojiMatch = title.match(/^([\p{Emoji_Presentation}\p{Extended_Pictographic}])/u);
+              if (emojiMatch) return <span className="text-lg">{emojiMatch[1]}</span>;
+              if (isTop10) return <span className="text-lg">🔥</span>;
+              return null;
+            })()}
           </div>
         </div>
 

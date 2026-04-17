@@ -53,6 +53,12 @@ export class TelegramAuthSupabaseService {
       throw new UnauthorizedException('Failed to create or find user');
     }
 
+    // Check if user is blocked/banned
+    if (user.blocked === true || user.status === 'banned') {
+      this.logger.warn(`Blocked user attempted login: ${user.id} (telegram_id: ${telegramAuthData.id})`);
+      throw new UnauthorizedException('ACCOUNT_BLOCKED');
+    }
+
     // Generate JWT tokens
     const tokens = await this.generateTokens(user);
 

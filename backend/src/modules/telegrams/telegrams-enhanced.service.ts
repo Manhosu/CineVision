@@ -733,6 +733,23 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     this.logger.log(`📨 processMessage called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
 
+    // Check if user is blocked before processing any command
+    try {
+      const { data: userData } = await this.supabase
+        .from('users')
+        .select('blocked')
+        .eq('telegram_id', telegramUserId.toString())
+        .single();
+
+      if (userData?.blocked === true) {
+        this.logger.warn(`🚫 Blocked user ${telegramUserId} tried to interact`);
+        await this.sendMessage(chatId, '🚫 Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.');
+        return;
+      }
+    } catch (e) {
+      // User not found yet — allow to proceed (will be created on /start)
+    }
+
     // Register user as active for catalog sync notifications
     if (this.catalogSyncService) {
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
@@ -956,6 +973,24 @@ export class TelegramsEnhancedService implements OnModuleInit {
     if (this.processedCallbacks.size > this.MAX_PROCESSED_CACHE) {
       const first = this.processedCallbacks.values().next().value;
       this.processedCallbacks.delete(first);
+    }
+
+    // Check if user is blocked before processing callback
+    try {
+      const { data: userData } = await this.supabase
+        .from('users')
+        .select('blocked')
+        .eq('telegram_id', telegramUserId.toString())
+        .single();
+
+      if (userData?.blocked === true) {
+        this.logger.warn(`🚫 Blocked user ${telegramUserId} tried callback interaction`);
+        await this.answerCallbackQuery(callbackId);
+        await this.sendMessage(chatId, '🚫 Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.');
+        return;
+      }
+    } catch (e) {
+      // User not found — allow
     }
 
     // Register user as active for catalog sync notifications

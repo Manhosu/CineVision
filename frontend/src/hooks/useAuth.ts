@@ -56,6 +56,36 @@ export function useAuth(): AuthState & {
       if (backendToken && userStr) {
         try {
           const userData = JSON.parse(userStr);
+
+          // Check if user is blocked — verify with backend
+          if (userData.telegram_id) {
+            try {
+              const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+              const checkRes = await fetch(`${apiUrl}/api/v1/admin/users?search=${userData.telegram_id}&limit=1`);
+              if (checkRes.ok) {
+                const checkData = await checkRes.json();
+                const foundUser = checkData.users?.[0];
+                if (foundUser?.blocked === true) {
+                  // User is blocked — clear session and show alert
+                  localStorage.removeItem('access_token');
+                  localStorage.removeItem('refresh_token');
+                  localStorage.removeItem('auth_token');
+                  localStorage.removeItem('user');
+                  setUser(null);
+                  setIsAuthenticated(false);
+                  setIsLoading(false);
+                  // Show blocked popup
+                  if (typeof window !== 'undefined') {
+                    alert('Sua conta foi bloqueada. Entre em contato com o suporte para mais informações.');
+                  }
+                  return;
+                }
+              }
+            } catch (checkErr) {
+              // If check fails, allow access (fail-open for network issues)
+            }
+          }
+
           setUser({
             id: userData.id,
             email: userData.email || 'telegram-user@cinevision.com',
