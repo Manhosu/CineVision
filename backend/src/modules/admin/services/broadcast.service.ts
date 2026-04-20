@@ -107,11 +107,10 @@ export class BroadcastService {
       buttonUrl?: string;
       inlineButtons?: Array<{ text: string; url: string }>;
     },
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean; blocked?: boolean }> {
     const endpoint = `${this.telegramApiUrl}/sendMessage`;
 
     try {
-      // Convert Markdown bold (*text*) to HTML bold (<b>text</b>) for better emoji support
       const htmlText = messageText
         .replace(/\*([^*]+)\*/g, '<b>$1</b>')
         .replace(/_([^_]+)_/g, '<i>$1</i>');
@@ -122,57 +121,27 @@ export class BroadcastService {
         parse_mode: 'HTML',
       };
 
-      // Priority: use inline_buttons if provided, otherwise fall back to single button
       if (options?.inlineButtons && Array.isArray(options.inlineButtons) && options.inlineButtons.length > 0) {
-        // Multiple inline buttons - each button is on its own row
-        const inlineKeyboard = options.inlineButtons.map(button => [{
-          text: button.text,
-          url: button.url,
-        }]);
-
         payload.reply_markup = {
-          inline_keyboard: inlineKeyboard,
+          inline_keyboard: options.inlineButtons.map(button => [{ text: button.text, url: button.url }]),
         };
-
-        this.logger.log(`Sending message with ${options.inlineButtons.length} inline buttons`);
       } else if (options?.buttonText && options?.buttonUrl) {
-        // Single button for backward compatibility
         const buttonText = typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
         const buttonUrl = typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
-
         if (buttonText && buttonUrl) {
           payload.reply_markup = {
             inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
           };
-          this.logger.log(`Sending message with button: ${buttonText} -> ${buttonUrl}`);
         }
       }
 
       const response = await axios.post(endpoint, payload);
-
-      if (response.data.ok) {
-        return true;
-      } else {
-        this.logger.warn(`Failed to send message to ${chatId}:`, response.data);
-        return false;
-      }
+      return { success: response.data.ok === true };
     } catch (error) {
-      this.logger.error(`Error sending message to ${chatId}:`, error.message);
-
-      // Log full error details from Telegram API
-      if (error.response?.data) {
-        this.logger.error(`Telegram API error response:`, JSON.stringify(error.response.data));
-      }
-
-      // Log the payload that failed
-      this.logger.error(`Failed payload:`, JSON.stringify({
-        endpoint,
-        chat_id: chatId,
-        message_length: messageText?.length || 0,
-        has_buttons: !!(options?.inlineButtons || (options?.buttonText && options?.buttonUrl)),
-      }));
-
-      return false;
+      const statusCode = error.response?.status;
+      const errorCode = error.response?.data?.error_code;
+      const blocked = statusCode === 403 || errorCode === 403 || statusCode === 400 || errorCode === 400;
+      return { success: false, blocked };
     }
   }
 
@@ -188,11 +157,10 @@ export class BroadcastService {
       buttonUrl?: string;
       inlineButtons?: Array<{ text: string; url: string }>;
     },
-  ): Promise<boolean> {
+  ): Promise<{ success: boolean; blocked?: boolean }> {
     const endpoint = `${this.telegramApiUrl}/sendPhoto`;
 
     try {
-      // Convert Markdown to HTML for better emoji/accent support
       const htmlCaption = caption
         ? caption.replace(/\*([^*]+)\*/g, '<b>$1</b>').replace(/_([^_]+)_/g, '<i>$1</i>')
         : undefined;
@@ -207,20 +175,13 @@ export class BroadcastService {
         payload.caption = htmlCaption;
       }
 
-      // Priority: use inline_buttons if provided, otherwise fall back to single button
       if (options?.inlineButtons && Array.isArray(options.inlineButtons) && options.inlineButtons.length > 0) {
-        const inlineKeyboard = options.inlineButtons.map(button => [{
-          text: button.text,
-          url: button.url,
-        }]);
-
         payload.reply_markup = {
-          inline_keyboard: inlineKeyboard,
+          inline_keyboard: options.inlineButtons.map(button => [{ text: button.text, url: button.url }]),
         };
       } else if (options?.buttonText && options?.buttonUrl) {
         const buttonText = typeof options.buttonText === 'string' ? options.buttonText.trim() : '';
         const buttonUrl = typeof options.buttonUrl === 'string' ? options.buttonUrl.trim() : '';
-
         if (buttonText && buttonUrl) {
           payload.reply_markup = {
             inline_keyboard: [[{ text: buttonText, url: buttonUrl }]],
@@ -229,21 +190,12 @@ export class BroadcastService {
       }
 
       const response = await axios.post(endpoint, payload);
-
-      if (response.data.ok) {
-        return true;
-      } else {
-        this.logger.warn(`Failed to send photo to ${chatId}:`, response.data);
-        return false;
-      }
+      return { success: response.data.ok === true };
     } catch (error) {
-      this.logger.error(`Error sending photo to ${chatId}:`, error.message);
-
-      if (error.response?.data) {
-        this.logger.error(`Telegram API error response:`, JSON.stringify(error.response.data));
-      }
-
-      return false;
+      const statusCode = error.response?.status;
+      const errorCode = error.response?.data?.error_code;
+      const blocked = statusCode === 403 || errorCode === 403 || statusCode === 400 || errorCode === 400;
+      return { success: false, blocked };
     }
   }
 
@@ -364,17 +316,18 @@ export class BroadcastService {
     users: any[],
     broadcastData: SendBroadcastDto,
   ): Promise<void> {
-    // Telegram limits: max 30 msg/sec, configured at 25/sec
-    // 25 users per batch + 0ms between each + 1s delay between batches
-    // = ~25 msg/sec (safe, 5 msg/sec margin under Telegram limit)
-    // For 91k users: ~1 hour
+    // Telegram limits: max 30 msg/sec, we target ~25 msg/sec
+    // 25 users sent IN PARALLEL per batch + 1s delay between batches
+    // Each HTTP call takes ~200-400ms, but parallel = all finish in ~400ms
+    // So: 25 msgs in ~400ms + 1000ms delay = ~1.4s per batch = ~18 msg/sec
+    // For 93k users: ~1.5 hours
     const BATCH_SIZE = 25;
     const BATCH_DELAY_MS = 1000;
-    const MESSAGE_DELAY_MS = 0; // no delay between messages within batch (batch itself = 1sec cycle)
 
     let successCount = 0;
     let failCount = 0;
     const failedTelegramIds: string[] = [];
+    const blockedUserIds: Array<{ chatId: string; telegramId: string }> = [];
 
     const totalUsers = users.length;
     const hasImage = !!broadcastData.image_url;
@@ -384,7 +337,7 @@ export class BroadcastService {
       buttonUrl: broadcastData.button_url,
     };
 
-    this.logger.log(`[Broadcast ${broadcastId}] Starting async processing for ${totalUsers} users (batch size: ${BATCH_SIZE}, delay: ${BATCH_DELAY_MS}ms)`);
+    this.logger.log(`[Broadcast ${broadcastId}] Starting PARALLEL processing for ${totalUsers} users (batch size: ${BATCH_SIZE}, delay: ${BATCH_DELAY_MS}ms)`);
 
     try {
       for (let i = 0; i < totalUsers; i += BATCH_SIZE) {
@@ -392,44 +345,51 @@ export class BroadcastService {
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(totalUsers / BATCH_SIZE);
 
-        this.logger.log(`[Broadcast ${broadcastId}] Processing batch ${batchNum}/${totalBatches} (${batch.length} users)`);
+        // Send all messages in this batch IN PARALLEL
+        const results = await Promise.allSettled(
+          batch.map(async (user) => {
+            if (!user.telegram_chat_id) {
+              return { success: false, blocked: false, userId: user.telegram_id };
+            }
 
-        for (let j = 0; j < batch.length; j++) {
+            let result: { success: boolean; blocked?: boolean };
+            if (hasImage) {
+              result = await this.sendPhotoToUser(
+                user.telegram_chat_id,
+                broadcastData.image_url!,
+                broadcastData.message_text,
+                buttonOptions,
+              );
+            } else {
+              result = await this.sendMessageToUser(
+                user.telegram_chat_id,
+                broadcastData.message_text,
+                buttonOptions,
+              );
+            }
+
+            return { ...result, chatId: user.telegram_chat_id, userId: user.telegram_id };
+          })
+        );
+
+        // Process results
+        for (let j = 0; j < results.length; j++) {
+          const result = results[j];
           const user = batch[j];
-          if (!user.telegram_chat_id) {
-            failCount++;
-            failedTelegramIds.push(String(user.telegram_id || 'unknown'));
-            continue;
-          }
 
-          let success: boolean;
-
-          if (hasImage) {
-            success = await this.sendPhotoToUser(
-              user.telegram_chat_id,
-              broadcastData.image_url!,
-              broadcastData.message_text,
-              buttonOptions,
-            );
-          } else {
-            success = await this.sendMessageToUser(
-              user.telegram_chat_id,
-              broadcastData.message_text,
-              buttonOptions,
-            );
-          }
-
-          if (success) {
+          if (result.status === 'fulfilled' && result.value.success) {
             successCount++;
           } else {
             failCount++;
             failedTelegramIds.push(String(user.telegram_id || 'unknown'));
-            await this.handleBlockedUser(user.telegram_chat_id, user.telegram_id);
-          }
 
-          // Small delay between individual messages to stay under rate limit
-          if (j < batch.length - 1) {
-            await this.sleep(MESSAGE_DELAY_MS);
+            // Collect blocked users to mark later (no extra API call)
+            if (result.status === 'fulfilled' && result.value.blocked) {
+              blockedUserIds.push({
+                chatId: user.telegram_chat_id,
+                telegramId: String(user.telegram_id),
+              });
+            }
           }
         }
 
@@ -442,10 +402,12 @@ export class BroadcastService {
           failed_sends: failCount,
           progress_percent: progressPercent,
           recipients_count: successCount,
-          failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+          failed_telegram_ids: failedTelegramIds.length > 100 ? failedTelegramIds.slice(-100).join(',') : failedTelegramIds.join(','),
         });
 
-        this.logger.log(`[Broadcast ${broadcastId}] Batch ${batchNum} done. Progress: ${progressPercent}% (success: ${successCount}, failed: ${failCount})`);
+        if (batchNum % 50 === 0 || batchNum === totalBatches) {
+          this.logger.log(`[Broadcast ${broadcastId}] Batch ${batchNum}/${totalBatches}. Progress: ${progressPercent}% (success: ${successCount}, failed: ${failCount})`);
+        }
 
         // Wait between batches (skip delay after last batch)
         if (i + BATCH_SIZE < totalUsers) {
@@ -460,20 +422,35 @@ export class BroadcastService {
         failed_sends: failCount,
         progress_percent: 100,
         recipients_count: successCount,
-        failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+        failed_telegram_ids: failedTelegramIds.length > 100 ? failedTelegramIds.slice(-100).join(',') : failedTelegramIds.join(','),
       });
 
       this.logger.log(`[Broadcast ${broadcastId}] Completed: ${successCount} successful, ${failCount} failed out of ${totalUsers} users`);
+
+      // Mark blocked users in background (fire-and-forget, no extra API calls)
+      if (blockedUserIds.length > 0) {
+        this.logger.log(`[Broadcast ${broadcastId}] Marking ${blockedUserIds.length} blocked users...`);
+        const telegramIds = blockedUserIds.map(u => u.telegramId);
+        try {
+          const { error: blockError } = await this.supabase
+            .from('users')
+            .update({ blocked: true })
+            .in('telegram_id', telegramIds);
+          if (blockError) this.logger.error('Error marking blocked users:', blockError);
+          else this.logger.log(`Marked ${telegramIds.length} users as blocked`);
+        } catch (err) {
+          this.logger.error('Error in blocked users update:', err.message);
+        }
+      }
     } catch (error) {
       this.logger.error(`[Broadcast ${broadcastId}] Error during async processing:`, error.message);
 
-      // Mark broadcast as failed
       await this.updateBroadcastProgress(broadcastId, {
         status: 'failed',
         successful_sends: successCount,
         failed_sends: failCount,
         progress_percent: Math.round(((successCount + failCount) / totalUsers) * 100),
-        failed_telegram_ids: failedTelegramIds.length > 0 ? failedTelegramIds.join(',') : null,
+        failed_telegram_ids: failedTelegramIds.length > 100 ? failedTelegramIds.slice(-100).join(',') : failedTelegramIds.join(','),
       });
     }
   }
