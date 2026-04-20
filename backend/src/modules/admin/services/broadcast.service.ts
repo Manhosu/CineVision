@@ -364,13 +364,13 @@ export class BroadcastService {
     users: any[],
     broadcastData: SendBroadcastDto,
   ): Promise<void> {
-    // Telegram safe limits: max 30 msg/sec, recommended 20-25/sec
-    // 25 users per batch + 40ms between each = 1s per batch + 1s delay = 2s per batch
-    // = ~12.5 msg/sec (safe margin under 30 limit)
-    // For 91k users: ~2 hours
+    // Telegram limits: max 30 msg/sec, configured at 25/sec
+    // 25 users per batch + 0ms between each + 1s delay between batches
+    // = ~25 msg/sec (safe, 5 msg/sec margin under Telegram limit)
+    // For 91k users: ~1 hour
     const BATCH_SIZE = 25;
     const BATCH_DELAY_MS = 1000;
-    const MESSAGE_DELAY_MS = 40; // delay between individual messages within a batch
+    const MESSAGE_DELAY_MS = 0; // no delay between messages within batch (batch itself = 1sec cycle)
 
     let successCount = 0;
     let failCount = 0;
