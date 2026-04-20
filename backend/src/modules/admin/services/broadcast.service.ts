@@ -28,7 +28,8 @@ export class BroadcastService {
       const { count, error } = await this.supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
-        .not('telegram_chat_id', 'is', null);
+        .not('telegram_chat_id', 'is', null)
+        .eq('blocked', false);
 
       if (error) {
         this.logger.error('Error counting bot users:', error);
@@ -63,6 +64,7 @@ export class BroadcastService {
           .from('users')
           .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
           .not('telegram_chat_id', 'is', null)
+          .eq('blocked', false)
           .range(from, to);
 
         if (error) {
@@ -362,12 +364,13 @@ export class BroadcastService {
     users: any[],
     broadcastData: SendBroadcastDto,
   ): Promise<void> {
-    // Telegram safe limits: max 30 msg/sec, but recommended ~25/sec to avoid 429
-    // 25 users per batch + 50ms between each message + 3s between batches
-    // = ~1.5 sec per batch = ~16 msg/sec (well under 30 limit)
+    // Telegram safe limits: max 30 msg/sec, recommended 20-25/sec
+    // 25 users per batch + 40ms between each = 1s per batch + 1s delay = 2s per batch
+    // = ~12.5 msg/sec (safe margin under 30 limit)
+    // For 91k users: ~2 hours
     const BATCH_SIZE = 25;
-    const BATCH_DELAY_MS = 3000;
-    const MESSAGE_DELAY_MS = 50; // delay between individual messages within a batch
+    const BATCH_DELAY_MS = 1000;
+    const MESSAGE_DELAY_MS = 40; // delay between individual messages within a batch
 
     let successCount = 0;
     let failCount = 0;
@@ -524,7 +527,7 @@ export class BroadcastService {
         try {
           const { error: updateError } = await this.supabase
             .from('users')
-            .update({ is_active: false })
+            .update({ blocked: true })
             .eq('telegram_id', telegramId);
 
           if (updateError) {

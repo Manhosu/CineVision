@@ -57,6 +57,7 @@ export default function BroadcastPage() {
   const [usersCount, setUsersCount] = useState(0);
   const [isSending, setIsSending] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastProgress | null>(null);
+  const [sendStartTime, setSendStartTime] = useState<number | null>(null);
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -231,6 +232,7 @@ export default function BroadcastPage() {
       toast.success(`Broadcast iniciado para ${result.total_users} usuários`);
 
       // Start polling progress
+      setSendStartTime(Date.now());
       setActiveBroadcast({
         id: result.broadcast_id,
         status: 'sending',
@@ -324,7 +326,28 @@ export default function BroadcastPage() {
                 style={{ width: `${activeBroadcast.progress_percent}%` }}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-2 text-right">{activeBroadcast.progress_percent}%</p>
+            <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
+              <span>{activeBroadcast.progress_percent}%</span>
+              {activeBroadcast.status === 'sending' && sendStartTime && (() => {
+                const elapsed = (Date.now() - sendStartTime) / 1000;
+                const sent = activeBroadcast.successful_sends + activeBroadcast.failed_sends;
+                const rate = sent > 0 ? sent / elapsed : 0;
+                const remaining = activeBroadcast.total_users - sent;
+                const estSeconds = rate > 0 ? remaining / rate : 0;
+                const formatTime = (s: number) => {
+                  if (s < 60) return `${Math.round(s)}s`;
+                  if (s < 3600) return `${Math.floor(s / 60)}min ${Math.round(s % 60)}s`;
+                  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}min`;
+                };
+                return (
+                  <div className="flex items-center gap-4">
+                    <span>~{rate.toFixed(1)} msg/seg</span>
+                    <span>Decorrido: {formatTime(elapsed)}</span>
+                    {rate > 0 && <span>Restante: ~{formatTime(estSeconds)}</span>}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 

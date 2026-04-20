@@ -1523,6 +1523,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
           updates.telegram_chat_id = chatId.toString();
         }
 
+        // Re-activate user if they were blocked (they're interacting again)
+        if (existingUser.blocked) {
+          updates.blocked = false;
+          this.logger.log(`Re-activating previously blocked user ${telegramUserId}`);
+        }
+
         if (telegramUserData) {
           if (telegramUserData.username && existingUser.telegram_username !== telegramUserData.username) {
             updates.telegram_username = telegramUserData.username;

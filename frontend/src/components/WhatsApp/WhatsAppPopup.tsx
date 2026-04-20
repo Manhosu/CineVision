@@ -60,7 +60,7 @@ export function WhatsAppPopup() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 40 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4 pointer-events-none overflow-y-auto"
           >
             <div className="bg-[#1a1a2e] border border-gray-700/50 rounded-2xl shadow-2xl max-w-md w-full pointer-events-auto relative overflow-hidden">
               {/* Green accent bar */}
@@ -77,7 +77,7 @@ export function WhatsAppPopup() {
                 </svg>
               </button>
 
-              <div className="p-6 pt-5">
+              <div className="p-4 sm:p-6 pt-4 sm:pt-5">
                 {/* WhatsApp Icon */}
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-14 h-14 bg-[#25D366] rounded-full flex items-center justify-center shadow-lg shadow-[#25D366]/20">

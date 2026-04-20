@@ -325,7 +325,7 @@ export default function DashboardPage() {
         whatsappLink="https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy"
         onConfirmJoined={() => setWhatsappJoined(true)}
       >
-      <div className="container mx-auto px-4 lg:px-6 py-12 mt-20">
+      <div className="container mx-auto px-4 lg:px-6 py-8 sm:py-12 mt-16 sm:mt-20">
         {/* Header do Dashboard */}
         <div className="mb-8 bg-gradient-to-r from-red-900/20 to-purple-900/20 rounded-xl p-6 border border-red-500/20">
           <h1 className="text-4xl font-bold text-white mb-3">🎬 Meu Dashboard</h1>
