@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -23,12 +24,30 @@ interface BroadcastHistory {
   image_url?: string;
   button_text?: string;
   button_url?: string;
+  inline_buttons?: Array<{ text: string; url: string }>;
   recipients_count: number;
   total_users?: number;
   successful_sends?: number;
   failed_sends?: number;
+  progress_percent?: number;
   status?: string;
   sent_at: string;
+  failed_telegram_ids?: string;
+}
+
+function formatBrDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function formatTime(s: number) {
+  if (s < 60) return `${Math.round(s)}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}min ${Math.round(s % 60)}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}min`;
 }
 
 function getHeaders() {
@@ -61,6 +80,8 @@ export default function BroadcastPage() {
   const [history, setHistory] = useState<BroadcastHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [selectedBroadcast, setSelectedBroadcast] = useState<BroadcastHistory | null>(null);
+  const [modalLive, setModalLive] = useState<BroadcastHistory | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -103,6 +124,57 @@ export default function BroadcastPage() {
 
     return () => clearInterval(interval);
   }, [activeBroadcast?.id, activeBroadcast?.status]);
+
+  // Supabase Realtime: subscribe to broadcast updates when modal is open
+  useEffect(() => {
+    if (!selectedBroadcast) { setModalLive(null); return; }
+    setModalLive(selectedBroadcast);
+
+    // If already completed/failed, no need for realtime
+    if (selectedBroadcast.status !== 'sending') return;
+
+    const channel = supabase
+      .channel(`broadcast-${selectedBroadcast.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'broadcasts', filter: `id=eq.${selectedBroadcast.id}` },
+        (payload: any) => {
+          const row = payload.new;
+          setModalLive(prev => prev ? { ...prev, ...row } : prev);
+          // Also update in history list
+          setHistory(h => h.map(item => item.id === row.id ? { ...item, ...row } : item));
+          if (row.status === 'completed') {
+            toast.success(`Broadcast concluído! ${row.successful_sends} enviados.`);
+            fetchHistory();
+          } else if (row.status === 'failed') {
+            toast.error(`Broadcast falhou.`);
+            fetchHistory();
+          }
+        }
+      )
+      .subscribe();
+
+    // Also poll as fallback (realtime may not be enabled)
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/admin/broadcast/progress/${selectedBroadcast.id}`, { headers: getHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          setModalLive(prev => prev ? { ...prev, ...data } : prev);
+          setHistory(h => h.map(item => item.id === data.id ? { ...item, ...data } : item));
+          if (data.status !== 'sending') {
+            clearInterval(pollInterval);
+            if (data.status === 'completed') fetchHistory();
+          }
+        }
+      } catch {}
+    }, 3000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(pollInterval);
+    };
+  }, [selectedBroadcast?.id]);
 
   const fetchUsersCount = async () => {
     try {
@@ -594,11 +666,21 @@ export default function BroadcastPage() {
                   <p className="text-center text-sm text-gray-600 py-6">Nenhum envio ainda</p>
                 ) : (
                   history.map((item) => (
-                    <div key={item.id} className="bg-black/30 rounded-lg p-3 border border-gray-800/50">
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedBroadcast(item)}
+                      className="bg-black/30 rounded-lg p-3 border border-gray-800/50 cursor-pointer hover:border-gray-600 hover:bg-black/50 transition-all"
+                    >
                       {item.image_url && (
                         <img src={item.image_url} alt="" className="w-full h-20 object-cover rounded mb-2" />
                       )}
                       <p className="text-xs text-gray-300 line-clamp-2 mb-2">{item.message_text}</p>
+                      {/* Mini progress bar for sending items */}
+                      {item.status === 'sending' && (
+                        <div className="w-full h-1 bg-gray-800 rounded-full overflow-hidden mb-2">
+                          <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: `${item.progress_percent || 0}%` }} />
+                        </div>
+                      )}
                       <div className="flex items-center justify-between text-[10px] text-gray-500">
                         <span className="flex items-center gap-1">
                           {item.status === 'completed' ? (
@@ -613,12 +695,7 @@ export default function BroadcastPage() {
                           {item.successful_sends ?? item.recipients_count} enviados
                           {item.failed_sends ? ` · ${item.failed_sends} falhas` : ''}
                         </span>
-                        <span>
-                          {new Date(item.sent_at).toLocaleDateString('pt-BR', {
-                            day: '2-digit', month: '2-digit',
-                            hour: '2-digit', minute: '2-digit',
-                          })}
-                        </span>
+                        <span>{formatBrDate(item.sent_at)}</span>
                       </div>
                     </div>
                   ))
@@ -628,6 +705,141 @@ export default function BroadcastPage() {
           </div>
         </div>
       </div>
+
+      {/* Detail Modal */}
+      {selectedBroadcast && modalLive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedBroadcast(null)}>
+          <div className="bg-[#111] border border-gray-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-gray-800">
+              <h3 className="text-lg font-bold text-white">Detalhes do Envio</h3>
+              <button onClick={() => setSelectedBroadcast(null)} className="text-gray-500 hover:text-white transition-colors text-xl">✕</button>
+            </div>
+
+            {/* Status Badge + Date */}
+            <div className="px-5 pt-4 flex items-center justify-between">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
+                modalLive.status === 'completed' ? 'bg-green-500/10 text-green-400 border border-green-500/30' :
+                modalLive.status === 'sending' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
+                modalLive.status === 'failed' ? 'bg-red-500/10 text-red-400 border border-red-500/30' :
+                'bg-gray-500/10 text-gray-400 border border-gray-500/30'
+              }`}>
+                {modalLive.status === 'sending' && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />}
+                {modalLive.status === 'completed' && <span className="w-1.5 h-1.5 rounded-full bg-green-400" />}
+                {modalLive.status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-red-400" />}
+                {modalLive.status === 'sending' ? 'Em Andamento' : modalLive.status === 'completed' ? 'Concluído' : modalLive.status === 'failed' ? 'Falhou' : 'Pendente'}
+              </span>
+              <span className="text-xs text-gray-500">{formatBrDate(modalLive.sent_at)}</span>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="px-5 pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-gray-400">Progresso</span>
+                <span className="text-sm font-mono text-white">{modalLive.progress_percent ?? 0}%</span>
+              </div>
+              <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    modalLive.status === 'completed' ? 'bg-green-500' :
+                    modalLive.status === 'failed' ? 'bg-red-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${modalLive.progress_percent ?? 0}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="px-5 pt-4 grid grid-cols-3 gap-3">
+              <div className="bg-black/30 rounded-lg p-3 text-center border border-gray-800/50">
+                <p className="text-lg font-bold text-green-400">{modalLive.successful_sends ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase mt-0.5">Enviados</p>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 text-center border border-gray-800/50">
+                <p className="text-lg font-bold text-red-400">{modalLive.failed_sends ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase mt-0.5">Falhas</p>
+              </div>
+              <div className="bg-black/30 rounded-lg p-3 text-center border border-gray-800/50">
+                <p className="text-lg font-bold text-white">{modalLive.total_users ?? 0}</p>
+                <p className="text-[10px] text-gray-500 uppercase mt-0.5">Total</p>
+              </div>
+            </div>
+
+            {/* ETA for sending broadcasts */}
+            {modalLive.status === 'sending' && (() => {
+              const sentAt = new Date(modalLive.sent_at).getTime();
+              const elapsed = (Date.now() - sentAt) / 1000;
+              const sent = (modalLive.successful_sends ?? 0) + (modalLive.failed_sends ?? 0);
+              const rate = sent > 0 ? sent / elapsed : 0;
+              const remaining = (modalLive.total_users ?? 0) - sent;
+              const eta = rate > 0 ? remaining / rate : 0;
+              return (
+                <div className="px-5 pt-4">
+                  <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-3 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-4 text-blue-300">
+                      <span>~{rate.toFixed(1)} msg/seg</span>
+                      <span>Decorrido: {formatTime(elapsed)}</span>
+                    </div>
+                    {rate > 0 && <span className="text-blue-400 font-medium">ETA: ~{formatTime(eta)}</span>}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Image */}
+            {modalLive.image_url && (
+              <div className="px-5 pt-4">
+                <img src={modalLive.image_url} alt="" className="w-full max-h-48 object-cover rounded-lg" />
+              </div>
+            )}
+
+            {/* Message */}
+            <div className="px-5 pt-4">
+              <label className="text-[10px] text-gray-500 uppercase tracking-wider">Mensagem</label>
+              <div className="mt-1.5 bg-black/30 rounded-lg p-3 border border-gray-800/50">
+                <p className="text-sm text-gray-300 whitespace-pre-wrap break-words"
+                   dangerouslySetInnerHTML={{ __html: formatPreview(modalLive.message_text) }}
+                />
+              </div>
+            </div>
+
+            {/* Buttons used */}
+            {modalLive.inline_buttons && modalLive.inline_buttons.length > 0 && (
+              <div className="px-5 pt-3">
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider">Botões</label>
+                <div className="mt-1.5 space-y-1">
+                  {modalLive.inline_buttons.map((btn, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="text-blue-400">{btn.text}</span>
+                      <span className="text-gray-600">→</span>
+                      <span className="text-gray-500 truncate">{btn.url}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Failed IDs summary */}
+            {(modalLive.failed_sends ?? 0) > 0 && modalLive.status !== 'sending' && (
+              <div className="px-5 pt-3">
+                <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-xs text-red-300/70">
+                  {modalLive.failed_sends} usuários não receberam (bloquearam o bot, conta deletada ou erro temporário)
+                </div>
+              </div>
+            )}
+
+            {/* Close button */}
+            <div className="p-5">
+              <button
+                onClick={() => setSelectedBroadcast(null)}
+                className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-gray-400 rounded-lg text-sm transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
