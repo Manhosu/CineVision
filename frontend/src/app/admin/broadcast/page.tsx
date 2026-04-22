@@ -820,10 +820,11 @@ export default function BroadcastPage() {
             )}
 
             {/* Failed IDs summary */}
-            {(modalLive.failed_sends ?? 0) > 0 && modalLive.status !== 'sending' && (
+            {(modalLive.failed_sends ?? 0) > 0 && (
               <div className="px-5 pt-3">
                 <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-3 text-xs text-red-300/70">
-                  {modalLive.failed_sends} usuários não receberam (bloquearam o bot, conta deletada ou erro temporário)
+                  <p className="font-medium text-red-400 mb-1">{modalLive.failed_sends} falhas no envio</p>
+                  <p className="text-red-300/50">Essas falhas acontecem quando o usuário bloqueou o bot ou deletou a conta do Telegram. A API do Telegram não diferencia entre os dois casos — ambos retornam o mesmo erro. Esses usuários são removidos automaticamente da lista para os próximos envios.</p>
                 </div>
               </div>
             )}
