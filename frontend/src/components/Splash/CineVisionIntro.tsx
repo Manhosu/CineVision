@@ -62,16 +62,21 @@ export default function CineVisionIntro() {
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black"
+          // z-index has to outrank every other overlay (eg. the WhatsApp
+          // community modal at z-9999) so the splash isn't covered.
+          className="fixed inset-0 z-[100000] flex items-center justify-center bg-black"
           aria-hidden="true"
         >
           <video
             ref={videoRef}
             src="/intro.mp4"
+            autoPlay
             muted
             playsInline
             preload="auto"
-            className="h-full w-full object-cover"
+            // contain on portrait viewports keeps the whole logo visible;
+            // cover on landscape fills the screen edge-to-edge.
+            className="h-full w-full object-contain landscape:object-cover"
           />
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
