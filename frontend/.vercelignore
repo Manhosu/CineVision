@@ -22,3 +22,7 @@ coverage
 *.flv
 *.webm
 public/videos
+# Allow short branding/splash assets shipped from public/
+!public/**/*.mp4
+!public/**/*.webm
+!public/**/*.mov
