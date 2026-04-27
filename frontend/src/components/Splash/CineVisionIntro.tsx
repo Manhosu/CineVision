@@ -59,23 +59,32 @@ export default function CineVisionIntro() {
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 1 }}
+          initial={{ opacity: 1, backgroundColor: '#000000' }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.6 }}
           // z-index has to outrank every other overlay (eg. the WhatsApp
           // community modal at z-9999) so the splash isn't covered.
-          // Background animates through the same color trajectory as the
-          // video edges so the letterbox area on portrait viewports never
-          // looks like a black cutout next to the navy frame.
-          // Corner colors sampled with ffmpeg at 0.5/2/3.5/5/5.7s:
+          // Background follows the video's brightening curve so the
+          // letterbox area on portrait never looks like a darker cutout
+          // next to the video frame. The video is essentially black for
+          // the first ~2.5s (only a tiny red glint) and only fills with
+          // navy in the last second — keep bg pure black until 50% of
+          // the duration, then ramp to the final navy. Corner colors
+          // sampled with ffmpeg at 0.5/2/3.5/5/5.7s:
           //   #010000 → #03000a → #040013 → #05001a → #05001a
           animate={{
-            backgroundColor: ['#000000', '#02000a', '#040013', '#05001a', '#05001a'],
+            backgroundColor: ['#000000', '#000000', '#020008', '#04001a', '#05001a'],
           }}
+          // Per-property transitions: backgroundColor follows the
+          // keyframes; opacity uses a quick 0.6s fade only on exit.
+          // (Without splitting them, a single `transition` prop made the
+          // exit fade take 5.88s — the splash hung on screen.)
           transition={{
-            duration: 5.88,
-            times: [0, 0.25, 0.55, 0.85, 1],
-            ease: 'linear',
+            backgroundColor: {
+              duration: 5.88,
+              times: [0, 0.45, 0.7, 0.9, 1],
+              ease: 'linear',
+            },
+            opacity: { duration: 0.6 },
           }}
           className="fixed inset-0 z-[100000] flex items-center justify-center"
           aria-hidden="true"
