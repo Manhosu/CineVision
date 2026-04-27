@@ -59,31 +59,22 @@ export default function CineVisionIntro() {
     <AnimatePresence>
       {visible && (
         <motion.div
-          initial={{ opacity: 1, backgroundColor: '#000000' }}
+          initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          transition={{ opacity: { duration: 0.6 } }}
           // z-index has to outrank every other overlay (eg. the WhatsApp
           // community modal at z-9999) so the splash isn't covered.
-          // Background tracks the video's actual edge brightness so the
-          // letterbox space on portrait never looks like a darker frame
-          // around the video. Edges sampled with ffmpeg (top+bottom 2-row
-          // band of an 8x8 downscale) at 0.5/1.5/2.5/3.5/4.5/5/5.5s:
-          //   #030003 → #040007 → #05000e → #05001a → #090332 → #060025 → #070024
-          // The edge briefly peaks at #090332 around 4.5s before easing
-          // back to #070024 — keep that bump in the curve.
-          animate={{
-            backgroundColor: ['#000000', '#040007', '#05001a', '#090332', '#070024'],
-          }}
-          // Per-property transitions: backgroundColor follows the
-          // keyframes; opacity uses a quick 0.6s fade only on exit.
-          // (Without splitting them, a single `transition` prop made the
-          // exit fade take 5.88s — the splash hung on screen.)
-          transition={{
-            backgroundColor: {
-              duration: 5.88,
-              times: [0, 0.25, 0.6, 0.76, 1],
-              ease: 'linear',
-            },
-            opacity: { duration: 0.6 },
+          // The bg is a fixed radial gradient that mirrors the video's
+          // own vignette: bright purple-navy in the center where the
+          // logo lands, fading to dark navy at the screen corners. This
+          // way the letterbox space on portrait reads as an extension of
+          // the video's spotlight instead of a contrasting darker frame.
+          // Stops chosen so the gradient color at the video's top edge
+          // (~37% from top of screen on portrait) ≈ the video's edge
+          // brightness sampled with ffmpeg (~#070024).
+          style={{
+            background:
+              'radial-gradient(ellipse 65% 45% at 50% 50%, #1a0050 0%, #0a0030 22%, #050018 55%, #020010 100%)',
           }}
           className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden"
           aria-hidden="true"
@@ -97,12 +88,24 @@ export default function CineVisionIntro() {
             preload="auto"
             // contain on portrait keeps the whole logo (CINE VISION + the
             // triangle) visible without horizontal cropping. cover on
-            // landscape fills the screen edge-to-edge. The page bg
-            // animates from black through the same navy curve as the
-            // video edge, so the letterbox space above/below the video
-            // on portrait blends into the video frame instead of looking
-            // like a darker cutout.
+            // landscape fills the screen edge-to-edge.
             className="h-full w-full object-contain landscape:object-cover"
+          />
+          {/* Black overlay covering both the video and the gradient bg.
+              Holds opaque for ~45% of the duration (matching the video's
+              dark intro), then fades out to reveal the synced video +
+              gradient. This avoids the previous "video brightening on
+              dark bg" mismatch — at every moment the user either sees
+              pure black or a fully-revealed scene. */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 bg-black"
+            initial={{ opacity: 1 }}
+            animate={{ opacity: [1, 1, 0.4, 0] }}
+            transition={{
+              duration: 5.88,
+              times: [0, 0.45, 0.75, 1],
+              ease: 'linear',
+            }}
           />
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
