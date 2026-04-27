@@ -64,7 +64,20 @@ export default function CineVisionIntro() {
           transition={{ duration: 0.6 }}
           // z-index has to outrank every other overlay (eg. the WhatsApp
           // community modal at z-9999) so the splash isn't covered.
-          className="fixed inset-0 z-[100000] flex items-center justify-center bg-black"
+          // Background animates through the same color trajectory as the
+          // video edges so the letterbox area on portrait viewports never
+          // looks like a black cutout next to the navy frame.
+          // Corner colors sampled with ffmpeg at 0.5/2/3.5/5/5.7s:
+          //   #010000 → #03000a → #040013 → #05001a → #05001a
+          animate={{
+            backgroundColor: ['#000000', '#02000a', '#040013', '#05001a', '#05001a'],
+          }}
+          transition={{
+            duration: 5.88,
+            times: [0, 0.25, 0.55, 0.85, 1],
+            ease: 'linear',
+          }}
+          className="fixed inset-0 z-[100000] flex items-center justify-center"
           aria-hidden="true"
         >
           <video
