@@ -86,7 +86,9 @@ export default function CineVisionIntro() {
             },
             opacity: { duration: 0.6 },
           }}
-          className="fixed inset-0 z-[100000] flex items-center justify-center"
+          // overflow-hidden so the scaled-up video on portrait does not
+          // leak past the splash overlay onto the page beneath.
+          className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden"
           aria-hidden="true"
         >
           <video
@@ -96,9 +98,14 @@ export default function CineVisionIntro() {
             muted
             playsInline
             preload="auto"
-            // contain on portrait viewports keeps the whole logo visible;
-            // cover on landscape fills the screen edge-to-edge.
-            className="h-full w-full object-contain landscape:object-cover"
+            // The intro video itself has dark periphery (above/below the
+            // bright "spotlight" reveal). On portrait that periphery
+            // looked like black bars next to the navy page bg. Use cover
+            // + a scale-up on portrait so the bright center fills the
+            // viewport and the dark periphery extends off-screen.
+            // Landscape doesn't need the scale — the video already fills
+            // edge-to-edge with object-cover.
+            className="h-full w-full object-cover scale-[1.8] landscape:scale-100"
           />
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
