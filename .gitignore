@@ -28,6 +28,12 @@ movies/
 *.wmv
 *.flv
 *.webm
+# Allow short branding/splash assets shipped from public
+!**/public/**/*.mp4
+!**/public/**/*.webm
+!**/public/**/*.mov
+!**/public/**/*.mp3
+!**/public/**/*.wav
 
 # Images (large files)
 *.png
