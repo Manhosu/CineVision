@@ -14,6 +14,7 @@ import {
 import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
+import AddToCartButton from '@/components/Cart/AddToCartButton';
 
 interface MovieCardProps {
   movie: Movie;
@@ -169,6 +170,24 @@ const MovieCard = memo(function MovieCard({
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
           />
+
+          {/* Quick add-to-cart icon (top-right corner) */}
+          {!isPurchased && (
+            <div className="absolute top-2 right-2 z-30" onClick={(e) => e.stopPropagation()}>
+              <AddToCartButton
+                content={{
+                  id: movie.id,
+                  title: movie.title,
+                  poster_url: movie.poster_url || undefined,
+                  price_cents: movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
+                    ? movie.discounted_price_cents
+                    : movie.price_cents,
+                  type: (movie as any).content_type || 'movie',
+                }}
+                variant="icon"
+              />
+            </div>
+          )}
         </div>
 
         {/* Info + Buy button below poster */}

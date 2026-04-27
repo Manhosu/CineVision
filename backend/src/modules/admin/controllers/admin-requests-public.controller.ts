@@ -1,11 +1,18 @@
-import { Controller, Get, Put, Delete, Post, Param, Query, Body, ValidationPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Controller, Get, Put, Delete, Post, Param, Query, Body, ValidationPipe, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RequestsSupabaseService } from '../../requests/requests-supabase.service';
 import { UpdateContentRequestDto } from '../../requests/dto';
 import { RequestStatus } from '../../requests/entities/content-request.entity';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../users/entities/user.entity';
 
 @ApiTags('admin-requests')
+@ApiBearerAuth()
 @Controller('admin/requests')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 export class AdminRequestsPublicController {
   constructor(private readonly requestsService: RequestsSupabaseService) {}
 

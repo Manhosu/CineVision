@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Movie } from '@/types/movie';
 import Pagination from '@/components/Pagination/Pagination';
+import AddToCartButton from '@/components/Cart/AddToCartButton';
 
 interface MovieGridProps {
   movies: Movie[];
@@ -97,6 +98,25 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
                   className="object-cover group-hover:scale-105 group-hover:brightness-110 transition-all duration-500"
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
                 />
+
+                {/* Quick add-to-cart icon (top-right corner) */}
+                {!purchased && (
+                  <div className="absolute top-2 right-2 z-30" onClick={(e) => e.preventDefault()}>
+                    <AddToCartButton
+                      content={{
+                        id: movie.id,
+                        title: movie.title,
+                        poster_url: movie.poster_url || undefined,
+                        price_cents:
+                          movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
+                            ? movie.discounted_price_cents
+                            : movie.price_cents,
+                        type: isSeries ? 'series' : 'movie',
+                      }}
+                      variant="icon"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Info + Price below poster */}

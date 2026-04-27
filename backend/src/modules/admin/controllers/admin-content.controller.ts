@@ -9,12 +9,16 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { OptionalAuthGuard } from '../../auth/guards/optional-auth.guard';
 import { GetUser } from '../../auth/decorators/get-user.decorator';
-import { User } from '../../users/entities/user.entity';
+import { User, UserRole } from '../../users/entities/user.entity';
 import { AdminContentSimpleService } from '../services/admin-content-simple.service';
+import { EmployeesService } from '../../employees/employees.service';
+import { ContentEditRequestsService } from '../../content-edit-requests/content-edit-requests.service';
 import {
   CreateContentDto,
   InitiateUploadDto,
@@ -26,11 +30,65 @@ import {
 
 @ApiTags('Admin - Content Management')
 @Controller('admin/content')
-// @UseGuards(JwtAuthGuard) // Temporarily disabled for testing
 @ApiBearerAuth()
 export class AdminContentController {
-  constructor(private readonly adminContentService: AdminContentSimpleService) {
+  constructor(
+    private readonly adminContentService: AdminContentSimpleService,
+    private readonly employeesService: EmployeesService,
+    private readonly editRequestsService: ContentEditRequestsService,
+  ) {
     console.log('AdminContentController loaded successfully');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers — resolve user role + employee permissions
+  // ---------------------------------------------------------------------------
+  private async assertCanAddContent(user: any, kind: 'movie' | 'series') {
+    if (!user) return; // public-mode endpoints (legacy)
+    const role = user.role;
+    if (role === UserRole.ADMIN || role === UserRole.MODERATOR) return;
+    if (role !== UserRole.EMPLOYEE) {
+      throw new ForbiddenException('Você não tem permissão para criar conteúdo');
+    }
+    const perms = await this.employeesService.getPermissions(user.sub || user.id);
+    if (!perms) throw new ForbiddenException('Permissões de funcionário não configuradas');
+    if (kind === 'movie' && !perms.can_add_movies) {
+      throw new ForbiddenException('Funcionário não pode adicionar filmes');
+    }
+    if (kind === 'series' && !perms.can_add_series) {
+      throw new ForbiddenException('Funcionário não pode adicionar séries');
+    }
+    await this.employeesService.checkDailyLimitAndIncrement(user.sub || user.id);
+  }
+
+  private async assertCanEditContent(user: any, contentId: string) {
+    if (!user) return;
+    const role = user.role;
+    if (role === UserRole.ADMIN || role === UserRole.MODERATOR) return;
+    if (role !== UserRole.EMPLOYEE) {
+      throw new ForbiddenException('Sem permissão de edição');
+    }
+    const ok = await this.employeesService.canEditContent(user.sub || user.id, contentId);
+    if (!ok) {
+      throw new ForbiddenException(
+        'Você só pode editar conteúdos que adicionou (dentro da janela permitida)',
+      );
+    }
+  }
+
+  /**
+   * Returns the edit capability for the given user on the content.
+   * Used by `updateContent` to decide between direct apply vs approval queue.
+   */
+  private async resolveEditCapability(
+    user: any,
+    contentId: string,
+  ): Promise<'direct' | 'needs_approval' | 'blocked'> {
+    if (!user) return 'direct'; // legacy / public mode
+    const role = user.role;
+    if (role === UserRole.ADMIN || role === UserRole.MODERATOR) return 'direct';
+    if (role !== UserRole.EMPLOYEE) return 'blocked';
+    return this.employeesService.getEditCapability(user.sub || user.id, contentId);
   }
 
   @Get()
@@ -64,6 +122,7 @@ export class AdminContentController {
   }
 
   @Post('create')
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({
     summary: 'Create new content (movie/series/documentary)',
     description: 'Creates content in database and automatically generates Stripe Product + Price',
@@ -75,9 +134,11 @@ export class AdminContentController {
   @ApiResponse({ status: 400, description: 'Invalid input or Stripe error' })
   async createContent(
     @Body() dto: CreateContentDto,
-    // @GetUser() user: User, // Temporarily disabled
+    @GetUser() user: any,
   ) {
-    return this.adminContentService.createContent(dto, null);
+    const kind = (dto as any).content_type === 'series' ? 'series' : 'movie';
+    await this.assertCanAddContent(user, kind);
+    return this.adminContentService.createContent(dto, user?.sub || user?.id || null);
   }
 
   @Post('initiate-upload')
@@ -127,6 +188,7 @@ export class AdminContentController {
   }
 
   @Put(':id/publish')
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({
     summary: 'Publish content (make available to users)',
     description: 'Sets content status to PUBLISHED and optionally sends Telegram notifications',
@@ -139,17 +201,19 @@ export class AdminContentController {
   async publishContent(
     @Param('id') contentId: string,
     @Body() dto: Omit<PublishContentDto, 'content_id'>,
-    // @GetUser() user: User, // Temporarily disabled
+    @GetUser() user: any,
   ) {
+    await this.assertCanEditContent(user, contentId);
     return this.adminContentService.publishContent(
       { content_id: contentId, ...dto },
-      null,
+      user?.sub || user?.id || null,
     );
   }
 
   // Series Management Endpoints
 
   @Post('series/create')
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({
     summary: 'Create new TV series',
     description: 'Creates series with optional per-series or per-episode pricing',
@@ -160,9 +224,10 @@ export class AdminContentController {
   })
   async createSeries(
     @Body() dto: CreateSeriesDto,
-    // @GetUser() user: User, // Temporarily disabled
+    @GetUser() user: any,
   ) {
-    return this.adminContentService.createSeries(dto, null);
+    await this.assertCanAddContent(user, 'series');
+    return this.adminContentService.createSeries(dto, user?.sub || user?.id || null);
   }
 
   @Post('series/:seriesId/episodes')
@@ -230,19 +295,39 @@ export class AdminContentController {
   }
 
   @Put(':id')
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({
     summary: 'Update content metadata',
-    description: 'Updates content information (title, description, etc.)',
+    description:
+      'Admins/moderators apply changes directly. Employees apply directly within their edit window; after the window, the change goes to an admin approval queue.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Content updated successfully',
-  })
+  @ApiResponse({ status: 200, description: 'Update applied or queued for approval' })
   @HttpCode(HttpStatus.OK)
   async updateContent(
     @Param('id') contentId: string,
     @Body() updateData: any,
+    @GetUser() user: any,
   ) {
+    const cap = await this.resolveEditCapability(user, contentId);
+    if (cap === 'blocked') {
+      throw new ForbiddenException(
+        'Você não tem permissão para editar este conteúdo.',
+      );
+    }
+    if (cap === 'needs_approval') {
+      const request = await this.editRequestsService.submitEditRequest({
+        employeeId: user.sub || user.id,
+        contentId,
+        proposedChanges: updateData,
+      });
+      return {
+        status: 'pending_approval',
+        message:
+          'Sua edição foi enviada para aprovação do administrador. Você será notificado assim que ela for aceita ou rejeitada.',
+        request,
+      };
+    }
+    // direct apply
     return this.adminContentService.updateContent(contentId, updateData);
   }
 

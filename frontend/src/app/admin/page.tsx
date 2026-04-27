@@ -24,6 +24,18 @@ interface ContentItem {
   createdAt: string;
 }
 
+interface EmployeePermissions {
+  can_add_movies: boolean;
+  can_add_series: boolean;
+  can_edit_own_content: boolean;
+  can_edit_any_content: boolean;
+  can_view_users: boolean;
+  can_view_purchases: boolean;
+  can_view_top10: boolean;
+  can_view_online_users: boolean;
+  can_manage_discounts: boolean;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const { logout } = useAuth();
@@ -36,6 +48,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [recentContent, setRecentContent] = useState<ContentItem[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [perms, setPerms] = useState<EmployeePermissions | null>(null);
+  const [isEmployee, setIsEmployee] = useState(false);
+  const [pendingEditCount, setPendingEditCount] = useState(0);
 
   const handleLogout = async () => {
     try {
@@ -112,6 +127,42 @@ export default function AdminDashboard() {
     const interval = setInterval(fetchStats, 30000);
 
     return () => clearInterval(interval);
+  }, [mounted]);
+
+  // Detect if logged user is an employee and fetch their permissions
+  useEffect(() => {
+    if (!mounted) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+      : null;
+    if (!token) return;
+
+    const userJson = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
+    let role: string | undefined;
+    try {
+      if (userJson) role = JSON.parse(userJson)?.role;
+    } catch {
+      /* silent */
+    }
+
+    if (role === 'employee') {
+      setIsEmployee(true);
+      fetch(`${API_URL}/api/v1/admin/employees/me/permissions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setPerms(data))
+        .catch(() => undefined);
+    } else {
+      // Admin / moderator: fetch pending edit-request count for the badge
+      fetch(`${API_URL}/api/v1/admin/content-edit-requests/pending-count`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : { count: 0 }))
+        .then((d) => setPendingEditCount(d?.count || 0))
+        .catch(() => undefined);
+    }
   }, [mounted]);
 
   const quickActions = [
@@ -210,8 +261,112 @@ export default function AdminDashboard() {
       ),
       gradient: 'from-indigo-600 to-purple-700',
       shadow: 'shadow-indigo-500/50'
+    },
+    {
+      title: 'Carrinho (descontos)',
+      description: 'Configurar faixas de desconto progressivo',
+      href: '/admin/cart-settings',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4z" />
+        </svg>
+      ),
+      gradient: 'from-emerald-600 to-green-700',
+      shadow: 'shadow-emerald-500/50'
+    },
+    {
+      title: 'Recuperar vendas',
+      description: 'Monitorar PIX não pago e ofertas de recuperação',
+      href: '/admin/pix-recovery',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      ),
+      gradient: 'from-yellow-600 to-orange-700',
+      shadow: 'shadow-yellow-500/50'
+    },
+    {
+      title: 'IA Atendimento',
+      description: 'Gerenciar conversas, treinamento e FAQ',
+      href: '/admin/ai-chat',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        </svg>
+      ),
+      gradient: 'from-violet-600 to-fuchsia-700',
+      shadow: 'shadow-violet-500/50'
+    },
+    {
+      title: 'Funcionários',
+      description: 'Gerenciar contas, permissões e limites',
+      href: '/admin/employees',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+      ),
+      gradient: 'from-sky-600 to-blue-700',
+      shadow: 'shadow-sky-500/50'
+    },
+    {
+      title: 'Liberar conteúdo',
+      description: 'Dar acesso manual a um usuário',
+      href: '/admin/grant-access',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      ),
+      gradient: 'from-lime-600 to-green-700',
+      shadow: 'shadow-lime-500/50'
+    },
+    {
+      title: pendingEditCount > 0 ? `Edições pendentes (${pendingEditCount})` : 'Edições pendentes',
+      description: 'Revisar mudanças propostas por funcionários',
+      href: '/admin/edit-requests',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+        </svg>
+      ),
+      gradient: 'from-amber-600 to-orange-700',
+      shadow: 'shadow-amber-500/50'
+    },
+    {
+      title: 'Minhas edições',
+      description: 'Acompanhe edições enviadas para aprovação',
+      href: '/admin/my-edit-requests',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      ),
+      gradient: 'from-teal-600 to-cyan-700',
+      shadow: 'shadow-teal-500/50'
     }
   ];
+
+  // Hide cards an employee shouldn't see, based on their permissions.
+  // Admins see everything. Employees see only what was explicitly enabled.
+  const employeeAllowedHrefs = (() => {
+    if (!isEmployee) return null; // null = no filtering (admin)
+    const allowed = new Set<string>([
+      '/admin/content/manage',
+      '/admin/my-edit-requests', // employees can always see their own edits
+    ]);
+    if (perms?.can_add_movies || perms?.can_add_series) allowed.add('/admin/content/create');
+    if (perms?.can_view_users) allowed.add('/admin/users');
+    if (perms?.can_view_purchases) allowed.add('/admin/purchases');
+    if (perms?.can_view_top10) allowed.add('/admin/top10');
+    if (perms?.can_manage_discounts) allowed.add('/admin/discounts');
+    return allowed;
+  })();
+
+  const filteredQuickActions = employeeAllowedHrefs
+    ? quickActions.filter((a) => employeeAllowedHrefs.has(a.href))
+    : quickActions;
 
   const statCards = [
     {
@@ -343,7 +498,7 @@ export default function AdminDashboard() {
             Ações Rápidas
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quickActions.map((action, index) => (
+            {filteredQuickActions.map((action, index) => (
               <Link
                 key={index}
                 href={action.href}

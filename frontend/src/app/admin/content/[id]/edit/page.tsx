@@ -307,7 +307,15 @@ export default function AdminContentEditPage() {
       );
 
       if (response.ok) {
-        toast.success('Conteúdo atualizado com sucesso!');
+        const result = await response.json().catch(() => ({}));
+        if (result?.status === 'pending_approval') {
+          toast.success(
+            '📝 Edição enviada para aprovação do administrador. Você verá em "Minhas edições" quando for revisada.',
+            { duration: 6000 },
+          );
+        } else {
+          toast.success('Conteúdo atualizado com sucesso!');
+        }
         await loadContent();
       } else {
         const error = await response.json();

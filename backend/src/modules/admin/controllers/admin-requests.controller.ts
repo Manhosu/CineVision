@@ -20,12 +20,16 @@ import {
 } from '@nestjs/swagger';
 import { RequestsService } from '../../requests/requests.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../users/entities/user.entity';
 import { UpdateContentRequestDto, ContentRequestResponseDto } from '../../requests/dto';
 import { RequestStatus } from '../../requests/entities/content-request.entity';
 
 @ApiTags('Admin - Requests')
 @Controller('admin/requests')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 @ApiBearerAuth()
 export class AdminRequestsController {
   constructor(private readonly requestsService: RequestsService) {}

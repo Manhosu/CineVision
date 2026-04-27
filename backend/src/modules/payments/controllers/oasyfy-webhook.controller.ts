@@ -1,6 +1,7 @@
-import { Controller, Post, Body, Logger, HttpCode } from '@nestjs/common';
+import { Controller, Post, Body, Logger, HttpCode, Inject, Optional } from '@nestjs/common';
 import { OasyfyService, OasyfyWebhookPayload } from '../services/oasyfy.service';
 import { SupabaseService } from '../../../config/supabase.service';
+import { OrdersService } from '../../orders/orders.service';
 
 @Controller('webhooks')
 export class OasyfyWebhookController {
@@ -9,6 +10,7 @@ export class OasyfyWebhookController {
   constructor(
     private readonly oasyfyService: OasyfyService,
     private readonly supabaseService: SupabaseService,
+    @Optional() @Inject(OrdersService) private readonly ordersService?: OrdersService,
   ) {}
 
   @Post('oasyfy')
@@ -54,7 +56,7 @@ export class OasyfyWebhookController {
     // Find payment by provider_payment_id
     const { data: payment, error: paymentError } = await this.supabaseService.client
       .from('payments')
-      .select('id, purchase_id, status')
+      .select('id, purchase_id, status, provider_meta')
       .eq('provider_payment_id', transactionId)
       .single();
 
@@ -77,6 +79,25 @@ export class OasyfyWebhookController {
         webhook_payload: payload,
       })
       .eq('id', payment.id);
+
+    // === ORDER-LEVEL PAYMENT (cart checkout) ===
+    const orderId = payment.provider_meta?.order_id;
+    if (orderId && this.ordersService) {
+      this.logger.log(`Order-level payment detected for order ${orderId}`);
+      try {
+        await this.ordersService.markOrderPaid(orderId);
+      } catch (err: any) {
+        this.logger.error(`Failed to mark order ${orderId} as paid: ${err.message}`);
+      }
+      this.logger.log(`Order ${orderId} fully processed`);
+      return;
+    }
+
+    // === LEGACY SINGLE-PURCHASE PAYMENT ===
+    if (!payment.purchase_id) {
+      this.logger.warn(`Payment ${payment.id} has no purchase_id and no order — skipping`);
+      return;
+    }
 
     // Update purchase status
     await this.supabaseService.client

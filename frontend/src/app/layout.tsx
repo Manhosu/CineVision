@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 import { Outfit } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import { Providers } from '@/components/Providers';
+import CartIcon from '@/components/Cart/CartIcon';
+import CineVisionIntro from '@/components/Splash/CineVisionIntro';
+import SessionGuard from '@/components/Auth/SessionGuard';
 import './globals.css';
 
 const outfit = Outfit({
@@ -89,10 +92,19 @@ export default function RootLayout({ children }: RootLayoutProps) {
             aria-hidden="true"
           />
 
+          {/* Splash intro (plays once per session) */}
+          <CineVisionIntro />
+
+          {/* Session heartbeat for authenticated users */}
+          <SessionGuard />
+
           {/* Main content */}
           <div className="relative min-h-screen">
             {children}
           </div>
+
+          {/* Global floating cart */}
+          <CartIcon />
 
           {/* Global toast notifications */}
           <Toaster

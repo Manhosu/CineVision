@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
+import { handleOrderDeepLink } from './order-payment.handler';
 
 interface Purchase {
   id: string;
@@ -64,6 +65,11 @@ export const startHandler = async (
   // Check if user wants to request content
   if (startParam === 'request_content') {
     await handleContentRequest(bot, chatId, firstName);
+  }
+  // Order deep-link: /start order_<uuid>
+  else if (startParam && startParam.startsWith('order_')) {
+    const orderToken = startParam.slice('order_'.length);
+    await handleOrderDeepLink(bot, chatId, orderToken);
   }
   // Check if there's a purchase token in the start parameter
   else if (startParam && startParam.length > 10) {

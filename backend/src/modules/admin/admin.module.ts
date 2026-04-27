@@ -25,6 +25,8 @@ import { AdminTop10Controller, AdminSalesController } from './controllers/admin-
 import { AdminTop10Service } from './services/admin-top10.service';
 import { AdminPeopleController } from './controllers/admin-people.controller';
 import { AdminPeopleService } from './services/admin-people.service';
+import { AdminManualGrantController } from './controllers/admin-manual-grant.controller';
+import { BotEphemeralController } from './controllers/bot-ephemeral.controller';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -50,6 +52,8 @@ import { ConfigModule } from '@nestjs/config';
 import { RequestsModule } from '../requests/requests.module';
 import { AuthModule } from '../auth/auth.module';
 import { PaymentsModule } from '../payments/payments.module';
+import { EmployeesModule } from '../employees/employees.module';
+import { ContentEditRequestsModule } from '../content-edit-requests/content-edit-requests.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [
@@ -76,6 +80,8 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminTop10Controller,
   AdminSalesController,
   AdminPeopleController,
+  AdminManualGrantController,
+  BotEphemeralController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -142,6 +148,8 @@ const conditionalExports = isTypeOrmEnabled() ? [
     SupabaseModule,
     forwardRef(() => AuthModule),
     forwardRef(() => PaymentsModule),
+    forwardRef(() => EmployeesModule),
+    forwardRef(() => ContentEditRequestsModule),
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

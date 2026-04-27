@@ -1,9 +1,16 @@
-import { Controller, Get, Put, Delete, Param, Query, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Put, Delete, Param, Query, Logger, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { SupabaseService } from '../../../config/supabase.service';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
+import { UserRole } from '../../users/entities/user.entity';
 
 @ApiTags('admin-users')
+@ApiBearerAuth()
 @Controller('admin/users')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 export class AdminUsersController {
   private readonly logger = new Logger(AdminUsersController.name);
 

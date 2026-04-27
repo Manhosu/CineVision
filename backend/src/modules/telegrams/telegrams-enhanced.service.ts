@@ -327,22 +327,24 @@ export class TelegramsEnhancedService implements OnModuleInit {
       ? `~R$ ${(originalPrice / 100).toFixed(2)}~ R$ ${(finalPrice / 100).toFixed(2)} (${discountPercentage}% OFF)`
       : `R$ ${(originalPrice / 100).toFixed(2)}`;
 
-    await this.sendMessage(chatId, `💳 *Escolha o método de pagamento:*\n\n🎬 ${content.title}\n💰 Valor: R$ ${priceText}\n\nSelecione uma opção:`, {
-      parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '💳 Cartão de Crédito', callback_data: `pay_stripe_${purchaseId}` },
+    // Cleanup any previous step messages for this chat first
+    await this.cleanupTrackedMessages(chatId);
+
+    await this.sendTrackedMessage(
+      chatId,
+      `💳 *Escolha o método de pagamento:*\n\n🎬 ${content.title}\n💰 Valor: R$ ${priceText}\n\nSelecione uma opção:`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '💳 Cartão de Crédito', callback_data: `pay_stripe_${purchaseId}` }],
+            [{ text: '📱 PIX', callback_data: `pay_pix_${purchaseId}` }],
+            [{ text: '🔙 Cancelar', callback_data: 'catalog' }],
           ],
-          [
-            { text: '📱 PIX', callback_data: `pay_pix_${purchaseId}` },
-          ],
-          [
-            { text: '🔙 Cancelar', callback_data: 'catalog' },
-          ],
-        ],
+        },
       },
-    });
+      'payment_choice',
+    );
   }
 
   /**
@@ -777,6 +779,202 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.handleSupportCommand(chatId);
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
+    } else if (text && !text.startsWith('/') && message.chat.type === 'private') {
+      // Dispatch to AI chat service
+      await this.dispatchAiChat(chatId, text, telegramUserId);
+    }
+  }
+
+  private async dispatchAiChat(chatId: number, text: string, telegramUserId: number) {
+    try {
+      const axios = (await import('axios')).default;
+      const backendSelf = this.configService.get('BACKEND_SELF_URL') || 'http://localhost:3001';
+
+      // Identify user
+      let userId: string | undefined;
+      try {
+        const { data: user } = await this.supabase
+          .from('users')
+          .select('id')
+          .eq('telegram_id', telegramUserId.toString())
+          .single();
+        userId = user?.id;
+      } catch {
+        /* silent */
+      }
+
+      const response = await axios.post(
+        `${backendSelf}/api/v1/ai-chat/message`,
+        {
+          platform: 'telegram',
+          external_chat_id: String(chatId),
+          message: text,
+          user_id: userId,
+        },
+        { timeout: 30000 },
+      );
+
+      const reply = response.data;
+      if (reply?.paused) return;
+      if (!reply?.text) return;
+
+      // If AI offered a payment link, send a single message with inline button
+      if (reply.paymentLink) {
+        await this.sendMessage(chatId, reply.text, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '💳 Pagar agora via PIX', url: reply.paymentLink }],
+            ],
+          },
+        });
+      } else {
+        await this.sendMessage(chatId, reply.text, { parse_mode: 'Markdown' });
+      }
+    } catch (err: any) {
+      this.logger.warn(`AI dispatch failed: ${err.message}`);
+    }
+  }
+
+  private async handleOrderDeepLink(chatId: number, orderToken: string, userId?: string) {
+    try {
+      const axios = (await import('axios')).default;
+      const backendSelf = this.configService.get('BACKEND_SELF_URL') || 'http://localhost:3001';
+      const response = await axios.get(`${backendSelf}/api/v1/orders/token/${orderToken}`, {
+        timeout: 10000,
+      });
+      const order = response.data;
+
+      if (!order) {
+        await this.sendMessage(chatId, '❌ Pedido não encontrado.');
+        return;
+      }
+
+      if (order.status === 'paid') {
+        await this.sendMessage(chatId, `✅ Esse pedido já foi pago.\n\nUse /minhas-compras para acessar seus conteúdos.`);
+        return;
+      }
+
+      const qr = order.payment?.provider_meta?.qr_code;
+      const qrB64 = order.payment?.provider_meta?.qr_code_base64;
+      const items = order.purchases || [];
+      const itemList = items
+        .map((p: any, i: number) => `${i + 1}. ${p.content?.title || 'Item'}`)
+        .join('\n');
+      const discountLine = order.discount_percent > 0
+        ? `\n🎁 Desconto aplicado: ${order.discount_percent}%`
+        : '';
+      const totalFmt = (order.total_cents / 100).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+      });
+
+      const header =
+        `🛒 *Seu pedido*\n\n${itemList}${discountLine}\n\n💰 Total: *R$ ${totalFmt}*\n\n📱 Pague com PIX:`;
+
+      if (qrB64) {
+        try {
+          const axiosLib = (await import('axios')).default;
+          const FormData = require('form-data');
+          const form = new FormData();
+          form.append('chat_id', chatId.toString());
+          form.append('photo', Buffer.from(qrB64.startsWith('data:') ? qrB64.split(',')[1] : qrB64, 'base64'), {
+            filename: 'qrcode.png',
+            contentType: 'image/png',
+          });
+          form.append('caption', header);
+          form.append('parse_mode', 'Markdown');
+          await axiosLib.post(`${this.botApiUrl}/sendPhoto`, form, {
+            headers: form.getHeaders(),
+          });
+        } catch (imgErr: any) {
+          this.logger.warn(`QR send failed: ${imgErr.message}`);
+          await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+        }
+      } else {
+        await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+      }
+
+      if (qr) {
+        await this.sendMessage(chatId, `*Código copia-e-cola:*\n\`${qr}\``, { parse_mode: 'Markdown' });
+      }
+
+      await this.sendMessage(
+        chatId,
+        '⏳ Aguardando pagamento. Você receberá uma confirmação automática.\n\nDigite /start para iniciar o bot novamente.',
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '✅ Já paguei', callback_data: `order_check_${orderToken}` }],
+              [{ text: '❌ Cancelar', callback_data: `order_cancel_${orderToken}` }],
+            ],
+          },
+        },
+      );
+    } catch (err: any) {
+      this.logger.error(`Order deep-link error: ${err.message}`);
+      await this.sendMessage(chatId, '❌ Não foi possível carregar o pedido. Tente novamente.');
+    }
+  }
+
+  // Order callback handlers
+  private async handleOrderCheckCallback(chatId: number, orderToken: string) {
+    try {
+      const axiosLib = (await import('axios')).default;
+      const backendSelf = this.configService.get('BACKEND_SELF_URL') || 'http://localhost:3001';
+      const response = await axiosLib.get(`${backendSelf}/api/v1/orders/token/${orderToken}`, {
+        timeout: 10000,
+      });
+      const order = response.data;
+      if (!order) {
+        await this.sendMessage(chatId, '❌ Pedido não encontrado.');
+        return;
+      }
+      if (order.status === 'paid') {
+        await this.sendMessage(
+          chatId,
+          '✅ *Pagamento confirmado!*\n\nVou te enviar os links em instantes.',
+          { parse_mode: 'Markdown' },
+        );
+        // Delivery is normally triggered by webhook; this is just a UX confirmation.
+      } else {
+        await this.sendMessage(
+          chatId,
+          '⏳ Ainda não identificamos seu pagamento. Aguarde mais alguns segundos ou tente novamente.',
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`Order check callback error: ${err.message}`);
+      await this.sendMessage(chatId, '❌ Erro ao verificar pagamento.');
+    }
+  }
+
+  private async handleOrderCancelCallback(chatId: number, orderToken: string) {
+    try {
+      const { data: order } = await this.supabase
+        .from('orders')
+        .select('id, status')
+        .eq('order_token', orderToken)
+        .maybeSingle();
+      if (!order) {
+        await this.sendMessage(chatId, '❌ Pedido não encontrado.');
+        return;
+      }
+      if (order.status === 'paid') {
+        await this.sendMessage(chatId, 'Esse pedido já foi pago — não dá pra cancelar.');
+        return;
+      }
+      await this.supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', order.id);
+      await this.cleanupTrackedMessages(chatId);
+      await this.sendMessage(
+        chatId,
+        '❌ Pedido cancelado.\n\nDigite /start para iniciar o bot novamente.',
+      );
+    } catch (err: any) {
+      this.logger.error(`Order cancel callback error: ${err.message}`);
+      await this.sendMessage(chatId, '❌ Erro ao cancelar pedido.');
     }
   }
 
@@ -1012,6 +1210,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.handleStripePayment(chatId, data);
     } else if (data?.startsWith('check_pix_')) {
       await this.handleCheckPixPayment(chatId, data);
+    } else if (data?.startsWith('order_check_')) {
+      const token = data.replace('order_check_', '');
+      await this.handleOrderCheckCallback(chatId, token);
+    } else if (data?.startsWith('order_cancel_')) {
+      const token = data.replace('order_cancel_', '');
+      await this.handleOrderCancelCallback(chatId, token);
     } else if (data === 'my_purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
@@ -1088,6 +1292,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private async handlePixPayment(chatId: number, data: string) {
     const purchaseId = data.replace('pay_pix_', '');
     try {
+      // Clean up the "payment choice" message before showing the PIX
+      await this.cleanupTrackedMessages(chatId);
 
       // Cleanup expired cache entries (> 5 min) to prevent stale locks
       const FIVE_MINUTES = 5 * 60 * 1000;
@@ -1646,6 +1852,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
         await this.handleBuyCallback(chatId, telegramUserId || chatId, param);
         return;
       }
+      // Order deep-link: /start order_<uuid>
+      else if (param.startsWith('order_')) {
+        const orderToken = param.replace('order_', '');
+        this.logger.log(`🛒 Order deep link: ${orderToken}`);
+        await this.handleOrderDeepLink(chatId, orderToken, user?.id);
+        return;
+      }
       // Se o parâmetro começa com "request_", é uma solicitação de conteúdo
       else if (param.startsWith('request_')) {
         try {
@@ -2173,6 +2386,59 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         },
       }
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bot-step message tracking (ephemeral cleanup between steps)
+  // Saves message_id in bot_ephemeral_messages so previous step messages can
+  // be deleted when the user advances. Best-effort — never throws.
+  // ---------------------------------------------------------------------------
+  async sendTrackedMessage(
+    chatId: number,
+    text: string,
+    options: any,
+    step: string,
+  ): Promise<any> {
+    const result = await this.sendMessage(chatId, text, options);
+    const msgId = result?.result?.message_id;
+    if (msgId) {
+      await this.supabase
+        .from('bot_ephemeral_messages')
+        .insert({ chat_id: String(chatId), message_id: msgId, step })
+        .then(() => undefined, () => undefined);
+    }
+    return result;
+  }
+
+  async cleanupTrackedMessages(chatId: number, exceptStep?: string): Promise<void> {
+    try {
+      let q = this.supabase
+        .from('bot_ephemeral_messages')
+        .select('id, message_id, step')
+        .eq('chat_id', String(chatId));
+      const { data: rows } = await q;
+      if (!rows?.length) return;
+
+      const toDelete = exceptStep ? rows.filter((r: any) => r.step !== exceptStep) : rows;
+
+      for (const r of toDelete) {
+        try {
+          await axios.post(`${this.botApiUrl}/deleteMessage`, {
+            chat_id: chatId,
+            message_id: r.message_id,
+          });
+        } catch {
+          // Telegram may refuse if msg >48h or already deleted — ignore
+        }
+      }
+
+      const ids = toDelete.map((r: any) => r.id);
+      if (ids.length) {
+        await this.supabase.from('bot_ephemeral_messages').delete().in('id', ids);
+      }
+    } catch (err: any) {
+      this.logger.warn(`cleanupTrackedMessages failed: ${err.message}`);
+    }
   }
 
   // Helper methods

@@ -134,6 +134,20 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('validate')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lightweight session heartbeat — 200 if token valid' })
+  validate(@Request() req) {
+    return {
+      valid: true,
+      sub: req.user?.sub,
+      role: req.user?.role,
+      ts: Date.now(),
+    };
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()

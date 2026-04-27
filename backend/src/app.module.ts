@@ -18,6 +18,13 @@ import { AdminModule } from './modules/admin/admin.module';
 import { RequestsModule } from './modules/requests/requests.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
+import { CartModule } from './modules/cart/cart.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PixRecoveryModule } from './modules/pix-recovery/pix-recovery.module';
+import { AiChatModule } from './modules/ai-chat/ai-chat.module';
+import { EmployeesModule } from './modules/employees/employees.module';
+import { ContentEditRequestsModule } from './modules/content-edit-requests/content-edit-requests.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApiModule } from './api/api.module';
 import { HealthModule } from './health/health.module';
 // import { UploadProgressModule } from './modules/upload-progress/upload-progress.module';
@@ -131,6 +138,13 @@ import { AdminSettings } from './modules/admin/entities/admin-settings.entity';
     RequestsModule,
     AnalyticsModule,
     DiscountsModule,
+    CartModule,
+    OrdersModule,
+    PixRecoveryModule,
+    AiChatModule,
+    EmployeesModule,
+    ContentEditRequestsModule,
+    WhatsappModule,
     ApiModule,
     HealthModule,
     // UploadProgressModule,

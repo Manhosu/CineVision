@@ -88,6 +88,11 @@ export class AdminContentSimpleService {
       age_rating: data.age_rating || null,
     };
 
+    // Audit trail — register who created this content (for employee permissions)
+    if (userId) {
+      contentData.createdById = userId;
+    }
+
     // Adicionar campos específicos de série se aplicável
     if (contentData.content_type === 'series') {
       contentData.total_seasons = data.total_seasons || null;

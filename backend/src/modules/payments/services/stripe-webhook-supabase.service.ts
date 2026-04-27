@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import Stripe from 'stripe';
 import { SupabaseService } from '../../../config/supabase.service';
 import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
+import { OrdersService } from '../../orders/orders.service';
 
 @Injectable()
 export class StripeWebhookSupabaseService {
@@ -10,6 +11,9 @@ export class StripeWebhookSupabaseService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly telegramsService: TelegramsEnhancedService,
+    @Optional()
+    @Inject(forwardRef(() => OrdersService))
+    private readonly ordersService?: OrdersService,
   ) {}
 
   private get supabase() {
@@ -49,9 +53,21 @@ export class StripeWebhookSupabaseService {
   private async handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
     this.logger.log(`Payment intent succeeded: ${paymentIntent.id}`);
 
-    const metadata = paymentIntent.metadata;
-    const purchaseId = metadata?.purchase_id;
-    const purchaseToken = metadata?.purchase_token;
+    const metadata = paymentIntent.metadata || {};
+
+    // === ORDER-LEVEL PAYMENT (cart checkout) ===
+    if (metadata.order_id && this.ordersService) {
+      this.logger.log(`Order-level Stripe payment: ${metadata.order_id}`);
+      try {
+        await this.ordersService.markOrderPaid(metadata.order_id);
+      } catch (err: any) {
+        this.logger.error(`Failed to mark order as paid: ${err.message}`);
+      }
+      return;
+    }
+
+    const purchaseId = metadata.purchase_id;
+    const purchaseToken = metadata.purchase_token;
 
     if (!purchaseId && !purchaseToken) {
       this.logger.warn(`No purchase_id or purchase_token in payment intent metadata: ${paymentIntent.id}`);
@@ -374,9 +390,21 @@ export class StripeWebhookSupabaseService {
   private async handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
     this.logger.log(`Checkout session completed: ${session.id}`);
 
-    const metadata = session.metadata;
-    const purchaseId = metadata?.purchase_id;
-    const purchaseToken = metadata?.purchase_token;
+    const metadata = session.metadata || {};
+
+    // === ORDER-LEVEL PAYMENT (cart checkout) ===
+    if (metadata.order_id && this.ordersService) {
+      this.logger.log(`Order-level Stripe checkout: ${metadata.order_id}`);
+      try {
+        await this.ordersService.markOrderPaid(metadata.order_id);
+      } catch (err: any) {
+        this.logger.error(`Failed to mark order as paid: ${err.message}`);
+      }
+      return;
+    }
+
+    const purchaseId = metadata.purchase_id;
+    const purchaseToken = metadata.purchase_token;
 
     if (!purchaseId && !purchaseToken) {
       this.logger.warn(`No purchase info in checkout session metadata: ${session.id}`);

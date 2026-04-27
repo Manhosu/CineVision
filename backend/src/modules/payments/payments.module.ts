@@ -21,6 +21,7 @@ import { Payment } from './entities/payment.entity';
 import { Purchase } from '../purchases/entities/purchase.entity';
 import { AdminModule } from '../admin/admin.module';
 import { TelegramsModule } from '../telegrams/telegrams.module';
+import { OrdersModule } from '../orders/orders.module';
 import { SupabaseModule } from '../../config/supabase.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
@@ -46,6 +47,7 @@ const conditionalExports = isTypeOrmEnabled()
     SupabaseModule,
     forwardRef(() => AdminModule),
     forwardRef(() => TelegramsModule),
+    forwardRef(() => OrdersModule),
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

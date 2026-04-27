@@ -6,6 +6,8 @@ import { ArrowLeftIcon, BookmarkIcon, ShareIcon, PlayIcon, EyeIcon } from '@hero
 import { BookmarkIcon as BookmarkOutline, FireIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
+import AddToCartButton from '@/components/Cart/AddToCartButton';
+import DiscountHint from '@/components/Cart/DiscountHint';
 
 interface ContentHeroProps {
   content: Movie & {
@@ -307,6 +309,23 @@ export default function ContentHero({
                 {isOwned ? 'Assistir' : isFlashPromo ? 'Comprar Agora' : 'Comprar'}
               </button>
             )}
+
+            {/* Add to cart (only if not owned) */}
+            {!isOwned && !checkingOwnership && (
+              <AddToCartButton
+                content={{
+                  id: content.id,
+                  title: content.title,
+                  poster_url: content.poster_url || undefined,
+                  price_cents: hasDiscount ? content.discounted_price_cents! : content.price_cents,
+                  type: contentType,
+                }}
+                variant="hero"
+              />
+            )}
+
+            {/* Cart discount incentive hint */}
+            {!isOwned && <DiscountHint className="ml-auto sm:ml-0" />}
 
             {/* Price tag */}
             <div className="flex flex-col">
