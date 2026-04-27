@@ -63,16 +63,15 @@ export default function CineVisionIntro() {
           exit={{ opacity: 0 }}
           // z-index has to outrank every other overlay (eg. the WhatsApp
           // community modal at z-9999) so the splash isn't covered.
-          // Background follows the video's brightening curve so the
-          // letterbox area on portrait never looks like a darker cutout
-          // next to the video frame. The video is essentially black for
-          // the first ~2.5s (only a tiny red glint) and only fills with
-          // navy in the last second — keep bg pure black until 50% of
-          // the duration, then ramp to the final navy. Corner colors
-          // sampled with ffmpeg at 0.5/2/3.5/5/5.7s:
-          //   #010000 → #03000a → #040013 → #05001a → #05001a
+          // Background tracks the video's actual edge brightness so the
+          // letterbox space on portrait never looks like a darker frame
+          // around the video. Edges sampled with ffmpeg (top+bottom 2-row
+          // band of an 8x8 downscale) at 0.5/1.5/2.5/3.5/4.5/5/5.5s:
+          //   #030003 → #040007 → #05000e → #05001a → #090332 → #060025 → #070024
+          // The edge briefly peaks at #090332 around 4.5s before easing
+          // back to #070024 — keep that bump in the curve.
           animate={{
-            backgroundColor: ['#000000', '#000000', '#020008', '#04001a', '#05001a'],
+            backgroundColor: ['#000000', '#040007', '#05001a', '#090332', '#070024'],
           }}
           // Per-property transitions: backgroundColor follows the
           // keyframes; opacity uses a quick 0.6s fade only on exit.
@@ -81,13 +80,11 @@ export default function CineVisionIntro() {
           transition={{
             backgroundColor: {
               duration: 5.88,
-              times: [0, 0.45, 0.7, 0.9, 1],
+              times: [0, 0.25, 0.6, 0.76, 1],
               ease: 'linear',
             },
             opacity: { duration: 0.6 },
           }}
-          // overflow-hidden so the scaled-up video on portrait does not
-          // leak past the splash overlay onto the page beneath.
           className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden"
           aria-hidden="true"
         >
@@ -98,14 +95,14 @@ export default function CineVisionIntro() {
             muted
             playsInline
             preload="auto"
-            // The intro video itself has dark periphery (above/below the
-            // bright "spotlight" reveal). On portrait that periphery
-            // looked like black bars next to the navy page bg. Use cover
-            // + a scale-up on portrait so the bright center fills the
-            // viewport and the dark periphery extends off-screen.
-            // Landscape doesn't need the scale — the video already fills
-            // edge-to-edge with object-cover.
-            className="h-full w-full object-cover scale-[1.8] landscape:scale-100"
+            // contain on portrait keeps the whole logo (CINE VISION + the
+            // triangle) visible without horizontal cropping. cover on
+            // landscape fills the screen edge-to-edge. The page bg
+            // animates from black through the same navy curve as the
+            // video edge, so the letterbox space above/below the video
+            // on portrait blends into the video frame instead of looking
+            // like a darker cutout.
+            className="h-full w-full object-contain landscape:object-cover"
           />
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
