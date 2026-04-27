@@ -245,7 +245,10 @@ function MobileLogoReveal() {
 
       {/* The logo itself. Comes in from depth (small + blurred +
           over-bright) then resolves to its natural size with a
-          slight overshoot for the cinematic punch. */}
+          slight overshoot for the cinematic punch.
+          mix-blend-mode: screen drops the PNG's black background to
+          fully transparent so the logo composites cleanly over the
+          red glow without showing a rectangular outline. */}
       <motion.img
         src="/cinevision-logo.png"
         alt=""
@@ -254,6 +257,7 @@ function MobileLogoReveal() {
         style={{
           width: 'min(82vw, 480px)',
           height: 'auto',
+          mixBlendMode: 'screen',
           willChange: 'transform, opacity, filter',
         }}
         initial={{ scale: 0.18, opacity: 0, filter: 'blur(28px) brightness(2.4)' }}
