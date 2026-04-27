@@ -14,15 +14,10 @@ coverage
 *.swo
 *~
 .git
-*.mp4
+# Heavy media files are kept out of git via .gitignore; do not re-exclude
+# here, otherwise legitimate small splash assets under public/ get dropped.
 *.mkv
 *.avi
-*.mov
 *.wmv
 *.flv
-*.webm
 public/videos
-# Allow short branding/splash assets shipped from public/
-!public/**/*.mp4
-!public/**/*.webm
-!public/**/*.mov
