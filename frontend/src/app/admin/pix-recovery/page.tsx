@@ -13,7 +13,8 @@ interface Stats {
     enabled: boolean;
     delayMinutes: number;
     discountPercent: number;
-    cooldownHours: number;
+    blockDaysMin: number;
+    blockDaysMax: number;
     maxItems: number;
   };
 }
@@ -53,11 +54,17 @@ export default function PixRecoveryPage() {
     if (!settings) return;
     try {
       setSaving(true);
+      if (settings.blockDaysMax < settings.blockDaysMin) {
+        toast.error('Bloqueio máximo precisa ser ≥ mínimo');
+        setSaving(false);
+        return;
+      }
       await api.put('/api/v1/admin/pix-recovery/settings', {
         enabled: settings.enabled,
         delayMinutes: settings.delayMinutes,
         discountPercent: settings.discountPercent,
-        cooldownHours: settings.cooldownHours,
+        blockDaysMin: settings.blockDaysMin,
+        blockDaysMax: settings.blockDaysMax,
         maxItems: settings.maxItems,
       });
       toast.success('Configurações salvas!');
@@ -114,11 +121,21 @@ export default function PixRecoveryPage() {
                 className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2"
               />
             </Field>
-            <Field label="Cooldown por usuário (horas)">
+            <Field label="Bloqueio mínimo após oferta (dias)">
               <input
                 type="number"
-                value={settings.cooldownHours}
-                onChange={(e) => setSettings({ ...settings, cooldownHours: Number(e.target.value) })}
+                min={1}
+                value={settings.blockDaysMin}
+                onChange={(e) => setSettings({ ...settings, blockDaysMin: Number(e.target.value) })}
+                className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2"
+              />
+            </Field>
+            <Field label="Bloqueio máximo após oferta (dias)">
+              <input
+                type="number"
+                min={1}
+                value={settings.blockDaysMax}
+                onChange={(e) => setSettings({ ...settings, blockDaysMax: Number(e.target.value) })}
                 className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2"
               />
             </Field>
@@ -131,6 +148,12 @@ export default function PixRecoveryPage() {
               />
             </Field>
           </div>
+          <p className="mt-3 text-xs text-zinc-500">
+            🛡️ Anti-fraude: depois que um cliente recebe a oferta, ele fica bloqueado
+            por um número aleatório de dias entre o mínimo e o máximo. Como o cliente
+            não consegue prever quando volta a ser elegível, ele não tem como
+            "esperar pra ganhar desconto sempre".
+          </p>
           <button
             onClick={saveSettings}
             disabled={saving}
@@ -154,26 +177,38 @@ export default function PixRecoveryPage() {
                   <th className="py-2">Data</th>
                   <th>Usuário</th>
                   <th>Desconto</th>
+                  <th>Bloqueado até</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map((h) => (
-                  <tr key={h.id} className="border-b border-white/5">
-                    <td className="py-2 text-zinc-400">
-                      {new Date(h.offered_at).toLocaleString('pt-BR')}
-                    </td>
-                    <td>{h.user_id || h.telegram_chat_id || '-'}</td>
-                    <td>{h.discount_percent}%</td>
-                    <td>
-                      {h.converted ? (
-                        <span className="text-green-400">Convertido</span>
-                      ) : (
-                        <span className="text-zinc-400">Pendente</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {history.map((h) => {
+                  const blockedUntil = h.next_eligible_at
+                    ? new Date(h.next_eligible_at)
+                    : null;
+                  const stillBlocked = blockedUntil && blockedUntil > new Date();
+                  return (
+                    <tr key={h.id} className="border-b border-white/5">
+                      <td className="py-2 text-zinc-400">
+                        {new Date(h.offered_at).toLocaleString('pt-BR')}
+                      </td>
+                      <td>{h.user_id || h.telegram_chat_id || '-'}</td>
+                      <td>{h.discount_percent}%</td>
+                      <td className={stillBlocked ? 'text-yellow-400' : 'text-zinc-500'}>
+                        {blockedUntil
+                          ? blockedUntil.toLocaleDateString('pt-BR')
+                          : '-'}
+                      </td>
+                      <td>
+                        {h.converted ? (
+                          <span className="text-green-400">Convertido</span>
+                        ) : (
+                          <span className="text-zinc-400">Pendente</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

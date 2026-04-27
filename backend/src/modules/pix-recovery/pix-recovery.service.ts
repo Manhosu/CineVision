@@ -31,18 +31,24 @@ export class PixRecoveryService {
   }
 
   private async getSettings() {
-    const [enabled, delay, discount, cooldown, maxItems] = await Promise.all([
+    const [enabled, delay, discount, blockMin, blockMax, maxItems] = await Promise.all([
       this.getSetting('pix_recovery_enabled'),
       this.getSetting('pix_recovery_delay_minutes'),
       this.getSetting('pix_recovery_discount_percent'),
-      this.getSetting('pix_recovery_cooldown_hours'),
+      this.getSetting('pix_recovery_block_days_min'),
+      this.getSetting('pix_recovery_block_days_max'),
       this.getSetting('pix_recovery_max_items'),
     ]);
+    const min = parseInt(blockMin ?? '30', 10) || 30;
+    const maxRaw = parseInt(blockMax ?? '60', 10) || 60;
+    // Guarantee max >= min so the random window is always valid.
+    const max = Math.max(min, maxRaw);
     return {
       enabled: (enabled ?? 'true').toLowerCase() === 'true',
       delayMinutes: parseInt(delay ?? '5', 10) || 5,
       discountPercent: parseFloat(discount ?? '10') || 10,
-      cooldownHours: parseInt(cooldown ?? '48', 10) || 48,
+      blockDaysMin: min,
+      blockDaysMax: max,
       maxItems: parseInt(maxItems ?? '2', 10) || 2,
     };
   }
@@ -51,7 +57,8 @@ export class PixRecoveryService {
     enabled?: boolean;
     delayMinutes?: number;
     discountPercent?: number;
-    cooldownHours?: number;
+    blockDaysMin?: number;
+    blockDaysMax?: number;
     maxItems?: number;
   }) {
     const pairs: Array<[string, string]> = [];
@@ -61,8 +68,10 @@ export class PixRecoveryService {
       pairs.push(['pix_recovery_delay_minutes', String(input.delayMinutes)]);
     if (input.discountPercent !== undefined)
       pairs.push(['pix_recovery_discount_percent', String(input.discountPercent)]);
-    if (input.cooldownHours !== undefined)
-      pairs.push(['pix_recovery_cooldown_hours', String(input.cooldownHours)]);
+    if (input.blockDaysMin !== undefined)
+      pairs.push(['pix_recovery_block_days_min', String(Math.max(1, Math.floor(input.blockDaysMin)))]);
+    if (input.blockDaysMax !== undefined)
+      pairs.push(['pix_recovery_block_days_max', String(Math.max(1, Math.floor(input.blockDaysMax)))]);
     if (input.maxItems !== undefined)
       pairs.push(['pix_recovery_max_items', String(input.maxItems)]);
 
@@ -72,6 +81,19 @@ export class PixRecoveryService {
         { onConflict: 'key' },
       );
     }
+  }
+
+  /**
+   * Picks a random timestamp between (now + minDays) and (now + maxDays).
+   * The randomness is what makes the anti-abuse strong: a customer who pays
+   * via recovery today doesn't know whether the next chance comes in 30 or
+   * 60 days, so they can't time their next purchase to game the discount.
+   */
+  private pickNextEligibleAt(minDays: number, maxDays: number): string {
+    const minMs = minDays * 24 * 60 * 60 * 1000;
+    const maxMs = maxDays * 24 * 60 * 60 * 1000;
+    const offset = minMs + Math.random() * (maxMs - minMs);
+    return new Date(Date.now() + offset).toISOString();
   }
 
   // ---------------------------------------------------------------------------
@@ -110,11 +132,10 @@ export class PixRecoveryService {
       return;
     }
 
-    // Skip if user is in cooldown
-    const cooldownSince = new Date(
-      Date.now() - settings.cooldownHours * 60 * 60 * 1000,
-    ).toISOString();
-
+    // Skip if user is still inside their randomized block window from a
+    // previous offer. The window is per-user/chat and stored as
+    // `next_eligible_at` on the most recent history row — see
+    // pickNextEligibleAt() for why it's randomized.
     const identifier = order.user_id
       ? { column: 'user_id', value: order.user_id }
       : order.telegram_chat_id
@@ -126,16 +147,18 @@ export class PixRecoveryService {
       return;
     }
 
-    const { data: recent } = await this.supabase.client
+    const nowIso = new Date().toISOString();
+    const { data: blocking } = await this.supabase.client
       .from('pix_recovery_history')
-      .select('id')
+      .select('id, next_eligible_at')
       .eq(identifier.column, identifier.value)
-      .gte('offered_at', cooldownSince)
+      .gt('next_eligible_at', nowIso)
+      .order('next_eligible_at', { ascending: false })
       .limit(1);
 
-    if (recent && recent.length) {
+    if (blocking && blocking.length) {
       this.logger.log(
-        `User ${identifier.value} in cooldown — skipping recovery for order ${order.id}`,
+        `User ${identifier.value} blocked until ${blocking[0].next_eligible_at} — skipping recovery for order ${order.id}`,
       );
       return;
     }
@@ -160,13 +183,21 @@ export class PixRecoveryService {
 
     if (!recovery) return;
 
-    // Record in history
+    // Record in history with the randomized next-eligibility timestamp.
+    // After today's offer the user is blocked at least `blockDaysMin` days
+    // and at most `blockDaysMax` days — they can't predict which.
+    const nextEligibleAt = this.pickNextEligibleAt(
+      settings.blockDaysMin,
+      settings.blockDaysMax,
+    );
+
     await this.supabase.client.from('pix_recovery_history').insert({
       user_id: order.user_id || null,
       telegram_chat_id: order.telegram_chat_id || null,
       original_order_id: order.id,
       recovery_order_id: recovery.order.id,
       discount_percent: settings.discountPercent,
+      next_eligible_at: nextEligibleAt,
     });
 
     // Notify user via bot

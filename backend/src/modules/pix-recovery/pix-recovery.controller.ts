@@ -34,7 +34,8 @@ export class PixRecoveryController {
       enabled?: boolean;
       delayMinutes?: number;
       discountPercent?: number;
-      cooldownHours?: number;
+      blockDaysMin?: number;
+      blockDaysMax?: number;
       maxItems?: number;
     },
   ) {
