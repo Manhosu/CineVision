@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -10,7 +10,23 @@ import { api } from '@/services/api';
 const fmt = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// useSearchParams() requires a Suspense boundary for Next.js 14 static
+// prerendering — without it the build fails with "missing-suspense-with-csr-bailout".
 export default function CheckoutPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black p-8 text-center text-white">
+          Carregando pedido...
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
+  );
+}
+
+function CheckoutContent() {
   const params = useSearchParams();
   const router = useRouter();
   const token = params?.get('token') || null;
