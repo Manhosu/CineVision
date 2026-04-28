@@ -5,57 +5,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const SESSION_KEY = 'cv_intro_played';
 
-// Splash duration depends on which animation is playing.
-// Desktop video clip is 5.4s (reverse-trimmed) + 200ms tail.
-// Mobile motion-driven animation is 4.6s + 200ms tail.
-const DESKTOP_DURATION_MS = 5600;
-const MOBILE_DURATION_MS = 4800;
-
-// Audio (Netflix-style "tudum" jingle, ~4s) climaxes at the end. Start
-// it slightly delayed so the climax lands on the logo reveal.
-const AUDIO_OFFSET_DESKTOP_MS = 1400;
-const AUDIO_OFFSET_MOBILE_MS = 600;
-
-// Returns null until matchMedia has been read (we render desktop on
-// the server to avoid an SSR/hydration mismatch).
-function useIsMobile(): boolean | null {
-  const [isMobile, setIsMobile] = useState<boolean | null>(null);
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px)');
-    setIsMobile(mq.matches);
-    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return isMobile;
-}
+// Total splash window: 5.5s of choreography + 0.6s exit fade.
+// The Netflix-style "tudum" jingle is 4.1s and climaxes at the
+// end. We start audio at 0.4s so the climax lands at ~4.5s of
+// splash time, which is where the logo slam-in resolves.
+const INTRO_DURATION_MS = 5500;
+const AUDIO_OFFSET_MS = 400;
+const ANIMATION_DURATION_S = 5.5;
 
 export default function CineVisionIntro() {
   const [visible, setVisible] = useState(false);
-  const isMobile = useIsMobile();
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
-    // Wait until matchMedia has resolved so we know which timing to use.
-    if (isMobile === null) return;
 
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
 
-    const duration = isMobile ? MOBILE_DURATION_MS : DESKTOP_DURATION_MS;
-    const audioOffset = isMobile ? AUDIO_OFFSET_MOBILE_MS : AUDIO_OFFSET_DESKTOP_MS;
-
-    const hideTimer = setTimeout(() => setVisible(false), duration);
-
-    const video = videoRef.current;
-    if (video) {
-      video.play().catch(() => {
-        /* autoplay blocked — splash still fades through */
-      });
-    }
+    const hideTimer = setTimeout(() => setVisible(false), INTRO_DURATION_MS);
 
     const audio = audioRef.current;
     let audioTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,7 +48,7 @@ export default function CineVisionIntro() {
             document.addEventListener('keydown', interactionHandler, { once: true });
           });
         }
-      }, audioOffset);
+      }, AUDIO_OFFSET_MS);
     }
 
     function cleanupInteractionHandler() {
@@ -95,12 +64,10 @@ export default function CineVisionIntro() {
       if (audioTimer) clearTimeout(audioTimer);
       cleanupInteractionHandler();
     };
-  }, [isMobile]);
+  }, []);
 
-  // Lock body scroll while the splash is up. Without this, fixed
-  // positioning still lets the underlying page scroll behind the
-  // overlay, and on desktop the user could scroll the splash out of
-  // alignment and see homepage content peek through the edges.
+  // Lock body scroll while the splash is up so the underlying page
+  // can't move behind the overlay.
   useEffect(() => {
     if (!visible) return;
     const prevOverflow = document.body.style.overflow;
@@ -117,34 +84,10 @@ export default function CineVisionIntro() {
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ opacity: { duration: 0.6 } }}
-          // z-index outranks every other overlay (eg. the WhatsApp
-          // community modal at z-9999) so the splash isn't covered.
-          // bg-black is always safe — both the desktop video and the
-          // mobile motion-driven animation are designed against pure
-          // black, so every pixel of letterbox is a perfect match.
           className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden bg-black"
           aria-hidden="true"
         >
-          {isMobile ? (
-            <MobileLogoReveal />
-          ) : (
-            // Desktop: object-contain (NOT cover) so the 16:9 source
-            // never zooms past its native size on tall/ultra-wide
-            // viewports. Cap the video at 80vh so the logo stays a
-            // tasteful proportion of the screen — without the cap,
-            // object-cover stretched the video edge-to-edge and the
-            // logo took ~70% of viewport height, which read as
-            // "absurdly large" rather than as a splash.
-            <video
-              ref={videoRef}
-              src="/intro.mp4"
-              autoPlay
-              muted
-              playsInline
-              preload="auto"
-              className="max-h-[80vh] max-w-[90vw] object-contain"
-            />
-          )}
+          <CinematicLogoReveal />
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
       )}
@@ -153,82 +96,117 @@ export default function CineVisionIntro() {
 }
 
 /**
- * Mobile-only motion-driven reveal. Built from scratch so the logo
- * never letterboxes against narrow portrait viewports the way the
- * landscape video did. The arc is:
- *   0–1.4s   anticipation glow grows from a single point
- *   1.4–3.0s logo slams in from depth (scale + de-blur + brighten)
- *   3.0–3.4s burst (radial flash + light streaks fan outward)
- *   3.4–4.6s logo holds with a gentle pulse, then fades on exit
+ * The reveal arc, designed to land beats at the same moments as the
+ * Netflix-style "tudum" jingle (audio climax at ~4.5s of splash):
+ *
+ *   0.0 – 1.6s  Anticipation. Black screen with a faint red ember
+ *               pulsing at center, slowly building. Sets the mood.
+ *   1.6 – 3.6s  Approach. Logo emerges from depth — starts at ~6%
+ *               scale, heavily blurred and over-bright, then zooms
+ *               toward the camera as blur clears and brightness
+ *               normalises.
+ *   3.6 – 4.4s  TUDUM. Logo overshoots to ~118% scale, a white-hot
+ *               camera-flash bursts from behind it, and 12 light
+ *               streaks fan outward across the screen.
+ *   4.4 – 5.0s  Settle. Logo pulls back from the overshoot to its
+ *               final 100% scale; flash fades; sustained pulsing
+ *               glow takes over the bg.
+ *   5.0 – 5.5s  Hold + breath. Subtle scale breathing (1.0→1.03→1.0)
+ *               while AnimatePresence stages the exit fade.
+ *
+ * All sizes are vmin-based so the same animation reads correctly on
+ * a 320px phone and a 27" desktop monitor — no separate code paths.
  */
-function MobileLogoReveal() {
-  // Eight light streaks fanning out at 45° increments. Each starts at
-  // the logo center, scales to ~70% of the viewport diagonal, and
-  // fades out. Staggering by index makes the burst feel like a sweep.
-  const streakAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+function CinematicLogoReveal() {
+  // 12 streaks fanning at 30° increments — denser than a typical
+  // 8-streak burst so the TUDUM beat feels like a full radial blast.
+  const streakCount = 12;
+  const streaks = Array.from({ length: streakCount }, (_, i) => ({
+    angle: (360 / streakCount) * i,
+    delay: i * 0.018,
+  }));
+
+  // Times below are normalized to the 5.5s animation window.
+  const D = ANIMATION_DURATION_S;
 
   return (
     <div className="relative flex h-full w-full items-center justify-center">
-      {/* Anticipation glow — a deep red bloom that pulses upward and
-          peaks just before the logo slam-in. Heavy blur softens it. */}
+      {/* ─── Layer 1: distant ember (anticipation) ──────────────────
+          A low-saturation red bloom that grows from a tiny ember to
+          a wide field. Heavily blurred so it reads as atmospheric
+          rather than as a defined shape. */}
       <motion.div
         className="pointer-events-none absolute"
-        initial={{ scale: 0.4, opacity: 0 }}
+        initial={{ scale: 0.05, opacity: 0 }}
         animate={{
-          scale: [0.4, 1.1, 1.6, 1.4, 1.5],
-          opacity: [0, 0.55, 0.85, 0.45, 0.55],
+          scale: [0.05, 0.4, 1.0, 1.7, 1.5, 1.6],
+          opacity: [0, 0.2, 0.55, 0.85, 0.6, 0.7],
         }}
-        transition={{ duration: 4.6, times: [0, 0.3, 0.65, 0.85, 1], ease: 'easeOut' }}
+        transition={{
+          duration: D,
+          times: [0, 0.18, 0.4, 0.7, 0.85, 1],
+          ease: 'easeOut',
+        }}
         style={{
-          width: '95vmin',
-          height: '95vmin',
+          width: '120vmin',
+          height: '120vmin',
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(255,30,40,0.55) 0%, rgba(180,10,20,0.25) 35%, transparent 65%)',
-          filter: 'blur(60px)',
+            'radial-gradient(circle, rgba(255,30,40,0.55) 0%, rgba(180,15,30,0.30) 30%, rgba(80,0,15,0.15) 55%, transparent 70%)',
+          filter: 'blur(70px)',
         }}
       />
 
-      {/* Burst flash — a tight white-hot core that lights up at the
-          slam-in moment and then dims. Provides the camera-flash beat. */}
+      {/* ─── Layer 2: TUDUM camera flash ────────────────────────────
+          A tight white-hot core that explodes outward at the slam-in
+          moment, blooms, then dims. Screen-blended so it adds light
+          without darkening the layers below. */}
       <motion.div
         className="pointer-events-none absolute"
         initial={{ scale: 0, opacity: 0 }}
         animate={{
-          scale: [0, 0.5, 1.6, 1.9, 2.2],
-          opacity: [0, 0, 0.95, 0.4, 0],
+          scale: [0, 0, 0.4, 1.8, 2.5, 3.0],
+          opacity: [0, 0, 0.3, 1, 0.5, 0],
         }}
-        transition={{ duration: 4.6, times: [0, 0.55, 0.7, 0.8, 1], ease: 'easeOut' }}
+        transition={{
+          duration: D,
+          times: [0, 0.6, 0.66, 0.74, 0.82, 0.95],
+          ease: 'easeOut',
+        }}
         style={{
-          width: '60vmin',
-          height: '60vmin',
+          width: '70vmin',
+          height: '70vmin',
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(255,80,80,0.5) 35%, transparent 70%)',
-          filter: 'blur(30px)',
+            'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,160,180,0.7) 25%, rgba(255,40,60,0.4) 50%, transparent 70%)',
+          filter: 'blur(40px)',
           mixBlendMode: 'screen',
         }}
       />
 
-      {/* Light streaks — eight thin red→white→transparent slashes
-          fanning outward from the logo at the burst moment. */}
-      {streakAngles.map((angle, i) => (
+      {/* ─── Layer 3: 12-streak light burst ─────────────────────────
+          Each streak is a thin slash that originates at the logo
+          center and fans outward as the camera-flash breaks. Tiny
+          per-streak delay makes the burst feel like a sweep rather
+          than a single instantaneous blast. */}
+      {streaks.map(({ angle, delay }) => (
         <motion.div
           key={angle}
           className="pointer-events-none absolute"
           style={{
-            width: '120vmax',
-            height: '3px',
+            width: '140vmax',
+            height: '2.5px',
             transformOrigin: '50% 50%',
             rotate: `${angle}deg`,
+            mixBlendMode: 'screen',
           }}
           initial={{ scaleX: 0, opacity: 0 }}
-          animate={{ scaleX: [0, 0, 1, 1.05], opacity: [0, 0, 0.85, 0] }}
+          animate={{ scaleX: [0, 0, 1, 1.05], opacity: [0, 0, 0.9, 0] }}
           transition={{
-            duration: 4.6,
-            times: [0, 0.62, 0.78, 0.95],
+            duration: D,
+            times: [0, 0.66, 0.78, 0.95],
             ease: [0.16, 1, 0.3, 1],
-            delay: i * 0.012,
+            delay,
           }}
         >
           <div
@@ -236,68 +214,89 @@ function MobileLogoReveal() {
               width: '100%',
               height: '100%',
               background:
-                'linear-gradient(90deg, transparent 0%, rgba(255,80,80,0.0) 35%, rgba(255,255,255,0.95) 50%, rgba(255,80,80,0.0) 65%, transparent 100%)',
-              filter: 'blur(1px)',
+                'linear-gradient(90deg, transparent 0%, rgba(255,80,80,0) 35%, rgba(255,255,255,1) 50%, rgba(255,80,80,0) 65%, transparent 100%)',
+              filter: 'blur(0.8px)',
             }}
           />
         </motion.div>
       ))}
 
-      {/* The logo itself. Comes in from depth (small + blurred +
-          over-bright) then resolves to its natural size with a
-          slight overshoot for the cinematic punch.
-          mix-blend-mode: screen drops the PNG's black background to
-          fully transparent so the logo composites cleanly over the
-          red glow without showing a rectangular outline. */}
+      {/* ─── Layer 4: backing glow under logo (sustained) ───────────
+          Sits behind the logo from the moment it lands, breathes
+          gently through the hold phase. Gives the logo the "neon
+          sign" feel after the burst is gone. */}
+      <motion.div
+        className="pointer-events-none absolute"
+        initial={{ scale: 0.6, opacity: 0 }}
+        animate={{
+          scale: [0.6, 0.6, 1.05, 1.2, 1.1, 1.18, 1.1],
+          opacity: [0, 0, 0.5, 0.65, 0.45, 0.55, 0.4],
+        }}
+        transition={{
+          duration: D,
+          times: [0, 0.65, 0.74, 0.82, 0.88, 0.95, 1],
+          ease: 'easeOut',
+        }}
+        style={{
+          width: 'clamp(280px, 75vmin, 720px)',
+          height: 'clamp(220px, 55vmin, 540px)',
+          borderRadius: '40%',
+          background:
+            'radial-gradient(ellipse, rgba(255,40,60,0.55) 0%, rgba(180,10,30,0.3) 40%, transparent 70%)',
+          filter: 'blur(50px)',
+        }}
+      />
+
+      {/* ─── Layer 5: the hero — CINEVT.png logo ────────────────────
+          Comes in from depth, blurred and over-bright, then resolves
+          to its rest scale with an overshoot at the TUDUM beat.
+          Subtle breathing sustains it during the hold phase. */}
       <motion.img
-        src="/cinevision-logo.png"
+        src="/CINEVT.png"
         alt=""
         draggable={false}
         className="relative z-10 select-none"
         style={{
-          width: 'min(82vw, 480px)',
+          width: 'clamp(260px, 60vmin, 720px)',
           height: 'auto',
-          mixBlendMode: 'screen',
           willChange: 'transform, opacity, filter',
+          // Subtle red drop shadow for cinematic glow on the white
+          // strokes — no Photoshop needed, just CSS layered over the
+          // transparent PNG.
+          filter: 'drop-shadow(0 0 18px rgba(255,40,60,0.45))',
         }}
-        initial={{ scale: 0.18, opacity: 0, filter: 'blur(28px) brightness(2.4)' }}
+        initial={{
+          scale: 0.06,
+          opacity: 0,
+          filter: 'blur(40px) brightness(3) drop-shadow(0 0 0 rgba(0,0,0,0))',
+        }}
         animate={{
-          scale: [0.18, 0.32, 1.18, 1.0, 1.04, 1.0],
-          opacity: [0, 0.25, 1, 1, 1, 1],
+          scale: [
+            0.06,  // 0%   - far away pinpoint
+            0.18,  // 18%  - emerging through fog
+            0.55,  // 40%  - clear of approach blur
+            1.18,  // 74%  - TUDUM overshoot
+            0.98,  // 82%  - small rebound past target
+            1.0,   // 88%  - settle
+            1.03,  // 94%  - breath in
+            1.0,   // 100% - rest
+          ],
+          opacity: [0, 0.25, 0.85, 1, 1, 1, 1, 1],
           filter: [
-            'blur(28px) brightness(2.4)',
-            'blur(18px) brightness(1.9)',
-            'blur(0px) brightness(1.45)',
-            'blur(0px) brightness(1.05)',
-            'blur(0px) brightness(1.15)',
-            'blur(0px) brightness(1.0)',
+            'blur(40px) brightness(3) drop-shadow(0 0 0 rgba(0,0,0,0))',
+            'blur(22px) brightness(2.2) drop-shadow(0 0 12px rgba(255,40,60,0.3))',
+            'blur(6px) brightness(1.6) drop-shadow(0 0 22px rgba(255,40,60,0.5))',
+            'blur(0px) brightness(1.4) drop-shadow(0 0 36px rgba(255,180,180,0.85))',
+            'blur(0px) brightness(1.05) drop-shadow(0 0 24px rgba(255,40,60,0.55))',
+            'blur(0px) brightness(1.0) drop-shadow(0 0 18px rgba(255,40,60,0.45))',
+            'blur(0px) brightness(1.08) drop-shadow(0 0 22px rgba(255,40,60,0.5))',
+            'blur(0px) brightness(1.0) drop-shadow(0 0 18px rgba(255,40,60,0.45))',
           ],
         }}
         transition={{
-          duration: 4.6,
-          times: [0, 0.45, 0.7, 0.78, 0.9, 1],
+          duration: D,
+          times: [0, 0.18, 0.4, 0.74, 0.82, 0.88, 0.94, 1],
           ease: [0.16, 1, 0.3, 1],
-        }}
-      />
-
-      {/* A second pulsing glow layer that lives behind the logo for the
-          entire hold phase. Keeps the logo from feeling static. */}
-      <motion.div
-        className="pointer-events-none absolute"
-        initial={{ opacity: 0, scale: 0.8 }}
-        animate={{
-          opacity: [0, 0, 0.6, 0.3, 0.5, 0.2],
-          scale: [0.8, 0.8, 1.1, 1.0, 1.08, 1.0],
-        }}
-        transition={{ duration: 4.6, times: [0, 0.7, 0.78, 0.85, 0.92, 1], ease: 'easeOut' }}
-        style={{
-          width: '70vmin',
-          height: '70vmin',
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(255,40,60,0.45) 0%, rgba(120,0,20,0.2) 40%, transparent 70%)',
-          filter: 'blur(40px)',
-          zIndex: 5,
         }}
       />
     </div>
