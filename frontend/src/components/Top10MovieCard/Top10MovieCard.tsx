@@ -13,6 +13,7 @@ import {
 import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroicons/react/24/solid';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
+import AddToCartButton from '@/components/Cart/AddToCartButton';
 
 interface Top10MovieCardProps {
   movie: Movie;
@@ -155,6 +156,31 @@ const Top10MovieCard = memo(function Top10MovieCard({
         >
           {/* Poster with year overlay */}
           <div className={`relative aspect-[2/3] overflow-hidden rounded-xl w-full ${isFlashPromo ? 'ring-2 ring-amber-500/70 shadow-[0_0_20px_rgba(245,158,11,0.25)]' : ''}`}>
+
+            {/* Add-to-cart icon — same pattern as the regular MovieCard:
+                top-right overlay, only when the user hasn't already
+                purchased the title. stopPropagation so clicking the
+                cart doesn't also fire the parent card click handler. */}
+            {!isPurchased && (
+              <div
+                className="absolute top-2 right-2 z-40"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <AddToCartButton
+                  content={{
+                    id: movie.id,
+                    title: movie.title,
+                    poster_url: movie.poster_url || undefined,
+                    price_cents:
+                      movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
+                        ? movie.discounted_price_cents
+                        : movie.price_cents,
+                    type: ((movie as any).content_type || 'movie') as 'movie' | 'series',
+                  }}
+                  variant="icon"
+                />
+              </div>
+            )}
 
             {/* Flash promo overlay - TOP */}
             {isFlashPromo && promoTimeLeft && (
