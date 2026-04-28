@@ -30,7 +30,13 @@ class ApiService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        // NestJS ValidationPipe returns `message` as an array of strings
+        // (one per failed constraint). Coerce to a single string before
+        // wrapping in Error, otherwise toast.error renders
+        // "[object Object]" or the joined-with-commas array.
+        const raw = errorData?.message;
+        const flat = Array.isArray(raw) ? raw.join(' · ') : raw;
+        throw new Error(flat || `HTTP error! status: ${response.status}`);
       }
 
       return await response.json();

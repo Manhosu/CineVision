@@ -31,7 +31,18 @@ export default function CartPage() {
 
   const handleFinalize = async () => {
     if (!items.length) return;
-    if (preview?.current_tier === null && preview.tiers.length > 0 && items.length < preview.tiers[0].min_items) {
+    // Optional-chain every preview access — `preview` is null until the
+    // first sync resolves, and current_tier is null when the user
+    // hasn't crossed any discount threshold yet. The previous code
+    // checked `preview?.current_tier === null && preview.tiers.length`,
+    // which threw "Cannot read properties of null (reading 'tiers')"
+    // if the user clicked Finalizar before the initial sync finished.
+    const tiers = preview?.tiers;
+    if (
+      preview?.current_tier === null &&
+      tiers && tiers.length > 0 &&
+      items.length < tiers[0].min_items
+    ) {
       setShowModal(true);
       return;
     }
