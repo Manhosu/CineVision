@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Header } from '@/components/Header/Header';
 import { HeroBanner } from '@/components/HeroBanner/HeroBanner';
@@ -42,6 +42,25 @@ interface ContentSection {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// In-memory cache for homepage data so a back-navigation from a
+// detail page renders instantly with the carousels already populated,
+// instead of flashing the loading skeleton and forcing the user to
+// re-scroll past every row to find where they were.
+//
+// The cache lives at module scope so it survives React unmounts within
+// the same SPA session (Next.js App Router remounts client components
+// on route change). Stale-while-revalidate: we always render from
+// cache when available AND refetch in the background to keep it fresh.
+const HOME_CACHE_TTL_MS = 60_000;
+const HOME_SCROLL_KEY = 'cv_home_scroll_y';
+type HomeCache = {
+  heroMovies: Movie[];
+  contentSections: ContentSection[];
+  purchasedMovies: Set<string>;
+  timestamp: number;
+};
+let homeCache: HomeCache | null = null;
+
 // Component that uses useSearchParams - must be wrapped in Suspense
 function AutoLoginHandler() {
   const router = useRouter();
@@ -63,17 +82,73 @@ function AutoLoginHandler() {
 function HomePageContent() {
   const router = useRouter();
   const { notifyContentReady } = useSplash();
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Hydrate from cache when available so the back-nav from a detail
+  // page mounts the carousels in the same frame the route resolves,
+  // not after a full refetch.
+  const cacheFresh = !!(homeCache && Date.now() - homeCache.timestamp < HOME_CACHE_TTL_MS);
+  const [isLoading, setIsLoading] = useState(!cacheFresh);
   const [hasFlashBanner, setHasFlashBanner] = useState(false);
-  const [heroMovies, setHeroMovies] = useState<Movie[]>([]);
-  const [contentSections, setContentSections] = useState<ContentSection[]>([]);
-  const [purchasedMovies, setPurchasedMovies] = useState<Set<string>>(new Set());
+  const [heroMovies, setHeroMovies] = useState<Movie[]>(
+    cacheFresh ? homeCache!.heroMovies : [],
+  );
+  const [contentSections, setContentSections] = useState<ContentSection[]>(
+    cacheFresh ? homeCache!.contentSections : [],
+  );
+  const [purchasedMovies, setPurchasedMovies] = useState<Set<string>>(
+    cacheFresh ? homeCache!.purchasedMovies : new Set(),
+  );
   const [error, setError] = useState<string | null>(null);
 
+  // Throttled scroll-position recorder. Saves the user's scroll Y to
+  // sessionStorage so a back-nav can restore it even when Next.js'
+  // own scrollRestoration flag misses (App Router data-driven pages
+  // re-render after the restore moment, invalidating the offset).
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        try {
+          sessionStorage.setItem(HOME_SCROLL_KEY, String(window.scrollY));
+        } catch { /* private mode / quota */ }
+      }, 200);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (timeout) clearTimeout(timeout);
+    };
+  }, []);
+
+  // Restore scroll synchronously after layout, but only when we
+  // mounted from cache (i.e., a return visit with carousels already
+  // populated). useLayoutEffect ensures the scroll happens before the
+  // browser paints, avoiding a visible jump from top to saved Y.
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!cacheFresh || isLoading) return;
+    try {
+      const raw = sessionStorage.getItem(HOME_SCROLL_KEY);
+      const y = raw ? parseInt(raw, 10) : 0;
+      if (y > 0) window.scrollTo(0, y);
+    } catch { /* ignore */ }
+  }, [cacheFresh, isLoading]);
+
+  useEffect(() => {
+    // Locals tracked for the cache write at the end. We can't read
+    // from state synchronously after setState calls, so we keep
+    // parallel locals updated with the same data.
+    let finalHero: Movie[] = cacheFresh ? homeCache!.heroMovies : [];
+    let finalSections: ContentSection[] = cacheFresh ? homeCache!.contentSections : [];
+    let finalPurchased: Set<string> = cacheFresh ? homeCache!.purchasedMovies : new Set();
+
     async function loadContent() {
       try {
-        setIsLoading(true);
+        // Only show the skeleton on a true cold load. With cache we
+        // already render the previous data and silently revalidate.
+        if (!cacheFresh) setIsLoading(true);
 
         // Get auth token from localStorage
         const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
@@ -122,8 +197,10 @@ function HomePageContent() {
         // If no featured content, fallback to releases or all movies
         if (heroMoviesData.length === 0) {
           const fallbackMovies = (Array.isArray(releasesData) ? releasesData : allMoviesData.movies || []).slice(0, 3);
+          finalHero = fallbackMovies;
           setHeroMovies(fallbackMovies);
         } else {
+          finalHero = heroMoviesData;
           setHeroMovies(heroMoviesData);
         }
 
@@ -191,6 +268,7 @@ function HomePageContent() {
           }
         ].filter(section => section.movies.length > 0);
 
+        finalSections = sections;
         setContentSections(sections);
         // Fetch user purchases if authenticated (using same endpoint as dashboard)
         if (token) {
@@ -243,7 +321,8 @@ function HomePageContent() {
                   );
 
                   console.log('✅ IDs de conteúdos comprados:', Array.from(purchasedIds));
-                  setPurchasedMovies(purchasedIds);
+                  finalPurchased = purchasedIds as Set<string>;
+                  setPurchasedMovies(purchasedIds as Set<string>);
 
                   // Build "Suggestions for You" based on purchased content genres
                   if (contentData.length > 0) {
@@ -270,17 +349,16 @@ function HomePageContent() {
                       }).slice(0, 20);
 
                       if (uniqueSuggestions.length > 0) {
-                        setContentSections(prev => {
-                          // Insert after the last top10 section, or at the beginning
-                          const lastTop10Idx = prev.reduce((acc, s, i) => s.type === 'top10' ? i : acc, -1);
-                          const insertIdx = lastTop10Idx + 1;
-                          const suggestion: ContentSection = { title: 'Sugestões para Você 👍', type: 'latest' as const, movies: uniqueSuggestions, viewAllUrl: `/movies?genre=${encodeURIComponent(topGenres[0])}` };
-                          return [
-                            ...prev.slice(0, insertIdx),
-                            suggestion,
-                            ...prev.slice(insertIdx),
-                          ];
-                        });
+                        // Insert after the last top10 section, or at the beginning
+                        const lastTop10Idx = finalSections.reduce((acc, s, i) => s.type === 'top10' ? i : acc, -1);
+                        const insertIdx = lastTop10Idx + 1;
+                        const suggestion: ContentSection = { title: 'Sugestões para Você 👍', type: 'latest' as const, movies: uniqueSuggestions, viewAllUrl: `/movies?genre=${encodeURIComponent(topGenres[0])}` };
+                        finalSections = [
+                          ...finalSections.slice(0, insertIdx),
+                          suggestion,
+                          ...finalSections.slice(insertIdx),
+                        ];
+                        setContentSections(finalSections);
                       }
                     }
                   }
@@ -300,6 +378,18 @@ function HomePageContent() {
         console.error('Erro ao carregar conteúdo:', err);
         setError('Erro ao carregar o conteúdo. Tente novamente mais tarde.');
       } finally {
+        // Persist the freshly-loaded data so the next mount of the
+        // homepage can hydrate from cache and skip the loading state
+        // entirely. Only write when we actually loaded something —
+        // a thrown error before any setState would leave finals empty.
+        if (finalSections.length > 0) {
+          homeCache = {
+            heroMovies: finalHero,
+            contentSections: finalSections,
+            purchasedMovies: finalPurchased,
+            timestamp: Date.now(),
+          };
+        }
         setIsLoading(false);
         notifyContentReady();
       }
