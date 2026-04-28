@@ -3,9 +3,14 @@ const nextConfig = {
   // Only use standalone in production builds
   ...(process.env.NODE_ENV === 'production' ? { output: 'standalone' } : {}),
 
-  // experimental: {
-  //   optimizeCss: true,
-  // },
+  experimental: {
+    // Restore the user's scroll position when they hit the browser
+    // back button. Without this, navigating from a deeply-scrolled
+    // homepage into a movie detail and back resets to top — users
+    // had to re-scroll past every carousel to find what they were
+    // looking at.
+    scrollRestoration: true,
+  },
 
   // TypeScript configuration for build
   typescript: {
