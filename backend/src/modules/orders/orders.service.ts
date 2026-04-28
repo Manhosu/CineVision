@@ -326,6 +326,17 @@ export class OrdersService {
       .eq('original_order_id', orderId)
       .eq('status', OrderStatus.PENDING);
 
+    // Empty the cart for this user/session so returning to /cart
+    // doesn't show items they just paid for. Best-effort: a failure
+    // here mustn't block payment confirmation.
+    try {
+      if (order.user_id) {
+        await this.cartService.clearCart(order.user_id, undefined);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Failed to clear cart for paid order ${orderId}: ${err.message}`);
+    }
+
     // Notify bot to deliver content
     await this.notifyBotForDelivery(order.id, order.telegram_chat_id);
 

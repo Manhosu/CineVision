@@ -31,18 +31,16 @@ export default function CartPage() {
 
   const handleFinalize = async () => {
     if (!items.length) return;
-    // Optional-chain every preview access — `preview` is null until the
-    // first sync resolves, and current_tier is null when the user
-    // hasn't crossed any discount threshold yet. The previous code
-    // checked `preview?.current_tier === null && preview.tiers.length`,
-    // which threw "Cannot read properties of null (reading 'tiers')"
-    // if the user clicked Finalizar before the initial sync finished.
-    const tiers = preview?.tiers;
-    if (
-      preview?.current_tier === null &&
-      tiers && tiers.length > 0 &&
-      items.length < tiers[0].min_items
-    ) {
+    // Show the upsell modal whenever there's a higher tier still
+    // reachable — covers two flows now:
+    //   - User has 0 tier locked in and is below the first tier.
+    //   - User already has a tier (eg. 10%) but the next tier
+    //     (eg. 25%) is still within reach. We push them once before
+    //     letting checkout proceed, in case they want the bigger
+    //     discount. They can still bail out via "Manter X% e
+    //     finalizar". All thresholds/percents come from preview, so
+    //     admin-changed discount tiers stay correct.
+    if (preview?.next_tier && preview.items_missing_for_next > 0) {
       setShowModal(true);
       return;
     }
@@ -182,14 +180,32 @@ export default function CartPage() {
                       ? `Garantir ${preview.discount_percent}% de desconto`
                       : 'Pagar agora'}
                 </button>
-                {!processing && preview && preview.discount_percent === 0 && preview.next_tier && (
-                  <p className="mt-2 text-center text-xs text-zinc-400">
-                    Adicione mais {preview.items_missing_for_next}{' '}
-                    {preview.items_missing_for_next === 1 ? 'item' : 'itens'} e ganhe{' '}
-                    <span className="font-semibold text-yellow-400">
-                      {preview.next_tier.percent}% off
-                    </span>
-                  </p>
+                {/* Inline upsell hint. Two variants depending on
+                    whether the user has already locked in a tier:
+                    - No tier yet → "Adicione mais N e ganhe X%"
+                    - Tier locked → "Você ganhou X%. Adicione mais N
+                      para Y%" — keeps the message small/secondary so
+                      it doesn't feel like a blocker.
+                    All percentages come from preview (admin tunable),
+                    no hardcoded values. */}
+                {!processing && preview && preview.next_tier && preview.items_missing_for_next > 0 && (
+                  preview.discount_percent === 0 ? (
+                    <p className="mt-2 text-center text-xs text-zinc-400">
+                      Adicione mais {preview.items_missing_for_next}{' '}
+                      {preview.items_missing_for_next === 1 ? 'item' : 'itens'} e ganhe{' '}
+                      <span className="font-semibold text-yellow-400">
+                        {preview.next_tier.percent}% off
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-center text-xs text-zinc-400">
+                      Você já ganhou{' '}
+                      <span className="font-semibold text-green-400">{preview.discount_percent}%</span>.
+                      Adicione mais {preview.items_missing_for_next}{' '}
+                      {preview.items_missing_for_next === 1 ? 'item' : 'itens'} para subir a{' '}
+                      <span className="font-semibold text-yellow-400">{preview.next_tier.percent}%</span>
+                    </p>
+                  )
                 )}
               </div>
             </aside>
@@ -202,6 +218,19 @@ export default function CartPage() {
         preview={preview}
         onContinue={doCheckout}
         onClose={() => setShowModal(false)}
+        onAddMore={() => {
+          // Close the modal, then send the user back to where they
+          // came from (homepage carousel, search, etc.) so they can
+          // pick up the extra item without a full reload. Falls back
+          // to a soft router.push('/') when the cart was opened via
+          // a deep link with no history.
+          setShowModal(false);
+          if (typeof window !== 'undefined' && window.history.length > 1) {
+            router.back();
+          } else {
+            router.push('/');
+          }
+        }}
       />
     </div>
   );

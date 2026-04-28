@@ -250,7 +250,14 @@ function CinematicLogoReveal() {
       {/* ─── Layer 5: the hero — CINEVT.png logo ────────────────────
           Comes in from depth, blurred and over-bright, then resolves
           to its rest scale with an overshoot at the TUDUM beat.
-          Subtle breathing sustains it during the hold phase. */}
+          Subtle breathing sustains it during the hold phase.
+          The inline `style` MUST match the Framer Motion `initial`
+          values exactly (scale, opacity, filter). Otherwise on slower
+          devices (mobile, low-end Android) the logo paints once at
+          full size with the rest filter before hydration runs and
+          Framer Motion takes over — that's the "flash of old logo"
+          users reported on mobile. With the initial inlined, the very
+          first paint is already at scale 0.06 / opacity 0 / blurred. */}
       <motion.img
         src="/CINEVT.png"
         alt=""
@@ -259,11 +266,10 @@ function CinematicLogoReveal() {
         style={{
           width: 'clamp(260px, 60vmin, 720px)',
           height: 'auto',
+          opacity: 0,
+          transform: 'scale(0.06)',
+          filter: 'blur(40px) brightness(3)',
           willChange: 'transform, opacity, filter',
-          // Subtle red drop shadow for cinematic glow on the white
-          // strokes — no Photoshop needed, just CSS layered over the
-          // transparent PNG.
-          filter: 'drop-shadow(0 0 18px rgba(255,40,60,0.45))',
         }}
         initial={{
           scale: 0.06,

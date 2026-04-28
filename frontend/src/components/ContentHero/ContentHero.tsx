@@ -29,8 +29,8 @@ export default function ContentHero({
   backHref = '/',
   backLabel = 'Voltar',
   contentType = 'movie',
-  isOwned = false,
-  checkingOwnership = false,
+  isOwned: isOwnedProp = false,
+  checkingOwnership: checkingOwnershipProp = false,
   onPlay,
   onPurchase,
 }: ContentHeroProps) {
@@ -38,6 +38,68 @@ export default function ContentHero({
   const [urgencyTimer, setUrgencyTimer] = useState('');
   const [fakeViewers, setFakeViewers] = useState(0);
   const [fakeUnits, setFakeUnits] = useState(0);
+
+  // The /movies/[id] page is a server component and never sets the
+  // isOwned prop, so by default the hero shows "Comprar" + the
+  // add-to-cart button even for content the user already paid for.
+  // Run our own client-side check using the same endpoint the
+  // homepage uses (/purchases/user/{id}/content), which works for
+  // Telegram-authenticated users where /purchases/check/{id} doesn't
+  // because that one requires a JWT user.sub on every request.
+  const [ownedFromCheck, setOwnedFromCheck] = useState<boolean | null>(null);
+  const isOwned = isOwnedProp || ownedFromCheck === true;
+  const checkingOwnership = checkingOwnershipProp || ownedFromCheck === null;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isOwnedProp) {
+      // Parent already knows — skip the network round-trip.
+      setOwnedFromCheck(true);
+      return;
+    }
+
+    let cancelled = false;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const token =
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('auth_token') ||
+      localStorage.getItem('admin_token');
+
+    if (!token) {
+      setOwnedFromCheck(false);
+      return;
+    }
+
+    const userStr = localStorage.getItem('user');
+    let userId: string | null = null;
+    try {
+      if (userStr) userId = JSON.parse(userStr)?.id || null;
+    } catch { /* malformed user blob */ }
+
+    if (!userId) {
+      setOwnedFromCheck(false);
+      return;
+    }
+
+    fetch(`${apiUrl}/api/v1/purchases/user/${userId}/content`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((items) => {
+        if (cancelled) return;
+        const owned = Array.isArray(items)
+          ? items.some((c: any) => c?.id === content.id)
+          : false;
+        setOwnedFromCheck(owned);
+      })
+      .catch(() => {
+        if (!cancelled) setOwnedFromCheck(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [content.id, isOwnedProp]);
 
   const isFlashPromo = content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
 

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import { useCartStore } from '@/stores/cartStore';
 
 const fmt = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -34,6 +35,7 @@ function CheckoutContent() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
+  const cartClear = useCartStore((s) => s.clear);
 
   useEffect(() => {
     if (!token) {
@@ -41,6 +43,7 @@ function CheckoutContent() {
       return;
     }
     let cancelled = false;
+    let cartCleared = false;
     const load = async () => {
       try {
         const data = await api.get<any>(`/api/v1/orders/token/${token}`);
@@ -49,6 +52,15 @@ function CheckoutContent() {
         setLoading(false);
         if (data?.status === 'paid') {
           setPolling(false);
+          // Wipe the cart the moment we observe payment confirmed.
+          // Backend markOrderPaid clears the cart for logged-in users,
+          // but anonymous/session-cart users have no user_id on the
+          // order — without this, returning to /cart would still show
+          // their just-paid items.
+          if (!cartCleared) {
+            cartCleared = true;
+            cartClear().catch(() => { /* best effort */ });
+          }
         }
       } catch (err: any) {
         toast.error(err.message || 'Pedido não encontrado');
@@ -62,7 +74,7 @@ function CheckoutContent() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [token, router]);
+  }, [token, router, cartClear]);
 
   const copyPix = () => {
     if (!order?.payment?.provider_meta?.qr_code) return;
