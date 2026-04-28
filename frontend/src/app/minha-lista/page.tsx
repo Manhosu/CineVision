@@ -172,7 +172,7 @@ export default function MinhaListaPage() {
 
         {/* Content */}
         {isLoading ? (
-          <LoadingSkeleton count={6} />
+          <LoadingSkeleton type="grid" count={6} />
         ) : (
           <>
             {/* Meus Filmes Tab */}
@@ -193,14 +193,17 @@ export default function MinhaListaPage() {
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                     {myContent.map((content) => (
+                      // MovieCard takes a single `movie` prop, not flat
+                      // fields. Passing `id={...} title={...}` left the
+                      // required `movie` prop undefined and the card
+                      // crashed on first render with "Cannot read
+                      // properties of undefined (reading
+                      // 'is_flash_promo')" — that was the client-side
+                      // exception users saw after PIX payment.
                       <MovieCard
                         key={content.id}
-                        id={content.id}
-                        title={content.title}
-                        posterUrl={content.poster_url}
-                        rating={content.imdb_rating}
-                        year={content.release_year}
-                        genres={content.genres}
+                        movie={content}
+                        isPurchased
                       />
                     ))}
                   </div>
