@@ -127,20 +127,31 @@ export class CartService {
       throw new BadRequestException('Either user_id or session_id is required');
     }
 
-    const column = userId ? 'user_id' : 'session_id';
-    const value = userId || sessionId;
-
-    // Use limit(1) instead of maybeSingle() to be defensive against legacy
-    // duplicates without throwing.
-    const { data: existingList } = await this.supabase
-      .from('carts')
-      .select('*')
-      .eq(column, value)
-      .order('created_at', { ascending: true })
-      .limit(1);
-
-    if (existingList && existingList.length > 0) {
-      return existingList[0];
+    // Look up by both keys when both are present. Previous version only
+    // queried one column, then INSERTed with both — if the user had a
+    // pre-login session-cart, the insert collided with the
+    // `uniq_carts_session_id` partial unique index and bubbled up as
+    // "duplicate key value violates unique constraint" on the very
+    // first add-to-cart click after sign-in.
+    let cart = await this.findCartByKeys(userId, sessionId);
+    if (cart) {
+      // If we matched a session-only cart and the user is now logged
+      // in, claim it. Same idea for the inverse (user-only cart that
+      // gets a session id later) — keep the cart, just fill in the
+      // missing key so subsequent lookups by either key resolve.
+      const updates: Record<string, string> = {};
+      if (userId && !cart.user_id) updates.user_id = userId;
+      if (sessionId && !cart.session_id) updates.session_id = sessionId;
+      if (Object.keys(updates).length > 0) {
+        const { data: claimed } = await this.supabase
+          .from('carts')
+          .update(updates)
+          .eq('id', cart.id)
+          .select('*')
+          .single();
+        if (claimed) cart = claimed;
+      }
+      return cart;
     }
 
     const insertPayload: any = {};
@@ -153,19 +164,42 @@ export class CartService {
       .select('*')
       .single();
 
-    if (error || !created) {
-      // Race: another request may have just created the same cart. Retry the read.
-      const { data: retry } = await this.supabase
+    if (created) return created;
+
+    // Insert failed. The most common cause is a race or a duplicate
+    // (e.g. a pre-existing session-cart that wasn't visible to the
+    // initial lookup due to read-replica lag). Re-check both keys
+    // before giving up.
+    const retry = await this.findCartByKeys(userId, sessionId);
+    if (retry) return retry;
+
+    throw new BadRequestException(`Failed to create cart: ${error?.message}`);
+  }
+
+  // Looks up a cart by either user_id or session_id, in that order of
+  // preference. Returns the first match. Both keys are partial-unique
+  // (NULLs allowed), so we can't combine them into a single OR query
+  // safely — do them sequentially and prefer the user-owned cart.
+  private async findCartByKeys(userId?: string, sessionId?: string) {
+    if (userId) {
+      const { data } = await this.supabase
         .from('carts')
         .select('*')
-        .eq(column, value)
+        .eq('user_id', userId)
         .order('created_at', { ascending: true })
         .limit(1);
-      if (retry && retry.length > 0) return retry[0];
-      throw new BadRequestException(`Failed to create cart: ${error?.message}`);
+      if (data && data.length > 0) return data[0];
     }
-
-    return created;
+    if (sessionId) {
+      const { data } = await this.supabase
+        .from('carts')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      if (data && data.length > 0) return data[0];
+    }
+    return null;
   }
 
   async getCartWithItems(userId?: string, sessionId?: string) {

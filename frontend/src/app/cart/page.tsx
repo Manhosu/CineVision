@@ -51,15 +51,28 @@ export default function CartPage() {
     }
   };
 
+  // "Continuar comprando" should drop the user back where they came
+  // from (a movie detail page, search results, etc.) instead of always
+  // forcing them to the homepage. Falls back to the homepage when
+  // there's no history (eg. cart opened directly from a deep link).
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="mx-auto max-w-4xl px-4 py-8">
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={handleBack}
           className="mb-6 inline-flex items-center gap-2 text-zinc-400 hover:text-white"
         >
           <ArrowLeftIcon className="h-4 w-4" /> Continuar comprando
-        </Link>
+        </button>
 
         <h1 className="mb-6 text-3xl font-bold">Seu carrinho</h1>
 
