@@ -199,6 +199,28 @@ const MovieCard = memo(function MovieCard({
             )}
           </div>
 
+          {/* Preço grande, centralizado, acima do botão (Igor pediu).
+              Botão fica minimalista só com "Adicionar". Para conteúdo
+              já comprado, escondemos o preço — só sobra o "Assistir". */}
+          {!isPurchased && (
+            <div className="mb-2 text-center">
+              {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[11px] text-gray-500 line-through">
+                    {formatPrice(movie.price_cents)}
+                  </span>
+                  <span className="text-base font-bold text-green-400">
+                    {formatPrice(movie.discounted_price_cents)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-base font-bold text-white">
+                  {formatPrice(movie.price_cents)}
+                </span>
+              )}
+            </div>
+          )}
+
           <button
             onClick={isPurchased ? handleWatch : handlePurchase}
             className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-2 px-3 rounded-lg transition-colors border border-white/10"
@@ -211,14 +233,7 @@ const MovieCard = memo(function MovieCard({
             ) : (
               <>
                 <ShoppingCartIcon className="w-4 h-4" />
-                {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
-                  <span className="text-xs flex items-center gap-1.5">
-                    <span className="line-through text-gray-500">{formatPrice(movie.price_cents)}</span>
-                    <span className="text-green-400 font-bold">{formatPrice(movie.discounted_price_cents)}</span>
-                  </span>
-                ) : (
-                  <span className="text-xs">{formatPrice(movie.price_cents)}</span>
-                )}
+                <span className="text-xs">Adicionar</span>
               </>
             )}
           </button>

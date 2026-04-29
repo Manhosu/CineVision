@@ -221,8 +221,9 @@ ${catalogBlock}
 ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}
 
 INSTRUÇÕES OBRIGATÓRIAS:
-- Se o cliente pedir um filme que está listado acima, responda com nome, valor e um marcador:  <<BUY:ID_DO_CONTEUDO>>
-- Se o cliente pedir um filme que NÃO está listado, responda: "Vou verificar a disponibilidade e já te retorno, beleza?" e inclua o marcador <<PAUSE:content_not_found>>
+- Se a mensagem do usuário for ambígua, vazia ou genérica (ex: "quero", "tem?", "tá aí?", "oi", "boa noite"), faça uma pergunta de esclarecimento ANTES de qualquer ação. Exemplos: "Que filme você procura?", "Sobre qual conteúdo você quer saber?". NUNCA emita marcadores em mensagens ambíguas — apenas pergunte de volta.
+- Se o cliente pedir UM ou MAIS filmes que estão listados no catálogo acima, responda com nome e valor de cada um e inclua um marcador <<BUY:ID_DO_CONTEUDO>> para CADA filme detectado (um marcador por filme). O sistema gera automaticamente um único PIX agregado com desconto progressivo aplicado.
+- Se o cliente pedir EXPLICITAMENTE um título específico que NÃO existe no catálogo (ex: "Quero o filme Avatar 3"), responda: "Vou verificar a disponibilidade e já te retorno, beleza?" e inclua o marcador <<PAUSE:content_not_found>>. NUNCA pause sem o usuário ter citado um título nominalmente.
 - Responda sempre em português brasileiro, de forma amigável e humanizada.
 - Não revele que você é uma IA a menos que o usuário pergunte.
 - Nunca invente filmes que não estão no catálogo.`;
@@ -253,11 +254,14 @@ INSTRUÇÕES OBRIGATÓRIAS:
     suggestedContentIds = buyMatches.map((m) => m[1]);
     cleanText = cleanText.replace(/<<BUY:[^>]+>>/gi, '').trim();
 
-    // If BUY detected, generate a payment link for the single item (quick buy)
+    // Se BUY foi detectado (1 ou N itens), gera UM link de pagamento
+    // agregado: o cart-service aplica o desconto progressivo
+    // automaticamente, então 3 filmes pedidos juntos saem com 1 PIX
+    // único e desconto consolidado. Igor pediu isso explicitamente.
     let paymentLink: string | undefined;
     if (suggestedContentIds.length) {
       paymentLink = await this.createQuickBuyLink(
-        suggestedContentIds[0],
+        suggestedContentIds,
         externalChatId,
         userId,
       );
@@ -279,14 +283,24 @@ INSTRUÇÕES OBRIGATÓRIAS:
   }
 
   private async createQuickBuyLink(
-    contentId: string,
+    contentIds: string[],
     telegramChatId: string,
     userId?: string,
   ): Promise<string | undefined> {
+    if (!contentIds.length) return undefined;
     try {
-      // Ensure a fresh cart with just this item
+      // Reset do carrinho e re-add de todos os itens. Dedup defensivo
+      // pra não bater em duplicate-key se o modelo emitir <<BUY>> duas
+      // vezes pro mesmo content_id.
+      const uniqueIds = Array.from(new Set(contentIds));
       await this.cartService.clearCart(userId, telegramChatId).catch(() => undefined);
-      await this.cartService.addItem(contentId, userId, telegramChatId);
+      for (const id of uniqueIds) {
+        try {
+          await this.cartService.addItem(id, userId, telegramChatId);
+        } catch (err: any) {
+          this.logger.warn(`Failed to add ${id} to quick-buy cart: ${err.message}`);
+        }
+      }
       const result = await this.ordersService.createOrderFromCart({
         userId,
         sessionId: telegramChatId,
@@ -341,6 +355,57 @@ INSTRUÇÕES OBRIGATÓRIAS:
         paused_at: new Date().toISOString(),
       })
       .eq('id', conversationId);
+  }
+
+  /**
+   * Admin envia uma mensagem direto pelo painel — a conversa fica em
+   * modo takeover (ai_enabled=false) automaticamente, a mensagem é
+   * salva como role=admin no histórico e enviada via Telegram pro
+   * usuário. Ler o histórico depois mostra a mensagem na timeline.
+   */
+  async sendAdminMessage(conversationId: string, text: string): Promise<void> {
+    const trimmed = (text || '').trim();
+    if (!trimmed) return;
+
+    const { data: conversation } = await this.supabase.client
+      .from('ai_conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .maybeSingle();
+
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    // Pausa a IA automaticamente — admin assumiu.
+    if (conversation.ai_enabled) {
+      await this.pauseConversation(conversationId, 'admin_takeover');
+    }
+
+    // Persiste no histórico como role=admin (separável de assistant
+    // que é a IA). Front pode renderizar com cor/ícone diferente.
+    await this.supabase.client.from('ai_messages').insert({
+      conversation_id: conversationId,
+      role: 'admin',
+      content: trimmed,
+    });
+
+    await this.supabase.client
+      .from('ai_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conversationId);
+
+    // Despacha para o Telegram (única plataforma com sendMessage hoje)
+    if (conversation.platform === 'telegram' && this.telegramsService) {
+      const chatId = parseInt(conversation.external_chat_id, 10);
+      if (!Number.isNaN(chatId)) {
+        try {
+          await this.telegramsService.sendMessage(chatId, trimmed);
+        } catch (err: any) {
+          this.logger.warn(`sendAdminMessage failed for ${chatId}: ${err.message}`);
+        }
+      }
+    }
   }
 
   async resumeConversation(conversationId: string) {

@@ -780,6 +780,18 @@ export class TelegramsEnhancedService implements OnModuleInit {
     } else if (text === '/ajuda' || text === '/help') {
       await this.handleHelpCommand(chatId);
     } else if (text && !text.startsWith('/') && message.chat.type === 'private') {
+      // Limitação técnica: a Bot API NÃO entrega o conteúdo de uma
+      // Story (apenas o flag reply_to_story). A IA não consegue
+      // adivinhar qual filme estava no pôster, então respondemos com
+      // uma mensagem humanizada pedindo o título antes de tentar.
+      // Igor pediu pra "montar uma mensagem informando essa restrição".
+      if (message.reply_to_story || message.story) {
+        await this.sendMessage(
+          chatId,
+          'Oi! Vi que você está respondendo a um Story 🎬, mas eu (bot) não consigo ver o conteúdo dele por uma limitação do Telegram. 😅\n\nMe diz qual filme ou série você está procurando que eu te ajudo na hora!',
+        );
+        return;
+      }
       // Dispatch to AI chat service
       await this.dispatchAiChat(chatId, text, telegramUserId);
     }

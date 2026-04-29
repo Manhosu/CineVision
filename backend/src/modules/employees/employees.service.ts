@@ -83,11 +83,19 @@ export class EmployeesService {
   }
 
   async listEmployees() {
-    const { data: employees } = await this.supabase.client
+    const { data: employees, error } = await this.supabase.client
       .from('users')
       .select('id, name, email, role, status, last_login, created_at')
       .eq('role', 'employee')
       .order('created_at', { ascending: false });
+
+    if (error) {
+      // Igor reported "funcionário criado não aparece na lista". The
+      // earlier migration left the enum in a fragile state — surface
+      // any select error so we don't return [] silently.
+      this.logger.error(`listEmployees failed: ${error.message}`);
+      throw new BadRequestException(`Falha ao listar funcionários: ${error.message}`);
+    }
 
     if (!employees?.length) return [];
 

@@ -81,6 +81,18 @@ export class AiChatController {
     return { ok: true };
   }
 
+  @Post('admin/ai-chat/conversations/:id/send')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async sendAdminMessage(
+    @Param('id') id: string,
+    @Body() body: { text: string },
+  ) {
+    await this.aiChatService.sendAdminMessage(id, body.text);
+    return { ok: true };
+  }
+
   @Get('admin/ai-chat/training')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

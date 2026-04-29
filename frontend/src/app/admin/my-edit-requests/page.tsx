@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface EditRequest {
   id: string;
@@ -31,6 +32,7 @@ export default function MyEditRequestsPage() {
 
   return (
     <div className="mx-auto max-w-3xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-2 text-3xl font-bold">Minhas edições enviadas</h1>
       <p className="mb-6 text-sm text-zinc-400">
         Edições feitas após a janela de tempo permitida ficam aqui aguardando aprovação do

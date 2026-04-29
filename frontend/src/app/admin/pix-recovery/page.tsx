@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface Stats {
   totalOffered: number;
@@ -80,6 +81,7 @@ export default function PixRecoveryPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-6 text-3xl font-bold">Recuperação de vendas PIX</h1>
 
       {/* Stats cards */}

@@ -31,9 +31,11 @@ export default function AdminLogin() {
 
       const { access_token, refresh_token, user } = response.data;
 
-      // Verificar se o usuário é admin
-      if (user.role !== 'admin') {
-        setError('Acesso negado. Apenas administradores podem acessar esta área.');
+      // Aceitar admin e funcionários — funcionários veem só as áreas
+      // permitidas via employee_permissions (gate em /admin/layout.tsx).
+      const allowedRoles = ['admin', 'employee'];
+      if (!allowedRoles.includes(user.role)) {
+        setError('Acesso negado. Apenas administradores e funcionários podem acessar esta área.');
         setLoading(false);
         return;
       }
@@ -46,7 +48,8 @@ export default function AdminLogin() {
 
       console.log('✅ Admin login successful - tokens saved to localStorage');
 
-      // Redirecionar para o dashboard admin
+      // Redirecionar para o dashboard admin (o layout filtra o que cada
+      // role/permission consegue ver dentro dele).
       router.push('/admin');
     } catch (err: any) {
       console.error('Erro ao fazer login:', err);

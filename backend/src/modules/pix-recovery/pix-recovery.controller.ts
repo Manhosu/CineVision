@@ -37,6 +37,7 @@ export class PixRecoveryController {
       blockDaysMin?: number;
       blockDaysMax?: number;
       maxItems?: number;
+      maxAgeDays?: number;
     },
   ) {
     await this.recovery.setSettings(body);

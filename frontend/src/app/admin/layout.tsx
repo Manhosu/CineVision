@@ -37,11 +37,13 @@ export default function AdminLayout({
           return;
         }
 
-        // Verificar se é admin
+        // Verificar se é admin ou funcionário (employee). Funcionários
+        // entram no painel; cada página interna ainda valida as
+        // permissões granulares (employee_permissions).
         try {
           const user = JSON.parse(userStr);
-          if (user.role !== 'admin') {
-            // Não é admin, redirecionar para login
+          const allowedRoles = ['admin', 'employee'];
+          if (!allowedRoles.includes(user.role)) {
             setIsChecking(false);
             setIsAuthenticated(false);
             router.replace('/admin/login');

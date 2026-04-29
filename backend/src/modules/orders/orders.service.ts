@@ -413,18 +413,29 @@ export class OrdersService {
     maxAgeMinutes = 30,
   ): Promise<any[]> {
     const now = Date.now();
-    const minCreatedAt = new Date(now - maxAgeMinutes * 60 * 1000).toISOString();
+    // Igor pediu: recovery deve alcançar usuários antigos também (não
+    // só os que abandonaram nos últimos 30min). Se o caller passar
+    // maxAgeMinutes <= 0, removemos o limite inferior — toda order
+    // pendente, não importa a idade, fica elegível. O block-window
+    // randomizado em pix-recovery.service.ts garante que não fazemos
+    // spam, então é seguro abrir essa porta.
     const maxCreatedAt = new Date(now - delayMinutes * 60 * 1000).toISOString();
 
-    const { data, error } = await this.supabase.client
+    let query = this.supabase.client
       .from('orders')
       .select('*')
       .eq('status', OrderStatus.PENDING)
       .eq('is_recovery_order', false)
-      .gte('created_at', minCreatedAt)
       .lte('created_at', maxCreatedAt)
       .order('created_at', { ascending: false })
       .limit(50);
+
+    if (maxAgeMinutes > 0) {
+      const minCreatedAt = new Date(now - maxAgeMinutes * 60 * 1000).toISOString();
+      query = query.gte('created_at', minCreatedAt);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       this.logger.error('Failed to query pending orders for recovery', error);
@@ -533,6 +544,16 @@ export class OrdersService {
     if (Number.isNaN(chatId)) {
       this.logger.warn(`Invalid telegram_chat_id "${telegramChatId}"`);
       return;
+    }
+
+    // Wipe the QR/copia-e-cola/payment-method messages we tracked for
+    // this chat so the user's history is clean once the PIX confirms.
+    // The cleanup hook also runs on cancel/payment-pick, but never
+    // after webhook → markOrderPaid until now.
+    try {
+      await this.telegramsService.cleanupTrackedMessages(chatId);
+    } catch (err: any) {
+      this.logger.warn(`cleanupTrackedMessages failed for ${chatId}: ${err.message}`);
     }
 
     // Fetch purchases with their content (so we have telegram_group_link)

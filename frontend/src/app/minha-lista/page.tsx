@@ -26,11 +26,26 @@ interface Purchase {
   };
 }
 
+interface OrderGroup {
+  order_id: string | null;
+  order_token: string | null;
+  subtotal_cents: number;
+  discount_percent: number;
+  discount_cents: number;
+  total_cents: number;
+  total_items: number;
+  status: string;
+  paid_at: string | null;
+  created_at: string;
+  purchases: Purchase[];
+}
+
 export default function MinhaListaPage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [myContent, setMyContent] = useState<any[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [orderGroups, setOrderGroups] = useState<OrderGroup[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'content' | 'purchases'>('content');
 
@@ -82,16 +97,17 @@ export default function MinhaListaPage() {
           setMyContent(contentData);
         }
 
-        // Buscar histórico de compras
-        const purchasesRes = await fetch(`${apiUrl}/api/v1/purchases/user/${user.id}`, {
+        // Buscar histórico agrupado por pedido — pedidos com vários
+        // filmes viram 1 cartão expansível com desconto consolidado.
+        const groupedRes = await fetch(`${apiUrl}/api/v1/purchases/user/${user.id}/grouped`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
 
-        if (purchasesRes.ok) {
-          const purchasesData = await purchasesRes.json();
-          setPurchases(purchasesData);
+        if (groupedRes.ok) {
+          const groupedData = await groupedRes.json();
+          setOrderGroups(groupedData);
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -166,7 +182,7 @@ export default function MinhaListaPage() {
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            Histórico de Compras ({purchases.length})
+            Histórico de Compras ({orderGroups.length})
           </button>
         </div>
 
@@ -214,7 +230,7 @@ export default function MinhaListaPage() {
             {/* Histórico de Compras Tab */}
             {activeTab === 'purchases' && (
               <div>
-                {purchases.length === 0 ? (
+                {orderGroups.length === 0 ? (
                   <div className="text-center py-16">
                     <p className="text-gray-400 text-lg">
                       Você ainda não fez nenhuma compra
@@ -222,49 +238,106 @@ export default function MinhaListaPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {purchases.map((purchase) => (
-                      <div
-                        key={purchase.id}
-                        className="bg-dark-900 rounded-lg p-6 flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-4">
-                          {purchase.content?.poster_url && (
-                            <img
-                              src={purchase.content.poster_url}
-                              alt={purchase.content.title}
-                              className="w-16 h-24 object-cover rounded"
-                            />
-                          )}
-                          <div>
-                            <h3 className="text-white font-semibold text-lg">
-                              {purchase.content?.title || 'Filme Removido'}
-                            </h3>
-                            <p className="text-gray-400 text-sm">
-                              Comprado em {new Date(purchase.created_at).toLocaleDateString('pt-BR')}
-                            </p>
-                            <p className="text-gray-500 text-sm">
-                              Status: <span className={`font-medium ${
-                                purchase.status === 'completed' ? 'text-green-500' :
-                                purchase.status === 'pending' ? 'text-yellow-500' :
-                                'text-red-500'
-                              }`}>
-                                {purchase.status === 'completed' ? 'Concluído' :
-                                 purchase.status === 'pending' ? 'Pendente' :
-                                 'Cancelado'}
-                              </span>
-                            </p>
+                    {orderGroups.map((group, idx) => {
+                      const groupKey = group.order_id || `solo-${group.purchases[0]?.id || idx}`;
+                      const isMulti = group.purchases.length > 1;
+                      const isOpen = !!expanded[groupKey];
+                      const statusLabel =
+                        group.status === 'paid' || group.status === 'completed' || group.status === 'COMPLETED'
+                          ? 'Concluído'
+                          : group.status === 'pending'
+                            ? 'Pendente'
+                            : 'Cancelado';
+                      const statusColor =
+                        statusLabel === 'Concluído'
+                          ? 'text-green-500'
+                          : statusLabel === 'Pendente'
+                            ? 'text-yellow-500'
+                            : 'text-red-500';
+                      const dateStr = new Date(group.paid_at || group.created_at).toLocaleDateString('pt-BR');
+
+                      return (
+                        <div key={groupKey} className="bg-dark-900 rounded-lg overflow-hidden">
+                          <div className="p-6 flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className="flex -space-x-3">
+                                {group.purchases.slice(0, 3).map((p) =>
+                                  p.content?.poster_url ? (
+                                    <img
+                                      key={p.id}
+                                      src={p.content.poster_url}
+                                      alt={p.content.title}
+                                      className="w-14 h-20 object-cover rounded border-2 border-dark-900"
+                                    />
+                                  ) : null,
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h3 className="text-white font-semibold text-lg truncate">
+                                  {isMulti
+                                    ? `Pedido ${group.order_token ? `#${group.order_token.slice(0, 8)}` : ''} · ${group.total_items} filmes`
+                                    : group.purchases[0]?.content?.title || 'Filme Removido'}
+                                </h3>
+                                <p className="text-gray-400 text-sm">Comprado em {dateStr}</p>
+                                <p className="text-gray-500 text-sm">
+                                  Status: <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+                                  {group.discount_percent > 0 && (
+                                    <span className="ml-2 text-green-400">
+                                      · -{group.discount_percent}% (R$ {(group.discount_cents / 100).toFixed(2)})
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-white font-bold text-xl">
+                                R$ {(group.total_cents / 100).toFixed(2)}
+                              </p>
+                              {isMulti && (
+                                <button
+                                  onClick={() => setExpanded((s) => ({ ...s, [groupKey]: !isOpen }))}
+                                  className="mt-1 text-sm text-primary-400 hover:text-primary-300"
+                                >
+                                  {isOpen ? 'Ver menos' : 'Ver mais'}
+                                </button>
+                              )}
+                            </div>
                           </div>
+
+                          {isMulti && isOpen && (
+                            <div className="border-t border-white/10 px-6 py-4 space-y-3 bg-black/30">
+                              {group.purchases.map((p) => (
+                                <div key={p.id} className="flex items-center gap-3">
+                                  {p.content?.poster_url && (
+                                    <img
+                                      src={p.content.poster_url}
+                                      alt={p.content.title}
+                                      className="w-10 h-14 object-cover rounded"
+                                    />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-white text-sm font-medium truncate">
+                                      {p.content?.title || 'Filme Removido'}
+                                    </p>
+                                  </div>
+                                  <p className="text-gray-300 text-sm shrink-0">
+                                    R$ {(p.amount_cents / 100).toFixed(2)}
+                                  </p>
+                                </div>
+                              ))}
+                              {group.discount_cents > 0 && (
+                                <div className="flex justify-between border-t border-white/10 pt-2 text-sm">
+                                  <span className="text-gray-400">Subtotal</span>
+                                  <span className="text-gray-300">
+                                    R$ {(group.subtotal_cents / 100).toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="text-white font-bold text-xl">
-                            R$ {(purchase.amount_cents / 100).toFixed(2)}
-                          </p>
-                          <p className="text-gray-400 text-sm">
-                            {purchase.currency}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

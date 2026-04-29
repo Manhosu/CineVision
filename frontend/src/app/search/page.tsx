@@ -27,14 +27,17 @@ function SearchResults() {
   const searchMovies = async (searchQuery: string) => {
     setIsLoading(true);
     try {
-      // Buscar filmes e séries em paralelo
+      // Buscar filmes e séries em paralelo. Limit alto pra cobrir
+      // sagas inteiras (Harry Potter, Velozes e Furiosos têm 8+
+      // títulos cada) — o default do backend de 20 cortava resultados.
+      const SEARCH_LIMIT = 100;
       const [moviesResponse, seriesResponse] = await Promise.all([
         fetch(
-          `${API_URL}/api/v1/content/movies?search=${encodeURIComponent(searchQuery)}`,
+          `${API_URL}/api/v1/content/movies?search=${encodeURIComponent(searchQuery)}&limit=${SEARCH_LIMIT}`,
           { cache: 'no-store' }
         ),
         fetch(
-          `${API_URL}/api/v1/content/series?search=${encodeURIComponent(searchQuery)}`,
+          `${API_URL}/api/v1/content/series?search=${encodeURIComponent(searchQuery)}&limit=${SEARCH_LIMIT}`,
           { cache: 'no-store' }
         )
       ]);

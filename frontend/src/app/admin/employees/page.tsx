@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface Permissions {
   user_id: string;
@@ -101,6 +102,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-6 text-3xl font-bold">Funcionários</h1>
 
       <section className="mb-6 rounded-xl border border-white/10 bg-zinc-900 p-5">

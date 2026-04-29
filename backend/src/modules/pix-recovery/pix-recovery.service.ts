@@ -31,18 +31,22 @@ export class PixRecoveryService {
   }
 
   private async getSettings() {
-    const [enabled, delay, discount, blockMin, blockMax, maxItems] = await Promise.all([
+    const [enabled, delay, discount, blockMin, blockMax, maxItems, maxAgeDays] = await Promise.all([
       this.getSetting('pix_recovery_enabled'),
       this.getSetting('pix_recovery_delay_minutes'),
       this.getSetting('pix_recovery_discount_percent'),
       this.getSetting('pix_recovery_block_days_min'),
       this.getSetting('pix_recovery_block_days_max'),
       this.getSetting('pix_recovery_max_items'),
+      this.getSetting('pix_recovery_max_age_days'),
     ]);
     const min = parseInt(blockMin ?? '30', 10) || 30;
     const maxRaw = parseInt(blockMax ?? '60', 10) || 60;
     // Guarantee max >= min so the random window is always valid.
     const max = Math.max(min, maxRaw);
+    // Default max age = 30 days (Igor: "alcançar usuários antigos").
+    // Set to 0 to disable upper bound and consider every pending order.
+    const ageDays = parseInt(maxAgeDays ?? '30', 10);
     return {
       enabled: (enabled ?? 'true').toLowerCase() === 'true',
       delayMinutes: parseInt(delay ?? '5', 10) || 5,
@@ -50,6 +54,7 @@ export class PixRecoveryService {
       blockDaysMin: min,
       blockDaysMax: max,
       maxItems: parseInt(maxItems ?? '2', 10) || 2,
+      maxAgeDays: Number.isFinite(ageDays) && ageDays >= 0 ? ageDays : 30,
     };
   }
 
@@ -60,6 +65,7 @@ export class PixRecoveryService {
     blockDaysMin?: number;
     blockDaysMax?: number;
     maxItems?: number;
+    maxAgeDays?: number;
   }) {
     const pairs: Array<[string, string]> = [];
     if (input.enabled !== undefined)
@@ -74,6 +80,8 @@ export class PixRecoveryService {
       pairs.push(['pix_recovery_block_days_max', String(Math.max(1, Math.floor(input.blockDaysMax)))]);
     if (input.maxItems !== undefined)
       pairs.push(['pix_recovery_max_items', String(input.maxItems)]);
+    if (input.maxAgeDays !== undefined)
+      pairs.push(['pix_recovery_max_age_days', String(Math.max(0, Math.floor(input.maxAgeDays)))]);
 
     for (const [key, value] of pairs) {
       await this.supabase.client.from('admin_settings').upsert(
@@ -104,9 +112,14 @@ export class PixRecoveryService {
     const settings = await this.getSettings();
     if (!settings.enabled) return;
 
+    // maxAgeDays === 0 → sem limite superior: toda order pendente
+    // (até de meses atrás) entra no funil. Default: 30 dias.
+    const maxAgeMinutes = settings.maxAgeDays > 0
+      ? settings.maxAgeDays * 24 * 60
+      : 0;
     const pending = await this.ordersService.findPendingOrdersForRecovery(
       settings.delayMinutes,
-      30,
+      maxAgeMinutes,
     );
 
     for (const order of pending) {

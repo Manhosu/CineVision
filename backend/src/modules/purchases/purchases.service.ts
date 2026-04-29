@@ -196,6 +196,98 @@ export class PurchasesService {
     });
   }
 
+  /**
+   * Histórico agrupado por pedido. Cada elemento contém os metadados
+   * do pedido (subtotal, desconto, total) + lista de compras com seu
+   * conteúdo. Compras antigas sem order_id (modelo single-item legado)
+   * ficam num grupo "solo" — order_id null e cada uma vira um cartão
+   * próprio. Igor pediu isso pra ver "Pedido #abc · 3 filmes · -10%"
+   * em /minha-lista.
+   */
+  async findGroupedByOrder(userId: string): Promise<any[]> {
+    const purchases = await this.purchaseRepository.find({
+      where: { user_id: userId },
+      relations: ['content'],
+      order: { created_at: 'DESC' },
+    });
+
+    if (!purchases.length) return [];
+
+    const orderIds = Array.from(
+      new Set(purchases.map((p) => p.order_id).filter((id): id is string => Boolean(id))),
+    );
+
+    const ordersMap = new Map<string, any>();
+    if (orderIds.length) {
+      const rows = await this.dataSource.query(
+        `SELECT id, order_token, subtotal_cents, discount_percent, discount_cents,
+                total_cents, total_items, status, paid_at, created_at
+           FROM orders
+          WHERE id = ANY($1::uuid[])`,
+        [orderIds],
+      );
+      for (const r of rows) ordersMap.set(r.id, r);
+    }
+
+    const grouped: any[] = [];
+    const seen = new Set<string>();
+
+    for (const p of purchases) {
+      if (p.order_id && ordersMap.has(p.order_id)) {
+        if (seen.has(p.order_id)) continue;
+        seen.add(p.order_id);
+        const order = ordersMap.get(p.order_id);
+        const items = purchases.filter((x) => x.order_id === p.order_id);
+        grouped.push({
+          order_id: order.id,
+          order_token: order.order_token,
+          subtotal_cents: order.subtotal_cents,
+          discount_percent: order.discount_percent,
+          discount_cents: order.discount_cents,
+          total_cents: order.total_cents,
+          total_items: order.total_items ?? items.length,
+          status: order.status,
+          paid_at: order.paid_at,
+          created_at: order.created_at,
+          purchases: items.map((it) => ({
+            id: it.id,
+            amount_cents: it.amount_cents,
+            currency: it.currency,
+            status: it.status,
+            created_at: it.created_at,
+            content: it.content,
+          })),
+        });
+      } else {
+        // Compra solo (sem order_id) — vira um grupo de 1.
+        grouped.push({
+          order_id: null,
+          order_token: null,
+          subtotal_cents: p.amount_cents,
+          discount_percent: 0,
+          discount_cents: 0,
+          total_cents: p.amount_cents,
+          total_items: 1,
+          status: p.status,
+          paid_at: null,
+          created_at: p.created_at,
+          purchases: [
+            {
+              id: p.id,
+              amount_cents: p.amount_cents,
+              currency: p.currency,
+              status: p.status,
+              created_at: p.created_at,
+              content: p.content,
+            },
+          ],
+        });
+      }
+    }
+
+    return grouped;
+  }
+
   async findByTelegramId(telegramId: string): Promise<any[]> {
     // First, find user by telegram ID
     const purchases = await this.purchaseRepository

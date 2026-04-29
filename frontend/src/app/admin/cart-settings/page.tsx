@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface Tier {
   min_items: number;
@@ -63,6 +64,7 @@ export default function CartSettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-2 text-3xl font-bold">Desconto progressivo do carrinho</h1>
       <p className="mb-6 text-sm text-zinc-400">
         Configure as faixas de desconto aplicadas automaticamente conforme o cliente adiciona

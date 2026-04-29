@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 type Status = 'pending' | 'approved' | 'rejected';
 
@@ -95,6 +96,7 @@ export default function EditRequestsPage() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-6 text-3xl font-bold">Edições pendentes de aprovação</h1>
 
       <div className="mb-4 flex gap-2 border-b border-white/10">

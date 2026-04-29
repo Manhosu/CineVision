@@ -14,6 +14,10 @@ export class ContentService {
   ) {}
 
   async findAllMovies(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
+    // Igor reportou que sagas (Harry Potter, Velozes & Furiosos) eram
+    // cortadas com o limite de 20. Permite até 100 por chamada — suficiente
+    // pra qualquer franquia, e o frontend pagina se precisar de mais.
+    limit = Math.min(Math.max(limit, 1), 100);
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .leftJoinAndSelect('content.categories', 'categories')
@@ -68,6 +72,7 @@ export class ContentService {
   }
 
   async findAllSeries(page = 1, limit = 20, genre?: string, sort = 'created_at', search?: string) {
+    limit = Math.min(Math.max(limit, 1), 100);
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere('content.content_type = :type', { type: 'series' })

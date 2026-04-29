@@ -38,10 +38,10 @@ export default function DiscountHint({ className = '' }: Props) {
 
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 px-3 py-1.5 text-xs ${className}`}
+      className={`inline-flex items-center gap-2.5 rounded-xl border border-yellow-400/40 bg-gradient-to-r from-yellow-500/20 via-orange-500/15 to-amber-500/20 px-4 py-2 text-sm shadow-lg shadow-yellow-500/10 ${className}`}
     >
-      <TagIcon className="h-4 w-4 text-yellow-400" />
-      <span className="text-yellow-100">
+      <TagIcon className="h-5 w-5 flex-shrink-0 animate-pulse text-yellow-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]" />
+      <span className="text-yellow-50">
         Adicione <strong className="text-yellow-300">{best.min_items}</strong>{' '}
         {best.min_items === 1 ? 'filme' : 'filmes'} ao carrinho e ganhe{' '}
         <strong className="text-yellow-300">{best.percent}% de desconto</strong>!

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 type Tab = 'conversations' | 'training' | 'config';
 
@@ -18,7 +19,7 @@ interface Conversation {
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: 'user' | 'assistant' | 'system' | 'admin';
   content: string;
   created_at: string;
 }
@@ -92,6 +93,21 @@ export default function AiChatAdmin() {
     Promise.all([loadConversations(), loadTraining(), loadFlags()]).finally(() => setLoading(false));
   }, []);
 
+  // Polling 5s pra observar conversas em tempo real (Igor pediu —
+  // SSE/WebSocket seria ideal mas 5s atende o volume atual).
+  // Dois timers: um pra refrescar a lista geral, outro pra a conversa
+  // aberta. Pausa quando a aba está oculta pra economizar.
+  useEffect(() => {
+    if (tab !== 'conversations') return;
+    const tickAll = () => {
+      if (document.visibilityState !== 'visible') return;
+      loadConversations();
+      if (selected) loadMessages(selected.id);
+    };
+    const id = setInterval(tickAll, 5000);
+    return () => clearInterval(id);
+  }, [tab, selected?.id]);
+
   const takeover = async (id: string) => {
     try {
       await api.post(`/api/v1/admin/ai-chat/conversations/${id}/takeover`);
@@ -112,6 +128,31 @@ export default function AiChatAdmin() {
     }
   };
 
+  const [replyText, setReplyText] = useState('');
+  const [sendingReply, setSendingReply] = useState(false);
+
+  const sendReply = async () => {
+    if (!selected || !replyText.trim()) return;
+    setSendingReply(true);
+    try {
+      await api.post(`/api/v1/admin/ai-chat/conversations/${selected.id}/send`, {
+        text: replyText.trim(),
+      });
+      setReplyText('');
+      // Reload imediatamente pra a mensagem aparecer sem esperar o tick.
+      await Promise.all([loadMessages(selected.id), loadConversations()]);
+      // Se IA estava ativa, ela acabou de ser pausada pelo backend —
+      // recarrega a conversa selecionada pro botão refletir o novo estado.
+      const fresh = await api.get<Conversation[]>('/api/v1/admin/ai-chat/conversations');
+      const updated = fresh.find((c) => c.id === selected.id);
+      if (updated) setSelected(updated);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
   const saveTraining = async () => {
     try {
       await api.put('/api/v1/admin/ai-chat/training', training);
@@ -125,6 +166,7 @@ export default function AiChatAdmin() {
 
   return (
     <div className="mx-auto max-w-6xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-6 text-3xl font-bold">Atendimento IA</h1>
 
       <div className="mb-4 flex gap-3 border-b border-white/10">
@@ -203,19 +245,50 @@ export default function AiChatAdmin() {
                   </div>
                 </div>
                 <div className="max-h-[60vh] space-y-3 overflow-y-auto">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`rounded-xl p-3 ${
-                        m.role === 'user' ? 'bg-zinc-800' : 'bg-red-600/10 border border-red-500/30'
-                      }`}
-                    >
-                      <div className="mb-1 text-xs text-zinc-500">
-                        {m.role === 'user' ? 'Cliente' : 'IA'} · {new Date(m.created_at).toLocaleString('pt-BR')}
+                  {messages.map((m) => {
+                    const isUser = m.role === 'user';
+                    const isAdmin = m.role === 'admin';
+                    const bubbleClass = isUser
+                      ? 'bg-zinc-800'
+                      : isAdmin
+                        ? 'bg-blue-600/10 border border-blue-500/30'
+                        : 'bg-red-600/10 border border-red-500/30';
+                    const author = isUser ? 'Cliente' : isAdmin ? 'Admin (você)' : 'IA';
+                    return (
+                      <div key={m.id} className={`rounded-xl p-3 ${bubbleClass}`}>
+                        <div className="mb-1 text-xs text-zinc-500">
+                          {author} · {new Date(m.created_at).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="whitespace-pre-wrap text-sm">{m.content}</div>
                       </div>
-                      <div className="whitespace-pre-wrap text-sm">{m.content}</div>
-                    </div>
-                  ))}
+                    );
+                  })}
+                </div>
+
+                {/* Input do admin — manda mensagem direto pelo painel.
+                    Backend pausa a IA automaticamente no primeiro envio. */}
+                <div className="mt-4 flex gap-2 border-t border-white/10 pt-4">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendReply();
+                      }
+                    }}
+                    placeholder="Digite sua resposta... (Enter envia, Shift+Enter quebra linha)"
+                    rows={2}
+                    disabled={sendingReply}
+                    className="flex-1 resize-none rounded-lg border border-white/10 bg-zinc-950 p-3 text-sm focus:border-red-500 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    onClick={sendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    className="self-end rounded-lg bg-red-600 px-5 py-2 font-semibold text-white transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {sendingReply ? 'Enviando...' : 'Enviar'}
+                  </button>
                 </div>
               </>
             )}

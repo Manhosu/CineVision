@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface UserHit {
   id: string;
@@ -97,6 +98,7 @@ export default function GrantAccessPage() {
 
   return (
     <div className="mx-auto max-w-3xl p-6 text-white">
+      <AdminBackButton />
       <h1 className="mb-6 text-3xl font-bold">Liberar conteúdo manualmente</h1>
 
       <section className="mb-4 rounded-xl border border-white/10 bg-zinc-900 p-5">

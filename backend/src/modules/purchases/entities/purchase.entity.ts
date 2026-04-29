@@ -56,6 +56,9 @@ export class Purchase {
   @Column('uuid', { unique: true, nullable: true })
   purchase_token?: string;
 
+  @Column('uuid', { nullable: true })
+  order_id?: string;
+
   @Column(createEnumColumn(PurchaseDeliveryType, PurchaseDeliveryType.SITE))
   preferred_delivery: PurchaseDeliveryType;
 

@@ -151,6 +151,15 @@ export class PurchasesController {
     return this.purchasesService.findByUserId(userId);
   }
 
+  @Get('user/:userId/grouped')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get purchase history grouped by order' })
+  @ApiResponse({ status: 200, description: 'Grouped purchase history retrieved successfully' })
+  async getUserPurchaseHistoryGrouped(@Param('userId') userId: string) {
+    return this.purchasesService.findGroupedByOrder(userId);
+  }
+
   @Get('check/:contentId')
   @ApiOperation({ summary: 'Check if user owns content' })
   @ApiResponse({ status: 200, description: 'Ownership check completed' })
