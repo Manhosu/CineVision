@@ -17,6 +17,7 @@ export default function CineVisionIntro() {
   const [visible, setVisible] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Effect 1: decide se vai mostrar o splash. Roda 1x no mount.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
@@ -25,31 +26,22 @@ export default function CineVisionIntro() {
     sessionStorage.setItem(SESSION_KEY, '1');
 
     const hideTimer = setTimeout(() => setVisible(false), INTRO_DURATION_MS);
+    return () => clearTimeout(hideTimer);
+  }, []);
 
+  // Effect 2: tocar o áudio quando o splash ficar visível. Tem que
+  // ser separado do effect de mount porque setVisible(true) é
+  // assíncrono — o <audio> só renderiza no re-render seguinte. Ler
+  // audioRef.current dentro do mesmo effect dá `null` e a chamada de
+  // play() nunca acontece (era esse o bug "splash sem áudio mesmo
+  // no desktop" que o Igor reportou).
+  useEffect(() => {
+    if (!visible) return;
     const audio = audioRef.current;
-    let audioTimer: ReturnType<typeof setTimeout> | null = null;
-    let interactionHandler: (() => void) | null = null;
+    if (!audio) return;
 
-    if (audio) {
-      audio.volume = 0.7;
-      audioTimer = setTimeout(() => {
-        const playPromise = audio.play();
-        // If autoplay is blocked (most first-time visits without prior
-        // engagement on the site), arm a one-shot listener on the
-        // document so the very first click/tap unlocks the jingle.
-        if (playPromise && typeof playPromise.catch === 'function') {
-          playPromise.catch(() => {
-            interactionHandler = () => {
-              audio.play().catch(() => {});
-              cleanupInteractionHandler();
-            };
-            document.addEventListener('click', interactionHandler, { once: true });
-            document.addEventListener('touchstart', interactionHandler, { once: true });
-            document.addEventListener('keydown', interactionHandler, { once: true });
-          });
-        }
-      }, AUDIO_OFFSET_MS);
-    }
+    audio.volume = 0.7;
+    let interactionHandler: (() => void) | null = null;
 
     function cleanupInteractionHandler() {
       if (!interactionHandler) return;
@@ -59,12 +51,29 @@ export default function CineVisionIntro() {
       interactionHandler = null;
     }
 
+    const audioTimer = setTimeout(() => {
+      const playPromise = audio.play();
+      // Se autoplay for bloqueado (primeira visita sem engajamento
+      // prévio no site), arma um one-shot listener no documento pra
+      // que o primeiro clique/toque desbloqueie o jingle.
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          interactionHandler = () => {
+            audio.play().catch(() => {});
+            cleanupInteractionHandler();
+          };
+          document.addEventListener('click', interactionHandler, { once: true });
+          document.addEventListener('touchstart', interactionHandler, { once: true });
+          document.addEventListener('keydown', interactionHandler, { once: true });
+        });
+      }
+    }, AUDIO_OFFSET_MS);
+
     return () => {
-      clearTimeout(hideTimer);
-      if (audioTimer) clearTimeout(audioTimer);
+      clearTimeout(audioTimer);
       cleanupInteractionHandler();
     };
-  }, []);
+  }, [visible]);
 
   // Lock body scroll while the splash is up so the underlying page
   // can't move behind the overlay.

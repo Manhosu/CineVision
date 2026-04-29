@@ -1,11 +1,18 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useCallback } from 'react';
+
+// IMPORTANTE: Este contexto antes renderizava uma SEGUNDA splash com
+// logo estático (1.5–5s) por cima da nova animação Framer Motion em
+// CineVisionIntro.tsx. No mobile, com hidratação mais lenta, a antiga
+// "comia" os primeiros segundos da nova — Igor reportou exatamente
+// "uma animação antiga ou imagem estática interrompendo a nova". A
+// splash agora vive 100% em CineVisionIntro; este contexto só sobra
+// como compat shim (notifyContentReady) pra não quebrar consumidores
+// existentes (page.tsx). Pode ser removido inteiro num próximo passo.
 
 interface SplashContextType {
-  /** Whether splash is currently showing */
   isSplashActive: boolean;
-  /** Call this when your content has finished loading */
   notifyContentReady: () => void;
 }
 
@@ -19,89 +26,13 @@ export function useSplash() {
 }
 
 export function SplashProvider({ children }: { children: React.ReactNode }) {
-  const [isSplashActive, setIsSplashActive] = useState(false);
-  const [contentReady, setContentReady] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && !sessionStorage.getItem('splash_shown')) {
-      setIsSplashActive(true);
-    }
-  }, []);
-
   const notifyContentReady = useCallback(() => {
-    setContentReady(true);
-  }, []);
-
-  const handleSplashDone = useCallback(() => {
-    setIsSplashActive(false);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('splash_shown', '1');
-    }
+    // No-op — kept para compat com page.tsx, que ainda chama essa fn.
   }, []);
 
   return (
-    <SplashContext.Provider value={{ isSplashActive, notifyContentReady }}>
-      {isSplashActive && (
-        <SplashOverlay contentReady={contentReady} onDone={handleSplashDone} />
-      )}
+    <SplashContext.Provider value={{ isSplashActive: false, notifyContentReady }}>
       {children}
     </SplashContext.Provider>
-  );
-}
-
-/**
- * Splash overlay:
- * - Shows for minimum 1.5s (so animation looks good)
- * - Waits for contentReady signal
- * - Once BOTH conditions met, fades out
- */
-function SplashOverlay({
-  contentReady,
-  onDone,
-}: {
-  contentReady: boolean;
-  onDone: () => void;
-}) {
-  const [minTimePassed, setMinTimePassed] = useState(false);
-  const [fadeOut, setFadeOut] = useState(false);
-
-  // Minimum display time
-  useEffect(() => {
-    const timer = setTimeout(() => setMinTimePassed(true), 1500);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // When both ready, start fade out
-  useEffect(() => {
-    if (minTimePassed && contentReady && !fadeOut) {
-      setFadeOut(true);
-      const timer = setTimeout(onDone, 500); // fade duration
-      return () => clearTimeout(timer);
-    }
-  }, [minTimePassed, contentReady, fadeOut, onDone]);
-
-  // Safety: max 5s splash even if content never signals ready
-  useEffect(() => {
-    const maxTimer = setTimeout(() => {
-      setFadeOut(true);
-      setTimeout(onDone, 500);
-    }, 5000);
-    return () => clearTimeout(maxTimer);
-  }, [onDone]);
-
-  return (
-    <div
-      className={`fixed inset-0 z-[9999] flex items-center justify-center bg-black transition-opacity duration-500 ${
-        fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
-      }`}
-    >
-      <div className="flex flex-col items-center gap-8 animate-splash-in">
-        <img
-          src="/CINEVT.png"
-          alt="CineVision"
-          className="w-64 md:w-80 lg:w-96 drop-shadow-[0_0_40px_rgba(220,38,38,0.4)]"
-        />
-      </div>
-    </div>
   );
 }
