@@ -23,23 +23,29 @@ interface Stats {
 const fmtMoney = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const PAGE_SIZE = 30;
+
 export default function PixRecoveryPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<Stats['settings'] | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchActive, setSearchActive] = useState('');
+  const [page, setPage] = useState(0); // 0-indexed
 
   const load = async () => {
     try {
       setLoading(true);
       const [s, h] = await Promise.all([
         api.get<Stats>('/api/v1/admin/pix-recovery/stats'),
-        api.get<any[]>('/api/v1/admin/pix-recovery/history?limit=50'),
+        loadHistory(0, ''),
       ]);
       setStats(s);
       setSettings(s.settings);
-      setHistory(h);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao carregar');
     } finally {
@@ -47,9 +53,39 @@ export default function PixRecoveryPage() {
     }
   };
 
+  const loadHistory = async (nextPage: number, query: string) => {
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(nextPage * PAGE_SIZE),
+      });
+      if (query) params.set('q', query);
+      const res = await api.get<{ items: any[]; total: number }>(
+        `/api/v1/admin/pix-recovery/history?${params.toString()}`,
+      );
+      setHistory(res.items || []);
+      setHistoryTotal(res.total || 0);
+      setPage(nextPage);
+      setSearchActive(query);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao buscar histórico');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
+
+  // Debounce: aguarda 400ms parado pra disparar busca
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (searchInput !== searchActive) loadHistory(0, searchInput.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const saveSettings = async () => {
     if (!settings) return;
@@ -168,52 +204,117 @@ export default function PixRecoveryPage() {
 
       {/* History */}
       <div className="rounded-xl border border-white/10 bg-zinc-900 p-6">
-        <h2 className="mb-4 text-xl font-bold">Histórico recente</h2>
-        {history.length === 0 ? (
-          <p className="text-zinc-400">Nenhuma oferta de recuperação enviada ainda.</p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold">Histórico</h2>
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Buscar por nome, email, telegram..."
+            className="w-full rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-sm sm:w-72"
+          />
+        </div>
+
+        {historyLoading && history.length === 0 ? (
+          <p className="text-zinc-400">Carregando...</p>
+        ) : history.length === 0 ? (
+          <p className="text-zinc-400">
+            {searchActive
+              ? `Nenhuma oferta encontrada para "${searchActive}".`
+              : 'Nenhuma oferta de recuperação enviada ainda.'}
+          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-white/10 text-left">
-                <tr>
-                  <th className="py-2">Data</th>
-                  <th>Usuário</th>
-                  <th>Desconto</th>
-                  <th>Bloqueado até</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((h) => {
-                  const blockedUntil = h.next_eligible_at
-                    ? new Date(h.next_eligible_at)
-                    : null;
-                  const stillBlocked = blockedUntil && blockedUntil > new Date();
-                  return (
-                    <tr key={h.id} className="border-b border-white/5">
-                      <td className="py-2 text-zinc-400">
-                        {new Date(h.offered_at).toLocaleString('pt-BR')}
-                      </td>
-                      <td>{h.user_id || h.telegram_chat_id || '-'}</td>
-                      <td>{h.discount_percent}%</td>
-                      <td className={stillBlocked ? 'text-yellow-400' : 'text-zinc-500'}>
-                        {blockedUntil
-                          ? blockedUntil.toLocaleDateString('pt-BR')
-                          : '-'}
-                      </td>
-                      <td>
-                        {h.converted ? (
-                          <span className="text-green-400">Convertido</span>
-                        ) : (
-                          <span className="text-zinc-400">Pendente</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-white/10 text-left">
+                  <tr>
+                    <th className="py-2">Data</th>
+                    <th>Usuário</th>
+                    <th>Desconto</th>
+                    <th>Bloqueado até</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((h) => {
+                    const blockedUntil = h.next_eligible_at
+                      ? new Date(h.next_eligible_at)
+                      : null;
+                    const stillBlocked = blockedUntil && blockedUntil > new Date();
+                    const userLabel = h.user
+                      ? h.user.name ||
+                        h.user.email ||
+                        (h.user.telegram_username ? `@${h.user.telegram_username}` : null) ||
+                        h.user.telegram_id
+                      : null;
+                    return (
+                      <tr key={h.id} className="border-b border-white/5">
+                        <td className="py-2 text-zinc-400">
+                          {new Date(h.offered_at).toLocaleString('pt-BR')}
+                        </td>
+                        <td>
+                          <div className="font-medium">
+                            {userLabel || h.telegram_chat_id || '—'}
+                          </div>
+                          {userLabel && h.user?.email && (
+                            <div className="text-xs text-zinc-500">{h.user.email}</div>
+                          )}
+                          {h.telegram_chat_id && (
+                            <div className="text-xs text-zinc-500">
+                              chat <code>{h.telegram_chat_id}</code>
+                            </div>
+                          )}
+                        </td>
+                        <td>{h.discount_percent}%</td>
+                        <td className={stillBlocked ? 'text-yellow-400' : 'text-zinc-500'}>
+                          {blockedUntil
+                            ? blockedUntil.toLocaleString('pt-BR', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td>
+                          {h.converted ? (
+                            <span className="text-green-400">Convertido</span>
+                          ) : (
+                            <span className="text-zinc-400">Pendente</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginação */}
+            <div className="mt-4 flex items-center justify-between text-sm">
+              <span className="text-zinc-500">
+                Mostrando {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, historyTotal)} de{' '}
+                {historyTotal}
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => loadHistory(Math.max(0, page - 1), searchActive)}
+                  disabled={page === 0 || historyLoading}
+                  className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-40 hover:bg-white/5"
+                >
+                  ← Anterior
+                </button>
+                <button
+                  onClick={() => loadHistory(page + 1, searchActive)}
+                  disabled={(page + 1) * PAGE_SIZE >= historyTotal || historyLoading}
+                  className="rounded-lg border border-white/10 px-3 py-1 text-sm disabled:opacity-40 hover:bg-white/5"
+                >
+                  Próxima →
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

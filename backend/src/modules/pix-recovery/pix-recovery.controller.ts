@@ -15,9 +15,17 @@ export class PixRecoveryController {
   constructor(private readonly recovery: PixRecoveryService) {}
 
   @Get('history')
-  @ApiOperation({ summary: 'List PIX recovery history' })
-  async history(@Query('limit') limit?: string) {
-    return this.recovery.listHistory(limit ? parseInt(limit, 10) : 100);
+  @ApiOperation({ summary: 'List PIX recovery history (paginated, searchable)' })
+  async history(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('q') search?: string,
+  ) {
+    return this.recovery.listHistory({
+      limit: limit ? parseInt(limit, 10) : 30,
+      offset: offset ? parseInt(offset, 10) : 0,
+      search,
+    });
   }
 
   @Get('stats')

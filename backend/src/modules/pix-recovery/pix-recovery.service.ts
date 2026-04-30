@@ -281,14 +281,74 @@ export class PixRecoveryService {
   // ---------------------------------------------------------------------------
   // Admin-facing helpers
   // ---------------------------------------------------------------------------
-  async listHistory(limit = 100) {
-    const { data, error } = await this.supabase.client
+  async listHistory(opts: {
+    limit?: number;
+    offset?: number;
+    search?: string;
+  } = {}): Promise<{ items: any[]; total: number }> {
+    const limit = Math.min(Math.max(opts.limit || 30, 1), 100);
+    const offset = Math.max(opts.offset || 0, 0);
+    const search = (opts.search || '').trim();
+
+    // Carrega o slice de history. Se tem busca, primeiro acha os user_ids
+    // que casam com nome/email/telegram e filtra. Depois enriquece cada
+    // linha com info do user pra exibir nome no painel (Igor pediu).
+    let userIdFilter: string[] | null = null;
+    if (search) {
+      const { data: users } = await this.supabase.client
+        .from('users')
+        .select('id')
+        .or(
+          `name.ilike.%${search}%,email.ilike.%${search}%,telegram_username.ilike.%${search}%,telegram_id.eq.${search}`,
+        )
+        .limit(200);
+      userIdFilter = (users || []).map((u: any) => u.id);
+      if (userIdFilter.length === 0 && !/^\d+$/.test(search)) {
+        return { items: [], total: 0 };
+      }
+    }
+
+    let query = this.supabase.client
       .from('pix_recovery_history')
-      .select('*')
-      .order('offered_at', { ascending: false })
-      .limit(limit);
-    if (error) return [];
-    return data || [];
+      .select('*', { count: 'exact' })
+      .order('offered_at', { ascending: false });
+
+    if (userIdFilter && userIdFilter.length) {
+      // Match user_id OR (no user_id but telegram_chat_id == search) — por isso
+      // a OR string mais elaborada.
+      const idsCsv = userIdFilter.join(',');
+      if (/^\d+$/.test(search)) {
+        query = query.or(`user_id.in.(${idsCsv}),telegram_chat_id.eq.${search}`);
+      } else {
+        query = query.in('user_id', userIdFilter);
+      }
+    } else if (search && /^\d+$/.test(search)) {
+      query = query.eq('telegram_chat_id', search);
+    }
+
+    const { data, error, count } = await query.range(offset, offset + limit - 1);
+    if (error) {
+      this.logger.error('listHistory failed', error);
+      return { items: [], total: 0 };
+    }
+
+    // Enriquece com user info pra mostrar nome no painel
+    const ids = Array.from(new Set((data || []).map((r: any) => r.user_id).filter(Boolean)));
+    const userMap = new Map<string, any>();
+    if (ids.length) {
+      const { data: users } = await this.supabase.client
+        .from('users')
+        .select('id, name, email, telegram_username, telegram_id')
+        .in('id', ids);
+      for (const u of users || []) userMap.set(u.id, u);
+    }
+
+    const items = (data || []).map((row: any) => ({
+      ...row,
+      user: row.user_id ? userMap.get(row.user_id) : null,
+    }));
+
+    return { items, total: count ?? items.length };
   }
 
   async getStats() {

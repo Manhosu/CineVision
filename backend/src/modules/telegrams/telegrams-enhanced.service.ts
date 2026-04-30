@@ -1014,8 +1014,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
         { timeout: 30000 },
       );
 
-      // Delay aleatório 4-12s. Roda em paralelo com a chamada da IA.
-      const delayMs = 4000 + Math.floor(Math.random() * 8000);
+      // Delay aleatório 5-8s. Igor pediu pra parecer humano sem ficar
+      // arrastado. Roda em paralelo com a chamada da IA.
+      const delayMs = 5000 + Math.floor(Math.random() * 3000);
       const delayPromise = new Promise((r) => setTimeout(r, delayMs));
 
       // Re-arma typing a cada 4s pra não sumir (Telegram drops após ~5s).

@@ -496,10 +496,13 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Real-time Analytics */}
-        <div className="mb-8">
-          <RealtimeAnalytics />
-        </div>
+        {/* Real-time Analytics — escondido pra employees sem permissão.
+            "Pessoas Online" é considerado dado sensível na ACL do Igor. */}
+        {(!isEmployee || perms?.can_view_online_users) && (
+          <div className="mb-8">
+            <RealtimeAnalytics />
+          </div>
+        )}
 
         {/* Quick Actions */}
         <div className="mb-8">
