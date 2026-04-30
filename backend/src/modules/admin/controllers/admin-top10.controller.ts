@@ -8,20 +8,19 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { PermissionGuard } from '../../auth/guards/permission.guard';
+import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AdminTop10Service } from '../services/admin-top10.service';
 
 @ApiTags('Admin - Top 10')
 @Controller('admin/top10')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @ApiBearerAuth()
 export class AdminTop10Controller {
   constructor(private readonly top10Service: AdminTop10Service) {}
 
   @Get('current')
+  @RequirePermission('can_view_top10')
   @ApiOperation({ summary: 'Get current top 10 content' })
   @ApiQuery({ name: 'type', enum: ['movie', 'series'], required: false })
   @ApiResponse({ status: 200, description: 'Current top 10 retrieved successfully' })
@@ -31,6 +30,7 @@ export class AdminTop10Controller {
   }
 
   @Get('history')
+  @RequirePermission('can_view_top10')
   @ApiOperation({ summary: 'Get weekly ranking history' })
   @ApiQuery({ name: 'weeks', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Weekly history retrieved successfully' })
@@ -42,13 +42,13 @@ export class AdminTop10Controller {
 
 @ApiTags('Admin - Sales')
 @Controller('admin/sales')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @ApiBearerAuth()
 export class AdminSalesController {
   constructor(private readonly top10Service: AdminTop10Service) {}
 
   @Get('weekly')
+  @RequirePermission('can_view_top10')
   @ApiOperation({ summary: 'Get daily sales data' })
   @ApiQuery({ name: 'days', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Daily sales data retrieved successfully' })

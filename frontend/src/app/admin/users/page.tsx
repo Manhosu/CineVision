@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useRequirePermission } from '@/hooks/useRequirePermission';
 
 interface User {
   id: string;
@@ -24,6 +25,7 @@ interface UserStats {
 export default function AdminUsersPage() {
   const router = useRouter();
   const { logout } = useAuth();
+  const permCheck = useRequirePermission('can_view_users');
 
   // Data
   const [users, setUsers] = useState<User[]>([]);
@@ -204,6 +206,14 @@ export default function AdminUsersPage() {
 
     return pages;
   };
+
+  if (permCheck.loading || !permCheck.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Verificando permissões...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">

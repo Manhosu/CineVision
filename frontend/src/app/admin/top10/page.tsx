@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRequirePermission } from '@/hooks/useRequirePermission';
 
 interface Top10Item {
   position: number;
@@ -54,6 +55,7 @@ function formatDate(date: Date): string {
 }
 
 export default function AdminTop10Page() {
+  const permCheck = useRequirePermission('can_view_top10');
   const [activeTab, setActiveTab] = useState<'movie' | 'series'>('movie');
   const [data, setData] = useState<Top10Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +106,14 @@ export default function AdminTop10Page() {
 
     fetchTop10();
   }, [activeTab]);
+
+  if (permCheck.loading || !permCheck.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Verificando permissões...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">

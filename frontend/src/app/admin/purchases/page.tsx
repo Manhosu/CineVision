@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useRequirePermission } from '@/hooks/useRequirePermission';
 
 interface Purchase {
   id: string;
@@ -36,6 +37,7 @@ interface PurchaseStats {
 }
 
 export default function AdminPurchasesPage() {
+  const permCheck = useRequirePermission('can_view_purchases');
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [stats, setStats] = useState<PurchaseStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -191,6 +193,14 @@ export default function AdminPurchasesPage() {
       minute: '2-digit'
     });
   };
+
+  if (permCheck.loading || !permCheck.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Verificando permissões...
+      </div>
+    );
+  }
 
   if (loading && purchases.length === 0) {
     return (

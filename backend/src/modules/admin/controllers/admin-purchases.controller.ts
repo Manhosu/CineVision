@@ -13,21 +13,20 @@ import {
 import { AdminPurchasesSimpleService } from '../services/admin-purchases-simple.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { PermissionGuard } from '../../auth/guards/permission.guard';
+import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 
 @ApiTags('Admin Purchases')
 @ApiBearerAuth()
 @Controller('admin/purchases')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 export class AdminPurchasesController {
   private readonly logger = new Logger(AdminPurchasesController.name);
 
   constructor(private readonly adminPurchasesService: AdminPurchasesSimpleService) {}
 
   @Get('orders')
+  @RequirePermission('can_view_purchases')
   @ApiOperation({
     summary: 'List all purchase orders with REAL Telegram data (Admin only)',
     description: 'Retrieve paginated list of purchase orders with REAL user Telegram information and real-time payment status from Stripe. Shows actual telegram_id and @username from provider_meta, not synthetic data. Requires admin authentication.'
@@ -61,6 +60,7 @@ export class AdminPurchasesController {
   }
 
   @Get('orders/:id')
+  @RequirePermission('can_view_purchases')
   @ApiOperation({
     summary: 'Get order by ID (Admin only)',
     description: 'Retrieve detailed information about a specific order. Requires admin authentication.'
@@ -75,6 +75,7 @@ export class AdminPurchasesController {
   }
 
   @Get('stats')
+  @RequirePermission('can_view_purchases')
   @ApiOperation({
     summary: 'Get purchase statistics (Admin only)',
     description: 'Retrieve overall statistics about purchases and revenue. Optionally filter by date range. Requires admin authentication.'

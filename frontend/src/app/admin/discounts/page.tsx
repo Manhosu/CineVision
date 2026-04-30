@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRequirePermission } from '@/hooks/useRequirePermission';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -54,6 +55,7 @@ interface CategoryOption {
 }
 
 export default function AdminDiscountsPage() {
+  const permCheck = useRequirePermission('can_manage_discounts');
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -249,6 +251,14 @@ export default function AdminDiscountsPage() {
     category: 'Categoria',
     individual: 'Individual',
   };
+
+  if (permCheck.loading || !permCheck.allowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        Verificando permissões...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 p-6">

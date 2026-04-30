@@ -2,15 +2,13 @@ import { Controller, Get, Put, Delete, Param, Query, Logger, UseGuards } from '@
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { SupabaseService } from '../../../config/supabase.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../../auth/guards/roles.guard';
-import { Roles } from '../../auth/decorators/roles.decorator';
-import { UserRole } from '../../users/entities/user.entity';
+import { PermissionGuard } from '../../auth/guards/permission.guard';
+import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 
 @ApiTags('admin-users')
 @ApiBearerAuth()
 @Controller('admin/users')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 export class AdminUsersController {
   private readonly logger = new Logger(AdminUsersController.name);
 
@@ -18,6 +16,7 @@ export class AdminUsersController {
   private get supabase() { return this.supabaseService.client; }
 
   @Get()
+  @RequirePermission('can_view_users')
   @ApiOperation({ summary: 'Get paginated users with search and filter' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page (default: 50)' })
@@ -65,6 +64,7 @@ export class AdminUsersController {
   }
 
   @Get('stats')
+  @RequirePermission('can_view_users')
   @ApiOperation({ summary: 'Get user statistics (counts only, no data loaded)' })
   async getUserStats() {
     this.logger.log('Fetching user stats...');

@@ -85,7 +85,7 @@ export class EmployeesService {
   async listEmployees() {
     const { data: employees, error } = await this.supabase.client
       .from('users')
-      .select('id, name, email, role, status, last_login, created_at')
+      .select('id, name, email, role, status, last_login_at, created_at')
       .eq('role', 'employee')
       .order('created_at', { ascending: false });
 
@@ -117,7 +117,7 @@ export class EmployeesService {
   async getEmployee(id: string) {
     const { data: user } = await this.supabase.client
       .from('users')
-      .select('id, name, email, role, status, last_login, created_at')
+      .select('id, name, email, role, status, last_login_at, created_at')
       .eq('id', id)
       .single();
 
