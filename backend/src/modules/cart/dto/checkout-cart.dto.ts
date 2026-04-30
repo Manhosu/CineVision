@@ -16,4 +16,12 @@ export class CheckoutCartDto {
   @IsOptional()
   @IsString()
   session_id?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Telegram chat ID do cliente (vem do link enviado pela IA via Business DM, query param ?chat=). Usado pra entrega via Telegram após pagamento confirmado.',
+  })
+  @IsOptional()
+  @IsString()
+  telegram_chat_id?: string;
 }

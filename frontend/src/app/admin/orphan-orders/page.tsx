@@ -13,8 +13,10 @@ interface OrphanOrder {
   paid_at: string | null;
   created_at: string;
   user_id: string | null;
+  customer_whatsapp: string | null;
   items: string[];
   claim_url: string;
+  whatsapp_url: string | null;
 }
 
 const fmtMoney = (cents: number) =>
@@ -129,8 +131,24 @@ export default function OrphanOrdersPage() {
                       {o.items.join(' · ')}
                     </div>
                   )}
+                  {o.customer_whatsapp && (
+                    <div className="mt-1 text-sm">
+                      <span className="text-zinc-500">WhatsApp da cliente: </span>
+                      <code className="text-green-400">+{o.customer_whatsapp}</code>
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  {o.whatsapp_url && (
+                    <a
+                      href={o.whatsapp_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-700"
+                    >
+                      💬 Mandar no WhatsApp
+                    </a>
+                  )}
                   <button
                     onClick={() => copyMessage(o)}
                     className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold hover:bg-red-700"

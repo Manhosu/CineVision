@@ -33,11 +33,11 @@ export class AiChatService {
   // ---------------------------------------------------------------------------
   // Settings
   // ---------------------------------------------------------------------------
-  async isEnabled(platform: 'telegram' | 'whatsapp'): Promise<boolean> {
-    const key =
-      platform === 'telegram'
-        ? 'ai_chat_enabled_telegram'
-        : 'ai_chat_enabled_whatsapp';
+  async isEnabled(platform: 'telegram' | 'whatsapp' | 'telegram_business'): Promise<boolean> {
+    let key: string;
+    if (platform === 'telegram') key = 'ai_chat_enabled_telegram';
+    else if (platform === 'whatsapp') key = 'ai_chat_enabled_whatsapp';
+    else key = 'ai_chat_enabled_telegram_business';
     const { data } = await this.supabase.client
       .from('admin_settings')
       .select('value')
@@ -47,20 +47,23 @@ export class AiChatService {
   }
 
   async getEnabledFlags() {
-    const [tg, wa] = await Promise.all([
+    const [tg, wa, tgb] = await Promise.all([
       this.supabase.client.from('admin_settings').select('value').eq('key', 'ai_chat_enabled_telegram').maybeSingle(),
       this.supabase.client.from('admin_settings').select('value').eq('key', 'ai_chat_enabled_whatsapp').maybeSingle(),
+      this.supabase.client.from('admin_settings').select('value').eq('key', 'ai_chat_enabled_telegram_business').maybeSingle(),
     ]);
     return {
       telegram: (tg.data?.value ?? 'false').toLowerCase() === 'true',
       whatsapp: (wa.data?.value ?? 'false').toLowerCase() === 'true',
+      telegram_business: (tgb.data?.value ?? 'false').toLowerCase() === 'true',
     };
   }
 
-  async setEnabledFlags(input: { telegram?: boolean; whatsapp?: boolean }) {
+  async setEnabledFlags(input: { telegram?: boolean; whatsapp?: boolean; telegram_business?: boolean }) {
     const updates: Array<[string, string]> = [];
     if (input.telegram !== undefined) updates.push(['ai_chat_enabled_telegram', String(input.telegram)]);
     if (input.whatsapp !== undefined) updates.push(['ai_chat_enabled_whatsapp', String(input.whatsapp)]);
+    if (input.telegram_business !== undefined) updates.push(['ai_chat_enabled_telegram_business', String(input.telegram_business)]);
     for (const [k, v] of updates) {
       await this.supabase.client.from('admin_settings').upsert(
         { key: k, value: v, updated_at: new Date().toISOString() },
@@ -112,7 +115,7 @@ export class AiChatService {
   // Conversation lifecycle
   // ---------------------------------------------------------------------------
   private async getOrCreateConversation(
-    platform: 'telegram' | 'whatsapp',
+    platform: 'telegram' | 'whatsapp' | 'telegram_business',
     externalChatId: string,
   ) {
     const { data: existing } = await this.supabase.client
@@ -178,12 +181,13 @@ export class AiChatService {
   // Process incoming user message
   // ---------------------------------------------------------------------------
   async processIncomingMessage(params: {
-    platform: 'telegram' | 'whatsapp';
+    platform: 'telegram' | 'whatsapp' | 'telegram_business';
     externalChatId: string;
     messageText: string;
     userId?: string;
+    businessConnectionId?: string;
   }): Promise<AiReply> {
-    const { platform, externalChatId, messageText, userId } = params;
+    const { platform, externalChatId, messageText, userId, businessConnectionId } = params;
 
     if (!(await this.isEnabled(platform))) {
       return { text: '', paused: true };
@@ -218,15 +222,7 @@ export class AiChatService {
 
 ${catalogBlock}
 
-${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}
-
-INSTRUÇÕES OBRIGATÓRIAS:
-- Se a mensagem do usuário for ambígua, vazia ou genérica (ex: "quero", "tem?", "tá aí?", "oi", "boa noite"), faça uma pergunta de esclarecimento ANTES de qualquer ação. Exemplos: "Que filme você procura?", "Sobre qual conteúdo você quer saber?". NUNCA emita marcadores em mensagens ambíguas — apenas pergunte de volta.
-- Se o cliente pedir UM ou MAIS filmes que estão listados no catálogo acima, responda com nome e valor de cada um e inclua um marcador <<BUY:ID_DO_CONTEUDO>> para CADA filme detectado (um marcador por filme). O sistema gera automaticamente um único PIX agregado com desconto progressivo aplicado.
-- Se o cliente pedir EXPLICITAMENTE um título específico que NÃO existe no catálogo (ex: "Quero o filme Avatar 3"), responda: "Vou verificar a disponibilidade e já te retorno, beleza?" e inclua o marcador <<PAUSE:content_not_found>>. NUNCA pause sem o usuário ter citado um título nominalmente.
-- Responda sempre em português brasileiro, de forma amigável e humanizada.
-- Não revele que você é uma IA a menos que o usuário pergunte.
-- Nunca invente filmes que não estão no catálogo.`;
+${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
 
     const history = await this.recentHistory(conversation.id);
 
@@ -238,33 +234,107 @@ INSTRUÇÕES OBRIGATÓRIAS:
 
     const rawText = completion.text.trim();
 
-    // Parse directives
+    // Parse directives. Os markers são strippados da resposta final.
     let paused = false;
-    let suggestedContentIds: string[] = [];
     let cleanText = rawText;
+    let suggestedContentIds: string[] = [];
+    let paymentLink: string | undefined;
 
-    if (/<<PAUSE:content_not_found>>/i.test(rawText)) {
+    // PAUSE: IA não soube responder — encerra e chama Igor
+    if (/<<PAUSE:[^>]+>>/i.test(rawText)) {
       paused = true;
       cleanText = cleanText.replace(/<<PAUSE:[^>]+>>/gi, '').trim();
-      await this.pauseConversation(conversation.id, 'content_not_found');
+      const reasonMatch = rawText.match(/<<PAUSE:([^>]+)>>/i);
+      const reason = reasonMatch?.[1] ?? 'unknown';
+      await this.pauseConversation(conversation.id, reason);
       await this.notifyAdminForTakeover(platform, externalChatId, messageText);
     }
 
-    const buyMatches = [...rawText.matchAll(/<<BUY:([0-9a-f-]{36})>>/gi)];
-    suggestedContentIds = buyMatches.map((m) => m[1]);
-    cleanText = cleanText.replace(/<<BUY:[^>]+>>/gi, '').trim();
+    // LIST_REDIRECT: cliente pediu lista completa — manda link da home
+    if (/<<LIST_REDIRECT>>/i.test(rawText)) {
+      cleanText = cleanText.replace(/<<LIST_REDIRECT>>/gi, '').trim();
+      // Se Claude já compôs texto, mantém; senão usa template padrão.
+      if (!cleanText) {
+        cleanText =
+          'Nossa lista completa tá direto no aplicativo! 🎬 Dá uma olhada aqui:\n\n' +
+          'https://cinevisionapp.com.br/\n\n' +
+          'Qualquer filme que rolar interesse, é só me chamar 💕';
+      } else if (!cleanText.includes('cinevisionapp.com.br')) {
+        cleanText += '\n\nhttps://cinevisionapp.com.br/';
+      }
+    }
 
-    // Se BUY foi detectado (1 ou N itens), gera UM link de pagamento
-    // agregado: o cart-service aplica o desconto progressivo
-    // automaticamente, então 3 filmes pedidos juntos saem com 1 PIX
-    // único e desconto consolidado. Igor pediu isso explicitamente.
-    let paymentLink: string | undefined;
-    if (suggestedContentIds.length) {
-      paymentLink = await this.createQuickBuyLink(
-        suggestedContentIds,
-        externalChatId,
-        userId,
+    // ASK_YEAR: só strip do marker — texto natural já tá no rawText
+    if (/<<ASK_YEAR:[^>]+>>/i.test(rawText)) {
+      cleanText = cleanText.replace(/<<ASK_YEAR:[^>]+>>/gi, '').trim();
+    }
+
+    // DETAIL: substitui o antigo BUY. NÃO gera order — apenas anexa
+    // o link da página de detalhes do site no fim da resposta.
+    const detailMatches = [...rawText.matchAll(/<<DETAIL:([0-9a-f-]{36})>>/gi)];
+    cleanText = cleanText.replace(/<<DETAIL:[^>]+>>/gi, '').trim();
+    if (detailMatches.length) {
+      const ids = Array.from(new Set(detailMatches.map((m) => m[1])));
+      const links = await this.buildDetailLinks(
+        ids,
+        businessConnectionId,
+        platform === 'telegram_business' ? externalChatId : undefined,
       );
+      suggestedContentIds = ids;
+      if (links.length) {
+        const linksBlock = links
+          .map((l) => `🎬 *${l.title}${l.year ? ` (${l.year})` : ''}* — R$ ${this.formatBRL(l.priceCents)}\n👉 ${l.url}`)
+          .join('\n\n');
+        cleanText = (cleanText ? `${cleanText}\n\n` : '') + linksBlock;
+        if (links.length > 1) {
+          cleanText += '\n\nPra ganhar desconto progressivo, dá pra montar um pacote no carrinho do site 🎁';
+        }
+      }
+    }
+
+    // MANUAL_PIX: cliente pediu PIX manual depois do link de detalhes.
+    // Backend monta resposta com chave + total e notifica Igor no bot.
+    const manualPixMatch = rawText.match(/<<MANUAL_PIX:([0-9a-f,-]+)>>/i);
+    if (manualPixMatch) {
+      cleanText = cleanText.replace(/<<MANUAL_PIX:[^>]+>>/gi, '').trim();
+      const ids = Array.from(
+        new Set(
+          manualPixMatch[1]
+            .split(',')
+            .map((s) => s.trim())
+            .filter((s) => /^[0-9a-f-]{36}$/i.test(s)),
+        ),
+      );
+      const summary = await this.buildManualPixSummary(ids);
+      if (summary.items.length) {
+        const itemsBlock = summary.items
+          .map((it) => `🎬 *${it.title}${it.year ? ` (${it.year})` : ''}* — R$ ${this.formatBRL(it.priceCents)}`)
+          .join('\n');
+        cleanText =
+          'Sem problema! 💕\n\n' +
+          itemsBlock +
+          `\n\n💰 *Total: R$ ${this.formatBRL(summary.totalCents)}*\n\n` +
+          `PIX e-mail: ${summary.pixKey}\n\n` +
+          'Assim que efetuar, só me enviar o comprovante por aqui que verifico e libero seus filmes 💕';
+
+        // Notifica Igor pra validar comprovante manual.
+        await this.notifyAdminManualPix(summary, externalChatId, businessConnectionId);
+      }
+    }
+
+    // BUY: legacy do bot direto — mantém comportamento antigo (gera link
+    // de pagamento agregado). Não usado no fluxo Business novo.
+    if (platform !== 'telegram_business') {
+      const buyMatches = [...rawText.matchAll(/<<BUY:([0-9a-f-]{36})>>/gi)];
+      const buyIds = buyMatches.map((m) => m[1]);
+      cleanText = cleanText.replace(/<<BUY:[^>]+>>/gi, '').trim();
+      if (buyIds.length) {
+        suggestedContentIds = buyIds;
+        paymentLink = await this.createQuickBuyLink(buyIds, externalChatId, userId);
+      }
+    } else {
+      // Strip qualquer <<BUY>> que escapou no platform Business.
+      cleanText = cleanText.replace(/<<BUY:[^>]+>>/gi, '').trim();
     }
 
     await this.appendMessage(
@@ -280,6 +350,123 @@ INSTRUÇÕES OBRIGATÓRIAS:
       suggestedContentIds,
       paymentLink,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers usados pelos novos markers
+  // ---------------------------------------------------------------------------
+
+  private formatBRL(cents: number): string {
+    return (cents / 100).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  /**
+   * Monta os links da página de detalhes do site pra cada UUID. Se
+   * businessConnectionId + customerChatId presentes, anexa
+   * ?via=business&bid=BCID&chat=CHATID pra que ao adicionar ao
+   * carrinho o backend marque a order como vinda do canal Business
+   * (entrega via Igor depois) E saiba qual é o chat_id pra entregar.
+   */
+  private async buildDetailLinks(
+    contentIds: string[],
+    businessConnectionId?: string,
+    customerChatId?: string,
+  ): Promise<Array<{ id: string; title: string; year?: number; priceCents: number; url: string }>> {
+    if (!contentIds.length) return [];
+    const { data } = await this.supabase.client
+      .from('content')
+      .select('id, title, release_year, price_cents, content_type')
+      .in('id', contentIds);
+    const baseUrl =
+      this.configService.get('PUBLIC_FRONTEND_URL') ||
+      'https://cinevisionapp.com.br';
+    const params: string[] = [];
+    if (businessConnectionId) {
+      params.push(`via=business`);
+      params.push(`bid=${encodeURIComponent(businessConnectionId)}`);
+    }
+    if (customerChatId) {
+      params.push(`chat=${encodeURIComponent(customerChatId)}`);
+    }
+    const suffix = params.length ? `?${params.join('&')}` : '';
+    return (data || []).map((c: any) => {
+      const path = c.content_type === 'series' ? 'series' : 'movies';
+      return {
+        id: c.id,
+        title: c.title,
+        year: c.release_year ?? undefined,
+        priceCents: c.price_cents,
+        url: `${baseUrl}/${path}/${c.id}${suffix}`,
+      };
+    });
+  }
+
+  private async buildManualPixSummary(
+    contentIds: string[],
+  ): Promise<{
+    items: Array<{ id: string; title: string; year?: number; priceCents: number }>;
+    totalCents: number;
+    pixKey: string;
+  }> {
+    const items: Array<{ id: string; title: string; year?: number; priceCents: number }> = [];
+    if (contentIds.length) {
+      const { data } = await this.supabase.client
+        .from('content')
+        .select('id, title, release_year, price_cents')
+        .in('id', contentIds);
+      for (const c of data || []) {
+        items.push({
+          id: c.id,
+          title: c.title,
+          year: c.release_year ?? undefined,
+          priceCents: c.price_cents,
+        });
+      }
+    }
+    const totalCents = items.reduce((acc, it) => acc + it.priceCents, 0);
+    return {
+      items,
+      totalCents,
+      pixKey: this.configService.get('MANUAL_PIX_KEY') || 'cinevision.app@hotmail.com',
+    };
+  }
+
+  /**
+   * Avisa Igor no DM dele com o bot quando cliente pediu PIX manual.
+   * Inclui resumo dos filmes + total + chat_id do cliente pra ele
+   * encontrar a conversa e validar o comprovante.
+   */
+  private async notifyAdminManualPix(
+    summary: { items: Array<{ title: string; year?: number; priceCents: number }>; totalCents: number },
+    clientExternalChatId: string,
+    businessConnectionId?: string,
+  ) {
+    const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    if (!adminChatId || !this.telegramsService) return;
+
+    const itemsBlock = summary.items
+      .map((it) => `• ${it.title}${it.year ? ` (${it.year})` : ''} — R$ ${this.formatBRL(it.priceCents)}`)
+      .join('\n');
+    const text =
+      `🔔 *PIX manual solicitado*\n\n` +
+      `Cliente (chat \`${clientExternalChatId}\`) pediu pra pagar via PIX manual:\n\n` +
+      itemsBlock +
+      `\n\n💰 *Total: R$ ${this.formatBRL(summary.totalCents)}*\n\n` +
+      (businessConnectionId
+        ? '_Conversa via Business DM_\n\n'
+        : '') +
+      `Quando o comprovante chegar, valida no banco e libera o conteúdo via /admin/grant-access.`;
+
+    try {
+      await this.telegramsService.sendMessage(parseInt(adminChatId, 10), text, {
+        parse_mode: 'Markdown',
+      });
+    } catch (err: any) {
+      this.logger.warn(`notifyAdminManualPix failed: ${err.message}`);
+    }
   }
 
   private async createQuickBuyLink(
@@ -312,6 +499,17 @@ INSTRUÇÕES OBRIGATÓRIAS:
       this.logger.warn(`Failed to create quick-buy link: ${err.message}`);
       return undefined;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Business connection status (lista conexões ativas pra mostrar no painel)
+  // ---------------------------------------------------------------------------
+  async getBusinessConnections() {
+    const { data } = await this.supabase.client
+      .from('telegram_business_connections')
+      .select('*')
+      .order('updated_at', { ascending: false });
+    return data || [];
   }
 
   // ---------------------------------------------------------------------------

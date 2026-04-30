@@ -54,4 +54,17 @@ export class OrdersController {
       body.user_id,
     );
   }
+
+  // Salva o WhatsApp do comprador na order. Chamado pela tela de
+  // sucesso do checkout quando a compra é órfã (paga via web sem
+  // login). O admin usa esse número no painel de órfãs pra recuperar
+  // a venda via wa.me. Sem auth — quem tem o token tem permissão.
+  @Post('token/:token/whatsapp')
+  @ApiOperation({ summary: 'Save customer WhatsApp on a paid order' })
+  async setWhatsapp(
+    @Param('token') token: string,
+    @Body() body: { whatsapp: string },
+  ) {
+    return this.ordersService.setCustomerWhatsapp(token, body.whatsapp);
+  }
 }

@@ -61,7 +61,12 @@ export class CartController {
     @Body(ValidationPipe) dto: AddCartItemDto,
     @GetUser() user: any,
   ) {
-    return this.cartService.addItem(dto.content_id, user?.sub, dto.session_id);
+    return this.cartService.addItem(
+      dto.content_id,
+      user?.sub,
+      dto.session_id,
+      dto.business_connection_id,
+    );
   }
 
   @Delete('items/:contentId')
@@ -93,6 +98,7 @@ export class CartController {
       userId: user?.sub,
       sessionId: dto.session_id,
       preferredDelivery: dto.preferred_delivery,
+      telegramChatId: dto.telegram_chat_id,
     });
   }
 }

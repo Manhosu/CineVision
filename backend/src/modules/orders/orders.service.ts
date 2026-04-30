@@ -57,6 +57,14 @@ export class OrdersService {
     const preview = cartData.preview;
     const delivery = preferredDelivery || PurchaseDeliveryType.TELEGRAM;
 
+    // Se o cart foi iniciado a partir de um link da IA via Business DM
+    // (cliente clicou em /movies/UUID?via=business&bid=BCID), o cart
+    // tem o business_connection_id persistido. Propaga pra order pra
+    // que markOrderPaid → notifyBotForDelivery despache via canal
+    // Business em vez do bot direto.
+    const businessConnectionId =
+      (cartData.cart as any)?.business_connection_id || null;
+
     // 1. Create Order
     const orderToken = uuidv4();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -74,6 +82,7 @@ export class OrdersService {
         status: OrderStatus.PENDING,
         is_recovery_order: false,
         telegram_chat_id: telegramChatId || null,
+        business_connection_id: businessConnectionId,
         expires_at: expiresAt.toISOString(),
       })
       .select()
@@ -374,13 +383,38 @@ export class OrdersService {
   }
 
   // ---------------------------------------------------------------------------
+  // Salva o WhatsApp de contato numa order (chamado pela tela de
+  // sucesso quando a order é órfã). Sanitiza pra dígitos só, pra
+  // facilitar o link wa.me do painel.
+  // ---------------------------------------------------------------------------
+  async setCustomerWhatsapp(token: string, rawWhatsapp: string): Promise<{ ok: boolean }> {
+    const digits = (rawWhatsapp || '').replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 15) {
+      throw new BadRequestException('WhatsApp inválido');
+    }
+    // Adiciona código do Brasil se não estiver presente (assume BR
+    // como padrão — Igor opera 100% no Brasil). 10/11 dígitos = local;
+    // 12/13 = já tem 55.
+    const normalized = digits.length <= 11 ? `55${digits}` : digits;
+    const { error } = await this.supabase.client
+      .from('orders')
+      .update({ customer_whatsapp: normalized })
+      .eq('order_token', token);
+    if (error) {
+      this.logger.error(`setCustomerWhatsapp failed for ${token}: ${error.message}`);
+      throw new BadRequestException('Não foi possível salvar o WhatsApp');
+    }
+    return { ok: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Lista orders pagas órfãs (sem telegram_chat_id). Usada pelo admin
   // pra recuperar compras de clientes que pagaram via web sem login.
   // ---------------------------------------------------------------------------
   async listOrphanOrders(limit = 100): Promise<any[]> {
     const { data, error } = await this.supabase.client
       .from('orders')
-      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id')
+      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id, customer_whatsapp')
       .eq('status', OrderStatus.PAID)
       .is('telegram_chat_id', null)
       .order('paid_at', { ascending: false })
@@ -418,6 +452,11 @@ export class OrdersService {
         ...o,
         items,
         claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        whatsapp_url: o.customer_whatsapp
+          ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
+              `Olá! Identifiquei aqui que você fez uma compra no nosso site (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) e ainda não recebeu o acesso.\n\nPara receber seu(s) filme(s), abra nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático ❤️`,
+            )}`
+          : null,
       };
     });
   }
@@ -657,14 +696,33 @@ export class OrdersService {
       return;
     }
 
+    // Carrega a order pra saber se ela veio do canal Business (via=business
+    // no link da página de detalhes). Quando sim, despacha as mensagens
+    // pelo canal Business (Igor → cliente) em vez do bot direto, com
+    // humanização (delay + typing).
+    const { data: orderFull } = await this.supabase.client
+      .from('orders')
+      .select('business_connection_id')
+      .eq('id', orderId)
+      .maybeSingle();
+    const businessConnectionId: string | undefined =
+      orderFull?.business_connection_id || undefined;
+    const sendOpts = (extra: Record<string, any> = {}) => ({
+      ...extra,
+      ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
+    });
+
     // Wipe the QR/copia-e-cola/payment-method messages we tracked for
     // this chat so the user's history is clean once the PIX confirms.
-    // The cleanup hook also runs on cancel/payment-pick, but never
-    // after webhook → markOrderPaid until now.
-    try {
-      await this.telegramsService.cleanupTrackedMessages(chatId);
-    } catch (err: any) {
-      this.logger.warn(`cleanupTrackedMessages failed for ${chatId}: ${err.message}`);
+    // The cleanup hook também roda em cancel/payment-pick mas não após
+    // markOrderPaid antes desse fix. Skip quando for canal Business —
+    // nesse caso a IA é quem mandou o link, sem mensagens de QR pra limpar.
+    if (!businessConnectionId) {
+      try {
+        await this.telegramsService.cleanupTrackedMessages(chatId);
+      } catch (err: any) {
+        this.logger.warn(`cleanupTrackedMessages failed for ${chatId}: ${err.message}`);
+      }
     }
 
     // Fetch purchases with their content (so we have telegram_group_link)
@@ -679,12 +737,29 @@ export class OrdersService {
     }
 
     try {
+      // Humanização pro canal Business: "Vou analisar seu comprovante…"
+      // → ~5s typing → "Pagamento confirmado!". No bot direto vamos
+      // direto pra confirmação (sem teatro).
+      if (businessConnectionId) {
+        await this.telegramsService.sendMessage(
+          chatId,
+          'Vou analisar seu comprovante… 💕',
+          sendOpts(),
+        );
+        // Mostra "digitando..." durante a verificação simulada.
+        try {
+          await this.telegramsService.sendChatAction(chatId, 'typing', businessConnectionId);
+        } catch { /* best-effort */ }
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+
       const totalItems = purchases.length;
-      const header =
-        `✅ *Pagamento confirmado!*\n\n` +
-        `Você adquiriu ${totalItems} ${totalItems === 1 ? 'conteúdo' : 'conteúdos'}. ` +
-        `Os links pra assistir estão abaixo:\n`;
-      await this.telegramsService.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+      const header = businessConnectionId
+        ? `✅ *Pagamento confirmado!*\n\nAqui ${totalItems === 1 ? 'está seu filme' : 'estão seus filmes'}:`
+        : `✅ *Pagamento confirmado!*\n\n` +
+          `Você adquiriu ${totalItems} ${totalItems === 1 ? 'conteúdo' : 'conteúdos'}. ` +
+          `Os links pra assistir estão abaixo:\n`;
+      await this.telegramsService.sendMessage(chatId, header, sendOpts({ parse_mode: 'Markdown' }));
 
       const inlineButtons: Array<Array<{ text: string; url: string }>> = [];
       for (const p of purchases) {
@@ -698,7 +773,7 @@ export class OrdersService {
           await this.telegramsService.sendMessage(
             chatId,
             `⚠️ *${title}*: link pendente, o suporte vai te enviar manualmente.`,
-            { parse_mode: 'Markdown' },
+            sendOpts({ parse_mode: 'Markdown' }),
           );
         }
       }
@@ -706,16 +781,27 @@ export class OrdersService {
       if (inlineButtons.length) {
         await this.telegramsService.sendMessage(
           chatId,
-          'Clique nos botões abaixo:',
-          { reply_markup: { inline_keyboard: inlineButtons } },
+          businessConnectionId
+            ? 'Tenha um ótimo filme 💕'
+            : 'Clique nos botões abaixo:',
+          sendOpts({ reply_markup: { inline_keyboard: inlineButtons } }),
         );
       }
 
-      // Final fixed message (per scope)
-      await this.telegramsService.sendMessage(
-        chatId,
-        'Digite /start para iniciar o bot novamente.',
-      );
+      // Mensagem final só no fluxo bot direto. No Business a IA
+      // (Yanna) já encerra com "Tenha um ótimo filme 💕".
+      if (!businessConnectionId) {
+        await this.telegramsService.sendMessage(
+          chatId,
+          'Digite /start para iniciar o bot novamente.',
+        );
+      } else {
+        await this.telegramsService.sendMessage(
+          chatId,
+          'Qualquer coisa estamos a disposição ❤️',
+          sendOpts(),
+        );
+      }
     } catch (err: any) {
       this.logger.error(`Delivery for order ${orderId} failed: ${err.message}`);
     }

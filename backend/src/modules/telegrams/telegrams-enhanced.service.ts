@@ -695,6 +695,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
       } else if (webhookData.callback_query) {
         this.logger.log('🔘 Processing callback query');
         await this.processCallbackQuery(webhookData.callback_query);
+      } else if (webhookData.business_connection) {
+        // Telegram Business: Igor (de)autorizou o bot na conta dele.
+        this.logger.log('🤝 Processing business_connection update');
+        await this.processBusinessConnection(webhookData.business_connection);
+      } else if (webhookData.business_message) {
+        // Telegram Business: DM chegou pra Igor — IA atende.
+        this.logger.log('💬 Processing business_message update');
+        await this.processBusinessMessage(webhookData.business_message);
       } else {
         this.logger.warn('⚠️ Unknown webhook update type:', Object.keys(webhookData));
       }
@@ -847,6 +855,215 @@ export class TelegramsEnhancedService implements OnModuleInit {
       this.logger.warn(`AI dispatch failed: ${err.message}`);
     }
   }
+
+  // ==================== TELEGRAM BUSINESS API ====================
+
+  /**
+   * Igor (de)autorizou o bot via Settings → Business → Chatbots.
+   * Persistimos a conexão pra (a) saber qual business_connection_id usar
+   * ao responder e (b) verificar can_reply antes de processar mensagens.
+   */
+  private async processBusinessConnection(payload: any) {
+    try {
+      const id = payload.id as string;
+      const ownerId = payload.user?.id ?? payload.user_id;
+      const canReply =
+        payload.rights?.can_reply === true || payload.can_reply === true;
+      const isEnabled = payload.is_enabled !== false;
+
+      this.logger.log(
+        `Business connection ${id} from user ${ownerId} (can_reply=${canReply}, is_enabled=${isEnabled})`,
+      );
+
+      const { error } = await this.supabase
+        .from('telegram_business_connections')
+        .upsert(
+          {
+            id,
+            telegram_user_id: ownerId,
+            can_reply: canReply,
+            is_enabled: isEnabled,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' },
+        );
+
+      if (error) {
+        this.logger.error(
+          `Failed to upsert business connection ${id}: ${error.message}`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(`processBusinessConnection failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * DM chegando pra Igor via Business. Roteia pra IA com platform
+   * 'telegram_business'. Se a mensagem veio do próprio Igor (ele digitou
+   * uma resposta manual no app), pausa a IA pra essa conversa — Igor
+   * assumiu manualmente.
+   */
+  private async processBusinessMessage(payload: any) {
+    try {
+      const businessConnectionId = payload.business_connection_id as string;
+      const message = payload;
+      const chatId = message.chat?.id;
+      const senderId = message.from?.id;
+      const text = message.text;
+
+      if (!chatId || !text) return;
+
+      // Lookup conexão pra validar can_reply + identificar Igor.
+      const { data: connection } = await this.supabase
+        .from('telegram_business_connections')
+        .select('*')
+        .eq('id', businessConnectionId)
+        .maybeSingle();
+
+      if (!connection) {
+        this.logger.warn(
+          `business_message for unknown connection ${businessConnectionId}`,
+        );
+        return;
+      }
+
+      if (!connection.is_enabled || !connection.can_reply) {
+        this.logger.log(
+          `Skipping business_message — connection ${businessConnectionId} disabled or read-only`,
+        );
+        return;
+      }
+
+      // Se quem mandou foi o próprio Igor (dono da conta Business),
+      // pausa a IA pra essa conversa — ele assumiu o atendimento.
+      if (senderId && senderId === connection.telegram_user_id) {
+        await this.supabase
+          .from('ai_conversations')
+          .update({
+            ai_enabled: false,
+            paused_reason: 'owner_takeover',
+            paused_at: new Date().toISOString(),
+          })
+          .eq('platform', 'telegram_business')
+          .eq('external_chat_id', String(chatId));
+        this.logger.log(
+          `Owner takeover: pausing AI for chat ${chatId} (Igor responded manually)`,
+        );
+        return;
+      }
+
+      // Cliente mandou DM. Dispatcha pra IA com humanization (typing + delay).
+      await this.dispatchAiChatBusiness(
+        chatId,
+        text,
+        businessConnectionId,
+        senderId,
+      );
+    } catch (err: any) {
+      this.logger.error(`processBusinessMessage failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Dispatcha mensagem de cliente Business pra IA, aplicando layer de
+   * humanização: 4-12s delay aleatório + sendChatAction(typing) durante.
+   * Igor pediu isso pra resposta parecer humana.
+   */
+  private async dispatchAiChatBusiness(
+    chatId: number,
+    text: string,
+    businessConnectionId: string,
+    telegramUserId?: number,
+  ) {
+    try {
+      const axios = (await import('axios')).default;
+      const backendSelf =
+        this.configService.get('BACKEND_SELF_URL') || 'http://localhost:3001';
+
+      // Identifica user no banco se já existe (pra histórico/permissões).
+      let userId: string | undefined;
+      if (telegramUserId) {
+        try {
+          const { data: user } = await this.supabase
+            .from('users')
+            .select('id')
+            .eq('telegram_id', String(telegramUserId))
+            .maybeSingle();
+          userId = user?.id;
+        } catch {
+          /* silent */
+        }
+      }
+
+      // Mostra "digitando..." imediatamente pro cliente ver atividade.
+      this.sendChatAction(chatId, 'typing', businessConnectionId).catch(
+        () => undefined,
+      );
+
+      // Pede a resposta da IA em paralelo ao delay humanizado.
+      const aiPromise = axios.post(
+        `${backendSelf}/api/v1/ai-chat/message`,
+        {
+          platform: 'telegram_business',
+          external_chat_id: String(chatId),
+          message: text,
+          user_id: userId,
+          business_connection_id: businessConnectionId,
+        },
+        { timeout: 30000 },
+      );
+
+      // Delay aleatório 4-12s. Roda em paralelo com a chamada da IA.
+      const delayMs = 4000 + Math.floor(Math.random() * 8000);
+      const delayPromise = new Promise((r) => setTimeout(r, delayMs));
+
+      // Re-arma typing a cada 4s pra não sumir (Telegram drops após ~5s).
+      const typingInterval = setInterval(() => {
+        this.sendChatAction(chatId, 'typing', businessConnectionId).catch(
+          () => undefined,
+        );
+      }, 4000);
+
+      const [response] = await Promise.all([aiPromise, delayPromise]);
+      clearInterval(typingInterval);
+
+      const reply = response.data;
+      if (reply?.paused) return;
+      if (!reply?.text) return;
+
+      await this.sendMessage(chatId, reply.text, {
+        parse_mode: 'Markdown',
+        business_connection_id: businessConnectionId,
+      });
+    } catch (err: any) {
+      this.logger.warn(`Business AI dispatch failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Envia chat action ("typing", "upload_photo", etc). Suporta
+   * business_connection_id pra mostrar atividade na conta do Igor.
+   */
+  async sendChatAction(
+    chatId: number,
+    action: 'typing' | 'upload_photo' | 'record_voice' = 'typing',
+    businessConnectionId?: string,
+  ): Promise<void> {
+    try {
+      const axios = (await import('axios')).default;
+      const body: Record<string, any> = { chat_id: chatId, action };
+      if (businessConnectionId) body.business_connection_id = businessConnectionId;
+      await axios.post(`${this.botApiUrl}/sendChatAction`, body, {
+        timeout: 5000,
+      });
+    } catch (err: any) {
+      // Best-effort — sendChatAction falhar não é crítico.
+      this.logger.debug?.(`sendChatAction failed: ${err.message}`);
+    }
+  }
+
+  // ==================== END TELEGRAM BUSINESS ====================
 
   private async handleOrderDeepLink(chatId: number, orderToken: string, userId?: string) {
     try {
@@ -2529,7 +2746,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       const webhookUrl = `${this.botApiUrl}/setWebhook`;
       const payload: any = {
         url,
-        allowed_updates: ['message', 'callback_query'],
+        allowed_updates: [
+          'message',
+          'callback_query',
+          'business_connection',
+          'business_message',
+        ],
       };
 
       if (secretToken) {
@@ -2785,7 +3007,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         const url = `${this.botApiUrl}/setWebhook`;
         const response = await axios.post(url, {
           url: webhookUrl,
-          allowed_updates: ['message', 'callback_query'],
+          allowed_updates: [
+          'message',
+          'callback_query',
+          'business_connection',
+          'business_message',
+        ],
           drop_pending_updates: true,
         });
         if (response.data.ok) {
@@ -2863,7 +3090,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       const response = await axios.post(url, {
         offset: this.pollingOffset,
         timeout: 30,
-        allowed_updates: ['message', 'callback_query'],
+        allowed_updates: [
+          'message',
+          'callback_query',
+          'business_connection',
+          'business_message',
+        ],
       });
 
       if (response.data.ok && response.data.result.length > 0) {

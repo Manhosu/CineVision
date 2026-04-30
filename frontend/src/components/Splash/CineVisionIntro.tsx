@@ -33,45 +33,38 @@ export default function CineVisionIntro() {
   // ser separado do effect de mount porque setVisible(true) é
   // assíncrono — o <audio> só renderiza no re-render seguinte. Ler
   // audioRef.current dentro do mesmo effect dá `null` e a chamada de
-  // play() nunca acontece (era esse o bug "splash sem áudio mesmo
-  // no desktop" que o Igor reportou).
+  // play() nunca acontece.
+  //
+  // No mobile: NÃO toca. iOS Safari e Chrome Android bloqueiam
+  // autoplay sem gesto prévio. O fallback de "tocar no primeiro
+  // toque" funcionava mas dava UX estranha (toca quando o user rola
+  // ou clica em qualquer coisa). Igor pediu pra remover do mobile.
   useEffect(() => {
     if (!visible) return;
+    if (typeof window === 'undefined') return;
+    const isMobile =
+      window.matchMedia('(max-width: 768px)').matches ||
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) return;
+
     const audio = audioRef.current;
     if (!audio) return;
 
     audio.volume = 0.7;
-    let interactionHandler: (() => void) | null = null;
-
-    function cleanupInteractionHandler() {
-      if (!interactionHandler) return;
-      document.removeEventListener('click', interactionHandler);
-      document.removeEventListener('touchstart', interactionHandler);
-      document.removeEventListener('keydown', interactionHandler);
-      interactionHandler = null;
-    }
 
     const audioTimer = setTimeout(() => {
       const playPromise = audio.play();
-      // Se autoplay for bloqueado (primeira visita sem engajamento
-      // prévio no site), arma um one-shot listener no documento pra
-      // que o primeiro clique/toque desbloqueie o jingle.
       if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {
-          interactionHandler = () => {
-            audio.play().catch(() => {});
-            cleanupInteractionHandler();
-          };
-          document.addEventListener('click', interactionHandler, { once: true });
-          document.addEventListener('touchstart', interactionHandler, { once: true });
-          document.addEventListener('keydown', interactionHandler, { once: true });
-        });
+        // Se mesmo no desktop o autoplay falhar (extremamente raro
+        // em desktop sem engajamento), desiste silenciosamente —
+        // sem fallback de listener pra evitar tocar fora do contexto
+        // da splash.
+        playPromise.catch(() => {});
       }
     }, AUDIO_OFFSET_MS);
 
     return () => {
       clearTimeout(audioTimer);
-      cleanupInteractionHandler();
     };
   }, [visible]);
 

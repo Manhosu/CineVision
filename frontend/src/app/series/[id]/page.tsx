@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import ContentHero from '@/components/ContentHero/ContentHero';
 import CastSection from '@/components/CastSection/CastSection';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
+import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
 import { Movie } from '@/types/movie';
 
 interface Series extends Movie {
@@ -103,6 +104,9 @@ export default function SeriesDetailsPage() {
 
   return (
     <main className="bg-dark-950">
+      {/* Captura ?via=business&bid=...&chat=... pro fluxo de IA Business DM. */}
+      <BusinessLinkCapture />
+
       <ContentHero
         content={series}
         backHref="/"

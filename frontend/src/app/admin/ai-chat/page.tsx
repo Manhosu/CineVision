@@ -32,6 +32,16 @@ interface Training {
 interface Flags {
   telegram: boolean;
   whatsapp: boolean;
+  telegram_business: boolean;
+}
+
+interface BusinessConnection {
+  id: string;
+  telegram_user_id: number;
+  can_reply: boolean;
+  is_enabled: boolean;
+  connected_at: string;
+  updated_at: string;
 }
 
 export default function AiChatAdmin() {
@@ -40,7 +50,8 @@ export default function AiChatAdmin() {
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [training, setTraining] = useState<Training>({ system_prompt: '', faq_pairs: [] });
-  const [flags, setFlags] = useState<Flags>({ telegram: false, whatsapp: false });
+  const [flags, setFlags] = useState<Flags>({ telegram: false, whatsapp: false, telegram_business: false });
+  const [businessConnections, setBusinessConnections] = useState<BusinessConnection[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadConversations = async () => {
@@ -79,18 +90,33 @@ export default function AiChatAdmin() {
     }
   };
 
-  const updateFlag = async (key: 'telegram' | 'whatsapp', value: boolean) => {
+  const loadBusinessConnections = async () => {
+    try {
+      const data = await api.get<BusinessConnection[]>('/api/v1/admin/ai-chat/business-connections');
+      setBusinessConnections(data);
+    } catch {
+      // best-effort — feature pode não estar deployada ainda
+    }
+  };
+
+  const flagLabels: Record<keyof Flags, string> = {
+    telegram: 'Bot do Telegram',
+    whatsapp: 'WhatsApp',
+    telegram_business: 'DM Pessoal (Telegram Business)',
+  };
+
+  const updateFlag = async (key: keyof Flags, value: boolean) => {
     try {
       const data = await api.put<Flags>('/api/v1/admin/ai-chat/flags', { [key]: value });
       setFlags(data);
-      toast.success(`IA ${key === 'telegram' ? 'Telegram' : 'WhatsApp'} ${value ? 'ativada' : 'desativada'}`);
+      toast.success(`IA no ${flagLabels[key]} ${value ? 'ativada' : 'desativada'}`);
     } catch (err: any) {
       toast.error(err.message);
     }
   };
 
   useEffect(() => {
-    Promise.all([loadConversations(), loadTraining(), loadFlags()]).finally(() => setLoading(false));
+    Promise.all([loadConversations(), loadTraining(), loadFlags(), loadBusinessConnections()]).finally(() => setLoading(false));
   }, []);
 
   // Polling 5s pra observar conversas em tempo real (Igor pediu —
@@ -198,8 +224,21 @@ export default function AiChatAdmin() {
                   selected?.id === c.id ? 'border-red-500 bg-red-500/10' : 'border-white/10 bg-zinc-900 hover:bg-zinc-800'
                 }`}
               >
-                <div className="text-sm font-semibold">
-                  {c.platform} · {c.external_chat_id}
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  {c.platform === 'telegram_business' ? (
+                    <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-bold text-blue-300">
+                      DM PESSOAL
+                    </span>
+                  ) : c.platform === 'telegram' ? (
+                    <span className="rounded bg-zinc-500/20 px-1.5 py-0.5 text-[10px] font-bold text-zinc-300">
+                      BOT
+                    </span>
+                  ) : (
+                    <span className="rounded bg-green-500/20 px-1.5 py-0.5 text-[10px] font-bold text-green-300">
+                      WHATSAPP
+                    </span>
+                  )}
+                  <span className="truncate">{c.external_chat_id}</span>
                 </div>
                 <div className="mt-1 text-xs text-zinc-500">
                   {c.ai_enabled ? (
@@ -371,9 +410,16 @@ export default function AiChatAdmin() {
           </p>
 
           <ToggleRow
-            label="IA atende mensagens privadas no Telegram"
+            label="IA atende mensagens no Bot do Telegram"
+            description="Quando alguém manda DM pro @cinevisionv2bot."
             value={flags.telegram}
             onChange={(v) => updateFlag('telegram', v)}
+          />
+          <ToggleRow
+            label="IA atende DMs do seu Telegram pessoal (Business)"
+            description="Requer Telegram Business + bot conectado em Settings → Business → Chatbots."
+            value={flags.telegram_business}
+            onChange={(v) => updateFlag('telegram_business', v)}
           />
           <ToggleRow
             label="IA atende mensagens no WhatsApp"
@@ -381,6 +427,53 @@ export default function AiChatAdmin() {
             value={flags.whatsapp}
             onChange={(v) => updateFlag('whatsapp', v)}
           />
+
+          {/* Status da conexão Business — só renderiza quando flag tá ativa */}
+          {flags.telegram_business && (
+            <div className="mt-6 rounded-lg border border-white/10 bg-zinc-950 p-4">
+              <h3 className="mb-2 text-sm font-semibold">Conexões Business ativas</h3>
+              {businessConnections.length === 0 ? (
+                <p className="text-xs text-zinc-500">
+                  Nenhuma conta conectada ainda. No app do Telegram, vá em{' '}
+                  <strong>Configurações → Telegram Business → Chatbots</strong> e adicione{' '}
+                  <code className="rounded bg-black px-1 py-0.5">@cinevisionv2bot</code>.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {businessConnections.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between rounded border border-white/5 p-2 text-xs"
+                    >
+                      <div>
+                        <div className="text-zinc-300">
+                          Telegram ID <code className="text-zinc-100">{c.telegram_user_id}</code>
+                        </div>
+                        <div className="text-zinc-500">
+                          Conexão <code>{c.id.slice(0, 8)}…</code> · atualizada em{' '}
+                          {new Date(c.updated_at).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span
+                          className={`rounded px-2 py-0.5 text-[10px] font-semibold ${
+                            c.is_enabled ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                          }`}
+                        >
+                          {c.is_enabled ? 'ATIVA' : 'DESATIVADA'}
+                        </span>
+                        {!c.can_reply && (
+                          <span className="rounded bg-yellow-500/20 px-2 py-0.5 text-[10px] font-semibold text-yellow-300">
+                            SÓ LEITURA
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

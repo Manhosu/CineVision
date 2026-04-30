@@ -122,7 +122,11 @@ export class CartService {
   // ---------------------------------------------------------------------------
   // Cart retrieval / creation
   // ---------------------------------------------------------------------------
-  async getOrCreateCart(userId?: string, sessionId?: string) {
+  async getOrCreateCart(
+    userId?: string,
+    sessionId?: string,
+    businessConnectionId?: string,
+  ) {
     if (!userId && !sessionId) {
       throw new BadRequestException('Either user_id or session_id is required');
     }
@@ -139,9 +143,15 @@ export class CartService {
       // in, claim it. Same idea for the inverse (user-only cart that
       // gets a session id later) — keep the cart, just fill in the
       // missing key so subsequent lookups by either key resolve.
+      // Também populamos business_connection_id se vier (sessão veio
+      // de um link da IA via Business DM): assim quando criar a order
+      // a entrega vai pelo canal Business em vez do bot direto.
       const updates: Record<string, string> = {};
       if (userId && !cart.user_id) updates.user_id = userId;
       if (sessionId && !cart.session_id) updates.session_id = sessionId;
+      if (businessConnectionId && !cart.business_connection_id) {
+        updates.business_connection_id = businessConnectionId;
+      }
       if (Object.keys(updates).length > 0) {
         const { data: claimed } = await this.supabase
           .from('carts')
@@ -157,6 +167,7 @@ export class CartService {
     const insertPayload: any = {};
     if (userId) insertPayload.user_id = userId;
     if (sessionId) insertPayload.session_id = sessionId;
+    if (businessConnectionId) insertPayload.business_connection_id = businessConnectionId;
 
     const { data: created, error } = await this.supabase
       .from('carts')
@@ -239,8 +250,13 @@ export class CartService {
   // ---------------------------------------------------------------------------
   // Add / remove
   // ---------------------------------------------------------------------------
-  async addItem(contentId: string, userId?: string, sessionId?: string) {
-    const cart = await this.getOrCreateCart(userId, sessionId);
+  async addItem(
+    contentId: string,
+    userId?: string,
+    sessionId?: string,
+    businessConnectionId?: string,
+  ) {
+    const cart = await this.getOrCreateCart(userId, sessionId, businessConnectionId);
 
     const { data: content, error: contentError } = await this.supabase
       .from('content')

@@ -64,6 +64,21 @@ const genSessionId = (): string => {
   return id;
 };
 
+// Lê o business_connection_id que o BusinessLinkCapture salvou ao
+// abrir uma página de detalhes vinda de link da IA via Business DM.
+// Persiste durante toda a sessão (sessionStorage).
+const readBusinessContext = () => {
+  if (typeof window === 'undefined') return { bid: undefined as string | undefined, chat: undefined as string | undefined };
+  try {
+    return {
+      bid: sessionStorage.getItem('cv_business_connection_id') || undefined,
+      chat: sessionStorage.getItem('cv_business_chat_id') || undefined,
+    };
+  } catch {
+    return { bid: undefined, chat: undefined };
+  }
+};
+
 const buildQuery = (params: Record<string, string | undefined>) => {
   const pairs = Object.entries(params).filter(([, v]) => v !== undefined && v !== '');
   return pairs.length ? '?' + pairs.map(([k, v]) => `${k}=${encodeURIComponent(v!)}`).join('&') : '';
@@ -116,9 +131,14 @@ export const useCartStore = create<CartState>()(
           }));
         }
         try {
+          const ctx = readBusinessContext();
           const data = await apiService.post<{ items: CartItem[]; preview: DiscountPreview }>(
             '/api/v1/cart/items',
-            { content_id: contentId, session_id: get().sessionId },
+            {
+              content_id: contentId,
+              session_id: get().sessionId,
+              ...(ctx.bid ? { business_connection_id: ctx.bid } : {}),
+            },
           );
           set({ items: data.items || [], preview: data.preview || null, syncError: null });
         } catch (err: any) {
@@ -160,9 +180,11 @@ export const useCartStore = create<CartState>()(
       },
 
       async checkout(preferredDelivery = 'telegram') {
+        const ctx = readBusinessContext();
         const result = await apiService.post<any>('/api/v1/cart/checkout', {
           preferred_delivery: preferredDelivery,
           session_id: get().sessionId,
+          ...(ctx.chat ? { telegram_chat_id: ctx.chat } : {}),
         });
         set({ items: [], preview: null });
         return result;

@@ -36,6 +36,9 @@ function CheckoutContent() {
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
   const cartClear = useCartStore((s) => s.clear);
+  const [whatsappValue, setWhatsappValue] = useState('');
+  const [whatsappSaving, setWhatsappSaving] = useState(false);
+  const [whatsappSaved, setWhatsappSaved] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -106,6 +109,25 @@ function CheckoutContent() {
   const needsTelegramClaim = paid && !order.telegram_chat_id;
   const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
   const claimDeepLink = `https://t.me/${botUsername}?start=order_${order.order_token}`;
+  const hasWhatsappCaptured = !!order.customer_whatsapp || whatsappSaved;
+
+  const saveWhatsapp = async () => {
+    const digits = whatsappValue.replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 13) {
+      toast.error('Informe um WhatsApp válido (ex: 21 99828-0890)');
+      return;
+    }
+    setWhatsappSaving(true);
+    try {
+      await api.post(`/api/v1/orders/token/${token}/whatsapp`, { whatsapp: digits });
+      setWhatsappSaved(true);
+      toast.success('WhatsApp salvo. Vamos te avisar caso precisar!');
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao salvar');
+    } finally {
+      setWhatsappSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-black px-4 py-10 text-white">
@@ -131,9 +153,56 @@ function CheckoutContent() {
                   </svg>
                   Receber pelo Telegram
                 </a>
-                <p className="text-xs text-zinc-500">
+                <p className="mb-6 text-xs text-zinc-500">
                   Já abriu o bot e ainda não recebeu? <Link href="/minha-lista" className="text-red-400 underline">Ver meus filmes</Link>
                 </p>
+
+                {/* Captura de WhatsApp pra recuperação manual caso a
+                    pessoa feche a aba sem clicar no botão acima.
+                    Igor opera tráfego pelo WhatsApp, então esse é o
+                    canal de recuperação prioritário. */}
+                <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950 p-5 text-left">
+                  {hasWhatsappCaptured ? (
+                    <div className="flex items-start gap-3 text-sm">
+                      <span className="text-2xl">✅</span>
+                      <div>
+                        <p className="font-semibold text-green-400">WhatsApp salvo!</p>
+                        <p className="mt-1 text-xs text-zinc-400">
+                          Caso você feche essa página antes de receber os filmes pelo bot, vamos te chamar no WhatsApp.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <label htmlFor="orphan-whatsapp" className="mb-1 block text-sm font-semibold text-white">
+                        💬 Quer um plano B no WhatsApp?
+                      </label>
+                      <p className="mb-3 text-xs text-zinc-400">
+                        Se você ainda não usa Telegram ou prefere receber suporte por WhatsApp, deixe seu número.
+                        A gente te chama caso precise. <span className="text-zinc-500">Opcional.</span>
+                      </p>
+                      <div className="flex gap-2">
+                        <input
+                          id="orphan-whatsapp"
+                          type="tel"
+                          inputMode="numeric"
+                          placeholder="(21) 99828-0890"
+                          value={whatsappValue}
+                          onChange={(e) => setWhatsappValue(e.target.value)}
+                          disabled={whatsappSaving}
+                          className="flex-1 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-green-500 focus:outline-none disabled:opacity-50"
+                        />
+                        <button
+                          onClick={saveWhatsapp}
+                          disabled={whatsappSaving || !whatsappValue.trim()}
+                          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          {whatsappSaving ? '...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </>
             ) : (
               <>

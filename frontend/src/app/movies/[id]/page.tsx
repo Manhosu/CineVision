@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
+import { Suspense } from 'react';
 import ContentHero from '@/components/ContentHero/ContentHero';
 import CastSection from '@/components/CastSection/CastSection';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import RelatedMovies from '@/components/RelatedMovies/RelatedMovies';
+import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
 import { Movie } from '@/types/movie';
 
 interface MoviePageProps {
@@ -90,6 +92,11 @@ export default async function MoviePage({ params }: MoviePageProps) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <main className="bg-dark-950">
+        {/* Captura ?via=business&bid=...&chat=... pro fluxo de IA Business DM. */}
+        <Suspense fallback={null}>
+          <BusinessLinkCapture />
+        </Suspense>
+
         {/* Hero - fullscreen backdrop */}
         <ContentHero content={movie} backHref="/" backLabel="Início" contentType="movie" />
 

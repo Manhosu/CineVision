@@ -26,10 +26,11 @@ export class AiChatController {
   async processMessage(
     @Body()
     body: {
-      platform: 'telegram' | 'whatsapp';
+      platform: 'telegram' | 'whatsapp' | 'telegram_business';
       external_chat_id: string;
       message: string;
       user_id?: string;
+      business_connection_id?: string;
     },
   ) {
     return this.aiChatService.processIncomingMessage({
@@ -37,6 +38,7 @@ export class AiChatController {
       externalChatId: body.external_chat_id,
       messageText: body.message,
       userId: body.user_id,
+      businessConnectionId: body.business_connection_id,
     });
   }
 
@@ -113,9 +115,19 @@ export class AiChatController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiBearerAuth()
-  async setFlags(@Body() body: { telegram?: boolean; whatsapp?: boolean }) {
+  async setFlags(
+    @Body() body: { telegram?: boolean; whatsapp?: boolean; telegram_business?: boolean },
+  ) {
     await this.aiChatService.setEnabledFlags(body);
     return this.aiChatService.getEnabledFlags();
+  }
+
+  @Get('admin/ai-chat/business-connections')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async getBusinessConnections() {
+    return this.aiChatService.getBusinessConnections();
   }
 
   @Put('admin/ai-chat/training')
