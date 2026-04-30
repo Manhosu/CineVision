@@ -863,6 +863,35 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
 
       if (order.status === 'paid') {
+        // Caso da Yanna: pagou via web sem login → order ficou órfã
+        // (sem telegram_chat_id, possivelmente sem user_id). Aqui o
+        // primeiro deep-link clicado linka tudo e dispara a entrega.
+        // Se já estava linkada, só mostramos a mensagem informativa.
+        try {
+          const claimResp = await axios.post(
+            `${backendSelf}/api/v1/orders/token/${orderToken}/claim`,
+            {
+              telegram_chat_id: String(chatId),
+              user_id: userId,
+            },
+            { timeout: 10000 },
+          );
+          if (claimResp.data?.claimed) {
+            // Entrega já foi disparada pelo backend. Não envia
+            // mensagem extra aqui — `notifyBotForDelivery` já manda
+            // o "Pagamento confirmado!" + botões dos filmes.
+            return;
+          }
+          if (claimResp.data?.alreadyLinked) {
+            await this.sendMessage(
+              chatId,
+              `✅ Esse pedido já foi pago e entregue.\n\nUse /minhas-compras para acessar seus conteúdos.`,
+            );
+            return;
+          }
+        } catch (err: any) {
+          this.logger.warn(`Order claim failed for ${orderToken}: ${err.message}`);
+        }
         await this.sendMessage(chatId, `✅ Esse pedido já foi pago.\n\nUse /minhas-compras para acessar seus conteúdos.`);
         return;
       }

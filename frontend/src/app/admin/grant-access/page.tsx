@@ -54,14 +54,24 @@ export default function GrantAccessPage() {
     }
     const t = setTimeout(async () => {
       try {
-        const data = await api.get<any>(`/api/v1/content/movies?search=${encodeURIComponent(contentQuery)}&limit=10`);
-        const hits: ContentHit[] = (data.items || data.data || []).map((m: any) => ({
+        // Backend retorna { movies: [...], pagination: {...} } — não
+        // { items } nem { data }. O bug de "Demon Slayer não aparece"
+        // que o Igor reportou era esse projection errado. Também
+        // buscamos em séries em paralelo (sagas/séries não apareciam
+        // mesmo no antes-do-fix).
+        const [moviesRes, seriesRes] = await Promise.all([
+          api.get<any>(`/api/v1/content/movies?search=${encodeURIComponent(contentQuery)}&limit=10`),
+          api.get<any>(`/api/v1/content/series?search=${encodeURIComponent(contentQuery)}&limit=10`),
+        ]);
+        const moviesList = moviesRes?.movies || [];
+        const seriesList = seriesRes?.movies || [];
+        const hits: ContentHit[] = [...moviesList, ...seriesList].map((m: any) => ({
           id: m.id,
           title: m.title,
           type: m.content_type || m.type,
           poster_url: m.poster_url,
         }));
-        setContentResults(hits);
+        setContentResults(hits.slice(0, 20));
       } catch {
         /* no-op */
       }

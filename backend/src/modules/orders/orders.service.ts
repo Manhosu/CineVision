@@ -406,6 +406,68 @@ export class OrdersService {
   }
 
   // ---------------------------------------------------------------------------
+  // Claim an orphan paid order (web checkout sem login → bot deep link).
+  // Caso da Yanna: ela pagou via web, sem ter feito login. A order ficou
+  // com user_id=null e telegram_chat_id=null, então /minha-lista não
+  // mostra e o bot não entrega. Quando ela clica
+  // t.me/cinevisionv2bot?start=order_TOKEN, este método é chamado:
+  //   1. Linka order.telegram_chat_id ao chat dela
+  //   2. Garante user_id (procura por telegram_id; cria temp se não existir)
+  //   3. Atribui purchases.user_id pra que /minha-lista funcione daqui pra frente
+  //   4. Dispara entrega normal (notifyBotForDelivery)
+  // ---------------------------------------------------------------------------
+  async claimOrphanOrder(
+    orderToken: string,
+    telegramChatId: string,
+    userId?: string,
+  ): Promise<{ claimed: boolean; alreadyLinked?: boolean; reason?: string }> {
+    const { data: order } = await this.supabase.client
+      .from('orders')
+      .select('*')
+      .eq('order_token', orderToken)
+      .maybeSingle();
+
+    if (!order) {
+      return { claimed: false, reason: 'order_not_found' };
+    }
+
+    if (order.status !== OrderStatus.PAID) {
+      return { claimed: false, reason: 'order_not_paid' };
+    }
+
+    if (order.telegram_chat_id && order.user_id) {
+      // Já linkada — nada a fazer; bot pode mostrar mensagem informativa.
+      return { claimed: false, alreadyLinked: true };
+    }
+
+    const updates: Record<string, any> = {};
+    if (!order.telegram_chat_id) updates.telegram_chat_id = telegramChatId;
+    if (!order.user_id && userId) updates.user_id = userId;
+
+    if (Object.keys(updates).length) {
+      await this.supabase.client
+        .from('orders')
+        .update(updates)
+        .eq('id', order.id);
+    }
+
+    // Garante que TODAS as purchases dessa order têm user_id, pra
+    // /minha-lista da web também passar a listar pra ela.
+    if (userId) {
+      await this.supabase.client
+        .from('purchases')
+        .update({ user_id: userId })
+        .eq('order_id', order.id)
+        .is('user_id', null);
+    }
+
+    // Dispara entrega via Telegram (links dos filmes).
+    await this.notifyBotForDelivery(order.id, telegramChatId);
+
+    return { claimed: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Lookup recent pending orders for PIX recovery
   // ---------------------------------------------------------------------------
   async findPendingOrdersForRecovery(
