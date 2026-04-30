@@ -7,6 +7,8 @@ import {
   UseGuards,
   BadRequestException,
   NotFoundException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -14,8 +16,8 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { UserRole } from '../../users/entities/user.entity';
 import { SupabaseService } from '../../../config/supabase.service';
+import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
 
 interface GrantAccessBody {
   content_id: string;
@@ -28,7 +30,12 @@ interface GrantAccessBody {
 @Roles(UserRole.ADMIN)
 @ApiBearerAuth()
 export class AdminManualGrantController {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(AdminManualGrantController.name);
+
+  constructor(
+    private readonly supabase: SupabaseService,
+    @Optional() private readonly telegrams?: TelegramsEnhancedService,
+  ) {}
 
   @Get('user-search')
   @ApiOperation({ summary: 'Search users by email, telegram_id, id, or name (autocomplete)' })
@@ -137,27 +144,47 @@ export class AdminManualGrantController {
       throw new BadRequestException(`Failed to create purchase: ${error?.message}`);
     }
 
-    // Notify bot to deliver (best-effort)
-    try {
-      const botUrl = process.env.BOT_WEBHOOK_URL;
-      if (botUrl && user.telegram_chat_id) {
-        await axios.post(
-          `${botUrl}/webhook/payment-confirmed`,
-          {
-            purchase_id: purchase.id,
-            telegram_chat_id: user.telegram_chat_id,
-            manual: true,
-          },
-          { timeout: 5000 },
-        );
+    // Entrega direta via TelegramsEnhancedService — substitui o webhook
+    // antigo que dependia de BOT_WEBHOOK_URL (frágil) e do
+    // telegram_chat_id estar populado (nem todo user tem). Em chat
+    // privado, telegram_chat_id == telegram_id, então usamos qualquer
+    // um dos dois.
+    const chatIdRaw = user.telegram_chat_id || user.telegram_id;
+    let delivered = false;
+    if (chatIdRaw && this.telegrams) {
+      const chatId = parseInt(String(chatIdRaw), 10);
+      if (!Number.isNaN(chatId)) {
+        try {
+          const link = content.telegram_group_link;
+          const header =
+            `🎁 *Liberação manual de conteúdo*\n\n` +
+            `Você recebeu acesso a *${content.title}*. ` +
+            (link
+              ? 'Clique no botão abaixo pra assistir.'
+              : 'Em breve o suporte enviará o link.');
+          await this.telegrams.sendMessage(chatId, header, {
+            parse_mode: 'Markdown',
+            ...(link
+              ? {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: `🎬 ${content.title}`, url: link }],
+                    ],
+                  },
+                }
+              : {}),
+          });
+          delivered = true;
+        } catch (err: any) {
+          this.logger.warn(`Manual grant delivery failed for ${chatId}: ${err.message}`);
+        }
       }
-    } catch {
-      // best-effort
     }
 
     return {
       ok: true,
       purchase,
+      delivered,
       user: { id: user.id, name: user.name, email: user.email },
       content: { id: content.id, title: content.title },
     };
