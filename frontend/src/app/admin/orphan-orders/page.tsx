@@ -26,21 +26,33 @@ const fmtDate = (iso: string | null) =>
 export default function OrphanOrdersPage() {
   const [orders, setOrders] = useState<OrphanOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  const load = async () => {
+  const load = async (showSpinner = false) => {
     try {
-      setLoading(true);
+      if (showSpinner) setLoading(true);
       const data = await api.get<OrphanOrder[]>('/api/v1/orders/orphan');
       setOrders(data);
+      setLastRefresh(new Date());
     } catch (err: any) {
-      toast.error(err.message);
+      if (showSpinner) toast.error(err.message);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
+  // Carga inicial + polling 10s. Quando o cliente clica em
+  // "Receber pelo Telegram" e o bot faz o claim, o pedido vira
+  // não-órfão (telegram_chat_id deixa de ser null). Na próxima
+  // tick do polling, ele some daqui sozinho. Pausa quando a aba
+  // está em background.
   useEffect(() => {
-    load();
+    load(true);
+    const tick = () => {
+      if (document.visibilityState === 'visible') load(false);
+    };
+    const id = setInterval(tick, 10000);
+    return () => clearInterval(id);
   }, []);
 
   const copyLink = async (claimUrl: string) => {
@@ -75,12 +87,18 @@ export default function OrphanOrdersPage() {
         clicar e abrir o bot, os filmes são entregues automaticamente.
       </p>
 
-      <button
-        onClick={load}
-        className="mb-4 rounded-lg border border-white/10 px-3 py-1 text-sm text-zinc-300 hover:bg-white/5"
-      >
-        ↻ Recarregar
-      </button>
+      <div className="mb-4 flex items-center gap-3">
+        <button
+          onClick={() => load(true)}
+          className="rounded-lg border border-white/10 px-3 py-1 text-sm text-zinc-300 hover:bg-white/5"
+        >
+          ↻ Recarregar
+        </button>
+        <span className="text-xs text-zinc-500">
+          Atualiza sozinho a cada 10s
+          {lastRefresh && ` · última: ${lastRefresh.toLocaleTimeString('pt-BR')}`}
+        </span>
+      </div>
 
       {loading ? (
         <p className="text-zinc-500">Carregando...</p>
