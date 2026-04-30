@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/entities/user.entity';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { OrdersService } from './orders.service';
 
@@ -21,6 +24,18 @@ export class OrdersController {
   @ApiOperation({ summary: 'List authenticated user orders' })
   async listMine(@GetUser() user: any) {
     return this.ordersService.findByUser(user.sub);
+  }
+
+  // Lista orders órfãs (paga sem telegram_chat_id) — admin only.
+  // Usada pelo painel /admin/orphan-orders pra Igor recuperar
+  // compras de clientes que pagaram via web sem login.
+  @Get('orphan')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List paid orders without Telegram chat link (admin)' })
+  async listOrphan(@Query('limit') limit?: string) {
+    return this.ordersService.listOrphanOrders(limit ? parseInt(limit, 10) : 100);
   }
 
   // Endpoint chamado pelo bot quando alguém clica

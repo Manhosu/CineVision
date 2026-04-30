@@ -340,7 +340,65 @@ export class OrdersService {
     // Notify bot to deliver content
     await this.notifyBotForDelivery(order.id, order.telegram_chat_id);
 
+    // Order paga sem telegram_chat_id = compra "órfã" (cliente pagou
+    // via web sem ter passado pelo bot). Avisa o admin no Telegram
+    // dele com o link pronto pra ser encaminhado pra cliente. Caso
+    // típico: pessoa abre link no WhatsApp → navegador → paga PIX →
+    // não tem como receber automaticamente porque o site nunca
+    // pediu o Telegram dela.
+    if (!order.telegram_chat_id) {
+      await this.notifyAdminOrphanOrder(order).catch((err) => {
+        this.logger.warn(`Failed to notify admin about orphan order ${order.id}: ${err.message}`);
+      });
+    }
+
     return order;
+  }
+
+  private async notifyAdminOrphanOrder(order: any): Promise<void> {
+    if (!this.telegramsService) return;
+    const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    if (!adminChatId) return;
+
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+    const claimLink = `https://t.me/${botUsername}?start=order_${order.order_token}`;
+    const totalFmt = (order.total_cents / 100).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+    });
+
+    // Tenta achar dados de identificação pra ajudar o admin a achar
+    // a cliente. Se não houver, mostra "anônima".
+    const { data: purchases } = await this.supabase.client
+      .from('purchases')
+      .select('content:content(title)')
+      .eq('order_id', order.id);
+    const titles = (purchases || [])
+      .map((p: any) => {
+        const c = Array.isArray(p.content) ? p.content[0] : p.content;
+        return c?.title;
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+
+    const adminText =
+      `🔔 *Compra órfã detectada*\n\n` +
+      `Cliente pagou via web sem associar ao Telegram. Encaminhe a mensagem abaixo pra ela receber os filmes:\n\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `Olá! Para receber seu(s) filme(s) no Telegram, abra o nosso bot pelo link abaixo:\n\n` +
+      `${claimLink}\n\n` +
+      `Quando você abrir e iniciar a conversa, os links chegam automaticamente. ❤️\n` +
+      `━━━━━━━━━━━━━━━━━━━\n\n` +
+      `*Pedido:* \`${order.order_token.slice(0, 8)}\`\n` +
+      `*Total:* R$ ${totalFmt}\n` +
+      `*Itens:* ${titles.length ? titles.join(', ') : `${order.total_items} itens`}`;
+
+    try {
+      await this.telegramsService.sendMessage(parseInt(adminChatId, 10), adminText, {
+        parse_mode: 'Markdown',
+      });
+    } catch (err: any) {
+      this.logger.warn(`sendMessage to admin failed: ${err.message}`);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -371,6 +429,55 @@ export class OrdersService {
     }
 
     return { ...order, purchases: purchases || [], payment };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lista orders pagas órfãs (sem telegram_chat_id). Usada pelo admin
+  // pra recuperar compras de clientes que pagaram via web sem login.
+  // ---------------------------------------------------------------------------
+  async listOrphanOrders(limit = 100): Promise<any[]> {
+    const { data, error } = await this.supabase.client
+      .from('orders')
+      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id')
+      .eq('status', OrderStatus.PAID)
+      .is('telegram_chat_id', null)
+      .order('paid_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      this.logger.error('listOrphanOrders failed', error);
+      return [];
+    }
+
+    if (!data?.length) return [];
+
+    const orderIds = data.map((o: any) => o.id);
+    const { data: purchases } = await this.supabase.client
+      .from('purchases')
+      .select('order_id, content:content(title, poster_url)')
+      .in('order_id', orderIds);
+
+    const purchasesByOrder = new Map<string, any[]>();
+    for (const p of purchases || []) {
+      const list = purchasesByOrder.get(p.order_id) || [];
+      list.push(p);
+      purchasesByOrder.set(p.order_id, list);
+    }
+
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+
+    return data.map((o: any) => {
+      const items = (purchasesByOrder.get(o.id) || [])
+        .map((p: any) => {
+          const c = Array.isArray(p.content) ? p.content[0] : p.content;
+          return c?.title;
+        })
+        .filter(Boolean);
+      return {
+        ...o,
+        items,
+        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+      };
+    });
   }
 
   async findByUser(userId: string) {

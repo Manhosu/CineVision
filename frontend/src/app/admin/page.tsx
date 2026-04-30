@@ -311,6 +311,18 @@ export default function AdminDashboard() {
       shadow: 'shadow-sky-500/50'
     },
     {
+      title: 'Compras órfãs',
+      description: 'Recuperar pagamentos web sem Telegram associado',
+      href: '/admin/orphan-orders',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l-1 12H6L5 9z" />
+        </svg>
+      ),
+      gradient: 'from-orange-600 to-red-700',
+      shadow: 'shadow-orange-500/50'
+    },
+    {
       title: 'Liberar conteúdo',
       description: 'Dar acesso manual a um usuário',
       href: '/admin/grant-access',
