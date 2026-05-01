@@ -63,6 +63,12 @@ export class User {
   @Column({ default: false })
   whatsapp_joined: boolean;
 
+  // Número de WhatsApp pessoal do usuário, capturado de forma
+  // obrigatória no dashboard quando logado via Telegram. Canal de
+  // recuperação secundário caso o Telegram fique indisponível.
+  @Column({ nullable: true })
+  whatsapp?: string;
+
   @Column({ nullable: true })
   refresh_token?: string;
 

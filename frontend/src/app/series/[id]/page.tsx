@@ -71,12 +71,9 @@ export default function SeriesDetailsPage() {
     if (!series?.telegram_group_link) { toast.error('Conteúdo indisponível no momento'); return; }
     window.open(series.telegram_group_link, '_blank');
   };
-
-  const handlePurchase = () => {
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
-    window.open(`https://t.me/${botUsername}?start=buy_${seriesId}`, '_blank');
-    toast.success('Abrindo Telegram...', { duration: 2000 });
-  };
+  // O ContentHero cuida do "Comprar" sozinho — bifurca anônimo
+  // (Pix direto na web) vs logado-Telegram (deep link buy_<id>).
+  // Não passamos onPurchase aqui para não sobrescrever esse fluxo.
 
   if (loading) {
     return (
@@ -115,7 +112,6 @@ export default function SeriesDetailsPage() {
         isOwned={isOwned}
         checkingOwnership={checkingOwnership}
         onPlay={handlePlay}
-        onPurchase={handlePurchase}
       />
 
       <CastSection

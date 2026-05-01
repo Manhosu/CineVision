@@ -6,6 +6,7 @@ import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
+import { WhatsAppNumberGate } from '@/components/WhatsApp/WhatsAppNumberGate';
 import { toast } from 'react-hot-toast';
 
 interface Purchase {
@@ -137,7 +138,14 @@ export default function MinhaListaPage() {
     );
   }
 
-  return (
+  // Igor pediu: usuário logado via Telegram só vê o dashboard
+  // depois de cadastrar o WhatsApp pessoal. Vira fonte de contato
+  // secundária pra recuperação manual quando o Telegram falha.
+  // Quem não tem telegram_id (caso anônimo, edge cases) não passa
+  // pelo gate — não foi pedido cobrir esse fluxo.
+  const needsWhatsapp = !!user.telegram_id && !user.whatsapp;
+
+  const dashboard = (
     <div className="min-h-screen bg-dark-950">
       <Header />
 
@@ -348,5 +356,15 @@ export default function MinhaListaPage() {
 
       <Footer />
     </div>
+  );
+
+  return (
+    <WhatsAppNumberGate
+      userId={user.id}
+      hasWhatsapp={!needsWhatsapp}
+      onSaved={(digits) => setUser((u: any) => ({ ...u, whatsapp: digits }))}
+    >
+      {dashboard}
+    </WhatsAppNumberGate>
   );
 }

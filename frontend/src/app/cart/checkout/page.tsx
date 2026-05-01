@@ -138,71 +138,87 @@ function CheckoutContent() {
             <h1 className="mb-2 text-3xl font-bold text-green-400">Pagamento confirmado!</h1>
             {needsTelegramClaim ? (
               <>
-                <p className="mb-6 text-zinc-300">
-                  Para receber os links dos seus filmes, abra o nosso bot no Telegram clicando
-                  abaixo. A entrega é automática logo após você abrir o chat.
-                </p>
-                <a
-                  href={claimDeepLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mb-3 inline-flex items-center gap-2 rounded-lg bg-[#229ED9] px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/30 hover:brightness-110"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                  </svg>
-                  Receber pelo Telegram
-                </a>
-                <p className="mb-6 text-xs text-zinc-500">
-                  Já abriu o bot e ainda não recebeu? <Link href="/minha-lista" className="text-red-400 underline">Ver meus filmes</Link>
-                </p>
-
-                {/* Captura de WhatsApp pra recuperação manual caso a
-                    pessoa feche a aba sem clicar no botão acima.
-                    Igor opera tráfego pelo WhatsApp, então esse é o
-                    canal de recuperação prioritário. */}
-                <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950 p-5 text-left">
-                  {hasWhatsappCaptured ? (
+                {/* Captura de WhatsApp ANTES do botão "Receber pelo
+                    Telegram". Igor pediu pra tornar obrigatório:
+                    sem WhatsApp não liberamos o deep link, porque
+                    em compras órfãs (cliente sem login Telegram) o
+                    WhatsApp é o único canal de recuperação se a
+                    pessoa fechar a aba antes de clicar no bot. */}
+                {hasWhatsappCaptured ? (
+                  <div className="mb-4 rounded-xl border border-green-500/30 bg-green-500/5 p-4 text-left">
                     <div className="flex items-start gap-3 text-sm">
                       <span className="text-2xl">✅</span>
                       <div>
                         <p className="font-semibold text-green-400">WhatsApp salvo!</p>
                         <p className="mt-1 text-xs text-zinc-400">
-                          Caso você feche essa página antes de receber os filmes pelo bot, vamos te chamar no WhatsApp.
+                          Agora abra o bot no Telegram para receber seus filmes. Se você fechar essa página antes, te chamamos no WhatsApp.
                         </p>
                       </div>
                     </div>
-                  ) : (
-                    <>
-                      <label htmlFor="orphan-whatsapp" className="mb-1 block text-sm font-semibold text-white">
-                        💬 Quer um plano B no WhatsApp?
-                      </label>
-                      <p className="mb-3 text-xs text-zinc-400">
-                        Se você ainda não usa Telegram ou prefere receber suporte por WhatsApp, deixe seu número.
-                        A gente te chama caso precise. <span className="text-zinc-500">Opcional.</span>
-                      </p>
-                      <div className="flex gap-2">
-                        <input
-                          id="orphan-whatsapp"
-                          type="tel"
-                          inputMode="numeric"
-                          placeholder="(21) 99828-0890"
-                          value={whatsappValue}
-                          onChange={(e) => setWhatsappValue(e.target.value)}
-                          disabled={whatsappSaving}
-                          className="flex-1 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-green-500 focus:outline-none disabled:opacity-50"
-                        />
-                        <button
-                          onClick={saveWhatsapp}
-                          disabled={whatsappSaving || !whatsappValue.trim()}
-                          className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
-                        >
-                          {whatsappSaving ? '...' : 'Salvar'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/5 p-5 text-left">
+                    <label htmlFor="orphan-whatsapp" className="mb-1 block text-sm font-semibold text-white">
+                      💬 Cadastre seu WhatsApp para liberar a entrega
+                    </label>
+                    <p className="mb-3 text-xs text-zinc-400">
+                      Precisamos do seu WhatsApp antes de liberar o link do bot — é por ele que
+                      a gente te chama caso o Telegram falhe ou você feche a aba. Obrigatório.
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        id="orphan-whatsapp"
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder="(21) 99828-0890"
+                        value={whatsappValue}
+                        onChange={(e) => setWhatsappValue(e.target.value)}
+                        disabled={whatsappSaving}
+                        className="flex-1 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-amber-400 focus:outline-none disabled:opacity-50"
+                      />
+                      <button
+                        onClick={saveWhatsapp}
+                        disabled={whatsappSaving || !whatsappValue.trim()}
+                        className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-400 disabled:opacity-50"
+                      >
+                        {whatsappSaving ? '...' : 'Salvar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <p className="mb-6 text-zinc-300">
+                  {hasWhatsappCaptured
+                    ? 'Pronto! Abra o nosso bot no Telegram clicando abaixo. A entrega é automática logo após você abrir o chat.'
+                    : 'Cadastre seu WhatsApp acima para liberar o link do bot.'}
+                </p>
+                {hasWhatsappCaptured ? (
+                  <a
+                    href={claimDeepLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mb-3 inline-flex items-center gap-2 rounded-lg bg-[#229ED9] px-6 py-3 font-semibold text-white shadow-lg shadow-blue-500/30 hover:brightness-110"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+                    </svg>
+                    Receber pelo Telegram
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="mb-3 inline-flex cursor-not-allowed items-center gap-2 rounded-lg bg-zinc-700 px-6 py-3 font-semibold text-zinc-400"
+                    title="Preencha o WhatsApp acima para liberar"
+                  >
+                    🔒 Receber pelo Telegram
+                  </button>
+                )}
+                {hasWhatsappCaptured && (
+                  <p className="mb-6 text-xs text-zinc-500">
+                    Já abriu o bot e ainda não recebeu? <Link href="/minha-lista" className="text-red-400 underline">Ver meus filmes</Link>
+                  </p>
+                )}
               </>
             ) : (
               <>

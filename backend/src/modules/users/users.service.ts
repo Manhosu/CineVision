@@ -90,6 +90,12 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
+  async updateWhatsapp(userId: string, whatsapp: string): Promise<User> {
+    const user = await this.findById(userId);
+    user.whatsapp = whatsapp;
+    return this.userRepository.save(user);
+  }
+
   async getUserStats() {
     const total = await this.userRepository.count();
     const active = await this.userRepository.count({ where: { status: 'active' as any } });

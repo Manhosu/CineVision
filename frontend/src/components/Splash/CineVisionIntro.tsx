@@ -13,8 +13,22 @@ const INTRO_DURATION_MS = 5500;
 const AUDIO_OFFSET_MS = 400;
 const ANIMATION_DURATION_S = 5.5;
 
+// Tempo máximo que mantemos a splash esperando window.load. Existe
+// pra cobrir casos patológicos (rede que nunca completa, recurso
+// pesado pendurado) — depois desse tempo seguimos com a animação
+// mesmo que a página não tenha terminado de carregar.
+const PAGE_LOAD_TIMEOUT_MS = 10000;
+
 export default function CineVisionIntro() {
   const [visible, setVisible] = useState(false);
+  // `started` controla quando começa de fato a contagem dos 5.5s da
+  // animação e quando o áudio toca. Fica `false` enquanto a página
+  // ainda está carregando — durante esse intervalo a splash já está
+  // visível (tela preta cobrindo o paint inicial), mas a coreografia
+  // do logo ainda não rodou. Assim a animação inteira acontece com a
+  // home já pronta por baixo, sem corte seco no navegador embutido
+  // do Telegram.
+  const [started, setStarted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Effect 1: decide se vai mostrar o splash. Roda 1x no mount.
@@ -24,23 +38,59 @@ export default function CineVisionIntro() {
 
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
-
-    const hideTimer = setTimeout(() => setVisible(false), INTRO_DURATION_MS);
-    return () => clearTimeout(hideTimer);
   }, []);
 
-  // Effect 2: tocar o áudio quando o splash ficar visível. Tem que
+  // Effect 2: aguarda a página estar pronta (window.load) antes de
+  // iniciar a contagem da animação. Necessário porque no navegador
+  // embutido do Telegram a splash entrava ao mesmo tempo em que o
+  // chrome do app + a home estavam montando, e o redraw cortava
+  // frames da coreografia. Esperar window.load dá a garantia de que
+  // a animação inteira acontece com nada mais competindo pela GPU.
+  useEffect(() => {
+    if (!visible) return;
+    if (typeof window === 'undefined') return;
+
+    let cancelled = false;
+    const start = () => { if (!cancelled) setStarted(true); };
+
+    if (document.readyState === 'complete') {
+      start();
+    } else {
+      window.addEventListener('load', start, { once: true });
+    }
+
+    // Safety: nunca prender a splash mais que PAGE_LOAD_TIMEOUT_MS.
+    const safety = setTimeout(start, PAGE_LOAD_TIMEOUT_MS);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('load', start);
+      clearTimeout(safety);
+    };
+  }, [visible]);
+
+  // Effect 3: agora que a animação começou de verdade, agenda o
+  // hide depois dos 5.5s.
+  useEffect(() => {
+    if (!started) return;
+    const hideTimer = setTimeout(() => setVisible(false), INTRO_DURATION_MS);
+    return () => clearTimeout(hideTimer);
+  }, [started]);
+
+  // Effect 4: tocar o áudio quando o splash ficar visível. Tem que
   // ser separado do effect de mount porque setVisible(true) é
   // assíncrono — o <audio> só renderiza no re-render seguinte. Ler
   // audioRef.current dentro do mesmo effect dá `null` e a chamada de
-  // play() nunca acontece.
+  // play() nunca acontece. Também depende de `started` pra que o
+  // som só dispare junto com a animação, mantendo sincronia com a
+  // batida do "tudum".
   //
   // No mobile: NÃO toca. iOS Safari e Chrome Android bloqueiam
   // autoplay sem gesto prévio. O fallback de "tocar no primeiro
   // toque" funcionava mas dava UX estranha (toca quando o user rola
   // ou clica em qualquer coisa). Igor pediu pra remover do mobile.
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !started) return;
     if (typeof window === 'undefined') return;
     const isMobile =
       window.matchMedia('(max-width: 768px)').matches ||
@@ -66,7 +116,7 @@ export default function CineVisionIntro() {
     return () => {
       clearTimeout(audioTimer);
     };
-  }, [visible]);
+  }, [visible, started]);
 
   // Lock body scroll while the splash is up so the underlying page
   // can't move behind the overlay.
@@ -89,7 +139,12 @@ export default function CineVisionIntro() {
           className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden bg-black"
           aria-hidden="true"
         >
-          <CinematicLogoReveal />
+          {/* A coreografia do logo só monta depois que window.load
+              dispara — antes disso ficamos só com a tela preta. Sem
+              isso, no navegador embutido do Telegram a animação
+              cortava frames porque a home estava sendo montada por
+              baixo ao mesmo tempo. */}
+          {started && <CinematicLogoReveal />}
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
         </motion.div>
       )}

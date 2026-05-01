@@ -59,7 +59,7 @@ export class TelegramsService {
       await this.handleStartCommand(chatId, text);
     } else if (text === '/help' || text === '/ajuda') {
       await this.handleHelpCommand(chatId);
-    } else if (text === '/minhas-compras' || text === '/my-purchases') {
+    } else if (text === '/minhascompras' || text === '/mypurchases') {
       await this.handleMyPurchasesCommand(chatId, message.from.id);
     } else if (text?.startsWith('/pedir ')) {
       const movieTitle = text.substring(7);
@@ -103,7 +103,7 @@ export class TelegramsService {
     const helpMessage = `🤖 **Comandos Disponíveis:**
 
 /start - Iniciar o bot
-/minhas-compras - Ver suas compras
+/minhascompras - Ver suas compras
 /ajuda - Mostrar esta ajuda
 /pedir <título> - Solicitar um filme
 

@@ -38,7 +38,7 @@ export class NotificationService {
 Seu pagamento foi processado com sucesso.
 Você receberá o link para assistir em instantes.
 
-🎬 Use /minhas-compras para ver todos os seus filmes.
+🎬 Use /minhascompras para ver todos os seus filmes.
 
 🛍 Para realizar novas compras no aplicativo, digite /start`;
 

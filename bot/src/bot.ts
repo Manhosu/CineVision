@@ -48,8 +48,8 @@ export class TelegramBot {
     this.bot.onText(/\/catalog/, (msg) => catalogHandler(this.bot, msg));
     this.bot.onText(/\/meus_filmes/, (msg) => myMoviesHandler(this.bot, msg));
     this.bot.onText(/\/my_movies/, (msg) => myMoviesHandler(this.bot, msg));
-    this.bot.onText(/\/minhas-compras/, (msg) => this.showPurchasesHandler(this.bot, msg));
-    this.bot.onText(/\/my-purchases/, (msg) => this.showPurchasesHandler(this.bot, msg));
+    this.bot.onText(/\/minhascompras/, (msg) => this.showPurchasesHandler(this.bot, msg));
+    this.bot.onText(/\/mypurchases/, (msg) => this.showPurchasesHandler(this.bot, msg));
     
     // Movie request command
     this.bot.onText(/\/pedir (.+)/, (msg, match) => this.handleMovieRequest(this.bot, msg, match));

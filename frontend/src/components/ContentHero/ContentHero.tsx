@@ -2,12 +2,30 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon, BookmarkIcon, ShareIcon, PlayIcon, EyeIcon } from '@heroicons/react/24/solid';
 import { BookmarkIcon as BookmarkOutline, FireIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import DiscountHint from '@/components/Cart/DiscountHint';
+import { useCartStore } from '@/stores/cartStore';
+
+// Anônimo = não tem telegram_id salvo no localStorage. Usuários do
+// bot fazem login e gravam telegram_id no blob `user`; visitantes
+// vindos de WhatsApp/navegador externo nunca têm. Essa distinção
+// decide se o botão "Comprar" abre o bot (telegram-logado) ou se
+// gera Pix direto na web (anônimo).
+function isAnonymousUser(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    const u = localStorage.getItem('user');
+    if (!u) return true;
+    return !JSON.parse(u)?.telegram_id;
+  } catch {
+    return true;
+  }
+}
 
 interface ContentHeroProps {
   content: Movie & {
@@ -38,6 +56,12 @@ export default function ContentHero({
   const [urgencyTimer, setUrgencyTimer] = useState('');
   const [fakeViewers, setFakeViewers] = useState(0);
   const [fakeUnits, setFakeUnits] = useState(0);
+  const [buyingNow, setBuyingNow] = useState(false);
+
+  const router = useRouter();
+  const cartAdd = useCartStore((s) => s.add);
+  const cartClear = useCartStore((s) => s.clear);
+  const cartCheckout = useCartStore((s) => s.checkout);
 
   // The /movies/[id] page is a server component and never sets the
   // isOwned prop, so by default the hero shows "Comprar" + the
@@ -189,20 +213,57 @@ export default function ContentHero({
     toast.success(saved ? 'Removido da lista' : 'Salvo na lista');
   };
 
-  const handleMainAction = () => {
+  const handleMainAction = async () => {
     if (isOwned && onPlay) {
       onPlay();
-    } else if (!isOwned && onPurchase) {
+      return;
+    }
+    if (!isOwned && onPurchase) {
       onPurchase();
-    } else {
-      // Default: open Telegram
-      const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
-      if (isOwned && content.telegram_group_link) {
+      return;
+    }
+    if (isOwned) {
+      // Já comprou — abre o grupo do Telegram com o conteúdo
+      if (content.telegram_group_link) {
         window.open(content.telegram_group_link, '_blank');
-      } else {
-        window.open(`https://t.me/${botUsername}?start=buy_${content.id}`, '_blank');
-        toast.success('Abrindo Telegram...', { duration: 2000 });
       }
+      return;
+    }
+
+    // Comprar: bifurca por estado de login.
+    // Quem está logado com telegram_id segue pro fluxo histórico do
+    // bot (deep link buy_<id>) — Igor opera vendas pelo bot e
+    // mantém esse caminho intacto.
+    // Quem é anônimo (sem telegram_id no localStorage) precisa de
+    // um caminho que feche a venda na web: criamos uma order de 1
+    // item via cart e mandamos pra /cart/checkout (que já gera Pix
+    // e captura WhatsApp).
+    if (!isAnonymousUser()) {
+      const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+      window.open(`https://t.me/${botUsername}?start=buy_${content.id}`, '_blank');
+      toast.success('Abrindo Telegram...', { duration: 2000 });
+      return;
+    }
+
+    if (buyingNow) return;
+    setBuyingNow(true);
+    try {
+      // Pix direto na web: limpa o cart pra evitar arrastar itens
+      // antigos do anônimo, adiciona só este filme e finaliza.
+      // `clear` falha silenciosamente se o cart já estava vazio.
+      try { await cartClear(); } catch { /* cart já vazio é ok */ }
+      await cartAdd(content.id, {
+        id: content.id,
+        title: content.title,
+        poster_url: content.poster_url || undefined,
+        price_cents: hasDiscount ? content.discounted_price_cents! : content.price_cents,
+        type: contentType,
+      });
+      const result = await cartCheckout('site');
+      router.push(`/cart/checkout?token=${result.order.order_token}`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Não foi possível iniciar a compra. Tente novamente.');
+      setBuyingNow(false);
     }
   };
 
@@ -351,6 +412,33 @@ export default function ContentHero({
             </div>
           )}
 
+          {/* Price tag — centralizado acima do CTA pra ancorar a
+              decisão de compra. Antes ficava no meio da row de
+              botões e perdia hierarquia visual. Só aparece quando
+              o usuário ainda não comprou — quem já tem o filme só
+              vê "Assistir". */}
+          {!isOwned && !checkingOwnership && (
+            <div className="mb-3 sm:mb-4 flex flex-col items-center text-center">
+              {hasDiscount ? (
+                <>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-white/40 line-through text-sm">{formatPrice(content.price_cents)}</span>
+                    <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-0.5 rounded-full">
+                      {content.discount_percentage}% OFF
+                    </span>
+                  </div>
+                  <span className="text-green-400 font-bold text-2xl sm:text-3xl">
+                    {formatPrice(content.discounted_price_cents!)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-white font-bold text-2xl sm:text-3xl">
+                  {formatPrice(content.price_cents)}
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Actions row */}
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Main CTA */}
@@ -359,7 +447,8 @@ export default function ContentHero({
             ) : (
               <button
                 onClick={handleMainAction}
-                className={`flex items-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 ${
+                disabled={buyingNow}
+                className={`flex items-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 disabled:cursor-wait disabled:opacity-70 ${
                   isOwned
                     ? 'bg-white text-dark-950 hover:bg-white/90 shadow-lg shadow-white/20'
                     : isFlashPromo
@@ -368,7 +457,7 @@ export default function ContentHero({
                 }`}
               >
                 <PlayIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                {isOwned ? 'Assistir' : isFlashPromo ? 'Comprar Agora' : 'Comprar'}
+                {isOwned ? 'Assistir' : buyingNow ? 'Processando...' : isFlashPromo ? 'Comprar Agora' : 'Comprar'}
               </button>
             )}
 
@@ -388,30 +477,6 @@ export default function ContentHero({
 
             {/* Cart discount incentive hint */}
             {!isOwned && <DiscountHint className="ml-auto sm:ml-0" />}
-
-            {/* Price tag */}
-            <div className="flex flex-col">
-              {hasDiscount ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <span className="text-white/40 line-through text-sm">{formatPrice(content.price_cents)}</span>
-                    <span className="bg-green-500/20 text-green-400 text-xs font-bold px-2 py-0.5 rounded-full">
-                      {content.discount_percentage}% OFF
-                    </span>
-                  </div>
-                  <span className="text-green-400 font-bold text-xl sm:text-2xl">
-                    {formatPrice(content.discounted_price_cents!)}
-                  </span>
-                </>
-              ) : (
-                <span className="text-white font-bold text-xl sm:text-2xl">
-                  {formatPrice(content.price_cents)}
-                </span>
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="hidden sm:block w-px h-10 bg-white/10" />
 
             {/* Secondary actions */}
             <button

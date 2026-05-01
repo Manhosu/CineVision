@@ -777,7 +777,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.handleStartCommand(chatId, text, telegramUserId);
     } else if (text === '/catalogo' || text === '/catalog') {
       await this.showCatalog(chatId);
-    } else if (text === '/minhas_compras' || text === '/minhas-compras' || text === '/my-purchases') {
+    } else if (text === '/minhascompras' || text === '/minhas_compras' || text === '/mypurchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (text === '/meu_id' || text === '/meu-id' || text === '/my-id') {
       await this.handleMyIdCommand(chatId, telegramUserId);
@@ -1101,16 +1101,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
             return;
           }
           if (claimResp.data?.alreadyLinked) {
+            // Caso especial: o link foi resgatado por OUTRA conta.
+            // Mensagem distinta pra orientar suporte — Igor recupera
+            // manualmente via painel /admin/orphan-orders se for
+            // legítimo (cliente trocou de número, etc.).
+            if (claimResp.data?.reason === 'linked_to_other_chat') {
+              await this.sendMessage(
+                chatId,
+                `⚠️ Esse pedido já foi resgatado por outra conta do Telegram.\n\nSe foi você que pagou, fale com o suporte para liberar manualmente.`,
+              );
+              return;
+            }
             await this.sendMessage(
               chatId,
-              `✅ Esse pedido já foi pago e entregue.\n\nUse /minhas-compras para acessar seus conteúdos.`,
+              `✅ Esse pedido já foi pago e entregue.\n\nUse /minhascompras para acessar seus conteúdos.`,
             );
             return;
           }
         } catch (err: any) {
           this.logger.warn(`Order claim failed for ${orderToken}: ${err.message}`);
         }
-        await this.sendMessage(chatId, `✅ Esse pedido já foi pago.\n\nUse /minhas-compras para acessar seus conteúdos.`);
+        await this.sendMessage(chatId, `✅ Esse pedido já foi pago.\n\nUse /minhascompras para acessar seus conteúdos.`);
         return;
       }
 

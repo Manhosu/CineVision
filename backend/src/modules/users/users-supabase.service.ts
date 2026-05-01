@@ -171,4 +171,26 @@ export class UsersSupabaseService {
       throw new Error(`Failed to update whatsapp_joined: ${error.message}`);
     }
   }
+
+  async updateWhatsapp(userId: string, whatsapp: string): Promise<any> {
+    this.logger.log(`Updating whatsapp for user: ${userId}`);
+
+    try {
+      const result = await this.supabaseClient.update(
+        'users',
+        { whatsapp },
+        { id: userId },
+      );
+      if (result.length === 0) {
+        throw new NotFoundException(`User with ID ${userId} not found`);
+      }
+      return result[0];
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error('Failed to update whatsapp:', error.message);
+      throw new Error(`Failed to update whatsapp: ${error.message}`);
+    }
+  }
 }

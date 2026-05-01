@@ -53,7 +53,7 @@ export async function handleOrderDeepLink(
     if (order.status === 'paid') {
       await bot.sendMessage(
         chatId,
-        `✅ Esse pedido já foi pago!\n\nUse /minhas-compras para acessar seus conteúdos.`,
+        `✅ Esse pedido já foi pago!\n\nUse /minhascompras para acessar seus conteúdos.`,
       );
       return;
     }

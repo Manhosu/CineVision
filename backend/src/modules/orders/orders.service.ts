@@ -523,21 +523,51 @@ export class OrdersService {
       return { claimed: false, reason: 'order_not_paid' };
     }
 
-    if (order.telegram_chat_id && order.user_id) {
-      // Já linkada — nada a fazer; bot pode mostrar mensagem informativa.
+    // Resgate único: se a order já tem telegram_chat_id, só
+    // aceita uma "re-entrega" se for o MESMO chat reabrindo o
+    // link. Outro chat tentando resgatar é tratado como tentativa
+    // duplicada — não dispara entrega nem sobrescreve o vínculo.
+    //
+    // Antes da correção, a verificação só rejeitava se chat_id E
+    // user_id estavam preenchidos. Como cliente sem login fica com
+    // user_id=null, um segundo clique de outra conta passava: a
+    // entrega era reenviada ao chat original e o bot do segundo
+    // usuário recebia `claimed: true`, induzindo a achar que tinha
+    // resgatado. Agora a regra é: se chat_id existe e é diferente,
+    // é tentativa em outra conta → bloqueia.
+    if (order.telegram_chat_id) {
+      const sameChat = String(order.telegram_chat_id) === String(telegramChatId);
+      if (!sameChat) {
+        return {
+          claimed: false,
+          alreadyLinked: true,
+          reason: 'linked_to_other_chat',
+        };
+      }
+      // Mesmo chat reabrindo o link — só linka user_id se ainda
+      // faltava, mas NÃO dispara entrega de novo (idempotente).
+      if (!order.user_id && userId) {
+        await this.supabase.client
+          .from('orders')
+          .update({ user_id: userId })
+          .eq('id', order.id);
+        await this.supabase.client
+          .from('purchases')
+          .update({ user_id: userId })
+          .eq('order_id', order.id)
+          .is('user_id', null);
+      }
       return { claimed: false, alreadyLinked: true };
     }
 
-    const updates: Record<string, any> = {};
-    if (!order.telegram_chat_id) updates.telegram_chat_id = telegramChatId;
+    // Primeiro claim — linka chat e (se vier) user_id.
+    const updates: Record<string, any> = { telegram_chat_id: telegramChatId };
     if (!order.user_id && userId) updates.user_id = userId;
 
-    if (Object.keys(updates).length) {
-      await this.supabase.client
-        .from('orders')
-        .update(updates)
-        .eq('id', order.id);
-    }
+    await this.supabase.client
+      .from('orders')
+      .update(updates)
+      .eq('id', order.id);
 
     // Garante que TODAS as purchases dessa order têm user_id, pra
     // /minha-lista da web também passar a listar pra ela.
@@ -549,7 +579,9 @@ export class OrdersService {
         .is('user_id', null);
     }
 
-    // Dispara entrega via Telegram (links dos filmes).
+    // Dispara entrega via Telegram (links dos filmes). Só roda no
+    // primeiro claim — chat reabrindo o mesmo link cai no branch
+    // de cima e não chega aqui.
     await this.notifyBotForDelivery(order.id, telegramChatId);
 
     return { claimed: true };

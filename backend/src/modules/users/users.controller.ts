@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -99,6 +100,22 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   updateWhatsappJoined(@Param('id') id: string, @Body() body: { joined: boolean }) {
     return this.usersService.updateWhatsappJoined(id, body.joined);
+  }
+
+  @Patch(':id/whatsapp')
+  @ApiOperation({ summary: 'Update user personal WhatsApp number' })
+  @ApiResponse({ status: 200, description: 'WhatsApp number updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid WhatsApp number' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  updateWhatsapp(@Param('id') id: string, @Body() body: { whatsapp: string }) {
+    // Sanitização básica: só dígitos. Validação de tamanho fica no
+    // service (rejeita < 10 ou > 13 dígitos para cobrir formatos
+    // BR com e sem DDI).
+    const digits = (body?.whatsapp || '').replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 13) {
+      throw new BadRequestException('WhatsApp inválido');
+    }
+    return this.usersService.updateWhatsapp(id, digits);
   }
 
   @Delete(':id')
