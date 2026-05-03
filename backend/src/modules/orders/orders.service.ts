@@ -414,9 +414,10 @@ export class OrdersService {
   async listOrphanOrders(limit = 100): Promise<any[]> {
     const { data, error } = await this.supabase.client
       .from('orders')
-      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id, customer_whatsapp')
+      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id, customer_whatsapp, telegram_chat_id')
       .eq('status', OrderStatus.PAID)
       .is('telegram_chat_id', null)
+      .is('dismissed_at', null)
       .order('paid_at', { ascending: false })
       .limit(limit);
     if (error) {
@@ -459,6 +460,125 @@ export class OrdersService {
           : null,
       };
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Orders pagas mas com pelo menos uma purchase NÃO entregue. Igor pediu
+  // (vídeo IMG_8794): clientes pagam, recebem o telegram_chat_id no claim
+  // ou direto no bot, mas o bot falha em entregar (provider down, race no
+  // webhook, link de grupo expirou). Essas compras SOMEM da tab de
+  // "órfãs" porque elas têm telegram_chat_id; precisam de um lugar pra o
+  // admin ver e reenviar.
+  //
+  // Distinção:
+  //  - Órfãs: paid + telegram_chat_id IS NULL (cliente nunca abriu o bot).
+  //  - Pagas não entregues: paid + chat_id preenchido + AO MENOS UMA
+  //    purchase com delivery_sent=false.
+  // ---------------------------------------------------------------------------
+  async listUndeliveredOrders(limit = 100): Promise<any[]> {
+    const { data: orders, error } = await this.supabase.client
+      .from('orders')
+      .select('id, order_token, total_cents, total_items, paid_at, created_at, user_id, customer_whatsapp, telegram_chat_id')
+      .eq('status', OrderStatus.PAID)
+      .not('telegram_chat_id', 'is', null)
+      .is('dismissed_at', null)
+      .order('paid_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      this.logger.error('listUndeliveredOrders failed', error);
+      return [];
+    }
+    if (!orders?.length) return [];
+
+    const orderIds = orders.map((o: any) => o.id);
+    const { data: purchases } = await this.supabase.client
+      .from('purchases')
+      .select('id, order_id, delivery_sent, content:content(title, poster_url)')
+      .in('order_id', orderIds);
+
+    // Agrupa por order_id e filtra: só order que tem ao menos 1 purchase
+    // com delivery_sent=false.
+    const byOrder = new Map<string, any[]>();
+    for (const p of purchases || []) {
+      const list = byOrder.get(p.order_id) || [];
+      list.push(p);
+      byOrder.set(p.order_id, list);
+    }
+
+    const undelivered = orders.filter((o: any) => {
+      const list = byOrder.get(o.id) || [];
+      return list.some((p: any) => !p.delivery_sent);
+    });
+
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+
+    return undelivered.map((o: any) => {
+      const list = byOrder.get(o.id) || [];
+      const items = list
+        .map((p: any) => {
+          const c = Array.isArray(p.content) ? p.content[0] : p.content;
+          return c?.title;
+        })
+        .filter(Boolean);
+      const undeliveredCount = list.filter((p: any) => !p.delivery_sent).length;
+      return {
+        ...o,
+        items,
+        purchases_total: list.length,
+        purchases_undelivered: undeliveredCount,
+        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        whatsapp_url: o.customer_whatsapp
+          ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
+              `Olá! Identifiquei que sua compra (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) foi paga mas o link não chegou. Vou reenviar agora!`,
+            )}`
+          : null,
+      };
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Marca a order como dispensada do painel admin (não exclui — preserva
+  // histórico financeiro). Usada quando o admin identifica que a compra
+  // está perdida (cliente sumiu, dado errado, etc.) e não quer ela
+  // poluindo a lista de pendências reais.
+  // ---------------------------------------------------------------------------
+  async dismissOrder(orderId: string): Promise<{ dismissed: boolean }> {
+    const { error } = await this.supabase.client
+      .from('orders')
+      .update({ dismissed_at: new Date().toISOString() })
+      .eq('id', orderId);
+    if (error) {
+      this.logger.error(`dismissOrder failed for ${orderId}`, error);
+      throw new BadRequestException('Falha ao dispensar order');
+    }
+    return { dismissed: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Re-dispara entrega de uma order paga. Usada pelo painel admin quando
+  // delivery_sent ficou false (provider down, link expirou, etc.).
+  // Só funciona se a order tem telegram_chat_id; senão, retornar erro
+  // pra o admin saber que precisa do claim do cliente primeiro.
+  // ---------------------------------------------------------------------------
+  async redeliverOrder(orderId: string): Promise<{ redelivered: boolean; reason?: string }> {
+    const { data: order } = await this.supabase.client
+      .from('orders')
+      .select('id, status, telegram_chat_id')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order) {
+      throw new NotFoundException('Order não encontrada');
+    }
+    if (order.status !== OrderStatus.PAID) {
+      return { redelivered: false, reason: 'order_not_paid' };
+    }
+    if (!order.telegram_chat_id) {
+      return { redelivered: false, reason: 'no_telegram_chat_id' };
+    }
+
+    await this.notifyBotForDelivery(order.id, order.telegram_chat_id);
+    return { redelivered: true };
   }
 
   async findByUser(userId: string) {

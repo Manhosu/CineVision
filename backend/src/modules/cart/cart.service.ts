@@ -260,7 +260,9 @@ export class CartService {
 
     const { data: content, error: contentError } = await this.supabase
       .from('content')
-      .select('id, title, price_cents, status')
+      .select(
+        'id, title, price_cents, discounted_price_cents, is_flash_promo, promo_ends_at, status',
+      )
       .eq('id', contentId)
       .single();
 
@@ -272,13 +274,30 @@ export class CartService {
       throw new BadRequestException('Content is not available for purchase');
     }
 
+    // F2.1 — bug reportado pelo Igor (vídeo IMG_8832): conteúdo com
+    // flash promo ativa mostrava 7,02 na tela mas o PIX vinha 7,80.
+    // Causa: o snapshot salvava `price_cents` cheio, ignorando
+    // `discounted_price_cents`. Aqui escolhemos o preço efetivo no
+    // momento do add (preço com desconto vence se: promoção ativa +
+    // não expirada + valor menor). Esse snapshot vai ser usado no
+    // checkout sem nova consulta — congela a oferta vista pelo cliente.
+    const promoIsActive =
+      content.is_flash_promo &&
+      typeof content.discounted_price_cents === 'number' &&
+      content.discounted_price_cents > 0 &&
+      content.discounted_price_cents < content.price_cents &&
+      (!content.promo_ends_at || new Date(content.promo_ends_at) > new Date());
+    const effectivePrice = promoIsActive
+      ? content.discounted_price_cents
+      : content.price_cents;
+
     const { error } = await this.supabase
       .from('cart_items')
       .upsert(
         {
           cart_id: cart.id,
           content_id: contentId,
-          price_cents_snapshot: content.price_cents,
+          price_cents_snapshot: effectivePrice,
         },
         { onConflict: 'cart_id,content_id' },
       );

@@ -195,11 +195,6 @@ export class AiChatService {
 
     const conversation = await this.getOrCreateConversation(platform, externalChatId);
 
-    if (!conversation.ai_enabled) {
-      // Admin assumed — bot should not auto-respond
-      return { text: '', paused: true };
-    }
-
     if (userId && !conversation.user_id) {
       await this.supabase.client
         .from('ai_conversations')
@@ -207,7 +202,23 @@ export class AiChatService {
         .eq('id', conversation.id);
     }
 
+    // SEMPRE persiste a mensagem do cliente — mesmo quando IA está
+    // pausada (admin assumiu). Antes desse fix, a mensagem era
+    // descartada no early return abaixo, então Igor olhava o painel
+    // e não via o que o cliente continuou dizendo durante a conversa
+    // sob controle manual. Bug reportado no vídeo (6) — IA "não
+    // respondia" alguns clientes mas a verdade é que a conversa
+    // estava em takeover e Igor não enxergava as novas mensagens.
     await this.appendMessage(conversation.id, 'user', messageText);
+
+    if (!conversation.ai_enabled) {
+      // Admin assumed — bot should not auto-respond, mas a mensagem
+      // do cliente já foi salva acima e vai aparecer no painel.
+      this.logger.log(
+        `Conversation ${conversation.id} paused (reason: ${conversation.paused_reason || 'unknown'}) — message persisted but no AI reply.`,
+      );
+      return { text: '', paused: true };
+    }
 
     // Build context: training + catalog hits + history
     const training = await this.getTraining();
@@ -226,11 +237,37 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
 
     const history = await this.recentHistory(conversation.id);
 
-    const completion = await this.claude.complete({
-      system: systemPrompt,
-      messages: history,
-      maxTokens: 512,
-    });
+    // Timing pra debug F1.4 (Igor reportou que IA demora 3 mensagens
+    // pra responder). Logamos latência total e do Claude isolado.
+    const t0 = Date.now();
+    let completion: Awaited<ReturnType<typeof this.claude.complete>>;
+    try {
+      completion = await this.claude.complete({
+        system: systemPrompt,
+        messages: history,
+        maxTokens: 512,
+      });
+    } catch (err: any) {
+      const t1 = Date.now();
+      this.logger.error(
+        `Claude completion failed after ${t1 - t0}ms for conversation ${conversation.id}: ${err.message}`,
+      );
+      // Fallback gracioso: pausa a conversa e chama Igor em vez de
+      // deixar o cliente sem resposta (que era o sintoma reportado —
+      // "IA não respondeu, repeti 3x até vir resposta"). A mensagem
+      // do cliente já foi salva no append acima.
+      await this.pauseConversation(conversation.id, 'claude_failure');
+      await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+      return {
+        text: '',
+        paused: true,
+        suggestedContentIds: [],
+      };
+    }
+    const claudeMs = Date.now() - t0;
+    this.logger.log(
+      `Claude completion ok in ${claudeMs}ms (in=${completion.inputTokens}, out=${completion.outputTokens}) conv=${conversation.id}`,
+    );
 
     const rawText = completion.text.trim();
 
@@ -275,12 +312,12 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     cleanText = cleanText.replace(/<<DETAIL:[^>]+>>/gi, '').trim();
     if (detailMatches.length) {
       const ids = Array.from(new Set(detailMatches.map((m) => m[1])));
-      const links = await this.buildDetailLinks(
+      const { links, missingIds } = await this.buildDetailLinks(
         ids,
         businessConnectionId,
         platform === 'telegram_business' ? externalChatId : undefined,
       );
-      suggestedContentIds = ids;
+      suggestedContentIds = links.map((l) => l.id);
       if (links.length) {
         const linksBlock = links
           .map((l) => `🎬 *${l.title}${l.year ? ` (${l.year})` : ''}* — R$ ${this.formatBRL(l.priceCents)}\n👉 ${l.url}`)
@@ -289,6 +326,25 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         if (links.length > 1) {
           cleanText += '\n\nPra ganhar desconto progressivo, dá pra montar um pacote no carrinho do site 🎁';
         }
+      }
+      // Se TODOS os IDs vieram inválidos (cliente recebeu "tenho aqui
+      // pra você:" mas IA inventou UUIDs), avisa ao cliente em vez de
+      // entregar texto truncado. Igor reportou esse bug — IA respondia
+      // valor mas não mandava link, ou link 404.
+      if (missingIds.length && !links.length) {
+        cleanText =
+          (cleanText ? `${cleanText}\n\n` : '') +
+          'Hmm, deixa eu confirmar essa busca aqui pra você 🎬 me dá um instante que vou verificar se temos esse título exato no catálogo.';
+        // Pausa pra Igor assumir — alta probabilidade de alucinação ou
+        // título saiu do catálogo
+        await this.pauseConversation(conversation.id, 'detail_ids_invalid');
+        await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+        paused = true;
+      } else if (missingIds.length && links.length < ids.length) {
+        // Parcial — alguns links válidos, outros faltam. Reconhece sem
+        // assustar o cliente.
+        cleanText +=
+          '\n\n_(Tem 1 ou 2 títulos da sua busca que ainda estou conferindo aqui — qualquer dúvida me chama)_';
       }
     }
 
@@ -337,6 +393,14 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       cleanText = cleanText.replace(/<<BUY:[^>]+>>/gi, '').trim();
     }
 
+    // SAFETY NET: remove qualquer marker `<<...>>` que tenha escapado
+    // do processing acima — IA inventando markers novos, regex falha,
+    // etc. Igor reportou (vídeo IMG_8771) que cliente recebia "código
+    // interno" no chat tipo `<<DETAIL:abc>>` quando algo dava errado.
+    // Aqui garantimos que, mesmo que algo escape, o cliente nunca vê
+    // marker.
+    cleanText = cleanText.replace(/<<[A-Z_]+(?::[^>]*)?>>/g, '').trim();
+
     await this.appendMessage(
       conversation.id,
       'assistant',
@@ -374,12 +438,33 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     contentIds: string[],
     businessConnectionId?: string,
     customerChatId?: string,
-  ): Promise<Array<{ id: string; title: string; year?: number; priceCents: number; url: string }>> {
-    if (!contentIds.length) return [];
+  ): Promise<{
+    links: Array<{ id: string; title: string; year?: number; priceCents: number; url: string }>;
+    missingIds: string[];
+  }> {
+    if (!contentIds.length) return { links: [], missingIds: [] };
     const { data } = await this.supabase.client
       .from('content')
-      .select('id, title, release_year, price_cents, content_type')
+      .select('id, title, release_year, price_cents, content_type, status')
       .in('id', contentIds);
+
+    // Filtra só conteúdo PUBLICADO — se a IA "alucinou" um UUID que
+    // não existe ou referenciou rascunho/excluído, NÃO geramos link 404.
+    // Ids faltantes são reportados separadamente pra que o caller possa
+    // avisar o cliente em vez de silenciar (que era o bug do feedback do
+    // Igor — IA dizia "tenho aqui pra você:" e não vinha link nenhum).
+    const found = (data || []).filter(
+      (c: any) => c.status === 'PUBLISHED' || c.status === 'published',
+    );
+    const foundIds = new Set(found.map((c: any) => c.id));
+    const missingIds = contentIds.filter((id) => !foundIds.has(id));
+
+    if (missingIds.length) {
+      this.logger.warn(
+        `buildDetailLinks: ${missingIds.length} ID(s) não encontrado(s) no catálogo: ${missingIds.join(', ')}`,
+      );
+    }
+
     const baseUrl =
       this.configService.get('PUBLIC_FRONTEND_URL') ||
       'https://cinevisionapp.com.br';
@@ -392,7 +477,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       params.push(`chat=${encodeURIComponent(customerChatId)}`);
     }
     const suffix = params.length ? `?${params.join('&')}` : '';
-    return (data || []).map((c: any) => {
+    const links = found.map((c: any) => {
       const path = c.content_type === 'series' ? 'series' : 'movies';
       return {
         id: c.id,
@@ -402,6 +487,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         url: `${baseUrl}/${path}/${c.id}${suffix}`,
       };
     });
+    return { links, missingIds };
   }
 
   private async buildManualPixSummary(
@@ -476,12 +562,36 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
   ): Promise<string | undefined> {
     if (!contentIds.length) return undefined;
     try {
-      // Reset do carrinho e re-add de todos os itens. Dedup defensivo
-      // pra não bater em duplicate-key se o modelo emitir <<BUY>> duas
-      // vezes pro mesmo content_id.
       const uniqueIds = Array.from(new Set(contentIds));
+
+      // VALIDAÇÃO PRÉ-CART: confirma que TODOS os IDs existem como
+      // conteúdo PUBLISHED antes de mexer no carrinho. Se IA inventou
+      // UUID, abortamos antes de criar order vazia → cliente não vai
+      // ganhar link de pagamento que abriria carrinho zerado.
+      const { data: existing } = await this.supabase.client
+        .from('content')
+        .select('id, status')
+        .in('id', uniqueIds);
+      const validIds = (existing || [])
+        .filter((c: any) => c.status === 'PUBLISHED' || c.status === 'published')
+        .map((c: any) => c.id);
+
+      if (!validIds.length) {
+        this.logger.warn(
+          `createQuickBuyLink: nenhum ID válido em [${uniqueIds.join(', ')}] — abortando.`,
+        );
+        return undefined;
+      }
+      if (validIds.length < uniqueIds.length) {
+        const missing = uniqueIds.filter((id) => !validIds.includes(id));
+        this.logger.warn(
+          `createQuickBuyLink: ignorando ${missing.length} ID(s) inválido(s): ${missing.join(', ')}`,
+        );
+      }
+
+      // Reset do carrinho e re-add só dos IDs válidos.
       await this.cartService.clearCart(userId, telegramChatId).catch(() => undefined);
-      for (const id of uniqueIds) {
+      for (const id of validIds) {
         try {
           await this.cartService.addItem(id, userId, telegramChatId);
         } catch (err: any) {

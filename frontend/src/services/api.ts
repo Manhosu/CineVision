@@ -70,6 +70,14 @@ class ApiService {
     });
   }
 
+  async patch<T = any>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
+
   async delete<T = any>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,

@@ -802,6 +802,116 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
       // Dispatch to AI chat service
       await this.dispatchAiChat(chatId, text, telegramUserId);
+    } else if ((message.photo || message.document) && message.chat.type === 'private') {
+      // F1.7 — Igor pediu (vídeo IMG_8772): cliente envia comprovante
+      // PIX como imagem; antes era ignorado e ficava perdido. Agora
+      // persistimos a referência (file_id + caption) na tabela
+      // `ai_messages` pra aparecer no painel admin de IA.
+      //
+      // BÔNUS: se o caption contém "comprovante", "paguei", "pago",
+      // "pix" → pausa a conversa pra Igor revisar a imagem manualmente.
+      try {
+        await this.handleIncomingMedia(chatId, telegramUserId, message);
+      } catch (err: any) {
+        this.logger.warn(`handleIncomingMedia failed for ${chatId}: ${err.message}`);
+      }
+    }
+  }
+
+  /**
+   * Persiste mídia recebida (photo/document) em `ai_messages` ligando
+   * à `ai_conversations` via (platform=telegram, external_chat_id=chatId).
+   * Cria a conversation se não existir. Pausa IA se o caption sugerir
+   * comprovante de pagamento — Igor revisa manual.
+   */
+  private async handleIncomingMedia(
+    chatId: number,
+    _telegramUserId: number,
+    message: any,
+  ): Promise<void> {
+    let mediaType: 'photo' | 'document' | null = null;
+    let fileId: string | undefined;
+
+    if (message.photo && Array.isArray(message.photo) && message.photo.length) {
+      // Telegram envia várias resoluções — pegamos a maior (último item).
+      mediaType = 'photo';
+      fileId = message.photo[message.photo.length - 1].file_id;
+    } else if (message.document) {
+      mediaType = 'document';
+      fileId = message.document.file_id;
+    }
+
+    if (!mediaType || !fileId) return;
+
+    const caption: string = (message.caption || '').trim();
+    const externalChatId = String(chatId);
+
+    // Acha ou cria a ai_conversation pra esse chat. (replicado de
+    // ai-chat.service mas sem rodar a IA — só persistir.)
+    let { data: conv } = await this.supabase
+      .from('ai_conversations')
+      .select('id, ai_enabled, paused_reason')
+      .eq('platform', 'telegram')
+      .eq('external_chat_id', externalChatId)
+      .maybeSingle();
+
+    if (!conv) {
+      const { data: created } = await this.supabase
+        .from('ai_conversations')
+        .insert({ platform: 'telegram', external_chat_id: externalChatId, ai_enabled: true })
+        .select('id, ai_enabled, paused_reason')
+        .single();
+      conv = created;
+    }
+
+    if (!conv) return;
+
+    await this.supabase.from('ai_messages').insert({
+      conversation_id: conv.id,
+      role: 'user',
+      content: caption || `[${mediaType === 'photo' ? 'Imagem' : 'Documento'} enviado(a) pelo cliente]`,
+      media_type: mediaType,
+      media_telegram_file_id: fileId,
+    });
+
+    await this.supabase
+      .from('ai_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conv.id);
+
+    // Heurística de comprovante: pausa pra Igor revisar.
+    const looksLikeReceipt =
+      /comprovante|paguei|pago|pix|deposit|recibo|comprovado/i.test(caption);
+
+    if (looksLikeReceipt && conv.ai_enabled) {
+      await this.supabase
+        .from('ai_conversations')
+        .update({
+          ai_enabled: false,
+          paused_reason: 'receipt_image_received',
+          paused_at: new Date().toISOString(),
+        })
+        .eq('id', conv.id);
+
+      // Avisa o cliente que vamos analisar.
+      await this.sendMessage(
+        chatId,
+        '📩 Recebi seu comprovante! Vou analisar e te confirmar em instantes.',
+      );
+
+      // Notifica admin (chat configurado).
+      const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+      if (adminChatId) {
+        try {
+          await this.sendMessage(
+            parseInt(adminChatId, 10),
+            `📷 *Comprovante recebido*\n\nCliente \`${chatId}\` enviou ${mediaType === 'photo' ? 'uma imagem' : 'um documento'}${caption ? ` com a legenda: "${caption}"` : ''}.\n\nAcesse o painel de IA pra revisar e liberar o conteúdo.`,
+            { parse_mode: 'Markdown' },
+          );
+        } catch (err: any) {
+          this.logger.warn(`admin notify (receipt) failed: ${err.message}`);
+        }
+      }
     }
   }
 
@@ -2040,6 +2150,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       const username = telegramUserData?.username || `user_${telegramUserId}`;
 
+      const tempEmail = `telegram_${telegramUserId}@cinevision.temp`;
       const { data: newUser, error: createError } = await this.supabase
         .from('users')
         .insert({
@@ -2047,7 +2158,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           telegram_chat_id: chatId.toString(),
           telegram_username: username,
           name: userName,
-          email: `telegram_${telegramUserId}@cinevision.temp`, // Email temporário
+          email: tempEmail, // Email temporário
           password_hash: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
           role: 'user',
           status: 'active',
@@ -2056,6 +2167,44 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .single();
 
       if (createError || !newUser) {
+        // Fallback: o SELECT por telegram_id falhou (linha ~1983), mas o
+        // INSERT bate em UNIQUE no email — significa que existe um user
+        // com o mesmo email mas que o SELECT inicial não pegou (race
+        // condition entre /start simultâneos, ou corrupção histórica de
+        // telegram_id na linha já existente). Em vez de devolver null e
+        // mandar "Erro ao processar usuário" pro cliente — que é o bug
+        // reportado pelo Igor — recuperamos a linha pelo email único e
+        // garantimos que `telegram_id`/`telegram_chat_id` ficam corretos.
+        if (createError && (createError as any).code === '23505') {
+          this.logger.warn(
+            `Insert raced on email ${tempEmail} (telegram_id ${telegramUserId}); recovering existing row by email.`,
+          );
+          const { data: byEmail } = await this.supabase
+            .from('users')
+            .select('*')
+            .eq('email', tempEmail)
+            .single();
+
+          if (byEmail) {
+            // Reconcilia telegram_id/chat_id se o registro estava órfão
+            // ou desatualizado.
+            const fix: any = {};
+            if (byEmail.telegram_id !== telegramUserId.toString()) {
+              fix.telegram_id = telegramUserId.toString();
+            }
+            if (byEmail.telegram_chat_id !== chatId.toString()) {
+              fix.telegram_chat_id = chatId.toString();
+            }
+            if (Object.keys(fix).length > 0) {
+              await this.supabase.from('users').update(fix).eq('id', byEmail.id);
+              this.logger.log(
+                `Recovered user ${byEmail.id}; reconciled fields: ${Object.keys(fix).join(',')}`,
+              );
+            }
+            return { ...byEmail, ...fix };
+          }
+        }
+
         this.logger.error('Error creating user:', createError);
         return null;
       }

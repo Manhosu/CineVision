@@ -5,6 +5,84 @@ import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
 import AdminBackButton from '@/components/Admin/AdminBackButton';
 
+// Renderiza mídia (imagem/documento) buscando do endpoint admin com
+// Bearer token. Usa fetch + blob URL porque <img src=...> não consegue
+// passar Authorization header. Cria objectURL na montagem e revoga ao
+// desmontar pra não vazar memória.
+function AuthorizedMedia({ fileId, kind }: { fileId: string; kind: 'photo' | 'document' }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let revokedUrl: string | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const token =
+          (typeof window !== 'undefined' &&
+            (localStorage.getItem('admin_token') ||
+              localStorage.getItem('auth_token') ||
+              localStorage.getItem('access_token'))) ||
+          '';
+        const res = await fetch(
+          `${apiUrl}/api/v1/admin/ai-chat/media/${encodeURIComponent(fileId)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        revokedUrl = url;
+        if (!cancelled) setBlobUrl(url);
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || 'Falha ao carregar mídia');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (revokedUrl) URL.revokeObjectURL(revokedUrl);
+    };
+  }, [fileId]);
+
+  if (error) {
+    return (
+      <div className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+        ❌ Não foi possível carregar a mídia ({error})
+      </div>
+    );
+  }
+  if (!blobUrl) {
+    return (
+      <div className="mb-2 inline-block rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-400">
+        Carregando mídia...
+      </div>
+    );
+  }
+  if (kind === 'document') {
+    return (
+      <a
+        href={blobUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-2 inline-block rounded-lg border border-blue-500/30 bg-blue-600/10 px-3 py-2 text-xs text-blue-300 hover:bg-blue-600/20"
+      >
+        📎 Abrir documento
+      </a>
+    );
+  }
+  return (
+    <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="mb-2 block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={blobUrl}
+        alt="Mídia enviada pelo cliente"
+        className="max-h-72 max-w-full rounded-lg border border-white/10"
+        loading="lazy"
+      />
+    </a>
+  );
+}
+
 type Tab = 'conversations' | 'training' | 'config';
 
 interface Conversation {
@@ -22,6 +100,8 @@ interface Message {
   role: 'user' | 'assistant' | 'system' | 'admin';
   content: string;
   created_at: string;
+  media_type?: 'photo' | 'document' | null;
+  media_telegram_file_id?: string | null;
 }
 
 interface Training {
@@ -297,8 +377,18 @@ export default function AiChatAdmin() {
                       <div key={m.id} className={`rounded-xl p-3 ${bubbleClass}`}>
                         <div className="mb-1 text-xs text-zinc-500">
                           {author} · {new Date(m.created_at).toLocaleString('pt-BR')}
+                          {m.media_type === 'photo' && ' · 📷 imagem'}
+                          {m.media_type === 'document' && ' · 📎 documento'}
                         </div>
-                        <div className="whitespace-pre-wrap text-sm">{m.content}</div>
+                        {m.media_telegram_file_id && (
+                          <AuthorizedMedia
+                            fileId={m.media_telegram_file_id}
+                            kind={m.media_type === 'document' ? 'document' : 'photo'}
+                          />
+                        )}
+                        {m.content && (
+                          <div className="whitespace-pre-wrap text-sm">{m.content}</div>
+                        )}
                       </div>
                     );
                   })}

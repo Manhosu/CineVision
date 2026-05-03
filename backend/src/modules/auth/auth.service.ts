@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -8,6 +8,8 @@ import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
@@ -17,12 +19,33 @@ export class AuthService {
   async validateUser(email: string, password: string): Promise<any> {
     const user = await this.usersService.findByEmail(email);
 
-    if (user && (await bcrypt.compare(password, user.password_hash || user.password))) {
-      const { password: userPassword, password_hash, refresh_token, ...result } = user;
-      return result;
+    // Diagnóstico F2.2 (Igor reportou que funcionário Rafaela não
+    // consegue logar — "Acesso Negado"). Logamos cada falha pra
+    // distinguir as 3 causas possíveis: (a) email não encontrado,
+    // (b) password_hash ausente, (c) senha errada. Em produção
+    // facilita o triage sem expor dados sensíveis (não logamos
+    // a senha).
+    if (!user) {
+      this.logger.warn(`Login failed: email "${email}" not found`);
+      return null;
     }
 
-    return null;
+    const hash = user.password_hash || user.password;
+    if (!hash) {
+      this.logger.warn(
+        `Login failed: user ${user.id} (${email}) sem password_hash — registro foi criado sem senha hashada`,
+      );
+      return null;
+    }
+
+    const ok = await bcrypt.compare(password, hash);
+    if (!ok) {
+      this.logger.warn(`Login failed: senha incorreta para ${email} (role=${user.role})`);
+      return null;
+    }
+
+    const { password: userPassword, password_hash, refresh_token, ...result } = user;
+    return result;
   }
 
   async register(registerDto: RegisterDto) {

@@ -15,7 +15,9 @@ interface Permissions {
   can_view_purchases: boolean;
   can_view_top10: boolean;
   can_view_online_users: boolean;
+  can_view_active_users: boolean;
   can_manage_discounts: boolean;
+  can_add_people_photos: boolean;
   edit_window_hours: number;
   daily_content_limit: number;
 }
@@ -242,5 +244,7 @@ const PERMISSION_FIELDS: Array<{ key: string; label: string }> = [
   { key: 'can_view_purchases', label: 'Ver compras' },
   { key: 'can_view_top10', label: 'Ver Top 10' },
   { key: 'can_view_online_users', label: 'Ver usuários online' },
+  { key: 'can_view_active_users', label: 'Ver usuários ativos' },
   { key: 'can_manage_discounts', label: 'Gerenciar descontos' },
+  { key: 'can_add_people_photos', label: 'Autores — adicionar fotos aos sem foto' },
 ];

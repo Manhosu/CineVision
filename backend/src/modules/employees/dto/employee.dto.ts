@@ -71,6 +71,16 @@ export class CreateEmployeeDto {
   @IsBoolean()
   can_manage_discounts?: boolean;
 
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  can_view_active_users?: boolean;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  can_add_people_photos?: boolean;
+
   @ApiPropertyOptional({ default: 5 })
   @IsOptional()
   @IsInt()
@@ -131,6 +141,16 @@ export class UpdateEmployeePermissionsDto {
   @IsOptional()
   @IsBoolean()
   can_manage_discounts?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  can_view_active_users?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  can_add_people_photos?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()

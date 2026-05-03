@@ -20,6 +20,11 @@ const DEFAULT_PERMISSIONS = {
   can_view_top10: false,
   can_view_online_users: false,
   can_manage_discounts: false,
+  // F2.5/F2.6 — toggles independentes para Igor segregar funcionários
+  // que só fazem fotos de atores (can_add_people_photos), separar quem
+  // pode ver "Usuários Ativos" no dashboard.
+  can_view_active_users: false,
+  can_add_people_photos: false,
   edit_window_hours: 5,
   daily_content_limit: 50,
 };
@@ -73,6 +78,8 @@ export class EmployeesService {
       can_view_top10: dto.can_view_top10 ?? DEFAULT_PERMISSIONS.can_view_top10,
       can_view_online_users: dto.can_view_online_users ?? DEFAULT_PERMISSIONS.can_view_online_users,
       can_manage_discounts: dto.can_manage_discounts ?? DEFAULT_PERMISSIONS.can_manage_discounts,
+      can_view_active_users: dto.can_view_active_users ?? DEFAULT_PERMISSIONS.can_view_active_users,
+      can_add_people_photos: dto.can_add_people_photos ?? DEFAULT_PERMISSIONS.can_add_people_photos,
       edit_window_hours: dto.edit_window_hours ?? DEFAULT_PERMISSIONS.edit_window_hours,
       daily_content_limit: dto.daily_content_limit ?? DEFAULT_PERMISSIONS.daily_content_limit,
     };
@@ -263,24 +270,34 @@ export class EmployeesService {
   // Productivity stats
   // ---------------------------------------------------------------------------
   async getStats(userId: string) {
+    // F2.7 (vídeo IMG_8810): Igor reportou que stats do dashboard
+    // não atualizam. Causa: implementação anterior dependia da tabela
+    // cache `employee_daily_stats`, alimentada só dentro de
+    // `checkDailyLimitAndIncrement`. Se o funcionário criou conteúdo
+    // por outra rota (Supabase Studio, scripts) ou se o INSERT no
+    // cache falhou silenciosamente, os stats ficavam congelados.
+    //
+    // Agora consultamos `content` direto — fonte da verdade — usando
+    // count agregado por janela de tempo. Sem cache. Custo: 3 COUNT
+    // queries por chamada; aceitável pelo volume.
     const now = Date.now();
-    const day7 = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const day15 = new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const day7 = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const day15 = new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString();
+    const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const sum = async (sinceDate: string) => {
-      const { data } = await this.supabase.client
-        .from('employee_daily_stats')
-        .select('content_added_count')
-        .eq('user_id', userId)
-        .gte('stat_date', sinceDate);
-      return (data || []).reduce((a: number, b: any) => a + (b.content_added_count || 0), 0);
+    const countSince = async (since: string) => {
+      const { count } = await this.supabase.client
+        .from('content')
+        .select('id', { count: 'exact', head: true })
+        .eq('createdById', userId)
+        .gte('created_at', since);
+      return count || 0;
     };
 
     return {
-      last_7_days: await sum(day7),
-      last_15_days: await sum(day15),
-      last_30_days: await sum(day30),
+      last_7_days: await countSince(day7),
+      last_15_days: await countSince(day15),
+      last_30_days: await countSince(day30),
     };
   }
 

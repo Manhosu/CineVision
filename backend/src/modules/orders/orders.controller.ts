@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -36,6 +36,41 @@ export class OrdersController {
   @ApiOperation({ summary: 'List paid orders without Telegram chat link (admin)' })
   async listOrphan(@Query('limit') limit?: string) {
     return this.ordersService.listOrphanOrders(limit ? parseInt(limit, 10) : 100);
+  }
+
+  // Lista orders pagas com pelo menos uma purchase não entregue. Igor
+  // usa pra reenviar o link manualmente quando o webhook entregou
+  // parcialmente ou link de grupo expirou.
+  @Get('undelivered')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List paid orders with undelivered purchases (admin)' })
+  async listUndelivered(@Query('limit') limit?: string) {
+    return this.ordersService.listUndeliveredOrders(limit ? parseInt(limit, 10) : 100);
+  }
+
+  // Marca uma order como dispensada do painel. Não exclui — só esconde
+  // dos painéis de órfãs / não entregues. Usado quando o admin
+  // identifica que a compra é caso perdido (cliente sumiu, dado errado).
+  @Patch(':id/dismiss')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Dismiss order from admin panels (admin)' })
+  async dismiss(@Param('id') id: string) {
+    return this.ordersService.dismissOrder(id);
+  }
+
+  // Re-dispara entrega de uma order paga já vinculada a um chat. Usado
+  // quando delivery_sent ficou false e o admin quer reenviar manualmente.
+  @Post(':id/redeliver')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Re-trigger delivery for a paid order (admin)' })
+  async redeliver(@Param('id') id: string) {
+    return this.ordersService.redeliverOrder(id);
   }
 
   // Endpoint chamado pelo bot quando alguém clica
