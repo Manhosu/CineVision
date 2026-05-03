@@ -311,6 +311,84 @@ export class EmployeesService {
     return data || [];
   }
 
+  /**
+   * Productivity report — pedido novo do Igor (vídeo IMG_8846):
+   * "Como vou pagar por conteúdo do que ele adicionar na plataforma,
+   * preciso ter o exato quanto conteúdo foi adicionado, tudo
+   * especificado". Devolve breakdown DIÁRIO + MENSAL + lista crua dos
+   * itens, todos no range pedido (default: últimos 30 dias).
+   *
+   * Cada bucket diário/mensal já vem dividido em filmes vs séries
+   * pra render direto no gráfico do painel.
+   *
+   * Range custom: passar `from` e `to` (ISO date YYYY-MM-DD).
+   */
+  async getProductivity(
+    userId: string,
+    range?: { from?: string; to?: string },
+  ): Promise<{
+    range: { from: string; to: string };
+    daily: Array<{ date: string; movies: number; series: number; total: number }>;
+    monthly: Array<{ month: string; movies: number; series: number; total: number }>;
+    items: Array<{ id: string; title: string; content_type: string; status: string; created_at: string }>;
+    totals: { movies: number; series: number; total: number };
+  }> {
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const fromIso = range?.from || defaultFrom.toISOString();
+    const toIso = range?.to || now.toISOString();
+
+    const { data } = await this.supabase.client
+      .from('content')
+      .select('id, title, content_type, status, created_at')
+      .eq('createdById', userId)
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso)
+      .order('created_at', { ascending: false })
+      .limit(2000);
+
+    const items = data || [];
+
+    // Agrega por dia (YYYY-MM-DD) e por mês (YYYY-MM).
+    const dailyMap = new Map<string, { movies: number; series: number; total: number }>();
+    const monthlyMap = new Map<string, { movies: number; series: number; total: number }>();
+    let totMovies = 0, totSeries = 0;
+
+    const isSeries = (t: string | null) =>
+      (t || '').toLowerCase() === 'series' || (t || '').toLowerCase() === 'série';
+
+    for (const it of items as any[]) {
+      const d = new Date(it.created_at);
+      const dayKey = d.toISOString().slice(0, 10);
+      const monthKey = d.toISOString().slice(0, 7);
+      const series = isSeries(it.content_type);
+      const day = dailyMap.get(dayKey) || { movies: 0, series: 0, total: 0 };
+      const month = monthlyMap.get(monthKey) || { movies: 0, series: 0, total: 0 };
+      if (series) { day.series++; month.series++; totSeries++; }
+      else { day.movies++; month.movies++; totMovies++; }
+      day.total++;
+      month.total++;
+      dailyMap.set(dayKey, day);
+      monthlyMap.set(monthKey, month);
+    }
+
+    const daily = Array.from(dailyMap.entries())
+      .map(([date, v]) => ({ date, ...v }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const monthly = Array.from(monthlyMap.entries())
+      .map(([month, v]) => ({ month, ...v }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    return {
+      range: { from: fromIso, to: toIso },
+      daily,
+      monthly,
+      items: items as any,
+      totals: { movies: totMovies, series: totSeries, total: totMovies + totSeries },
+    };
+  }
+
   // ---------------------------------------------------------------------------
   // Telegram link preview (best-effort OG scraper)
   // ---------------------------------------------------------------------------

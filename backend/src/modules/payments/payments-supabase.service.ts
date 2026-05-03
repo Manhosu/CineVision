@@ -377,6 +377,44 @@ export class PaymentsSupabaseService {
         .single();
 
       if (paymentError || !payment) {
+        // Race condition: o webhook do Telegram tem retry agressivo. Antes
+        // do PARTIAL UNIQUE INDEX `uniq_payments_pix_active_per_purchase`,
+        // 2 requests simultâneas para o mesmo purchase passavam pelo
+        // SELECT inicial (linha 321), criavam 2 PIX no provider e gravavam
+        // 2 rows. Igor reportou QR Code duplicado (vídeo IMG_8775) e o
+        // banco tinha 354 duplicatas acumuladas. Agora o índice rejeita
+        // o segundo INSERT com 23505 — capturamos aqui e devolvemos o PIX
+        // que JÁ EXISTE em vez de explodir. O cliente vê 1 QR só.
+        const isUniqueViolation =
+          paymentError?.code === '23505' ||
+          /duplicate key/i.test(paymentError?.message || '') ||
+          /uniq_payments_pix_active_per_purchase/.test(paymentError?.message || '');
+
+        if (isUniqueViolation) {
+          this.logger.warn(
+            `Race condition no INSERT de PIX (purchase ${purchaseId}); recuperando o payment ativo já criado pela request concorrente.`,
+          );
+          const { data: winnerRows } = await this.supabaseService.client
+            .from('payments')
+            .select('id, provider_payment_id, status, provider_meta')
+            .eq('purchase_id', purchaseId)
+            .eq('payment_method', 'pix')
+            .in('status', ['pending', 'processing', 'completed'])
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          const winner = winnerRows?.[0];
+          if (winner) {
+            return {
+              provider_payment_id: winner.provider_payment_id,
+              qr_code_image: winner.provider_meta?.qr_code_image || null,
+              copy_paste_code: winner.provider_meta?.copy_paste_code || null,
+              amount_brl: (amountCents / 100).toFixed(2),
+              status: winner.status,
+            };
+          }
+        }
+
         this.logger.error(`Failed to create payment record: ${paymentError?.message || 'Unknown error'}`);
         throw new Error(`Failed to create payment record: ${paymentError?.message || 'Payment insert returned null'}`);
       }

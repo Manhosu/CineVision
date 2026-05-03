@@ -92,6 +92,20 @@ export class EmployeesController {
     return this.employees.getStats(id);
   }
 
+  @Get(':id/productivity')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Productivity breakdown (daily + monthly + items)',
+    description: 'IMG_8846 — Igor paga por conteúdo, precisa ver exatamente o que cada funcionário adicionou.',
+  })
+  async productivity(
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.employees.getProductivity(id, { from, to });
+  }
+
   @Get(':id/content')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Employee content list' })
