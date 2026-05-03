@@ -260,9 +260,7 @@ export class CartService {
 
     const { data: content, error: contentError } = await this.supabase
       .from('content')
-      .select(
-        'id, title, price_cents, discounted_price_cents, is_flash_promo, promo_ends_at, status',
-      )
+      .select('id, title, price_cents, status')
       .eq('id', contentId)
       .single();
 
@@ -276,20 +274,61 @@ export class CartService {
 
     // F2.1 — bug reportado pelo Igor (vídeo IMG_8832): conteúdo com
     // flash promo ativa mostrava 7,02 na tela mas o PIX vinha 7,80.
-    // Causa: o snapshot salvava `price_cents` cheio, ignorando
-    // `discounted_price_cents`. Aqui escolhemos o preço efetivo no
-    // momento do add (preço com desconto vence se: promoção ativa +
-    // não expirada + valor menor). Esse snapshot vai ser usado no
-    // checkout sem nova consulta — congela a oferta vista pelo cliente.
-    const promoIsActive =
-      content.is_flash_promo &&
-      typeof content.discounted_price_cents === 'number' &&
-      content.discounted_price_cents > 0 &&
-      content.discounted_price_cents < content.price_cents &&
-      (!content.promo_ends_at || new Date(content.promo_ends_at) > new Date());
-    const effectivePrice = promoIsActive
-      ? content.discounted_price_cents
-      : content.price_cents;
+    // Causa: o snapshot salvava `price_cents` cheio.
+    //
+    // ATENÇÃO: a tentativa anterior de pegar `discounted_price_cents`
+    // direto da tabela `content` quebrou TODAS as compras anônimas
+    // porque essas colunas não existem na tabela base — são injetadas
+    // em runtime pelo módulo `discounts` (regras globais/categoria/
+    // individual com janelas de validade). Consultamos o desconto
+    // ativo aqui em best-effort: se a query falhar ou não retornar,
+    // caímos no preço cheio (mesmo comportamento original) sem
+    // abortar a compra.
+    let effectivePrice = content.price_cents;
+    try {
+      const now = new Date().toISOString();
+
+      // Individual primeiro (mais específico vence sobre global).
+      const { data: individual } = await this.supabase
+        .from('discounts')
+        .select('discount_type, discount_value')
+        .eq('is_active', true)
+        .eq('discount_scope', 'individual')
+        .eq('scope_id', contentId)
+        .lte('starts_at', now)
+        .gte('ends_at', now)
+        .order('discount_value', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let discount = individual;
+      if (!discount) {
+        const { data: global } = await this.supabase
+          .from('discounts')
+          .select('discount_type, discount_value')
+          .eq('is_active', true)
+          .eq('discount_scope', 'global')
+          .lte('starts_at', now)
+          .gte('ends_at', now)
+          .order('discount_value', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        discount = global;
+      }
+
+      if (discount) {
+        const valueOff =
+          discount.discount_type === 'percentage'
+            ? Math.round((content.price_cents * Number(discount.discount_value)) / 100)
+            : Math.round(Number(discount.discount_value));
+        const calculated = content.price_cents - valueOff;
+        if (calculated > 0 && calculated < content.price_cents) {
+          effectivePrice = calculated;
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`Discount lookup failed for ${contentId}: ${err.message}; using full price.`);
+    }
 
     const { error } = await this.supabase
       .from('cart_items')
