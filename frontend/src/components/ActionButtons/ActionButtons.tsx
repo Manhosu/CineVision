@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Movie } from '@/types/movie';
+import { openContentGroup } from '@/lib/telegramAccess';
 import toast from 'react-hot-toast';
 
 interface ActionButtonsProps {
@@ -53,15 +54,9 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
   };
 
   const handleWatch = async () => {
-    if (!movie.telegram_group_link) {
-      toast.error('Conteudo indisponivel no momento', {
-        duration: 3000,
-      });
-      return;
-    }
-
-    // Open Telegram group link directly
-    window.open(movie.telegram_group_link, '_blank');
+    await openContentGroup(movie.id, movie.telegram_group_link, {
+      fallbackToast: 'Conteudo indisponivel no momento',
+    });
   };
 
   const handleTelegramPurchase = () => {

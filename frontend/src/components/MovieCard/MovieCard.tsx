@@ -15,6 +15,7 @@ import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroi
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 interface MovieCardProps {
   movie: Movie;
@@ -72,59 +73,9 @@ const MovieCard = memo(function MovieCard({
   const handleWatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    // Igor pediu (04/05): re-acesso pelo dashboard sem expor link
-    // permanente. Em vez de abrir o telegram_group_link cru (que
-    // pode ser Chat ID -100XXX e não é URL navegável, ou link de
-    // convite eternamente encaminhável), pedimos pro backend gerar
-    // um invite single-use de 24h validando ownership da purchase.
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('access_token') ||
-            localStorage.getItem('auth_token') ||
-            ''
-          : '';
-
-      if (!token) {
-        // Fallback: sem login, abre o link cru (mantém comportamento
-        // antigo). Página minha-lista tem gate de login, então isso
-        // é defensive.
-        if (movie.telegram_group_link) {
-          window.open(movie.telegram_group_link, '_blank');
-        } else {
-          toast.error('Conteúdo indisponível no momento');
-        }
-        return;
-      }
-
-      const res = await fetch(
-        `${apiUrl}/api/v1/telegrams/access-link/${movie.id}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.message || 'Não foi possível gerar acesso ao grupo');
-        return;
-      }
-
-      const data = (await res.json()) as { link: string; mode?: string; expiresInHours?: number };
-      if (!data.link) {
-        toast.error('Link indisponível');
-        return;
-      }
-      window.open(data.link, '_blank');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erro ao gerar acesso ao grupo');
-    }
+    await openContentGroup(movie.id, movie.telegram_group_link, {
+      fallbackToast: 'Conteudo indisponivel no momento',
+    });
   };
 
   const handlePurchase = (e: React.MouseEvent) => {

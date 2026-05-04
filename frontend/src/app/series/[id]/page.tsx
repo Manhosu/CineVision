@@ -8,6 +8,7 @@ import ContentHero from '@/components/ContentHero/ContentHero';
 import CastSection from '@/components/CastSection/CastSection';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
+import { openContentGroup } from '@/lib/telegramAccess';
 import { Movie } from '@/types/movie';
 
 interface Series extends Movie {
@@ -67,9 +68,9 @@ export default function SeriesDetailsPage() {
     fetchData();
   }, [seriesId, router]);
 
-  const handlePlay = () => {
-    if (!series?.telegram_group_link) { toast.error('Conteúdo indisponível no momento'); return; }
-    window.open(series.telegram_group_link, '_blank');
+  const handlePlay = async () => {
+    if (!series) return;
+    await openContentGroup(series.id, series.telegram_group_link);
   };
   // O ContentHero cuida do "Comprar" sozinho — bifurca anônimo
   // (Pix direto na web) vs logado-Telegram (deep link buy_<id>).

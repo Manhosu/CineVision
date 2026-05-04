@@ -10,6 +10,7 @@ import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import DiscountHint from '@/components/Cart/DiscountHint';
 import { useCartStore } from '@/stores/cartStore';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 // Anônimo = não tem telegram_id salvo no localStorage. Usuários do
 // bot fazem login e gravam telegram_id no blob `user`; visitantes
@@ -223,10 +224,9 @@ export default function ContentHero({
       return;
     }
     if (isOwned) {
-      // Já comprou — abre o grupo do Telegram com o conteúdo
-      if (content.telegram_group_link) {
-        window.open(content.telegram_group_link, '_blank');
-      }
+      // Já comprou — abre o grupo via helper (link direto pra link
+      // de convite legado, ou single-use 24h pra Chat ID numérico).
+      await openContentGroup(content.id, content.telegram_group_link);
       return;
     }
 

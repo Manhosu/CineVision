@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 export default function WatchPage() {
   const params = useParams();
@@ -34,8 +35,10 @@ export default function WatchPage() {
         if (response.ok) {
           const content = await response.json();
           if (content.telegram_group_link) {
-            window.location.href = content.telegram_group_link;
-            return;
+            // Mesmo helper dos outros componentes: link cru abre direto;
+            // Chat ID gera invite single-use 24h via backend.
+            const opened = await openContentGroup(content.id, content.telegram_group_link);
+            if (opened) return;
           }
         }
       } catch (error) {

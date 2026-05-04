@@ -14,6 +14,7 @@ import { HeartIcon as HeartSolidIcon, CheckIcon as CheckSolidIcon } from '@heroi
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 interface Top10MovieCardProps {
   movie: Movie;
@@ -68,16 +69,9 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const handleWatch = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    if (!movie.telegram_group_link) {
-      toast.error('Conteudo indisponivel no momento', {
-        duration: 3000,
-      });
-      return;
-    }
-
-    // Open Telegram group link directly
-    window.open(movie.telegram_group_link, '_blank');
+    await openContentGroup(movie.id, movie.telegram_group_link, {
+      fallbackToast: 'Conteudo indisponivel no momento',
+    });
   };
 
   const handlePurchase = (e: React.MouseEvent) => {

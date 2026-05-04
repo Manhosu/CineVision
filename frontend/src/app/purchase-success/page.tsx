@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 interface PurchaseDetails {
   id: string;
@@ -213,12 +214,14 @@ function PurchaseSuccessContent() {
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <button
-                onClick={() => {
+                onClick={async () => {
                   const telegramLink = (purchase.content as any).telegram_group_link;
-                  if (telegramLink) {
-                    window.open(telegramLink, '_blank');
-                  } else {
-                    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+                  const opened = telegramLink
+                    ? await openContentGroup(purchase.content.id, telegramLink)
+                    : false;
+                  if (!opened) {
+                    const botUsername =
+                      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
                     window.open(`https://t.me/${botUsername}`, '_blank');
                   }
                 }}
