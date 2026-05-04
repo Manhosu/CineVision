@@ -933,7 +933,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
         /* silent */
       }
 
-      const response = await axios.post(
+      // B7 (Igor pediu) — humaniza com "digitando..." + delay 5-8s
+      // pra parecer humano. Mesmo padrão do dispatchAiChatBusiness.
+      this.sendChatAction(chatId, 'typing').catch(() => undefined);
+
+      const aiPromise = axios.post(
         `${backendSelf}/api/v1/ai-chat/message`,
         {
           platform: 'telegram',
@@ -943,6 +947,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
         },
         { timeout: 30000 },
       );
+
+      const delayMs = 5000 + Math.floor(Math.random() * 3000);
+      const delayPromise = new Promise((r) => setTimeout(r, delayMs));
+
+      // Re-arma typing a cada 4s pra não sumir (Telegram drops após ~5s).
+      const typingInterval = setInterval(() => {
+        this.sendChatAction(chatId, 'typing').catch(() => undefined);
+      }, 4000);
+
+      const [response] = await Promise.all([aiPromise, delayPromise]);
+      clearInterval(typingInterval);
 
       const reply = response.data;
       if (reply?.paused) return;

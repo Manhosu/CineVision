@@ -8,6 +8,7 @@ interface Purchase {
   id: string;
   user_id: string;
   content_id: string;
+  order_id?: string | null;
   amount_cents: number;
   status: 'pending' | 'paid' | 'COMPLETED' | 'failed' | 'refunded';
   payment_method: string;
@@ -48,7 +49,57 @@ export default function AdminPurchasesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
+  const [groupByOrder, setGroupByOrder] = useState(true);
   const router = useRouter();
+
+  // B4 (Igor pediu) — agrupar purchases pela order_id quando o cliente
+  // comprou um pacote. Cada grupo vira 1 linha "header" com total de
+  // itens e valor; expand mostra os itens. Purchases avulsas (sem
+  // order_id, ex: compra direta antiga) ficam soltas no nível raiz.
+  type Group =
+    | { type: 'group'; orderId: string; purchases: Purchase[]; total: number }
+    | { type: 'single'; purchase: Purchase };
+
+  const groupedPurchases: Group[] = (() => {
+    if (!groupByOrder) return purchases.map((p) => ({ type: 'single', purchase: p }));
+    const byOrder = new Map<string, Purchase[]>();
+    const singles: Purchase[] = [];
+    for (const p of purchases) {
+      if (p.order_id) {
+        if (!byOrder.has(p.order_id)) byOrder.set(p.order_id, []);
+        byOrder.get(p.order_id)!.push(p);
+      } else {
+        singles.push(p);
+      }
+    }
+    const groups: Group[] = [];
+    for (const [orderId, list] of byOrder.entries()) {
+      if (list.length === 1) {
+        groups.push({ type: 'single', purchase: list[0] });
+      } else {
+        const total = list.reduce((sum, p) => sum + p.amount_cents, 0);
+        groups.push({ type: 'group', orderId, purchases: list, total });
+      }
+    }
+    for (const p of singles) groups.push({ type: 'single', purchase: p });
+    // ordena por created_at DESC do primeiro item do grupo
+    groups.sort((a, b) => {
+      const aDate = a.type === 'group' ? a.purchases[0].created_at : a.purchase.created_at;
+      const bDate = b.type === 'group' ? b.purchases[0].created_at : b.purchase.created_at;
+      return new Date(bDate).getTime() - new Date(aDate).getTime();
+    });
+    return groups;
+  })();
+
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
 
   const fetchPurchases = async (page = 1) => {
     try {
@@ -411,63 +462,143 @@ export default function AdminPurchasesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {purchases.map((purchase) => (
-                    <tr key={purchase.id} className="hover:bg-dark-700/30 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          <div className="text-white font-medium">#{purchase.id.slice(-8)}</div>
-                          {purchase.payment_method && purchase.payment_method !== 'unknown' && (
-                            <div className="text-gray-400 capitalize">{purchase.payment_method}</div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm">
-                          <div className="text-white">{purchase.user?.name || 'N/A'}</div>
-                          {purchase.user?.telegram_id && (
-                            <div className="text-xs mt-1">
-                              {purchase.user.telegram_username ? (
-                                <div className="text-blue-400 font-medium">
-                                  📱 @{purchase.user.telegram_username}
-                                </div>
-                              ) : (
-                                <div className="text-gray-500 font-mono">
-                                  📱 ID: {purchase.user.telegram_id}
+                  {groupedPurchases.map((g) => {
+                    if (g.type === 'single') {
+                      const purchase = g.purchase;
+                      return (
+                        <tr key={purchase.id} className="hover:bg-dark-700/30 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className="text-white font-medium">#{purchase.id.slice(-8)}</div>
+                              {purchase.payment_method && purchase.payment_method !== 'unknown' && (
+                                <div className="text-gray-400 capitalize">{purchase.payment_method}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className="text-white">{purchase.user?.name || 'N/A'}</div>
+                              {purchase.user?.telegram_id && (
+                                <div className="text-xs mt-1">
+                                  {purchase.user.telegram_username ? (
+                                    <div className="text-blue-400 font-medium">
+                                      📱 @{purchase.user.telegram_username}
+                                    </div>
+                                  ) : (
+                                    <div className="text-gray-500 font-mono">
+                                      📱 ID: {purchase.user.telegram_id}
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          {purchase.content?.poster_url && (
-                            <img
-                              src={purchase.content.poster_url}
-                              alt={purchase.content.title}
-                              className="w-10 h-14 object-cover rounded mr-3"
-                            />
-                          )}
-                          <div className="text-sm">
-                            <div className="text-white font-medium">{purchase.content?.title || 'N/A'}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-white font-medium">
-                          {formatCurrency(purchase.amount_cents)}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(purchase.status)}`}>
-                          {getStatusLabel(purchase.status)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                        {formatDate(purchase.created_at)}
-                      </td>
-                    </tr>
-                  ))}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              {purchase.content?.poster_url && (
+                                <img
+                                  src={purchase.content.poster_url}
+                                  alt={purchase.content.title}
+                                  className="w-10 h-14 object-cover rounded mr-3"
+                                />
+                              )}
+                              <div className="text-sm">
+                                <div className="text-white font-medium">{purchase.content?.title || 'N/A'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-white font-medium">
+                              {formatCurrency(purchase.amount_cents)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(purchase.status)}`}>
+                              {getStatusLabel(purchase.status)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            {formatDate(purchase.created_at)}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // Group header + (optionally) expanded items
+                    const first = g.purchases[0];
+                    const isOpen = expandedOrders.has(g.orderId);
+                    return (
+                      <>
+                        <tr
+                          key={g.orderId}
+                          className="cursor-pointer bg-blue-500/5 hover:bg-blue-500/10 transition-colors"
+                          onClick={() => toggleOrder(g.orderId)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className="text-white font-medium">
+                                {isOpen ? '▼' : '▶'} Pacote #{g.orderId.slice(-8)}
+                              </div>
+                              <div className="text-blue-400 text-xs">
+                                {g.purchases.length} itens
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className="text-white">{first.user?.name || 'N/A'}</div>
+                              {first.user?.telegram_username && (
+                                <div className="text-blue-400 text-xs font-medium">📱 @{first.user.telegram_username}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-zinc-400">
+                            {g.purchases.slice(0, 3).map((p) => p.content?.title || '?').join(', ')}
+                            {g.purchases.length > 3 && ` +${g.purchases.length - 3}`}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-white font-bold">
+                              {formatCurrency(g.total)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(first.status)}`}>
+                              {getStatusLabel(first.status)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            {formatDate(first.created_at)}
+                          </td>
+                        </tr>
+                        {isOpen &&
+                          g.purchases.map((p) => (
+                            <tr key={p.id} className="bg-dark-900/40">
+                              <td className="px-6 py-3 pl-12 text-xs text-zinc-500">
+                                ↳ #{p.id.slice(-8)}
+                              </td>
+                              <td className="px-6 py-3"></td>
+                              <td className="px-6 py-3">
+                                <div className="flex items-center text-sm">
+                                  {p.content?.poster_url && (
+                                    <img
+                                      src={p.content.poster_url}
+                                      alt={p.content.title}
+                                      className="w-8 h-12 object-cover rounded mr-2"
+                                    />
+                                  )}
+                                  <div className="text-zinc-300">{p.content?.title || 'N/A'}</div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-3 whitespace-nowrap text-sm text-zinc-400">
+                                {formatCurrency(p.amount_cents)}
+                              </td>
+                              <td className="px-6 py-3"></td>
+                              <td className="px-6 py-3"></td>
+                            </tr>
+                          ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

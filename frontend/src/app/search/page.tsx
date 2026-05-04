@@ -27,10 +27,11 @@ function SearchResults() {
   const searchMovies = async (searchQuery: string) => {
     setIsLoading(true);
     try {
-      // Buscar filmes e séries em paralelo. Limit alto pra cobrir
-      // sagas inteiras (Harry Potter, Velozes e Furiosos têm 8+
-      // títulos cada) — o default do backend de 20 cortava resultados.
-      const SEARCH_LIMIT = 100;
+      // B5 (Igor) — sagas grandes (Velozes e Furiosos tem 11+, Harry
+      // Potter 8, MCU 30+) e clientes pesquisam "marvel" e querem ver
+      // tudo. Subimos limite pra 250. Add-to-cart inline já existe via
+      // AddToCartButton (variant="icon") no canto do MovieCard.
+      const SEARCH_LIMIT = 250;
       const [moviesResponse, seriesResponse] = await Promise.all([
         fetch(
           `${API_URL}/api/v1/content/movies?search=${encodeURIComponent(searchQuery)}&limit=${SEARCH_LIMIT}`,

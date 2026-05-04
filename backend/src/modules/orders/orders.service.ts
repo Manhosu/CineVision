@@ -93,43 +93,44 @@ export class OrdersService {
       throw new BadRequestException(`Failed to create order: ${orderError?.message}`);
     }
 
-    // 2. Create one Purchase per item, linked to the order
+    // M10 — antes era um INSERT sequencial por item (cart com 5 filmes
+    // = 5 round-trips ao banco), o que dominava a latência do checkout
+    // (Igor reportou 1.5–8s). Agora 1 INSERT em batch.
     const perItemShare = preview.discount_percent / 100;
-    const purchases: any[] = [];
+    const purchasePayloads = items.map((item: any) => {
+      const itemDiscounted = Math.round(
+        item.price_cents_snapshot * (1 - perItemShare),
+      );
+      return {
+        user_id: userId || null,
+        content_id: item.content_id,
+        amount_cents: itemDiscounted,
+        currency: 'BRL',
+        status: PurchaseStatus.PENDING,
+        preferred_delivery: delivery,
+        purchase_token: uuidv4(),
+        order_id: order.id,
+        provider_meta: telegramChatId
+          ? { telegram_chat_id: telegramChatId, from_cart: true }
+          : { from_cart: true },
+      };
+    });
 
-    for (const item of items) {
-      const itemPrice = item.price_cents_snapshot;
-      const itemDiscounted = Math.round(itemPrice * (1 - perItemShare));
+    const { data: purchases, error: purchasesError } = await this.supabase.client
+      .from('purchases')
+      .insert(purchasePayloads)
+      .select();
 
-      const purchaseToken = uuidv4();
-      const { data: purchase, error: purchaseError } = await this.supabase.client
-        .from('purchases')
-        .insert({
-          user_id: userId || null,
-          content_id: item.content_id,
-          amount_cents: itemDiscounted,
-          currency: 'BRL',
-          status: PurchaseStatus.PENDING,
-          preferred_delivery: delivery,
-          purchase_token: purchaseToken,
-          order_id: order.id,
-          provider_meta: telegramChatId
-            ? { telegram_chat_id: telegramChatId, from_cart: true }
-            : { from_cart: true },
-        })
-        .select()
-        .single();
-
-      if (purchaseError) {
-        this.logger.warn(
-          `Failed to create purchase for content ${item.content_id}: ${purchaseError.message}`,
-        );
-        continue;
-      }
-      purchases.push(purchase);
+    if (purchasesError) {
+      this.logger.error(
+        `Failed to batch-insert purchases for order ${order.id}: ${purchasesError.message}`,
+      );
+      throw new BadRequestException(
+        `Could not create purchases for order: ${purchasesError.message}`,
+      );
     }
 
-    if (!purchases.length) {
+    if (!purchases?.length) {
       throw new BadRequestException('Could not create purchases for order');
     }
 

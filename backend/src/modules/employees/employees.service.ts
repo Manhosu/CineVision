@@ -39,10 +39,20 @@ export class EmployeesService {
   // CRUD
   // ---------------------------------------------------------------------------
   async createEmployee(dto: CreateEmployeeDto) {
+    // A7 — Igor reportou que Rafaela não conseguia logar. O email do
+    // print era `rafaelaa@cinevision.com` (3 a's) — provável typo no
+    // momento da criação. Normalizando email com lowercase + trim aqui
+    // (e no findByEmail do users-supabase) evitamos drift entre o que
+    // foi salvo e o que o usuário digita.
+    const normalizedEmail = (dto.email || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new BadRequestException('Email é obrigatório.');
+    }
+
     const { data: existing } = await this.supabase.client
       .from('users')
       .select('id')
-      .eq('email', dto.email)
+      .eq('email', normalizedEmail)
       .maybeSingle();
 
     if (existing) {
@@ -54,8 +64,8 @@ export class EmployeesService {
     const { data: user, error: userErr } = await this.supabase.client
       .from('users')
       .insert({
-        name: dto.name,
-        email: dto.email,
+        name: (dto.name || '').trim(),
+        email: normalizedEmail,
         password_hash: passwordHash,
         role: 'employee',
         status: 'active',

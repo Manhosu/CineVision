@@ -59,11 +59,16 @@ export class UsersSupabaseService {
   }
 
   async findByEmail(email: string): Promise<any> {
-    this.logger.log(`Finding user by email: ${email}`);
-    
+    // A7 — normaliza email antes de buscar pra casar com o que o
+    // createEmployee/register grava (lowercase + trim). Evita "Acesso
+    // negado" só porque o usuário digitou Email em capitalização
+    // diferente.
+    const normalized = (email || '').trim().toLowerCase();
+    this.logger.log(`Finding user by email: ${normalized}`);
+
     try {
       const user = await this.supabaseClient.selectOne('users', {
-        where: { email }
+        where: { email: normalized },
       });
       return user; // Returns null if not found
     } catch (error) {

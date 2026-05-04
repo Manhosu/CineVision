@@ -149,13 +149,19 @@ export class AiChatService {
     role: 'user' | 'assistant' | 'system',
     content: string,
     tokens?: number,
+    timing?: { receivedAt?: Date; respondedAt?: Date; latencyMs?: number },
   ) {
-    await this.supabase.client.from('ai_messages').insert({
+    const payload: Record<string, any> = {
       conversation_id: conversationId,
       role,
       content,
       tokens_used: tokens,
-    });
+    };
+    if (timing?.receivedAt) payload.received_at = timing.receivedAt.toISOString();
+    if (timing?.respondedAt) payload.responded_at = timing.respondedAt.toISOString();
+    if (timing?.latencyMs !== undefined) payload.latency_ms = timing.latencyMs;
+
+    await this.supabase.client.from('ai_messages').insert(payload);
 
     await this.supabase.client
       .from('ai_conversations')
@@ -188,6 +194,11 @@ export class AiChatService {
     businessConnectionId?: string;
   }): Promise<AiReply> {
     const { platform, externalChatId, messageText, userId, businessConnectionId } = params;
+
+    // A2 — Igor reportou que IA demora 3 mensagens pra responder.
+    // Instrumentamos latência ponta-a-ponta (received → responded)
+    // pra ter SQL agregada e identificar onde está o gargalo.
+    const receivedAt = new Date();
 
     if (!(await this.isEnabled(platform))) {
       return { text: '', paused: true };
@@ -401,12 +412,25 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     // marker.
     cleanText = cleanText.replace(/<<[A-Z_]+(?::[^>]*)?>>/g, '').trim();
 
+    // A2 — registra latência total (recebimento → assistant pronto pra
+    // enviar). Não inclui o delay humanizado de 5-8s aplicado no
+    // dispatchAiChat — esse é UX intencional, não latência da IA.
+    const respondedAt = new Date();
+    const latencyMs = respondedAt.getTime() - receivedAt.getTime();
+
     await this.appendMessage(
       conversation.id,
       'assistant',
       cleanText || rawText,
       completion.outputTokens,
+      { receivedAt, respondedAt, latencyMs },
     );
+
+    if (latencyMs > 8000) {
+      this.logger.warn(
+        `Slow AI response: ${latencyMs}ms (claude=${claudeMs}ms) conv=${conversation.id}`,
+      );
+    }
 
     return {
       text: cleanText || rawText,

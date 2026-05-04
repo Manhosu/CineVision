@@ -86,7 +86,24 @@ function CheckoutContent() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-black p-8 text-center text-white">Carregando pedido...</div>;
+    // M10 — Igor reportou QR demorando 1.5–8s (provider Oasyfy é lento).
+    // Loading state mais elegante pra não parecer travado.
+    return (
+      <div className="min-h-screen bg-black p-8 text-white">
+        <div className="mx-auto max-w-md space-y-6 text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-red-500 border-t-transparent" />
+          <h2 className="text-xl font-semibold">Gerando seu PIX...</h2>
+          <p className="text-sm text-zinc-400">
+            Estamos preparando o QR Code com o provedor de pagamento. Isso
+            pode levar alguns segundos.
+          </p>
+          <div className="rounded-xl border border-white/10 bg-zinc-900 p-4 text-xs text-zinc-500">
+            <p>💡 Dica: você poderá pagar pelo app do banco escaneando o QR
+            ou usando o código copia-e-cola.</p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!order) {
