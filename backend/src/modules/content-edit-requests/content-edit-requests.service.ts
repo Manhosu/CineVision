@@ -13,6 +13,7 @@ import { AdminContentSimpleService } from '../admin/services/admin-content-simpl
 import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 
 export type EditRequestStatus = 'pending' | 'approved' | 'rejected';
+export type EditRequestType = 'update' | 'delete';
 
 @Injectable()
 export class ContentEditRequestsService {
@@ -75,6 +76,7 @@ export class ContentEditRequestsService {
         changes: diff,
         original_snapshot: snapshot,
         status: 'pending',
+        request_type: 'update',
       })
       .select(
         `*, employee:employee_id(id, name, email), content:content_id(id, title, content_type, poster_url)`,
@@ -88,6 +90,67 @@ export class ContentEditRequestsService {
     }
 
     // Notify the master admin via Telegram (best-effort)
+    this.notifyAdminNewRequest(request).catch((e: any) =>
+      this.logger.warn(`Notify admin failed: ${e.message}`),
+    );
+
+    return request;
+  }
+
+  // A8 — solicitação de exclusão. Mesmo fluxo de aprovação que update,
+  // só que `changes` é vazio e `request_type='delete'`. Aprovação
+  // executa delete real via contentService.
+  async submitDeleteRequest(input: { employeeId: string; contentId: string }) {
+    const { employeeId, contentId } = input;
+
+    const { data: content, error } = await this.supabase.client
+      .from('content')
+      .select('*')
+      .eq('id', contentId)
+      .single();
+
+    if (error || !content) {
+      throw new NotFoundException(`Content ${contentId} not found`);
+    }
+
+    // Bloqueia duplicata: se já existe delete pendente para este conteúdo,
+    // não cria outro.
+    const { data: existing } = await this.supabase.client
+      .from('content_edit_requests')
+      .select('id')
+      .eq('content_id', contentId)
+      .eq('request_type', 'delete')
+      .eq('status', 'pending')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      throw new BadRequestException(
+        'Já existe uma solicitação de exclusão pendente para este conteúdo.',
+      );
+    }
+
+    const { data: request, error: insErr } = await this.supabase.client
+      .from('content_edit_requests')
+      .insert({
+        content_id: contentId,
+        employee_id: employeeId,
+        changes: {},
+        original_snapshot: { title: content.title, content_type: content.content_type },
+        status: 'pending',
+        request_type: 'delete',
+      })
+      .select(
+        `*, employee:employee_id(id, name, email), content:content_id(id, title, content_type, poster_url)`,
+      )
+      .single();
+
+    if (insErr || !request) {
+      throw new BadRequestException(
+        `Falha ao registrar pedido de exclusão: ${insErr?.message}`,
+      );
+    }
+
     this.notifyAdminNewRequest(request).catch((e: any) =>
       this.logger.warn(`Notify admin failed: ${e.message}`),
     );
@@ -149,6 +212,25 @@ export class ContentEditRequestsService {
     const request = await this.getById(id);
     if (request.status !== 'pending') {
       throw new BadRequestException('Pedido já foi processado.');
+    }
+
+    // A8 — pedido de delete dispara delete real; pedido de update aplica
+    // os changes. Update da request acontece antes do delete pra que
+    // o status `approved` seja persistido mesmo se o conteúdo sumir
+    // (FK `content_id` pode ficar órfã, mas o histórico continua).
+    if (request.request_type === 'delete') {
+      await this.supabase.client
+        .from('content_edit_requests')
+        .update({
+          status: 'approved',
+          reviewer_id: reviewerId,
+          reviewer_notes: reviewerNotes || null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+      await this.contentService.deleteContent(request.content_id);
+      // Após delete o getById falha (FK órfã); retorna o último estado conhecido.
+      return { ...request, status: 'approved', reviewer_id: reviewerId, reviewed_at: new Date().toISOString() };
     }
 
     // Apply the changes to the content via the existing service

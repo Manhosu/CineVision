@@ -81,9 +81,12 @@ export class BroadcastService {
         hasMore = data && data.length === pageSize;
         page++;
 
-        // Safety check: stop after 100 pages (100,000 users max)
-        if (page >= 100) {
-          this.logger.warn('Reached maximum pagination limit of 100 pages');
+        // M4 — Igor passou 100k usuários. Limite removido. Mantemos
+        // teto absoluto bem alto (10M = 10000 páginas × 1000) só pra
+        // evitar loop infinito caso `data.length === pageSize`
+        // continue eternamente devido a algum bug do Supabase.
+        if (page >= 10000) {
+          this.logger.warn('Reached absolute pagination ceiling of 10000 pages (10M users)');
           break;
         }
       }

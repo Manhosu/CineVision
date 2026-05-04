@@ -49,15 +49,25 @@ export class AdminContentService {
   /**
    * Create content with automatic Stripe Product + Price creation
    */
-  async createContent(dto: CreateContentDto, userId?: string): Promise<Content> {
+  async createContent(
+    dto: CreateContentDto,
+    userId?: string,
+    userRole?: string,
+  ): Promise<Content> {
     this.logger.log(`Creating content: ${dto.title}`);
 
     try {
       // Check if TypeORM is available
       if (!this.contentRepository) {
         // Use ContentService (Supabase) when TypeORM is not available
-        return this.createContentWithSupabase(dto, userId);
+        return this.createContentWithSupabase(dto, userId, userRole);
       }
+
+      // A9 — admin/moderator publica direto; outros vão pra DRAFT.
+      const isAdminLike = userRole === 'admin' || userRole === 'moderator';
+      const initialStatus = isAdminLike
+        ? ContentStatus.PUBLISHED
+        : ContentStatus.DRAFT;
 
       // Step 1: Create Stripe Product and Price (if available)
       let stripeResult = null;
@@ -117,7 +127,7 @@ export class AdminContentService {
         imdb_rating: dto.imdb_rating,
         duration_minutes: dto.duration_minutes,
         is_featured: dto.is_featured || false,
-        status: ContentStatus.DRAFT,
+        status: initialStatus,
         processing_status: VideoProcessingStatus.PENDING,
         categories,
         created_by: userId ? ({ id: userId } as any) : undefined,
@@ -150,8 +160,14 @@ export class AdminContentService {
   /**
    * Create content using Supabase when TypeORM is not available
    */
-  private async createContentWithSupabase(dto: CreateContentDto, userId?: string): Promise<any> {
+  private async createContentWithSupabase(
+    dto: CreateContentDto,
+    userId?: string,
+    userRole?: string,
+  ): Promise<any> {
     this.logger.log(`Creating content with Supabase: ${dto.title}`);
+
+    const isAdminLike = userRole === 'admin' || userRole === 'moderator';
 
     // Create content data for Supabase
     const contentData = {
@@ -171,7 +187,7 @@ export class AdminContentService {
       imdb_rating: dto.imdb_rating,
       duration_minutes: dto.duration_minutes,
       is_featured: dto.is_featured || false,
-      status: 'PUBLISHED',
+      status: isAdminLike ? 'PUBLISHED' : 'DRAFT',
       availability: dto.availability,
     };
 

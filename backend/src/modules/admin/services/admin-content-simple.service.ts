@@ -56,8 +56,18 @@ export class AdminContentSimpleService {
     return data;
   }
 
-  async createContent(data: any, userId?: string) {
+  async createContent(data: any, userId?: string, userRole?: string) {
     this.logger.log('Creating content with data:', JSON.stringify(data));
+
+    // A9 (vídeo IMG_8811) — Igor reclamou que conteúdo recém-criado
+    // ficava em rascunho mesmo quando criado por admin. Agora:
+    // - admin/moderator → PUBLISHED direto, vai pro site sem precisar
+    //   "subir" depois.
+    // - employee → DRAFT, segue o workflow de aprovação existente.
+    // - sem role identificável → DRAFT (segurança).
+    const isAdminLike =
+      userRole === 'admin' || userRole === 'moderator';
+    const initialStatus = isAdminLike ? 'PUBLISHED' : 'DRAFT';
 
     // Mapear campos do frontend para o formato do banco
     const contentData: any = {
@@ -70,7 +80,7 @@ export class AdminContentSimpleService {
       backdrop_position_mobile: data.backdrop_position_mobile || null,
       trailer_url: data.trailer_url || null,
       content_type: data.content_type || data.type || 'movie', // Mapeia para coluna content_type
-      status: 'DRAFT', // Sempre começa como draft
+      status: initialStatus,
       availability: 'site', // Padrão
       price_cents: data.price_cents || 0,
       currency: 'BRL',

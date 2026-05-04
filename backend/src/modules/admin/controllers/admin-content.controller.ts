@@ -138,7 +138,11 @@ export class AdminContentController {
   ) {
     const kind = (dto as any).content_type === 'series' ? 'series' : 'movie';
     await this.assertCanAddContent(user, kind);
-    return this.adminContentService.createContent(dto, user?.sub || user?.id || null);
+    return this.adminContentService.createContent(
+      dto,
+      user?.sub || user?.id || null,
+      user?.role || null,
+    );
   }
 
   @Post('initiate-upload')
@@ -274,24 +278,38 @@ export class AdminContentController {
   }
 
   @Delete(':id')
+  @UseGuards(OptionalAuthGuard)
   @ApiOperation({
     summary: 'Delete content',
-    description: 'Deletes content from database, S3, and Stripe. This action cannot be undone.',
+    description:
+      'Admins/moderators delete directly. Employees within their edit window delete directly; outside the window, the request goes to the admin approval queue (request_type=delete).',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Content deleted successfully',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Content not found',
-  })
+  @ApiResponse({ status: 200, description: 'Content deleted or queued for approval' })
+  @ApiResponse({ status: 404, description: 'Content not found' })
   @HttpCode(HttpStatus.OK)
   async deleteContent(
     @Param('id') contentId: string,
-    // @GetUser() user: User, // Temporarily disabled
+    @GetUser() user: any,
   ) {
-    return this.adminContentService.deleteContent(contentId, null);
+    const cap = await this.resolveEditCapability(user, contentId);
+    if (cap === 'blocked') {
+      throw new ForbiddenException(
+        'Você não tem permissão para excluir este conteúdo.',
+      );
+    }
+    if (cap === 'needs_approval') {
+      const request = await this.editRequestsService.submitDeleteRequest({
+        employeeId: user.sub || user.id,
+        contentId,
+      });
+      return {
+        status: 'pending_approval',
+        message:
+          'Sua solicitação de exclusão foi enviada para aprovação do administrador. O conteúdo só será removido após a aprovação.',
+        request,
+      };
+    }
+    return this.adminContentService.deleteContent(contentId, user?.sub || user?.id || null);
   }
 
   @Put(':id')

@@ -7,6 +7,8 @@ import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 type Status = 'pending' | 'approved' | 'rejected';
 
+type RequestType = 'update' | 'delete';
+
 interface EditRequest {
   id: string;
   content_id: string;
@@ -14,6 +16,7 @@ interface EditRequest {
   changes: Record<string, any>;
   original_snapshot: Record<string, any>;
   status: Status;
+  request_type?: RequestType;
   created_at: string;
   reviewed_at?: string;
   reviewer_notes?: string;
@@ -154,14 +157,24 @@ export default function EditRequestsPage() {
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold">
-                    {r.content?.title || r.content_id}
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold">
+                      {r.content?.title || r.content_id}
+                    </span>
+                    {r.request_type === 'delete' && (
+                      <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300">
+                        EXCLUIR
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-zinc-500">
                     {r.employee?.name || r.employee_id}
                   </div>
                   <div className="mt-1 text-[10px] text-zinc-500">
-                    {fmtDate(r.created_at)} · {Object.keys(r.changes).length} campo(s)
+                    {fmtDate(r.created_at)} ·{' '}
+                    {r.request_type === 'delete'
+                      ? 'pedido de exclusão'
+                      : `${Object.keys(r.changes).length} campo(s)`}
                   </div>
                 </div>
               </div>
@@ -199,7 +212,18 @@ export default function EditRequestsPage() {
                 </span>
               </div>
 
-              <h3 className="mb-2 text-sm font-semibold text-zinc-300">Diff</h3>
+              {selected.request_type === 'delete' && (
+                <div className="mb-5 rounded-lg border border-red-500/40 bg-red-600/10 p-4 text-sm text-red-200">
+                  <strong>⚠ Pedido de exclusão</strong> — ao aprovar, o conteúdo
+                  <em> "{selected.content?.title}" </em>
+                  será removido permanentemente da plataforma. Esta ação não
+                  pode ser desfeita.
+                </div>
+              )}
+
+              <h3 className="mb-2 text-sm font-semibold text-zinc-300">
+                {selected.request_type === 'delete' ? 'Resumo' : 'Diff'}
+              </h3>
               <div className="mb-5 space-y-3 rounded-lg border border-white/10 bg-zinc-950 p-3 max-h-[50vh] overflow-y-auto">
                 {Object.keys(selected.changes).map((field) => {
                   const before = selected.original_snapshot?.[field];
