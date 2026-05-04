@@ -1,24 +1,41 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
+import { EmployeesService } from '../../employees/employees.service';
+
+export type PhotoStatus = 'missing' | 'pending' | 'approved' | 'all';
 
 @Injectable()
 export class AdminPeopleService {
   private readonly logger = new Logger(AdminPeopleService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly employeesService: EmployeesService,
+  ) {}
 
-  async findAll(search?: string, role?: string) {
-    // Fetch people and content counts in parallel (2 queries instead of N+1)
+  async findAll(search?: string, role?: string, photoStatus: PhotoStatus = 'all') {
     let query = this.supabaseService.client
       .from('people')
       .select('*')
       .order('name', { ascending: true });
 
-    if (search) {
-      query = query.ilike('name', `%${search}%`);
-    }
-    if (role) {
-      query = query.eq('role', role);
+    if (search) query = query.ilike('name', `%${search}%`);
+    if (role) query = query.eq('role', role);
+
+    // IMG_8846 — funcionário com `can_add_people_photos` precisa filtrar
+    // só pessoas sem foto. Admin pode listar pendentes pra revisar.
+    if (photoStatus === 'missing') {
+      query = query.is('photo_url', null).is('photo_pending_url', null);
+    } else if (photoStatus === 'pending') {
+      query = query.not('photo_pending_url', 'is', null);
+    } else if (photoStatus === 'approved') {
+      query = query.not('photo_url', 'is', null);
     }
 
     const [{ data, error }, { data: counts }] = await Promise.all([
@@ -30,7 +47,6 @@ export class AdminPeopleService {
 
     if (error) throw new Error(`Failed to fetch people: ${error.message}`);
 
-    // Build count map from all links in one pass
     const countMap = new Map<string, number>();
     if (counts) {
       for (const row of counts) {
@@ -38,7 +54,7 @@ export class AdminPeopleService {
       }
     }
 
-    return (data || []).map(person => ({
+    return (data || []).map((person) => ({
       ...person,
       content_count: countMap.get(person.id) || 0,
     }));
@@ -58,7 +74,6 @@ export class AdminPeopleService {
   async findByIdWithContent(id: string) {
     const person = await this.findById(id);
 
-    // Get all content linked to this person
     const { data: links } = await this.supabaseService.client
       .from('content_people')
       .select('content_id, role, character_name, display_order')
@@ -69,7 +84,7 @@ export class AdminPeopleService {
       return { ...person, contents: [] };
     }
 
-    const contentIds = links.map(l => l.content_id);
+    const contentIds = links.map((l) => l.content_id);
     const { data: contents } = await this.supabaseService.client
       .from('content')
       .select('*')
@@ -92,7 +107,6 @@ export class AdminPeopleService {
       .single();
 
     if (error) {
-      // Unique constraint violation — person already exists
       if (error.code === '23505') {
         const { data: existing } = await this.supabaseService.client
           .from('people')
@@ -111,7 +125,6 @@ export class AdminPeopleService {
     const trimmed = name.trim();
     if (!trimmed) return null;
 
-    // Try to find existing
     const { data: existing } = await this.supabaseService.client
       .from('people')
       .select('*')
@@ -122,11 +135,14 @@ export class AdminPeopleService {
 
     if (existing) return existing;
 
-    // Create new
     return this.create({ name: trimmed, role });
   }
 
-  async update(id: string, data: { name?: string; photo_url?: string; bio?: string; role?: string }) {
+  async update(
+    id: string,
+    data: { name?: string; photo_url?: string; bio?: string; role?: string },
+  ) {
+    // Admin update path (sem ownership tracking).
     const updatePayload: any = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) updatePayload.name = data.name.trim();
     if (data.photo_url !== undefined) updatePayload.photo_url = data.photo_url;
@@ -154,13 +170,7 @@ export class AdminPeopleService {
     return { success: true };
   }
 
-  /**
-   * Sync content_people for a given content.
-   * Receives arrays of actor names and director name, creates people if needed,
-   * and replaces all content_people rows for this content.
-   */
   async syncContentPeople(contentId: string, actors: string[], director?: string) {
-    // Delete existing links
     await this.supabaseService.client
       .from('content_people')
       .delete()
@@ -168,7 +178,6 @@ export class AdminPeopleService {
 
     const inserts: any[] = [];
 
-    // Process actors
     for (let i = 0; i < actors.length; i++) {
       const name = actors[i]?.trim();
       if (!name) continue;
@@ -183,9 +192,8 @@ export class AdminPeopleService {
       }
     }
 
-    // Process director(s) — may be comma-separated
     if (director?.trim()) {
-      const directors = director.split(',').map(d => d.trim()).filter(Boolean);
+      const directors = director.split(',').map((d) => d.trim()).filter(Boolean);
       for (let i = 0; i < directors.length; i++) {
         const person = await this.findOrCreate(directors[i], 'director');
         if (person) {
@@ -207,5 +215,175 @@ export class AdminPeopleService {
         this.logger.error(`Failed to sync content_people: ${error.message}`);
       }
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // IMG_8846 — Photo workflow (admin direct, employee submits to pending)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Admin envia foto direto, persiste em `photo_url` com ownership.
+   * Employee envia foto pendente, persiste em `photo_pending_url` (precisa
+   * `can_add_people_photos=true` E pessoa estar sem foto). Roles abaixo
+   * de admin/employee são bloqueadas.
+   */
+  async submitPhoto(personId: string, photoUrl: string, actorUserId: string, isAdmin: boolean) {
+    if (!photoUrl?.trim()) {
+      throw new BadRequestException('photo_url é obrigatório');
+    }
+
+    const person = await this.findById(personId);
+    const now = new Date().toISOString();
+
+    if (isAdmin) {
+      const { data: updated, error } = await this.supabaseService.client
+        .from('people')
+        .update({
+          photo_url: photoUrl.trim(),
+          photo_added_by_user_id: actorUserId,
+          photo_added_at: now,
+          // Limpa qualquer pendência prévia (admin sobrepõe).
+          photo_pending_url: null,
+          photo_pending_by_user_id: null,
+          photo_pending_at: null,
+          photo_rejected_at: null,
+          photo_rejection_reason: null,
+          updated_at: now,
+        })
+        .eq('id', personId)
+        .select()
+        .single();
+
+      if (error) throw new Error(`Failed to set photo: ${error.message}`);
+      return { status: 'approved' as const, person: updated };
+    }
+
+    // Path do funcionário.
+    const perms = await this.employeesService.getPermissions(actorUserId);
+    if (!perms?.can_add_people_photos) {
+      throw new ForbiddenException('Sem permissão para adicionar fotos');
+    }
+    if (person.photo_url) {
+      throw new ForbiddenException(
+        'Esta pessoa já tem foto. Solicite ao admin para substituir.',
+      );
+    }
+    if (person.photo_pending_url) {
+      throw new BadRequestException(
+        'Já existe uma foto pendente de aprovação para esta pessoa.',
+      );
+    }
+
+    const { data: updated, error } = await this.supabaseService.client
+      .from('people')
+      .update({
+        photo_pending_url: photoUrl.trim(),
+        photo_pending_by_user_id: actorUserId,
+        photo_pending_at: now,
+        photo_rejected_at: null,
+        photo_rejection_reason: null,
+        updated_at: now,
+      })
+      .eq('id', personId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to submit photo: ${error.message}`);
+    return { status: 'pending' as const, person: updated };
+  }
+
+  /** Lista fotos pendentes (admin). */
+  async listPendingPhotos() {
+    const { data, error } = await this.supabaseService.client
+      .from('people')
+      .select(
+        'id, name, role, photo_pending_url, photo_pending_at, photo_pending_by_user_id',
+      )
+      .not('photo_pending_url', 'is', null)
+      .order('photo_pending_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to list pending photos: ${error.message}`);
+
+    const submitterIds = Array.from(
+      new Set((data || []).map((p) => p.photo_pending_by_user_id).filter(Boolean)),
+    );
+
+    let submitters: Record<string, { id: string; name: string; email: string }> = {};
+    if (submitterIds.length > 0) {
+      const { data: users } = await this.supabaseService.client
+        .from('users')
+        .select('id, name, email')
+        .in('id', submitterIds);
+      for (const u of users || []) submitters[u.id] = u;
+    }
+
+    return (data || []).map((p) => ({
+      ...p,
+      submitted_by: p.photo_pending_by_user_id
+        ? submitters[p.photo_pending_by_user_id] || null
+        : null,
+    }));
+  }
+
+  /** Admin aprova: promove `photo_pending_url` → `photo_url`. */
+  async approvePendingPhoto(personId: string, adminUserId: string) {
+    const person = await this.findById(personId);
+    if (!person.photo_pending_url) {
+      throw new BadRequestException('Esta pessoa não tem foto pendente.');
+    }
+
+    const now = new Date().toISOString();
+    const { data: updated, error } = await this.supabaseService.client
+      .from('people')
+      .update({
+        photo_url: person.photo_pending_url,
+        // Crédito vai para quem submeteu, não para o admin que aprovou.
+        photo_added_by_user_id: person.photo_pending_by_user_id,
+        photo_added_at: now,
+        photo_pending_url: null,
+        photo_pending_by_user_id: null,
+        photo_pending_at: null,
+        photo_rejected_at: null,
+        photo_rejection_reason: null,
+        updated_at: now,
+      })
+      .eq('id', personId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to approve photo: ${error.message}`);
+    this.logger.log(
+      `Photo approved for person ${personId} by admin ${adminUserId} (submitter: ${person.photo_pending_by_user_id})`,
+    );
+    return updated;
+  }
+
+  /** Admin rejeita: limpa `photo_pending_*`, opcionalmente registra motivo. */
+  async rejectPendingPhoto(personId: string, adminUserId: string, reason?: string) {
+    const person = await this.findById(personId);
+    if (!person.photo_pending_url) {
+      throw new BadRequestException('Esta pessoa não tem foto pendente.');
+    }
+
+    const now = new Date().toISOString();
+    const { data: updated, error } = await this.supabaseService.client
+      .from('people')
+      .update({
+        photo_pending_url: null,
+        photo_pending_by_user_id: null,
+        photo_pending_at: null,
+        photo_rejected_at: now,
+        photo_rejection_reason: reason || null,
+        updated_at: now,
+      })
+      .eq('id', personId)
+      .select()
+      .single();
+
+    if (error) throw new Error(`Failed to reject photo: ${error.message}`);
+    this.logger.log(
+      `Photo rejected for person ${personId} by admin ${adminUserId} (reason: ${reason || '—'})`,
+    );
+    return updated;
   }
 }

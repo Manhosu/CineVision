@@ -33,7 +33,9 @@ interface EmployeePermissions {
   can_view_purchases: boolean;
   can_view_top10: boolean;
   can_view_online_users: boolean;
+  can_view_active_users: boolean;
   can_manage_discounts: boolean;
+  can_add_people_photos: boolean;
 }
 
 export default function AdminDashboard() {
@@ -357,7 +359,32 @@ export default function AdminDashboard() {
       ),
       gradient: 'from-teal-600 to-cyan-700',
       shadow: 'shadow-teal-500/50'
-    }
+    },
+    {
+      title: 'Fotos pendentes',
+      description: 'Aprovar ou rejeitar fotos enviadas por funcionários',
+      href: '/admin/photos-pending',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      ),
+      gradient: 'from-amber-600 to-yellow-700',
+      shadow: 'shadow-amber-500/50',
+    },
+    {
+      title: 'Pessoas sem foto',
+      description: 'Adicionar fotos a atores e diretores sem foto',
+      href: '/employee/photos',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      ),
+      gradient: 'from-pink-600 to-rose-700',
+      shadow: 'shadow-pink-500/50',
+    },
   ];
 
   // Hide cards an employee shouldn't see, based on their permissions.
@@ -373,6 +400,7 @@ export default function AdminDashboard() {
     if (perms?.can_view_purchases) allowed.add('/admin/purchases');
     if (perms?.can_view_top10) allowed.add('/admin/top10');
     if (perms?.can_manage_discounts) allowed.add('/admin/discounts');
+    if (perms?.can_add_people_photos) allowed.add('/employee/photos');
     return allowed;
   })();
 
