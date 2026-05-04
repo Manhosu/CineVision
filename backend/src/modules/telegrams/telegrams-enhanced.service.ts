@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { createHmac } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -540,7 +540,57 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * @param userId - User ID for logging purposes
    * @returns Single-use invite link or null if failed
    */
-  private async createInviteLinkForUser(groupLink: string, userId: string): Promise<string | null> {
+  /**
+   * Re-acesso pelo dashboard (Igor pediu): cliente que já comprou clica
+   * em "Assistir" no Dashboard → backend valida ownership da purchase
+   * paga, gera invite single-use de 24h. Cliente entra no grupo, mesmo
+   * se saiu antes, sem expor link permanente que dá pra encaminhar.
+   *
+   * Throws ForbiddenException se o user não comprou esse content.
+   */
+  async getOrCreateAccessLinkForPurchasedContent(
+    userId: string,
+    contentId: string,
+  ): Promise<{ link: string; expiresInHours?: number; mode: 'single_use' | 'fallback_raw' }> {
+    // 1. Valida que o user tem purchase paga desse content.
+    const { data: purchases } = await this.supabase
+      .from('purchases')
+      .select('id, status')
+      .eq('user_id', userId)
+      .eq('content_id', contentId)
+      .in('status', ['paid', 'PAID', 'completed', 'COMPLETED'])
+      .limit(1);
+
+    if (!purchases || purchases.length === 0) {
+      throw new ForbiddenException('Você não tem acesso a este conteúdo.');
+    }
+
+    // 2. Lê o telegram_group_link do content.
+    const { data: content } = await this.supabase
+      .from('content')
+      .select('telegram_group_link')
+      .eq('id', contentId)
+      .maybeSingle();
+
+    const raw = content?.telegram_group_link?.trim();
+    if (!raw) {
+      throw new BadRequestException('Conteúdo sem grupo do Telegram configurado.');
+    }
+
+    // 3. Tenta criar invite single-use 24h. Se for Chat ID numérico ou
+    // username público, getChatIdFromLink resolve e a Bot API gera o
+    // invite. Se for link privado (`t.me/+`), getChatIdFromLink retorna
+    // null e caímos em fallback abaixo (manda o link cru, mesmo
+    // comportamento da entrega original).
+    const single = await this.createInviteLinkForUser(raw, userId);
+    if (single) {
+      return { link: single, expiresInHours: 24, mode: 'single_use' };
+    }
+
+    return { link: raw, mode: 'fallback_raw' };
+  }
+
+  async createInviteLinkForUser(groupLink: string, userId: string): Promise<string | null> {
     try {
       // Extract chat ID from the group link
       // Telegram group links format: https://t.me/+AbCdEfGhIjK or https://t.me/joinchat/AbCdEfGhIjK

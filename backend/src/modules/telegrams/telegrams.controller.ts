@@ -1,7 +1,9 @@
-import { Controller, Post, Body, Headers, Logger, Get } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, Headers, Logger, Get, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TelegramsService } from './telegrams.service';
 import { TelegramsEnhancedService } from './telegrams-enhanced.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GetUser } from '../auth/decorators/get-user.decorator';
 import {
   InitiateTelegramPurchaseDto,
   TelegramPurchaseResponseDto,
@@ -19,6 +21,31 @@ export class TelegramsController {
     private readonly telegramsEnhancedService: TelegramsEnhancedService,
   ) {
     this.logger.log('TelegramsController initialized');
+  }
+
+  // Igor pediu (04/05): re-acesso pelo dashboard. Cliente já comprou,
+  // vai assistir outro dia, clica em "Assistir" — backend valida
+  // ownership e gera invite single-use de 24h on-the-fly. Sem expor
+  // link permanente que dá pra encaminhar pra terceiros.
+  @Post('access-link/:contentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Generate single-use Telegram invite link for purchased content',
+    description:
+      'Validates the authenticated user owns a paid purchase of contentId, then returns a single-use invite link (24h expiry) generated via Bot API.',
+  })
+  @ApiResponse({ status: 200, description: 'Invite link generated' })
+  @ApiResponse({ status: 403, description: 'User did not purchase this content' })
+  @ApiResponse({ status: 400, description: 'Content has no Telegram group configured' })
+  async getAccessLink(
+    @Param('contentId') contentId: string,
+    @GetUser() user: any,
+  ) {
+    return this.telegramsEnhancedService.getOrCreateAccessLinkForPurchasedContent(
+      user.sub,
+      contentId,
+    );
   }
 
   @Post('webhook')
