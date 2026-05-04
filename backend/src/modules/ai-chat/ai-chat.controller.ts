@@ -73,6 +73,18 @@ export class AiChatController {
     return this.aiChatService.getConversationMessages(id);
   }
 
+  // N3 — health check da IA. Conta quantas conversas estão pausadas
+  // por claude_failure nas últimas 24h pra mostrar badge global no
+  // /admin/ai-chat. Igor vê "5 conversas em falha" → vai conferir
+  // saldo Anthropic / status da API key.
+  @Get('admin/ai-chat/health')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async getHealth() {
+    return this.aiChatService.getClaudeHealth();
+  }
+
   /**
    * Proxy de mídia do Telegram. Recebe um `file_id` (que veio do
    * webhook quando cliente enviou foto/documento) e devolve o

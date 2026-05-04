@@ -35,6 +35,32 @@ const formatValue = (v: any): string => {
   return String(v);
 };
 
+// N2 — detecta se um valor é um link/ID do Telegram que vale a pena
+// expor com botão "Abrir grupo" antes do admin aprovar.
+const isTelegramRef = (v: any): boolean => {
+  if (typeof v !== 'string' || !v.trim()) return false;
+  const s = v.trim();
+  // URL t.me em qualquer formato
+  if (/^https?:\/\/t\.me\//i.test(s)) return true;
+  // @username
+  if (/^@[a-zA-Z0-9_]{4,}$/.test(s)) return true;
+  // Chat ID numérico (-100XXX...)
+  if (/^-?\d{6,}$/.test(s)) return true;
+  return false;
+};
+
+const telegramHref = (v: string): string => {
+  const s = v.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith('@')) return `https://t.me/${s.slice(1)}`;
+  if (/^-?\d+$/.test(s)) {
+    // Chat ID puro não dá pra abrir direto pelo browser; abre busca
+    // generic do app web do Telegram pra Igor copiar/conferir.
+    return `https://web.telegram.org/`;
+  }
+  return s;
+};
+
 export default function EditRequestsPage() {
   const [tab, setTab] = useState<Status>('pending');
   const [requests, setRequests] = useState<EditRequest[]>([]);
@@ -228,10 +254,27 @@ export default function EditRequestsPage() {
                 {Object.keys(selected.changes).map((field) => {
                   const before = selected.original_snapshot?.[field];
                   const after = selected.changes[field];
+                  const isTelegramField =
+                    field === 'telegram_group_link' ||
+                    isTelegramRef(after) ||
+                    isTelegramRef(before);
                   return (
                     <div key={field} className="rounded border border-white/5 p-3">
-                      <div className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
-                        {field}
+                      <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-zinc-500">
+                        <span>{field}</span>
+                        {/* N2 — botão pra abrir o grupo Telegram antes
+                            de aprovar. Igor pediu pra super-visionar
+                            o que o funcionário pôs antes de validar. */}
+                        {isTelegramField && isTelegramRef(after) && /^https?:\/\//i.test(String(after)) && (
+                          <a
+                            href={telegramHref(String(after))}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded bg-blue-600/20 px-2 py-0.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/30"
+                          >
+                            🔗 Abrir grupo
+                          </a>
+                        )}
                       </div>
                       <div className="grid gap-2 md:grid-cols-2">
                         <div>

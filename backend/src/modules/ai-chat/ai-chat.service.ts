@@ -253,22 +253,54 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     const t0 = Date.now();
     let completion: Awaited<ReturnType<typeof this.claude.complete>>;
     try {
-      completion = await this.claude.complete({
-        system: systemPrompt,
-        messages: history,
-        maxTokens: 512,
-      });
+      // N3 — Igor reportou IA não respondendo recorrentemente
+      // (claude_failure se repetindo). Maioria das falhas Anthropic é
+      // transitória (timeout, 529 overload, rate limit momentâneo).
+      // Tenta até 3x com backoff curto antes de cair no fallback.
+      let attempt = 0;
+      let lastErr: any;
+      while (attempt < 3) {
+        try {
+          completion = await this.claude.complete({
+            system: systemPrompt,
+            messages: history,
+            maxTokens: 512,
+          });
+          if (attempt > 0) {
+            this.logger.log(
+              `Claude succeeded on attempt ${attempt + 1} for conversation ${conversation.id}`,
+            );
+          }
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          attempt++;
+          if (attempt < 3) {
+            const backoffMs = 500 * attempt; // 500ms, 1000ms
+            this.logger.warn(
+              `Claude attempt ${attempt} failed (${err?.response?.status || err.message}), retrying in ${backoffMs}ms…`,
+            );
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
+        }
+      }
+      if (!completion!) throw lastErr;
     } catch (err: any) {
       const t1 = Date.now();
       this.logger.error(
-        `Claude completion failed after ${t1 - t0}ms for conversation ${conversation.id}: ${err.message}`,
+        `Claude completion failed after ${t1 - t0}ms (3 attempts) for conversation ${conversation.id}: ${err.message}`,
       );
       // Fallback gracioso: pausa a conversa e chama Igor em vez de
       // deixar o cliente sem resposta (que era o sintoma reportado —
       // "IA não respondeu, repeti 3x até vir resposta"). A mensagem
       // do cliente já foi salva no append acima.
       await this.pauseConversation(conversation.id, 'claude_failure');
-      await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+      // N3 — throttle: só notifica Igor 1x por conversa em janela de
+      // 30 min, pra não spammar quando Anthropic está fora do ar e
+      // 50 clientes mandam msg em sequência.
+      if (await this.shouldNotifyClaudeFailure(conversation.id)) {
+        await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+      }
       return {
         text: '',
         paused: true,
@@ -749,6 +781,64 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         paused_at: null,
       })
       .eq('id', conversationId);
+  }
+
+  // N3 — health check da IA pra badge global no painel.
+  async getClaudeHealth() {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const [{ count: failedCount }, { count: totalActive }] = await Promise.all([
+      this.supabase.client
+        .from('ai_conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('paused_reason', 'claude_failure')
+        .gte('paused_at', since),
+      this.supabase.client
+        .from('ai_conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('ai_enabled', true)
+        .gte('last_message_at', since),
+    ]);
+
+    const failed = failedCount || 0;
+    const active = totalActive || 0;
+    const total = failed + active;
+    const failRate = total > 0 ? failed / total : 0;
+
+    return {
+      failed_24h: failed,
+      active_24h: active,
+      fail_rate: Number(failRate.toFixed(3)),
+      // Badge é "warning" se >5 falhas em 24h ou taxa >20%, "critical"
+      // se >20 ou taxa >50%. Igor consegue dimensionar o problema.
+      status:
+        failed > 20 || failRate > 0.5
+          ? 'critical'
+          : failed > 5 || failRate > 0.2
+          ? 'warning'
+          : 'healthy',
+    };
+  }
+
+  // N3 — Em memória: última vez que notificamos claude_failure por
+  // conversation. Throttle de 30min impede spam quando Anthropic
+  // está fora do ar e clientes em rajada disparam dezenas de falhas.
+  private claudeFailureNotifiedAt = new Map<string, number>();
+
+  private async shouldNotifyClaudeFailure(conversationId: string): Promise<boolean> {
+    const now = Date.now();
+    const last = this.claudeFailureNotifiedAt.get(conversationId);
+    const THIRTY_MIN = 30 * 60 * 1000;
+    if (last && now - last < THIRTY_MIN) return false;
+    this.claudeFailureNotifiedAt.set(conversationId, now);
+    // GC: remove entradas antigas (>2h) pra evitar leak
+    if (this.claudeFailureNotifiedAt.size > 200) {
+      const cutoff = now - 2 * 60 * 60 * 1000;
+      for (const [k, v] of this.claudeFailureNotifiedAt.entries()) {
+        if (v < cutoff) this.claudeFailureNotifiedAt.delete(k);
+      }
+    }
+    return true;
   }
 
   private async notifyAdminForTakeover(

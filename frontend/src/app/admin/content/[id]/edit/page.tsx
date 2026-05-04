@@ -584,17 +584,26 @@ export default function AdminContentEditPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-2">Link do Grupo Telegram *</label>
+                  <label className="block text-sm font-medium mb-2">
+                    Link do Grupo Telegram (ou Chat ID) *
+                  </label>
+                  {/* N4 — type="url" rejeitava ID numérico (-100XXX...).
+                      Trocado pra "text" pra aceitar tanto link de
+                      convite quanto Chat ID, em paridade com a tela
+                      de criação. */}
                   <input
-                    type="url"
+                    type="text"
                     value={telegramGroupLink}
                     onChange={(e) => setTelegramGroupLink(e.target.value)}
                     className={`w-full px-4 py-2 bg-dark-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 ${
                       !telegramGroupLink.trim() ? 'border-red-500/50' : 'border-white/10'
                     }`}
-                    placeholder="https://t.me/..."
+                    placeholder="https://t.me/+AbCdEfGhIjK ou -1001234567890"
                     required
                   />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Chat ID numérico (-100XXX) é o formato recomendado — o bot precisa estar no grupo como admin com permissão de criar links.
+                  </p>
                 </div>
               </div>
 

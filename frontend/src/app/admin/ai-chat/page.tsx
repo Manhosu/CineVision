@@ -124,6 +124,14 @@ interface BusinessConnection {
   updated_at: string;
 }
 
+// N3 — health check da IA pra saber se Claude API está respondendo.
+interface AiHealth {
+  failed_24h: number;
+  active_24h: number;
+  fail_rate: number;
+  status: 'healthy' | 'warning' | 'critical';
+}
+
 export default function AiChatAdmin() {
   const [tab, setTab] = useState<Tab>('conversations');
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -132,6 +140,7 @@ export default function AiChatAdmin() {
   const [training, setTraining] = useState<Training>({ system_prompt: '', faq_pairs: [] });
   const [flags, setFlags] = useState<Flags>({ telegram: false, whatsapp: false, telegram_business: false });
   const [businessConnections, setBusinessConnections] = useState<BusinessConnection[]>([]);
+  const [health, setHealth] = useState<AiHealth | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadConversations = async () => {
@@ -140,6 +149,15 @@ export default function AiChatAdmin() {
       setConversations(data);
     } catch (err: any) {
       toast.error(err.message);
+    }
+  };
+
+  const loadHealth = async () => {
+    try {
+      const data = await api.get<AiHealth>('/api/v1/admin/ai-chat/health');
+      setHealth(data);
+    } catch {
+      // silent — banner some se health falhar (não é crítico)
     }
   };
 
@@ -196,7 +214,13 @@ export default function AiChatAdmin() {
   };
 
   useEffect(() => {
-    Promise.all([loadConversations(), loadTraining(), loadFlags(), loadBusinessConnections()]).finally(() => setLoading(false));
+    Promise.all([
+      loadConversations(),
+      loadTraining(),
+      loadFlags(),
+      loadBusinessConnections(),
+      loadHealth(),
+    ]).finally(() => setLoading(false));
   }, []);
 
   // Polling 5s pra observar conversas em tempo real (Igor pediu —
@@ -213,6 +237,14 @@ export default function AiChatAdmin() {
     const id = setInterval(tickAll, 5000);
     return () => clearInterval(id);
   }, [tab, selected?.id]);
+
+  // N3 — health check Claude a cada 60s. Atualiza badge global.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') loadHealth();
+    }, 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const takeover = async (id: string) => {
     try {
@@ -273,7 +305,37 @@ export default function AiChatAdmin() {
   return (
     <div className="mx-auto max-w-6xl p-6 text-white">
       <AdminBackButton />
-      <h1 className="mb-6 text-3xl font-bold">Atendimento IA</h1>
+      <h1 className="mb-3 text-3xl font-bold">Atendimento IA</h1>
+
+      {/* N3 — banner global de saúde do Claude. Igor vê quando muitas
+          conversas pausaram por claude_failure e sabe que precisa
+          conferir saldo Anthropic. */}
+      {health && health.status !== 'healthy' && (
+        <div
+          className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+            health.status === 'critical'
+              ? 'border-red-500/40 bg-red-600/10 text-red-200'
+              : 'border-amber-500/40 bg-amber-600/10 text-amber-200'
+          }`}
+        >
+          <strong>
+            {health.status === 'critical' ? '🚨 Claude API com problemas críticos' : '⚠ Claude API instável'}
+          </strong>
+          {' — '}
+          {health.failed_24h} conversas pausaram nas últimas 24h
+          {health.fail_rate > 0 && ` (${(health.fail_rate * 100).toFixed(0)}% das ativas)`}.
+          Conferir saldo/API key em{' '}
+          <a
+            href="https://console.anthropic.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:no-underline"
+          >
+            console.anthropic.com
+          </a>
+          .
+        </div>
+      )}
 
       <div className="mb-4 flex gap-3 border-b border-white/10">
         <TabBtn current={tab} value="conversations" onClick={setTab}>

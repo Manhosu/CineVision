@@ -24,29 +24,44 @@ function EmployeeProductivity({ employeeId }: { employeeId: string }) {
   const [days, setDays] = useState(30);
   const [data, setData] = useState<ProductivityResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // N1 — Igor reportou que o gráfico não atualiza (dado em cache no
+  // React state). Agora load() é reexposto pra botão "Atualizar" e
+  // pra polling 30s automático.
+  const load = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      const to = new Date().toISOString();
+      const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+      const r = await api.get<ProductivityResponse>(
+        `/api/v1/admin/employees/${employeeId}/productivity?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      );
+      setData(r);
+      setLastUpdated(new Date());
+    } catch (err: any) {
+      if (!silent) toast.error(err.message || 'Falha ao carregar produtividade');
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        setLoading(true);
-        const to = new Date().toISOString();
-        const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-        const r = await api.get<ProductivityResponse>(
-          `/api/v1/admin/employees/${employeeId}/productivity?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-        );
-        if (!cancelled) setData(r);
-      } catch (err: any) {
-        if (!cancelled) toast.error(err.message || 'Falha ao carregar produtividade');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
     load();
-    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId, days]);
 
-  if (loading) return <p className="text-sm text-zinc-500">Carregando...</p>;
+  // N1 — polling 30s pra atualizar o gráfico em tempo real enquanto
+  // a aba está aberta. Pausa quando aba escondida.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') load(true);
+    }, 30000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, days]);
+
+  if (loading && !data) return <p className="text-sm text-zinc-500">Carregando...</p>;
   if (!data) return null;
 
   // Bar chart: maior valor define a escala (largura proporcional).
@@ -64,10 +79,10 @@ function EmployeeProductivity({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="space-y-4 text-sm">
-      {/* Range selector */}
+      {/* Range selector + Atualizar */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-zinc-500">Período:</span>
-        {[7, 15, 30, 60, 90].map((n) => (
+        {[1, 3, 7, 15, 30, 60, 90].map((n) => (
           <button
             key={n}
             onClick={() => setDays(n)}
@@ -77,9 +92,24 @@ function EmployeeProductivity({ employeeId }: { employeeId: string }) {
                 : 'border-white/10 text-zinc-400 hover:bg-white/5'
             }`}
           >
-            {n}d
+            {n === 1 ? 'Hoje' : `${n}d`}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[10px] text-zinc-600">
+            {lastUpdated
+              ? `atualizado ${lastUpdated.toLocaleTimeString('pt-BR')}`
+              : '—'}
+          </span>
+          <button
+            onClick={() => load()}
+            disabled={loading}
+            className="rounded-lg border border-white/10 px-2 py-1 text-xs text-zinc-400 transition hover:bg-white/5 disabled:opacity-50"
+            title="Atualizar agora"
+          >
+            ↻
+          </button>
+        </div>
       </div>
 
       {/* Totals */}

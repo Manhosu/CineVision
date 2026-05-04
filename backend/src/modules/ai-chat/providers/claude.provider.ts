@@ -51,7 +51,11 @@ export class ClaudeProvider {
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
         },
-        timeout: 30000,
+        // N3 — antes 30s. Igor reportou IA "demorando 1m40 ou não
+        // respondendo". 12s é mais que suficiente pra Claude responder
+        // em condição normal (~3-5s); se passou disso é melhor cair no
+        // retry/fallback rápido do que segurar a thread.
+        timeout: 12000,
       },
     );
 
