@@ -197,10 +197,21 @@ export default function AdminContentCreatePage() {
         backendData.total_episodes = seriesInfo.totalEpisodes;
       }
 
+      // BUG-FIX (E2E): sem Authorization Bearer o backend tratava como
+      // anônimo, gravando createdById=null. Resultado: conteúdo criado
+      // por funcionário ficava órfão — não contava na produtividade,
+      // não passava no getEditCapability, edição depois caía em
+      // "blocked" em vez de "needs_approval". Igor reportou no IMG_8812.
+      const token =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
+          : '';
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         credentials: 'include',
         body: JSON.stringify(backendData),
