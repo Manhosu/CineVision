@@ -119,6 +119,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
     this.catalogSyncService = service;
   }
 
+  /**
+   * Igor reportou (04/05): bot estava enviando link com `cine-vision-murex.vercel.app`
+   * em vez do domínio oficial. Causa: env var `FRONTEND_URL` no Render
+   * estava com a URL Vercel antiga. Em vez de depender só da env var,
+   * sanitizamos: se a URL configurada apontar pra `vercel.app`, ignora
+   * e retorna o domínio oficial. Assim o bot fica imune a env var
+   * obsoleta sem precisar redeploy.
+   */
+  private getFrontendUrl(): string {
+    const OFFICIAL = 'https://www.cinevisionapp.com.br';
+    const configured = this.configService.get<string>('FRONTEND_URL');
+    if (!configured) return OFFICIAL;
+    if (/vercel\.app/i.test(configured)) {
+      this.logger.warn(
+        `FRONTEND_URL "${configured}" aponta pra Vercel (legado). Forçando ${OFFICIAL}.`,
+      );
+      return OFFICIAL;
+    }
+    return configured;
+  }
+
   // ==================== NOVO FLUXO: VERIFICAÇÃO DE E-MAIL ====================
 
   /**
@@ -725,6 +746,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
   // ==================== CALLBACKS DO BOT ====================
 
+  // Igor reportou (04/05): bot estava enviando 2x a mesma mensagem
+  // de "/minhascompras" (uma com URL Vercel antiga, outra com a oficial).
+  // Causa: 2 instâncias do backend processando o mesmo webhook (deploy
+  // antigo + novo coexistindo, ou backend local rodando junto com
+  // produção). Mitigação: idempotência por `update_id`. Reusa o Set
+  // `processedUpdates` que o polling já tinha — agora webhook e
+  // polling compartilham o mesmo cache, então mesmo se as duas formas
+  // estiverem ativas em instâncias diferentes, cada update só roda 1x
+  // por instância. (Não resolve duplicação entre instâncias, só dentro
+  // da mesma instância — pra caso real Igor precisa garantir 1 deploy.)
+  private isUpdateAlreadyProcessed(updateId: number | undefined): boolean {
+    if (typeof updateId !== 'number') return false;
+    if (this.processedUpdates.has(updateId)) return true;
+    this.processedUpdates.add(updateId);
+    if (this.processedUpdates.size > this.MAX_PROCESSED_CACHE) {
+      const first = this.processedUpdates.values().next().value;
+      if (typeof first === 'number') this.processedUpdates.delete(first);
+    }
+    return false;
+  }
+
   async handleWebhook(webhookData: any, signature?: string) {
     try {
       this.logger.log('🔔 Webhook received:', JSON.stringify(webhookData).substring(0, 200));
@@ -736,6 +778,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
           this.logger.warn('Invalid webhook signature');
           return { status: 'invalid_signature' };
         }
+      }
+
+      // Idempotência por update_id (proteção contra instância duplicada).
+      if (this.isUpdateAlreadyProcessed(webhookData?.update_id)) {
+        this.logger.warn(
+          `⏭️ Skipping duplicate update_id=${webhookData.update_id} (already processed)`,
+        );
+        return { status: 'duplicate' };
       }
 
       // Process different types of updates
@@ -1896,7 +1946,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         // Idempotency: if already delivered, just confirm to user without re-sending
         if (purchase?.delivery_sent) {
           this.logger.log(`📦 Purchase ${purchaseId} already delivered, sending short confirmation`);
-          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const frontendUrl = this.getFrontendUrl();
           const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
           await this.sendMessage(chatId,
             `✅ *Pagamento já confirmado!*\n\nSeu conteudo ja foi entregue. Acesse pelo botao abaixo.\n\n🛍 Para realizar novas compras no aplicativo, digite /start`,
@@ -1940,7 +1990,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
           const contentTitle = content?.title || 'Conteudo';
           const priceText = (purchase.amount_cents / 100).toFixed(2);
-          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const frontendUrl = this.getFrontendUrl();
           const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
 
           await this.sendMessage(chatId,
@@ -1992,7 +2042,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
               const content = Array.isArray(confirmedPurchase.content) ? confirmedPurchase.content[0] : confirmedPurchase.content;
               const contentTitle = content?.title || 'Conteudo';
               const priceText = (confirmedPurchase.amount_cents / 100).toFixed(2);
-              const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+              const frontendUrl = this.getFrontendUrl();
               const dashUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
 
               await this.sendMessage(chatId,
@@ -2406,7 +2456,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           const content = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
           const contentTitle = content?.title || 'Conteudo';
           const priceText = (purchase.amount_cents / 100).toFixed(2);
-          const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+          const frontendUrl = this.getFrontendUrl();
           const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
 
           await this.sendMessage(chatId,
@@ -2462,7 +2512,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
 
     // Gerar link permanente autenticado do catálogo
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+    const frontendUrl = this.getFrontendUrl();
     const catalogUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/`;
 
     const welcomeMessage = `🎬 *Bem-vindo ao CineVision!*
@@ -2483,7 +2533,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
 👇 Clique no botão abaixo para ver nosso catálogo:`;
 
-    const siteUrl = process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br';
+    const siteUrl = this.getFrontendUrl();
 
     await this.sendMessage(chatId, welcomeMessage, {
       parse_mode: 'Markdown',
@@ -2514,7 +2564,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
 
       // Gerar link permanente de auto-login baseado no telegram_id
-      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+      const frontendUrl = this.getFrontendUrl();
       const autoLoginUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${user.telegram_id}&redirect=/`;
 
       await this.sendMessage(chatId,
@@ -2539,7 +2589,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private async handleMyPurchasesCommand(chatId: number, telegramUserId: number) {
     try {
       // Gerar link da dashboard com autologin baseado no telegram_id
-      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+      const frontendUrl = this.getFrontendUrl();
       const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${telegramUserId}&redirect=/dashboard`;
 
       const message = `📱 *Minhas Compras*
@@ -3091,7 +3141,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           try {
             // Generate auto-login link to dashboard
             const token = await this.generatePermanentToken(user.telegram_id);
-            const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+            const frontendUrl = this.getFrontendUrl();
             dashboardUrl = `${frontendUrl}/auth/auto-login?token=${token}`;
             tokenGenerated = true;
 
@@ -3120,7 +3170,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       }
 
       // Enviar mensagem de confirmação com botões inline
-      const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+      const frontendUrl = this.getFrontendUrl();
       const catalogUrl = tokenGenerated
         ? dashboardUrl.replace('/dashboard', '/catalog')
         : `${frontendUrl}/catalog`;
@@ -3202,7 +3252,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     this.logger.log(`Watch video callback disabled - redirecting to dashboard. Chat: ${chatId}, Data: ${data}`);
 
     // Redirecionar usuário para o dashboard
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://www.cinevisionapp.com.br';
+    const frontendUrl = this.getFrontendUrl();
     const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${telegramUserId}&redirect=/dashboard`;
 
     await this.sendMessage(chatId,
