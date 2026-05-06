@@ -57,11 +57,11 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 - [x] **N14** — `/admin/content/manage`: coluna "Adicionado por" + botão Telegram inline (`7853ec4`)
 - [x] **N16** — `WhatsAppNumberGate` envolvendo `/dashboard` (não só `/minha-lista`) (`36bdcfd`)
 
-### 🟡 Médio (3)
+### 🟡 Médio (1)
 - [x] **N7** — Actions row `justify-center sm:justify-start` pra alinhar botão com preço centralizado em mobile (`7f4645b`)
 - [ ] **N10** — Splash sem áudio + animação corta no Telegram in-app browser
-- [ ] **N11** — Busca insensível a acentos + título secundário inglês (auditar deploy do RPC)
-- [ ] **N13** — Filtro "Usuários ativos" toggleable por funcionário (auditar M9 em produção)
+- [x] **N11** — `fallbackAccentInsensitiveSearch` no searchContent (NFD strip) + migration RPC stagada em supabase/migrations (`6437495`)
+- [x] **N13** — Card "Usuários Ativos" só aparece pra admin/moderator ou funcionário com `can_view_active_users: true` (`0a15067`)
 - [x] **N18** — Anti-duplicata: debounce 400ms hits `/content/movies?search=` → alerta amarelo "⚠️ Já existe..." (`c3b9387`+`c3f98d8`)
 
 ### 🟢 Baixo (1)
