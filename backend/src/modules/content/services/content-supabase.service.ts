@@ -180,6 +180,14 @@ export class ContentSupabaseService {
         }
       }
 
+      // N11 (Igor 04/05): se RPC retornou vazio, tenta o fallback JS
+      // acento-insensível antes de devolver lista vazia. Cobre o caso
+      // de search_content existir mas não ter unaccent ativo.
+      if (sortedResults.length === 0) {
+        this.logger.warn(`[N11] RPC returned 0 for "${search}" — trying accent-insensitive JS fallback`);
+        return this.accentInsensitiveFallback(search, contentType, page, limit, sort);
+      }
+
       return {
         movies: sortedResults,
         total,
@@ -188,7 +196,86 @@ export class ContentSupabaseService {
         totalPages: Math.ceil(total / limit),
       };
     } catch (error) {
-      this.logger.warn(`Smart search RPC failed, falling back to ILIKE: ${error}`);
+      this.logger.warn(`Smart search RPC failed, falling back to accent-insensitive JS: ${error}`);
+      return this.accentInsensitiveFallback(search, contentType, page, limit, sort);
+    }
+  }
+
+  /**
+   * N11 (Igor 04/05): JS-side accent-insensitive search.
+   * Igor reportou que "diario" não acha "Diário". A migration
+   * 003-smart-search.sql não foi aplicada em produção e o ILIKE do
+   * Postgres não normaliza acentos sem a extensão unaccent.
+   * Baixa todos publicados do tipo (cap 500), normaliza title+description
+   * via NFD + strip diacritics e filtra in-memory. Para ~250 conteúdos é
+   * O(n) e cabe em <50ms.
+   */
+  private async accentInsensitiveFallback(
+    search: string,
+    contentType: string,
+    page: number,
+    limit: number,
+    sort: string,
+  ) {
+    try {
+      const { data: all } = await this.supabaseService.client
+        .from('content')
+        .select('*')
+        .eq('status', ContentStatus.PUBLISHED)
+        .eq('content_type', contentType)
+        .limit(500);
+
+      this.logger.log(
+        `[N11] accentInsensitiveFallback loaded ${all?.length || 0} records for type=${contentType} query="${search}"`,
+      );
+
+      const normalize = (s: string) =>
+        (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const q = normalize(search.trim());
+      this.logger.log(`[N11] normalizedQuery: "${q}"`);
+
+      const filtered = (all || []).filter((c: any) => {
+        return normalize(c.title).includes(q)
+          || normalize(c.description || '').includes(q);
+      });
+      this.logger.log(`[N11] filtered to ${filtered.length} matches`);
+
+      // Sort
+      const sorted = [...filtered];
+      switch (sort) {
+        case 'newest':
+          sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          break;
+        case 'popular':
+          sorted.sort((a, b) => (b.views_count || 0) - (a.views_count || 0));
+          break;
+        case 'rating':
+          sorted.sort((a, b) => (b.imdb_rating || 0) - (a.imdb_rating || 0));
+          break;
+        case 'price_low':
+          sorted.sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
+          break;
+        case 'price_high':
+          sorted.sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0));
+          break;
+        default:
+          sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      }
+
+      const offset = (page - 1) * limit;
+      const paged = sorted.slice(offset, offset + limit);
+      const total = sorted.length;
+
+      return {
+        movies: paged,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      };
+    } catch (err: any) {
+      this.logger.error(`[N11] accentInsensitiveFallback failed: ${err.message}`);
+      // Last resort: legacy ILIKE
       return this.ilikeFallbackSearch(search, contentType, page, limit, sort);
     }
   }
