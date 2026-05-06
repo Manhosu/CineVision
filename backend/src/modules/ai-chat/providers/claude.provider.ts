@@ -27,6 +27,7 @@ export type ClaudeFailureKind =
   | 'model_unavailable' // 404/400 com `model not found`
   | 'timeout' // axios timeout (12s)
   | 'network' // erro de rede sem resposta
+  | 'config_missing' // ANTHROPIC_API_KEY não configurada no env
   | 'unknown';
 
 export class ClaudeApiError extends Error {
@@ -117,7 +118,17 @@ export class ClaudeProvider {
   }): Promise<AiCompletionResult> {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      throw new Error('ANTHROPIC_API_KEY not configured');
+      // Lança ClaudeApiError com kind específico em vez de Error
+      // genérico — assim ai-chat.service mapeia pra paused_reason
+      // 'claude_config_missing' e o banner mostra hint correto pra
+      // Igor (configurar env var no Render).
+      throw new ClaudeApiError(
+        'config_missing',
+        null,
+        'n/a',
+        null,
+        'ANTHROPIC_API_KEY não configurada no ambiente do backend. Adicione em Render Dashboard → Environment.',
+      );
     }
 
     const primaryModel =

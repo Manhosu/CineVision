@@ -133,6 +133,7 @@ type ClaudeFailureKind =
   | 'model_unavailable'
   | 'timeout'
   | 'network'
+  | 'config_missing'
   | 'unknown';
 
 interface AiHealth {
@@ -155,6 +156,7 @@ const KIND_HINTS: Record<ClaudeFailureKind, string> = {
   model_unavailable: '🚧 Modelo configurado indisponível. Sistema está tentando fallback automaticamente.',
   timeout: '⏰ Claude demorou >12s. Pode ser rede ou Anthropic lento.',
   network: '🌐 Erro de rede. Verificar conectividade do Render com api.anthropic.com.',
+  config_missing: '⚙️ ANTHROPIC_API_KEY não configurada no Render. Adicionar em Render Dashboard → cinevision-backend → Environment, depois clicar em "Reativar conversas pausadas".',
   unknown: '❓ Erro não classificado. Ver logs do Render pra detalhes.',
 };
 

@@ -307,6 +307,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         kind === 'model_unavailable' ? 'claude_model_unavailable' :
         kind === 'timeout' ? 'claude_timeout' :
         kind === 'network' ? 'claude_network' :
+        kind === 'config_missing' ? 'claude_config_missing' :
         'claude_failure';
       await this.pauseConversation(conversation.id, pauseReason);
       // N3 — throttle: só notifica Igor 1x por conversa em janela de
@@ -916,6 +917,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         reason === 'claude_model_unavailable' ? 'model_unavailable' :
         reason === 'claude_timeout' ? 'timeout' :
         reason === 'claude_network' ? 'network' :
+        reason === 'claude_config_missing' ? 'config_missing' :
         'unknown';
       byKind[kind] = (byKind[kind] || 0) + 1;
     }
