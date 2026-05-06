@@ -287,14 +287,28 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       if (!completion!) throw lastErr;
     } catch (err: any) {
       const t1 = Date.now();
+      // N9 — agora classificamos o erro Claude (auth/rate_limit/
+      // overloaded/low_balance/model_unavailable/timeout/network).
+      // Persiste o `kind` no paused_reason pra Igor ver no painel
+      // exatamente que tipo de falha está acontecendo.
+      const kind = err?.kind ?? 'claude_failure';
+      const status = err?.statusCode ?? null;
       this.logger.error(
-        `Claude completion failed after ${t1 - t0}ms (3 attempts) for conversation ${conversation.id}: ${err.message}`,
+        `Claude failure after ${t1 - t0}ms (3 attempts) for conv ${conversation.id}: kind=${kind} status=${status} msg="${err?.message || 'unknown'}"`,
       );
       // Fallback gracioso: pausa a conversa e chama Igor em vez de
-      // deixar o cliente sem resposta (que era o sintoma reportado —
-      // "IA não respondeu, repeti 3x até vir resposta"). A mensagem
-      // do cliente já foi salva no append acima.
-      await this.pauseConversation(conversation.id, 'claude_failure');
+      // deixar o cliente sem resposta. A mensagem do cliente já foi
+      // salva no append acima.
+      const pauseReason =
+        kind === 'auth' ? 'claude_auth' :
+        kind === 'rate_limit' ? 'claude_rate_limit' :
+        kind === 'low_balance' ? 'claude_low_balance' :
+        kind === 'overloaded' ? 'claude_overloaded' :
+        kind === 'model_unavailable' ? 'claude_model_unavailable' :
+        kind === 'timeout' ? 'claude_timeout' :
+        kind === 'network' ? 'claude_network' :
+        'claude_failure';
+      await this.pauseConversation(conversation.id, pauseReason);
       // N3 — throttle: só notifica Igor 1x por conversa em janela de
       // 30 min, pra não spammar quando Anthropic está fora do ar e
       // 50 clientes mandam msg em sequência.
@@ -783,15 +797,19 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       .eq('id', conversationId);
   }
 
-  // N3 — health check da IA pra badge global no painel.
+  // N3 + N9 — health check da IA pra badge global no painel.
+  // Agora também desagrega por tipo de falha (auth/rate_limit/
+  // low_balance/overloaded/timeout/etc). Igor vê no banner não só
+  // "X conversas pausadas" mas QUE TIPO de falha está acontecendo.
   async getClaudeHealth() {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const [{ count: failedCount }, { count: totalActive }] = await Promise.all([
+    // Lista todas as conversas pausadas com motivos claude_*.
+    const [{ data: pausedRows }, { count: totalActive }] = await Promise.all([
       this.supabase.client
         .from('ai_conversations')
-        .select('id', { count: 'exact', head: true })
-        .eq('paused_reason', 'claude_failure')
+        .select('paused_reason')
+        .like('paused_reason', 'claude_%')
         .gte('paused_at', since),
       this.supabase.client
         .from('ai_conversations')
@@ -800,15 +818,36 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         .gte('last_message_at', since),
     ]);
 
-    const failed = failedCount || 0;
+    const failed = pausedRows?.length || 0;
     const active = totalActive || 0;
     const total = failed + active;
     const failRate = total > 0 ? failed / total : 0;
+
+    // Conta por kind. Mapeamento de paused_reason → kind humano.
+    const byKind: Record<string, number> = {};
+    for (const row of pausedRows || []) {
+      const reason = row.paused_reason as string;
+      const kind =
+        reason === 'claude_auth' ? 'auth' :
+        reason === 'claude_rate_limit' ? 'rate_limit' :
+        reason === 'claude_low_balance' ? 'low_balance' :
+        reason === 'claude_overloaded' ? 'overloaded' :
+        reason === 'claude_model_unavailable' ? 'model_unavailable' :
+        reason === 'claude_timeout' ? 'timeout' :
+        reason === 'claude_network' ? 'network' :
+        'unknown';
+      byKind[kind] = (byKind[kind] || 0) + 1;
+    }
+
+    // Causa dominante (pra mostrar no banner com hint específico).
+    const dominantKind = Object.entries(byKind).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
     return {
       failed_24h: failed,
       active_24h: active,
       fail_rate: Number(failRate.toFixed(3)),
+      by_kind: byKind,
+      dominant_kind: dominantKind,
       // Badge é "warning" se >5 falhas em 24h ou taxa >20%, "critical"
       // se >20 ou taxa >50%. Igor consegue dimensionar o problema.
       status:

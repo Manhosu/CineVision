@@ -124,13 +124,39 @@ interface BusinessConnection {
   updated_at: string;
 }
 
-// N3 — health check da IA pra saber se Claude API está respondendo.
+// N3 + N9 — health check da IA pra saber se Claude API está respondendo.
+type ClaudeFailureKind =
+  | 'auth'
+  | 'rate_limit'
+  | 'overloaded'
+  | 'low_balance'
+  | 'model_unavailable'
+  | 'timeout'
+  | 'network'
+  | 'unknown';
+
 interface AiHealth {
   failed_24h: number;
   active_24h: number;
   fail_rate: number;
+  by_kind?: Partial<Record<ClaudeFailureKind, number>>;
+  dominant_kind?: ClaudeFailureKind | null;
   status: 'healthy' | 'warning' | 'critical';
 }
+
+// N9 — hint específico no banner por tipo de falha. Igor sabe
+// exatamente o que fazer (recarregar saldo, esperar rate limit,
+// rotacionar key, etc).
+const KIND_HINTS: Record<ClaudeFailureKind, string> = {
+  auth: '🔑 API key inválida ou revogada — rotacionar em console.anthropic.com → Settings → API keys',
+  rate_limit: '⏱ Rate limit (muitas requisições por minuto). Anthropic aplica limites mais apertados quando saldo está baixo — recarregar resolve.',
+  low_balance: '💸 Saldo insuficiente — recarregar em console.anthropic.com → Credit balance',
+  overloaded: '🔥 Anthropic sobrecarregado (529). Geralmente passa em alguns minutos.',
+  model_unavailable: '🚧 Modelo configurado indisponível. Sistema está tentando fallback automaticamente.',
+  timeout: '⏰ Claude demorou >12s. Pode ser rede ou Anthropic lento.',
+  network: '🌐 Erro de rede. Verificar conectividade do Render com api.anthropic.com.',
+  unknown: '❓ Erro não classificado. Ver logs do Render pra detalhes.',
+};
 
 export default function AiChatAdmin() {
   const [tab, setTab] = useState<Tab>('conversations');
@@ -324,16 +350,32 @@ export default function AiChatAdmin() {
           {' — '}
           {health.failed_24h} conversas pausaram nas últimas 24h
           {health.fail_rate > 0 && ` (${(health.fail_rate * 100).toFixed(0)}% das ativas)`}.
-          Conferir saldo/API key em{' '}
-          <a
-            href="https://console.anthropic.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:no-underline"
-          >
-            console.anthropic.com
-          </a>
-          .
+          {health.dominant_kind && (
+            <div className="mt-2 text-xs opacity-90">
+              <strong>Causa dominante:</strong> {KIND_HINTS[health.dominant_kind]}
+            </div>
+          )}
+          {health.by_kind && Object.keys(health.by_kind).length > 1 && (
+            <div className="mt-1 text-xs opacity-75">
+              Distribuição:{' '}
+              {Object.entries(health.by_kind)
+                .sort((a, b) => b[1]! - a[1]!)
+                .map(([k, n]) => `${k}=${n}`)
+                .join(', ')}
+            </div>
+          )}
+          <div className="mt-2 text-xs">
+            Conferir saldo/API key em{' '}
+            <a
+              href="https://console.anthropic.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:no-underline"
+            >
+              console.anthropic.com
+            </a>
+            .
+          </div>
         </div>
       )}
 
