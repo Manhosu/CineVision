@@ -85,6 +85,17 @@ export class AiChatController {
     return this.aiChatService.getClaudeHealth();
   }
 
+  // Igor (06/05): após recarregar saldo Anthropic, o banner ficou
+  // preso porque conversas pausadas no histórico ainda contam. Esse
+  // endpoint reativa em batch todas as pausadas por claude_*.
+  @Post('admin/ai-chat/reactivate-paused')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async reactivatePaused() {
+    return this.aiChatService.reactivatePausedClaudeConversations();
+  }
+
   /**
    * Proxy de mídia do Telegram. Recebe um `file_id` (que veio do
    * webhook quando cliente enviou foto/documento) e devolve o

@@ -389,6 +389,30 @@ export default function AiChatAdmin() {
             </a>
             .
           </div>
+          {/* Igor (06/05): após recarregar saldo Anthropic, as pausas
+              antigas continuam contando no banner. Esse botão reativa
+              em batch tudo que está paused_reason LIKE 'claude_%'. */}
+          <div className="mt-3">
+            <button
+              onClick={async () => {
+                if (!confirm('Reativar todas as conversas que pausaram por falha do Claude? Use isso após recarregar saldo Anthropic ou rotacionar API key.')) return;
+                try {
+                  const result = await api.post<{ reactivated: number }>(
+                    '/api/v1/admin/ai-chat/reactivate-paused',
+                    {},
+                  );
+                  toast.success(`${result.reactivated} conversa(s) reativada(s)`);
+                  await loadHealth();
+                  await loadConversations();
+                } catch (err: any) {
+                  toast.error(err?.message || 'Falha ao reativar');
+                }
+              }}
+              className="rounded-md border border-current/40 px-3 py-1.5 text-xs font-semibold hover:bg-current/10 transition-colors"
+            >
+              ↻ Reativar conversas pausadas
+            </button>
+          </div>
         </div>
       )}
 

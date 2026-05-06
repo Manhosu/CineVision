@@ -817,6 +817,31 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       .eq('id', conversationId);
   }
 
+  /**
+   * Igor (06/05): após recarregar saldo Anthropic, o banner continua
+   * mostrando porque as conversas pausadas com paused_reason LIKE
+   * 'claude_%' nas últimas 24h ainda contam — incluindo as que pausaram
+   * antes da recarga. Esse método reativa todas elas em batch e devolve
+   * a contagem do que foi limpo. Como bonus, limpa o `paused_reason` e
+   * `paused_at` pra não confundir auditoria futura.
+   */
+  async reactivatePausedClaudeConversations() {
+    const { data, error } = await this.supabase.client
+      .from('ai_conversations')
+      .update({
+        ai_enabled: true,
+        paused_reason: null,
+        paused_at: null,
+      })
+      .like('paused_reason', 'claude_%')
+      .select('id');
+
+    if (error) {
+      throw new Error(`Failed to reactivate paused conversations: ${error.message}`);
+    }
+    return { reactivated: (data || []).length };
+  }
+
   // N3 + N9 — health check da IA pra badge global no painel.
   // Agora também desagrega por tipo de falha (auth/rate_limit/
   // low_balance/overloaded/timeout/etc). Igor vê no banner não só
