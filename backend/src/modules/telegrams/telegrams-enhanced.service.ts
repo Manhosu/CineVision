@@ -572,7 +572,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
   async getOrCreateAccessLinkForPurchasedContent(
     userId: string,
     contentId: string,
-  ): Promise<{ link: string; expiresInHours?: number; mode: 'single_use' | 'fallback_raw' }> {
+  ): Promise<{
+    link: string;
+    fixedLink?: string | null;
+    expiresInHours?: number;
+    mode: 'single_use' | 'fallback_raw';
+  }> {
     // 1. Valida que o user tem purchase paga desse content.
     const { data: purchases } = await this.supabase
       .from('purchases')
@@ -605,7 +610,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // comportamento da entrega original).
     const single = await this.createInviteLinkForUser(raw, userId);
     if (single) {
-      return { link: single, expiresInHours: 24, mode: 'single_use' };
+      // N6 (Igor 04/05): além do single-use, gerar tb um link fixo com
+      // `creates_join_request: true`. Se o cliente compartilhar esse
+      // link com terceiros, eles caem numa fila pra Igor aprovar
+      // manualmente — fica registrado quem está tentando entrar sem
+      // ter comprado. Falha em gerar o fixo não bloqueia o single-use.
+      const fixed = await this.createFixedRequestJoinLink(raw, userId).catch(() => null);
+      return { link: single, fixedLink: fixed, expiresInHours: 24, mode: 'single_use' };
     }
 
     // N5 (vídeo Igor 7:06 PM): se admin colou Chat ID numérico (`-100XXX`)
@@ -623,7 +634,84 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     // Caso contrário (link de convite legado tipo `https://t.me/+...`),
     // manda o link cru — abre direto no Telegram sem precisar do bot.
-    return { link: raw, mode: 'fallback_raw' };
+    return { link: raw, fixedLink: null, mode: 'fallback_raw' };
+  }
+
+  /**
+   * N6 (Igor 04/05): envia mensagem com 2 botões de acesso ao grupo
+   * (single-use 24h + fixo request-to-join) pro telegram chat do cliente.
+   * Usado pelos paths de confirmação de pagamento (webhook + "Já paguei").
+   * Falha em qualquer parte é apenas logada, não propaga.
+   */
+  async sendGroupAccessLinks(
+    chatId: number,
+    userId: string,
+    contentId: string,
+  ): Promise<void> {
+    try {
+      const access = await this.getOrCreateAccessLinkForPurchasedContent(userId, contentId).catch(
+        (err) => {
+          this.logger.warn(`sendGroupAccessLinks: getAccess failed (user=${userId}, content=${contentId}): ${err.message}`);
+          return null;
+        },
+      );
+      if (!access?.link) return;
+
+      const buttons: Array<Array<{ text: string; url: string }>> = [
+        [{ text: '🔑 Acesso Único (24h)', url: access.link }],
+      ];
+      if (access.fixedLink) {
+        buttons.push([{ text: '📌 Acesso Pessoal (compartilhável)', url: access.fixedLink }]);
+      }
+      const fixedDescription = access.fixedLink
+        ? `\n📌 *Acesso Pessoal*: link permanente. Se você compartilhar com alguém, essa pessoa cai numa fila pra ser aprovada manualmente — assim você não perde o acesso.`
+        : '';
+      await this.sendMessage(
+        chatId,
+        `🎬 *Acesso ao Grupo do Telegram*\n\n` +
+          `🔑 *Acesso Único*: link de uso único, válido por 24h. Use pra entrar imediatamente.${fixedDescription}\n\n` +
+          `_Não compartilhe esses links — eles estão vinculados à sua compra._`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: buttons },
+        },
+      );
+    } catch (err: any) {
+      this.logger.warn(`sendGroupAccessLinks failed (chat=${chatId}, content=${contentId}): ${err.message}`);
+    }
+  }
+
+  /**
+   * N6 (Igor 04/05): link fixo do grupo com `creates_join_request: true`.
+   * Cliente clica → cai numa fila de aprovação. Se o cliente original
+   * compartilhar esse link com um terceiro, o terceiro aparece pro Igor
+   * aprovar/rejeitar (consegue distinguir amigo legítimo de pirata).
+   *
+   * Diferente do single-use: não expira e pode ser usado múltiplas
+   * vezes — mas cada uso vira pedido manual de admin.
+   */
+  async createFixedRequestJoinLink(groupLink: string, userId: string): Promise<string | null> {
+    try {
+      const chatId = await this.getChatIdFromLink(groupLink);
+      if (!chatId) return null;
+
+      const response = await axios.post(`${this.botApiUrl}/createChatInviteLink`, {
+        chat_id: chatId,
+        creates_join_request: true,
+        name: `Fixo - User ${userId.substring(0, 8)}`,
+      });
+
+      if (response.data.ok) {
+        const link = response.data.result.invite_link;
+        this.logger.log(`Created fixed request-to-join link for user ${userId}: ${link}`);
+        return link;
+      }
+      this.logger.warn(`Failed to create fixed link: ${response.data.description}`);
+      return null;
+    } catch (error: any) {
+      this.logger.warn(`Error creating fixed link for user ${userId}: ${error.message}`);
+      return null;
+    }
   }
 
   async createInviteLinkForUser(groupLink: string, userId: string): Promise<string | null> {
@@ -2019,6 +2107,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
               reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashboardUrl }]] },
             }
           );
+
+          // N6 (Igor 04/05): se o conteúdo tem grupo Telegram configurado,
+          // envia 2 links (single-use 24h + fixo com request-to-join).
+          if (purchase.user_id && content?.telegram_group_link) {
+            await this.sendGroupAccessLinks(chatId, purchase.user_id, purchase.content_id);
+          }
         } else {
           await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.\n\n🛍 Para realizar novas compras no aplicativo, digite /start', {
             parse_mode: 'Markdown'
@@ -2064,6 +2158,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
                 `✅ *Pagamento Confirmado!*\n\n🎬 *${contentTitle}*\n💰 Valor: R$ ${priceText}\n\nSeu conteudo ja esta disponivel! Acesse pelo botao abaixo.\n\n🛍 Para realizar novas compras no aplicativo, digite /start`,
                 { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashUrl }]] } }
               );
+
+              // N6 — mesma lógica do path principal: envia 2 links se o
+              // conteúdo tem grupo Telegram configurado.
+              if (confirmedPurchase.user_id && content?.telegram_group_link) {
+                await this.sendGroupAccessLinks(chatId, confirmedPurchase.user_id, confirmedPurchase.content_id);
+              }
             }
 
             this.pendingPixPayments.delete(purchaseId);
@@ -3241,6 +3341,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
               telegramInviteLink = content.telegram_group_link;
             }
           }
+
+          // N6 (Igor 04/05): independente de auto-add ou link único,
+          // sempre envia mensagem com 2 links de acesso (single-use 24h
+          // + fixo request-to-join). Auto-add coloca o user no grupo
+          // imediatamente, mas se ele sair, ainda precisa dos links.
+          await this.sendGroupAccessLinks(parseInt(user.telegram_id), user.id, content.id);
         }
       }
 
