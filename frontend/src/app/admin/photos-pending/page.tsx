@@ -20,16 +20,31 @@ interface PendingPhoto {
   submitted_by: { id: string; name: string; email: string } | null;
 }
 
+interface PhotoStats {
+  pending: number;
+  missing: number;
+  rejected_last_7d: number;
+  employees_with_perm: { id: string; name: string; email: string; status: string }[];
+}
+
 export default function PhotosPendingPage() {
   const [items, setItems] = useState<PendingPhoto[]>([]);
+  const [stats, setStats] = useState<PhotoStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = async () => {
     try {
       setLoading(true);
-      const data = await api.get<PendingPhoto[]>('/api/v1/admin/people/photos/pending');
+      // Carrega pending + stats em paralelo. Stats é informativo —
+      // ajuda admin a entender se "vazio" é legítimo (ninguém submeteu)
+      // ou se ninguém tem permissão pra submeter.
+      const [data, statsData] = await Promise.all([
+        api.get<PendingPhoto[]>('/api/v1/admin/people/photos/pending'),
+        api.get<PhotoStats>('/api/v1/admin/people/photos/stats').catch(() => null),
+      ]);
       setItems(data);
+      setStats(statsData);
     } catch (err: any) {
       toast.error(err.message || 'Falha ao carregar pendentes');
     } finally {
@@ -77,11 +92,55 @@ export default function PhotosPendingPage() {
         podem submeter fotos para pessoas sem foto. Aqui você aprova ou rejeita.
       </p>
 
+      {/* Stats banner — ajuda admin a entender o estado do workflow */}
+      {stats && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-amber-500/30 bg-amber-600/5 p-3">
+            <div className="text-2xl font-bold text-amber-300">{stats.pending}</div>
+            <div className="text-xs text-zinc-400">pendentes agora</div>
+          </div>
+          <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+            <div className="text-2xl font-bold text-zinc-300">{stats.missing}</div>
+            <div className="text-xs text-zinc-500">pessoas sem foto</div>
+          </div>
+          <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+            <div className="text-2xl font-bold text-zinc-300">{stats.rejected_last_7d}</div>
+            <div className="text-xs text-zinc-500">rejeitadas (7d)</div>
+          </div>
+          <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+            <div className="text-2xl font-bold text-zinc-300">{stats.employees_with_perm.length}</div>
+            <div className="text-xs text-zinc-500">funcionários c/ permissão</div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-zinc-500">Carregando...</p>
       ) : items.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-zinc-900 p-8 text-center text-zinc-500">
-          Nenhuma foto pendente no momento.
+        <div className="rounded-xl border border-white/10 bg-zinc-900 p-8 text-center">
+          <p className="mb-3 text-zinc-300">Nenhuma foto pendente no momento.</p>
+          {stats && stats.employees_with_perm.length === 0 ? (
+            <p className="text-xs text-amber-400">
+              ⚠️ Nenhum funcionário tem a permissão <code className="rounded bg-zinc-800 px-1">can_add_people_photos</code>.
+              Habilite em <a href="/admin/employees" className="text-amber-300 underline">Funcionários</a> pra alguém poder enviar fotos.
+            </p>
+          ) : stats && stats.missing === 0 ? (
+            <p className="text-xs text-emerald-400">
+              ✅ Todas as {stats ? '739+' : ''} pessoas do catálogo já têm foto. Não há nada a aprovar.
+            </p>
+          ) : (
+            <div className="space-y-1 text-xs text-zinc-500">
+              <p>
+                Existem <strong className="text-zinc-300">{stats?.missing}</strong> pessoas sem foto no catálogo. Os{' '}
+                <strong className="text-zinc-300">{stats?.employees_with_perm.length}</strong> funcionário(s) com
+                permissão ({stats?.employees_with_perm.map((e) => e.name).join(', ')}) podem enviar fotos pelo painel{' '}
+                <a href="/employee/photos" className="text-zinc-300 underline">Pessoas sem foto</a>.
+              </p>
+              <p>
+                Quando alguém submeter uma foto, ela aparece aqui pra aprovação.
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

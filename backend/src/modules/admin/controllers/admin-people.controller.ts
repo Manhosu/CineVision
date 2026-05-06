@@ -45,6 +45,17 @@ export class AdminPeopleController {
     return this.peopleService.listPendingPhotos();
   }
 
+  @Get('photos/stats')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Photo workflow stats for admin diagnostics',
+    description:
+      'Igor reportou (06/05) que /admin/photos-pending mostra vazio. Esse endpoint mostra o estado completo: quantos pending, missing, rejeitados recentes, e quais funcionários têm permissão.',
+  })
+  async getPhotoStats() {
+    return this.peopleService.getPhotoWorkflowStats();
+  }
+
   @Get(':id')
   @Roles(UserRole.ADMIN, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Get person by ID' })

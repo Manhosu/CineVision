@@ -292,6 +292,58 @@ export class AdminPeopleService {
     return { status: 'pending' as const, person: updated };
   }
 
+  /**
+   * Stats do workflow de fotos pra admin entender o estado:
+   *  - pending: fotos aguardando aprovação (o que o /admin/photos-pending mostra)
+   *  - missing: pessoas sem foto e sem submissão pendente
+   *  - approved_by_employee: histórico de aprovações de fotos enviadas por funcionário
+   *  - rejected_recent: rejeições nos últimos 7 dias (pra admin acompanhar)
+   *  - employees_with_perm: quantos funcionários têm `can_add_people_photos`
+   *
+   * Igor (06/05): reportou que o painel de fotos pendentes "não mostra nada".
+   * Stats explicitas ajudam a entender se é estado vazio legítimo ou bug.
+   */
+  async getPhotoWorkflowStats() {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [
+      { count: pending },
+      { count: missing },
+      { count: rejectedRecent },
+      employeesWithPerm,
+    ] = await Promise.all([
+      this.supabaseService.client
+        .from('people')
+        .select('id', { count: 'exact', head: true })
+        .not('photo_pending_url', 'is', null),
+      this.supabaseService.client
+        .from('people')
+        .select('id', { count: 'exact', head: true })
+        .is('photo_url', null)
+        .is('photo_pending_url', null),
+      this.supabaseService.client
+        .from('people')
+        .select('id', { count: 'exact', head: true })
+        .gte('photo_rejected_at', sevenDaysAgo),
+      this.supabaseService.client
+        .from('employee_permissions')
+        .select('user_id, users!inner(id, name, email, status)', { count: 'exact' })
+        .eq('can_add_people_photos', true),
+    ]);
+
+    return {
+      pending: pending || 0,
+      missing: missing || 0,
+      rejected_last_7d: rejectedRecent || 0,
+      employees_with_perm: (employeesWithPerm.data || []).map((row: any) => ({
+        id: row.users?.id,
+        name: row.users?.name,
+        email: row.users?.email,
+        status: row.users?.status,
+      })),
+    };
+  }
+
   /** Lista fotos pendentes (admin). */
   async listPendingPhotos() {
     const { data, error } = await this.supabaseService.client
