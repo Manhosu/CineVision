@@ -45,12 +45,12 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 - [x] **URL Vercel sanitizada** + idempotência webhook (`694b808`)
 - [x] **Helper telegramAccess** — detecta link cru vs Chat ID e gera single-use (`bec7684`)
 
-### 🔴 Críticos pendentes (1)
+### 🔴 Críticos pendentes (todos entregues)
 - [x] **N5** — Toast claro quando bot não está no grupo (Chat ID válido mas createChatInviteLink falha) (`36bdcfd`)
 - [x] **N8** — PeopleTagInput envia `Authorization: Bearer` em search e find-or-create (`36bdcfd`)
 - [x] **N9** — ClaudeApiError discriminado + fallback de modelo + banner com causa dominante (`0b363ba`)
 - [x] **N12** — `getEditCapability` retorna `needs_approval` em vez de `blocked` em todos os caminhos não-diretos (`36bdcfd`)
-- [ ] **N15** — PIX Oasyfy reportado: cliente paga, comprovante OK, sistema mostra pendente
+- [x] **N15** — `OasyfyPollingService` (@Cron 2min) reconcilia webhook perdido consultando GET /transactions/{id} (`3dd7160`)
 
 ### 🟠 Alto (todos entregues)
 - [x] **N6** — `getOrCreateAccessLinkForPurchasedContent` retorna 2 links + helper `sendGroupAccessLinks` chamado em PIX confirmation + webhook delivery (`7cb2f67`)
