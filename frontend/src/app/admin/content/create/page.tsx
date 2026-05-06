@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
@@ -131,6 +131,47 @@ export default function AdminContentCreatePage() {
   const [showEpisodeManager, setShowEpisodeManager] = useState(false);
   const [currentSeason, setCurrentSeason] = useState(1);
   const [editingEpisode, setEditingEpisode] = useState<Episode | null>(null);
+
+  // N18 (Igor 04/05): anti-duplicata. Quando o admin digita o título,
+  // bate em /content/movies?search= ou /content/series?search= com debounce
+  // 400ms e mostra "⚠️ Já existe: ..." se aparecer match parcial. Não
+  // bloqueia o submit — só alerta visualmente, decisão fica com o admin.
+  const [duplicateMatches, setDuplicateMatches] = useState<{ id: string; title: string }[]>([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+
+  useEffect(() => {
+    const trimmed = formData.title.trim();
+    if (trimmed.length < 3) {
+      setDuplicateMatches([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        setCheckingDuplicates(true);
+        const endpoint = formData.content_type === 'series' ? 'series' : 'movies';
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/${endpoint}?search=${encodeURIComponent(trimmed)}&limit=5`
+        );
+        if (!res.ok) {
+          setDuplicateMatches([]);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+        setDuplicateMatches(
+          list
+            .filter((m: any) => m?.id && m?.title)
+            .slice(0, 5)
+            .map((m: any) => ({ id: m.id, title: m.title })),
+        );
+      } catch {
+        setDuplicateMatches([]);
+      } finally {
+        setCheckingDuplicates(false);
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [formData.title, formData.content_type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -581,6 +622,28 @@ export default function AdminContentCreatePage() {
                     className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
                     required
                   />
+                  {/* N18 — anti-duplicata: alerta visual, não bloqueia submit. */}
+                  {duplicateMatches.length > 0 && (
+                    <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                      <p className="text-sm text-yellow-300 font-medium mb-1.5">
+                        ⚠️ Já existe {formData.content_type === 'series' ? 'série' : 'filme'} com título parecido:
+                      </p>
+                      <ul className="text-sm text-yellow-200/90 space-y-0.5">
+                        {duplicateMatches.map((m) => (
+                          <li key={m.id} className="flex items-center gap-2">
+                            <span className="text-yellow-400">•</span>
+                            <span>{m.title}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-yellow-300/70 mt-1.5">
+                        Se for o mesmo conteúdo, edite o existente em vez de criar duplicado.
+                      </p>
+                    </div>
+                  )}
+                  {checkingDuplicates && duplicateMatches.length === 0 && formData.title.trim().length >= 3 && (
+                    <p className="mt-2 text-xs text-gray-500">Verificando duplicatas…</p>
+                  )}
                 </div>
               </div>
 
