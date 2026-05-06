@@ -608,6 +608,21 @@ export class TelegramsEnhancedService implements OnModuleInit {
       return { link: single, expiresInHours: 24, mode: 'single_use' };
     }
 
+    // N5 (vídeo Igor 7:06 PM): se admin colou Chat ID numérico (`-100XXX`)
+    // mas o bot ainda não foi adicionado como admin do grupo, o
+    // `createInviteLinkForUser` falha (chat not found) e o `raw` é só
+    // um número — não dá pra `window.open(-1003561516755)` no frontend.
+    // Em vez de mandar fallback inválido, devolve erro claro pra Igor
+    // saber que falta o passo operacional.
+    const isChatId = /^-?\d{6,}$/.test(raw);
+    if (isChatId) {
+      throw new BadRequestException(
+        'Não consegui gerar acesso a este grupo do Telegram. Verifique se @cinevisionv2bot foi adicionado como administrador do grupo, com permissão de "Convidar usuários via link".',
+      );
+    }
+
+    // Caso contrário (link de convite legado tipo `https://t.me/+...`),
+    // manda o link cru — abre direto no Telegram sem precisar do bot.
     return { link: raw, mode: 'fallback_raw' };
   }
 

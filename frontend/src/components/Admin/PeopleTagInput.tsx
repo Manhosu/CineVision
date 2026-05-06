@@ -41,7 +41,19 @@ export default function PeopleTagInput({ value, onChange, role, label, placehold
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_URL}/api/v1/admin/people?search=${encodeURIComponent(query)}&role=${role}`);
+        // N8 — AdminPeopleController foi protegido com guards na rodada
+        // de fotos (M8). Sem Bearer, a chamada cai em 401 e o input
+        // fica travado sem feedback visual ("não cria, não puxa lista"
+        // — vídeo 7:30:59 PM). Igual o bug do createContent (4d6d423).
+        const token =
+          (typeof window !== 'undefined' &&
+            (localStorage.getItem('access_token') ||
+              localStorage.getItem('auth_token'))) ||
+          '';
+        const res = await fetch(
+          `${API_URL}/api/v1/admin/people?search=${encodeURIComponent(query)}&role=${role}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
         if (res.ok) {
           const data = await res.json();
           // Filter out already selected
@@ -87,9 +99,17 @@ export default function PeopleTagInput({ value, onChange, role, label, placehold
     if (!name) return;
     setLoading(true);
     try {
+      const token =
+        (typeof window !== 'undefined' &&
+          (localStorage.getItem('access_token') ||
+            localStorage.getItem('auth_token'))) ||
+        '';
       const res = await fetch(`${API_URL}/api/v1/admin/people/find-or-create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ name, role }),
       });
       if (res.ok) {

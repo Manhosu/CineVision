@@ -203,7 +203,20 @@ export class EmployeesService {
    * Returns:
    * - 'direct'           → employee can edit and changes apply immediately
    * - 'needs_approval'   → employee can submit edit but it goes to admin queue
-   * - 'blocked'          → not allowed at all (e.g. someone else's content with no override)
+   * - 'blocked'          → user has no employee permissions at all (not even an employee)
+   *
+   * N12 (vídeos 8:18, 8:24, 8:36, 8:38 PM): Igor pediu controle TOTAL.
+   * Funcionário sem can_edit_own_content E funcionário tentando editar
+   * conteúdo de outro autor antes caíam em 'blocked' direto. Agora caem
+   * em 'needs_approval' — Igor aprova ou rejeita pelo painel.
+   *
+   * Apenas 2 casos retornam 'direct' (sem precisar admin):
+   *  1. Permissão `can_edit_any_content` (admin-like)
+   *  2. Próprio conteúdo dentro da janela `edit_window_hours`
+   *     (e funcionário tem `can_edit_own_content`)
+   *
+   * Tudo o mais → 'needs_approval'. Igor controla pelo painel.
+   * 'blocked' fica reservado pra quem não é funcionário (sem perms).
    */
   async getEditCapability(
     userId: string,
@@ -212,9 +225,8 @@ export class EmployeesService {
     const perms = await this.getPermissions(userId);
     if (!perms) return 'blocked';
 
-    // Admin override: can edit anything directly
+    // Caso 1: admin-like — edita qualquer coisa direto.
     if (perms.can_edit_any_content) return 'direct';
-    if (!perms.can_edit_own_content) return 'blocked';
 
     const { data: content } = await this.supabase.client
       .from('content')
@@ -223,17 +235,20 @@ export class EmployeesService {
       .single();
 
     if (!content) return 'blocked';
-    if (content.createdById !== userId) return 'blocked';
 
-    // Use ?? so that 0 (always-pending-approval) is honored
-    const windowHours = perms.edit_window_hours ?? 5;
-    const ageMs = Date.now() - new Date(content.created_at).getTime();
-    const maxMs = windowHours * 60 * 60 * 1000;
+    // Caso 2: próprio conteúdo dentro da janela → direct.
+    if (
+      perms.can_edit_own_content &&
+      content.createdById === userId
+    ) {
+      const windowHours = perms.edit_window_hours ?? 5;
+      const ageMs = Date.now() - new Date(content.created_at).getTime();
+      const maxMs = windowHours * 60 * 60 * 1000;
+      if (ageMs <= maxMs) return 'direct';
+    }
 
-    // Within window: edit applies immediately
-    if (ageMs <= maxMs) return 'direct';
-
-    // After window: edit is allowed but needs admin approval
+    // Tudo o mais (sem can_edit_own_content, fora da janela, conteúdo
+    // de outro autor) → vira pending pra admin aprovar.
     return 'needs_approval';
   }
 

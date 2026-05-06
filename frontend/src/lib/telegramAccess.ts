@@ -62,7 +62,11 @@ export async function openContentGroup(
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      toast.error(err.message || 'Não foi possível gerar acesso ao grupo');
+      // N5 — backend devolve mensagem específica quando bot não foi
+      // adicionado ao grupo (Chat ID válido mas createChatInviteLink
+      // falhou). Toast longa pra Igor ler até o fim.
+      const msg = err.message || 'Não foi possível gerar acesso ao grupo';
+      toast.error(msg, { duration: 7000 });
       return false;
     }
 

@@ -8,6 +8,7 @@ import { Footer } from '@/components/Footer/Footer';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
 import { WhatsAppGate } from '@/components/WhatsApp/WhatsAppGate';
+import { WhatsAppNumberGate } from '@/components/WhatsApp/WhatsAppNumberGate';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 
@@ -315,10 +316,23 @@ export default function DashboardPage() {
     );
   };
 
+  // N16 (Igor 11:09 PM 04/05): "não está aparecendo mais o pop-up do
+  // WhatsApp". O WhatsAppNumberGate (cadastro do número, A11 da rodada
+  // 03/05) só estava em /minha-lista. Agora também envolve /dashboard
+  // pra usuário Telegram que ainda não cadastrou o número ver o
+  // pop-up obrigatório aqui também.
+  const needsWhatsappNumber =
+    !!user?.telegram_id && !(user as any)?.whatsapp;
+
   return (
     <div className="min-h-screen bg-dark-950">
       <Header />
 
+      <WhatsAppNumberGate
+        userId={user.id}
+        hasWhatsapp={!needsWhatsappNumber}
+        onSaved={() => { /* o gate atualiza localStorage; useAuth refaz o load no próximo navigate */ }}
+      >
       <WhatsAppGate
         userId={user.id}
         whatsappJoined={whatsappJoined}
@@ -507,6 +521,7 @@ export default function DashboardPage() {
       </div>
 
       </WhatsAppGate>
+      </WhatsAppNumberGate>
 
       <Footer />
     </div>
