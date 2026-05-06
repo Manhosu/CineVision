@@ -52,17 +52,17 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 - [x] **N12** — `getEditCapability` retorna `needs_approval` em vez de `blocked` em todos os caminhos não-diretos (`36bdcfd`)
 - [ ] **N15** — PIX Oasyfy reportado: cliente paga, comprovante OK, sistema mostra pendente
 
-### 🟠 Alto (1)
-- [ ] **N6** — Enviar 2 links pro cliente: single-use + link fixo (com request-to-join)
+### 🟠 Alto (todos entregues)
+- [x] **N6** — `getOrCreateAccessLinkForPurchasedContent` retorna 2 links + helper `sendGroupAccessLinks` chamado em PIX confirmation + webhook delivery (`7cb2f67`)
 - [x] **N14** — `/admin/content/manage`: coluna "Adicionado por" + botão Telegram inline (`7853ec4`)
 - [x] **N16** — `WhatsAppNumberGate` envolvendo `/dashboard` (não só `/minha-lista`) (`36bdcfd`)
 
-### 🟡 Médio (5)
-- [ ] **N7** — Preço descentralizado em mobile (queria centralizado em cima do botão)
+### 🟡 Médio (3)
+- [x] **N7** — Actions row `justify-center sm:justify-start` pra alinhar botão com preço centralizado em mobile (`7f4645b`)
 - [ ] **N10** — Splash sem áudio + animação corta no Telegram in-app browser
 - [ ] **N11** — Busca insensível a acentos + título secundário inglês (auditar deploy do RPC)
 - [ ] **N13** — Filtro "Usuários ativos" toggleable por funcionário (auditar M9 em produção)
-- [ ] **N18** — Sugerir filme existente ao digitar título no `/admin/content/create` (anti-duplicata)
+- [x] **N18** — Anti-duplicata: debounce 400ms hits `/content/movies?search=` → alerta amarelo "⚠️ Já existe..." (`c3b9387`+`c3f98d8`)
 
 ### 🟢 Baixo (1)
 - [ ] **N17** — Habilitar IA no DM pessoal do Igor (depois de N9 normalizar)
