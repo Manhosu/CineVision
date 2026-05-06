@@ -36,6 +36,23 @@ export default function CineVisionIntro() {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
 
+    // N10 (Igor 04/05): no navegador embutido do Telegram (WebApp), a
+    // animação corta no meio porque a janela é redimensionada pelo
+    // Telegram conforme abre, e o áudio nunca toca por causa do
+    // autoplay block. Igor pediu pra pular splash inteira nesse modo —
+    // cliente cai direto na home. Detectamos por:
+    //   1. window.Telegram.WebApp — SDK injetado quando rodando como
+    //      Mini App ou via in-app browser de chat.
+    //   2. UA contendo "Telegram" — fallback para in-app browser fora
+    //      do contexto de Mini App.
+    const isTelegramWebApp =
+      Boolean((window as any).Telegram?.WebApp) ||
+      /Telegram/i.test(navigator.userAgent);
+    if (isTelegramWebApp) {
+      sessionStorage.setItem(SESSION_KEY, '1');
+      return;
+    }
+
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
   }, []);
