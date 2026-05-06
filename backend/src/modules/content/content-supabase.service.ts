@@ -65,6 +65,19 @@ export class ContentSupabaseService {
 
       let sortedResults = Array.isArray(results) ? results : [];
 
+      // N11 (Igor 04/05): se o RPC retornou vazio MAS o usuário tinha
+      // search query, é provável que (a) a migration 003-smart-search
+      // não tem a extensão unaccent ativa em produção, ou (b) a função
+      // existe mas está degradada. Tenta o fallback JS-side antes de
+      // devolver vazio. Isso cobre o caso de RPC succeed-but-empty —
+      // que o catch sozinho não pegaria. ~50ms de overhead no path raro.
+      if (sortedResults.length === 0) {
+        this.logger.warn(
+          `RPC search_content returned 0 for "${search}" — trying JS-side accent-insensitive fallback`,
+        );
+        return this.fallbackAccentInsensitiveSearch(search, contentType, page, limit);
+      }
+
       // Apply secondary sort if not using relevance
       if (sort !== 'relevance' && sort !== 'created_at') {
         switch (sort) {
