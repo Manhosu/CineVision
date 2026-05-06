@@ -60,7 +60,7 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 ### 🟡 Médio (todos entregues)
 - [x] **N7** — Actions row `justify-center sm:justify-start` pra alinhar botão com preço centralizado em mobile (`7f4645b`)
 - [x] **N10** — Skip splash inteira em Telegram WebApp / UA Telegram (`083a4ff`)
-- [x] **N11** — `fallbackAccentInsensitiveSearch` no searchContent (NFD strip) + fallback se RPC retorna empty (`6437495`+`95ec703`) + migration stagada
+- [x] **N11** — `accentInsensitiveFallback` em `services/content-supabase.service.ts` (NFD strip) — testado em prod: "mae"→"Mãe Fora da Caixa", "diario"→"Diários de um Vampiro", "memorias"→"Memórias de um Verão" (`3d0fcab`)
 - [x] **N13** — Card "Usuários Ativos" só aparece pra admin/moderator ou funcionário com `can_view_active_users: true` (`0a15067`)
 - [x] **N18** — Anti-duplicata: debounce 400ms hits `/content/movies?search=` → alerta amarelo "⚠️ Já existe..." (`c3b9387`+`c3f98d8`)
 
