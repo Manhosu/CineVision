@@ -5,30 +5,51 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const WHATSAPP_LINK = 'https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy';
 const DISMISS_KEY = 'whatsapp_popup_dismissed';
-const SHOW_DELAY_MS = 3000;
+// Splash (CineVisionIntro.tsx) marca essa key quando termina ou quando
+// pula a animação. Igor (06/05) reportou que o popup do WhatsApp não
+// aparecia mais — o motivo era que esse useEffect esperava por
+// `splash_shown` (uma key antiga) que ninguém mais escreve.
+const SPLASH_KEY = 'cv_intro_played';
+// 5.5s da animação + 0.6s do fade out + 1s de respiro = ~7s.
+const SHOW_DELAY_MS = 7000;
+// Fallback: se o splash demorar absurdo (ou nunca rodar — segunda
+// visita na sessão), tenta mostrar o popup igual depois desse tempo.
+const HARD_TIMEOUT_MS = 10000;
 
 export function WhatsAppPopup() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     // Usar sessionStorage para mostrar uma vez por sessao (aparece toda vez que abrir o site)
     const dismissed = sessionStorage.getItem(DISMISS_KEY);
     if (dismissed) return;
 
-    // Wait for splash screen to finish before showing popup
+    let mainTimer: any = null;
+    let pollTimer: any = null;
+    const hardTimer = setTimeout(() => {
+      // Garantia absoluta: mostra mesmo se splash sentinel nunca aparecer.
+      setIsVisible(true);
+      if (mainTimer) clearTimeout(mainTimer);
+      if (pollTimer) clearTimeout(pollTimer);
+    }, HARD_TIMEOUT_MS);
+
     const checkSplash = () => {
-      const splashDone = sessionStorage.getItem('splash_shown');
+      const splashDone = sessionStorage.getItem(SPLASH_KEY);
       if (splashDone) {
-        const timer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
-        return () => clearTimeout(timer);
+        mainTimer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
+        return;
       }
-      // Splash still showing — check again shortly
-      const retry = setTimeout(checkSplash, 500);
-      return () => clearTimeout(retry);
+      pollTimer = setTimeout(checkSplash, 500);
     };
 
-    const cleanup = checkSplash();
-    return () => { if (cleanup) cleanup(); };
+    checkSplash();
+
+    return () => {
+      if (mainTimer) clearTimeout(mainTimer);
+      if (pollTimer) clearTimeout(pollTimer);
+      clearTimeout(hardTimer);
+    };
   }, []);
 
   const handleDismiss = () => {
