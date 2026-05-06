@@ -439,8 +439,11 @@ export default function ContentHero({
             </div>
           )}
 
-          {/* Actions row */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          {/* Actions row — N7 (Igor 04/05): em mobile, centralizar a row
+              pra que o botão "Comprar" alinhe visualmente com o preço
+              que já fica centralizado. Em sm+ volta pro layout original
+              (alinhado à esquerda) que combina com o título da hero. */}
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4">
             {/* Main CTA */}
             {checkingOwnership ? (
               <div className="h-12 w-40 bg-white/10 rounded-xl animate-pulse" />
