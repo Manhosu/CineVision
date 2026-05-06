@@ -7,6 +7,7 @@ import { StripeService } from './services/stripe.service';
 import { WooviService } from './services/woovi.service';
 import { NewBankService } from './services/new-bank.service';
 import { OasyfyService } from './services/oasyfy.service';
+import { OasyfyPollingService } from './services/oasyfy-polling.service';
 import { WooviWebhookService } from './services/woovi-webhook.service';
 import { PixQRCodeService } from './services/pix-qrcode.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
@@ -28,11 +29,11 @@ import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-o
 const conditionalControllers = [PaymentsController, StripeTestController, StripeWebhookController, WooviWebhookController, OasyfyWebhookController, TestPaymentController];
 
 const conditionalProviders = isTypeOrmEnabled()
-  ? [PaymentsService, PixService, StripeService, WooviService, NewBankService, OasyfyService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookService, {
+  ? [PaymentsService, PixService, StripeService, WooviService, NewBankService, OasyfyService, OasyfyPollingService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookService, {
       provide: 'IPaymentsService',
       useClass: PaymentsService,
     }]
-  : [PaymentsSupabaseService, StripeService, WooviService, NewBankService, OasyfyService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookSupabaseService, {
+  : [PaymentsSupabaseService, StripeService, WooviService, NewBankService, OasyfyService, OasyfyPollingService, PixProviderFactory, WooviWebhookService, PixQRCodeService, StripeWebhookSupabaseService, {
       provide: PaymentsService,
       useClass: PaymentsSupabaseService,
     }];
