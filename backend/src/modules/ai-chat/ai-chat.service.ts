@@ -692,6 +692,26 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     return data || [];
   }
 
+  /**
+   * N17 (Igor 04/05): toggle manual do is_enabled de uma business
+   * connection. Usado quando o Telegram não propaga o estado (Igor
+   * desativa/reativa via settings mas o webhook não chega) ou pra
+   * pausar IA temporariamente sem precisar mexer no Telegram.
+   */
+  async setBusinessConnectionEnabled(id: string, enabled: boolean) {
+    const { data, error } = await this.supabase.client
+      .from('telegram_business_connections')
+      .update({ is_enabled: enabled, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to update business connection ${id}: ${error.message}`);
+    }
+    return data;
+  }
+
   // ---------------------------------------------------------------------------
   // Admin controls
   // ---------------------------------------------------------------------------

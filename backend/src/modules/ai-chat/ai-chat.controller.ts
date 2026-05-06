@@ -203,6 +203,20 @@ export class AiChatController {
     return this.aiChatService.getBusinessConnections();
   }
 
+  // N17 (Igor 04/05): toggle manual do is_enabled. Igor estava com a
+  // IA inativa no DM pessoal e queria forçar reativação sem mexer no
+  // Telegram (que às vezes não propaga o estado).
+  @Put('admin/ai-chat/business-connections/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async toggleBusinessConnection(
+    @Param('id') id: string,
+    @Body() body: { enabled: boolean },
+  ) {
+    return this.aiChatService.setBusinessConnectionEnabled(id, body.enabled);
+  }
+
   @Put('admin/ai-chat/training')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

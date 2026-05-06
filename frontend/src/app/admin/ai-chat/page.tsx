@@ -239,6 +239,19 @@ export default function AiChatAdmin() {
     }
   };
 
+  // N17 — toggle manual da conexão business (Igor pode forçar reativação)
+  const toggleBusinessConnection = async (id: string, currentEnabled: boolean) => {
+    try {
+      await api.put(`/api/v1/admin/ai-chat/business-connections/${id}`, {
+        enabled: !currentEnabled,
+      });
+      toast.success(`Conexão ${!currentEnabled ? 'reativada' : 'desativada'}`);
+      await loadBusinessConnections();
+    } catch (err: any) {
+      toast.error(err.message);
+    }
+  };
+
   useEffect(() => {
     Promise.all([
       loadConversations(),
@@ -661,6 +674,18 @@ export default function AiChatAdmin() {
                             SÓ LEITURA
                           </span>
                         )}
+                        {/* N17 — toggle manual em caso do Telegram não propagar estado */}
+                        <button
+                          onClick={() => toggleBusinessConnection(c.id, c.is_enabled)}
+                          className={`mt-1 rounded px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                            c.is_enabled
+                              ? 'bg-zinc-700 text-zinc-300 hover:bg-zinc-600'
+                              : 'bg-green-600/30 text-green-300 hover:bg-green-600/50'
+                          }`}
+                          title={c.is_enabled ? 'Desativar IA nesta conexão' : 'Reativar IA nesta conexão'}
+                        >
+                          {c.is_enabled ? 'Desativar' : 'Reativar'}
+                        </button>
                       </div>
                     </div>
                   ))}
