@@ -96,6 +96,18 @@ export class AiChatController {
     return this.aiChatService.reactivatePausedClaudeConversations();
   }
 
+  // Igor (06/05): IA continua falhando mesmo após recarga e reativar.
+  // Esse endpoint dispara uma chamada Claude direta e devolve o erro
+  // bruto pra Igor ver no painel exatamente o que a Anthropic está
+  // respondendo (status, message, kind classificado).
+  @Post('admin/ai-chat/test-claude')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  async testClaude() {
+    return this.aiChatService.testClaudeRaw();
+  }
+
   /**
    * Proxy de mídia do Telegram. Recebe um `file_id` (que veio do
    * webhook quando cliente enviou foto/documento) e devolve o

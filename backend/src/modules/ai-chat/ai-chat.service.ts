@@ -818,6 +818,42 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
   }
 
   /**
+   * Igor (06/05): IA continua falhando mesmo após recarga + reativar.
+   * Bate na Claude API com um prompt mínimo e devolve o erro bruto
+   * (status, kind classificado, mensagem da Anthropic, body inteiro
+   * truncado). Permite diagnóstico sem precisar acessar Render logs.
+   */
+  async testClaudeRaw() {
+    const t0 = Date.now();
+    try {
+      const result = await this.claude.complete({
+        system: 'Diga apenas "ok".',
+        messages: [{ role: 'user', content: 'Teste' }],
+        maxTokens: 16,
+      });
+      return {
+        ok: true,
+        latency_ms: Date.now() - t0,
+        text: result.text,
+        input_tokens: result.inputTokens,
+        output_tokens: result.outputTokens,
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        latency_ms: Date.now() - t0,
+        kind: err?.kind ?? null,
+        statusCode: err?.statusCode ?? null,
+        model: err?.model ?? null,
+        message: err?.message ?? String(err),
+        anthropic_error: err?.anthropicError ?? null,
+        is_classified: err?.constructor?.name === 'ClaudeApiError',
+        error_class: err?.constructor?.name ?? typeof err,
+      };
+    }
+  }
+
+  /**
    * Igor (06/05): após recarregar saldo Anthropic, o banner continua
    * mostrando porque as conversas pausadas com paused_reason LIKE
    * 'claude_%' nas últimas 24h ainda contam — incluindo as que pausaram
