@@ -97,9 +97,75 @@ export class ContentSupabaseService {
       };
     } catch (error) {
       this.logger.error('Error in smart search:', error);
-      // Fallback to basic ILIKE search if RPC fails (e.g., function not yet created)
-      this.logger.warn('Falling back to basic ILIKE search');
-      return this.findAllMoviesBasic(page, limit, undefined, 'created_at', search);
+      // N11 (Igor 04/05): a migration 003-smart-search.sql ainda não foi
+      // aplicada em produção (Igor reportou que "diario" não acha
+      // "Diário"). Em vez de cair em ILIKE — que não normaliza acentos
+      // no Postgres sem a extensão unaccent — usamos um fallback JS:
+      // baixa todos publicados do tipo e filtra in-memory por título
+      // normalizado (NFD + strip diacritics). Para ~250 conteúdos é
+      // O(n) e cabe em <50ms. Some o RPC for aplicado, esse path nem
+      // executa.
+      this.logger.warn('Falling back to JS-side accent-insensitive search');
+      return this.fallbackAccentInsensitiveSearch(search, contentType, page, limit);
+    }
+  }
+
+  /**
+   * N11 — fallback acento-insensível em JS quando search_content RPC
+   * não está disponível. Filtra in-memory após buscar todos publicados.
+   */
+  private async fallbackAccentInsensitiveSearch(
+    search: string,
+    contentType?: string,
+    page = 1,
+    limit = 20,
+  ) {
+    try {
+      const where: any = { status: ContentStatus.PUBLISHED };
+      if (contentType) where.content_type = contentType;
+
+      const all = await this.supabaseClient.select('content', {
+        where,
+        limit: 500, // safety cap; catálogo atual é ~258
+        order: { column: 'created_at', ascending: false },
+      });
+
+      // U+0300..U+036F = "Combining Diacritical Marks" block (acentos
+      // separados depois da decomposição NFD). Removendo, "Mãe" → "mae".
+      const normalize = (s: string) =>
+        (s || '')
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .toLowerCase();
+
+      const normalizedQuery = normalize(search.trim());
+      const filtered = (Array.isArray(all) ? all : []).filter((c: any) => {
+        const title = normalize(c.title);
+        const description = normalize(c.description || '');
+        return title.includes(normalizedQuery) || description.includes(normalizedQuery);
+      });
+
+      const offset = (page - 1) * limit;
+      const paged = filtered.slice(offset, offset + limit);
+      const total = filtered.length;
+
+      return {
+        movies: paged,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit) || 1,
+          hasNext: page < Math.ceil(total / limit),
+          hasPrev: page > 1,
+        },
+      };
+    } catch (err) {
+      this.logger.error('fallbackAccentInsensitiveSearch failed:', err);
+      return {
+        movies: [],
+        pagination: { page, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false },
+      };
     }
   }
 
