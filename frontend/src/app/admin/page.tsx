@@ -404,9 +404,16 @@ export default function AdminDashboard() {
     return allowed;
   })();
 
+  // Igor (06/05): "Pessoas sem foto" é exclusivamente um workflow de
+  // funcionário. Admin tem o /admin/photos-pending pra aprovar, não
+  // precisa do card de submissão. Sempre filtra esse card pra admin.
+  const adminHiddenHrefs = new Set<string>([
+    '/employee/photos',
+  ]);
+
   const filteredQuickActions = employeeAllowedHrefs
     ? quickActions.filter((a) => employeeAllowedHrefs.has(a.href))
-    : quickActions;
+    : quickActions.filter((a) => !adminHiddenHrefs.has(a.href));
 
   // N13 (Igor 04/05): card "Usuários Ativos" só aparece pra admin/moderator
   // ou pra funcionário com can_view_active_users explicitamente true.

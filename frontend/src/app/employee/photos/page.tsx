@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
+import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 interface Person {
   id: string;
@@ -86,6 +87,8 @@ export default function EmployeePhotosPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-6 text-white">
+      {/* Igor (06/05): "ao entrar nao tem botao de retornar ao dashboard" */}
+      <AdminBackButton />
       <h1 className="mb-2 text-3xl font-bold">Pessoas sem foto</h1>
       <p className="mb-6 text-sm text-zinc-400">
         Selecione uma foto para o ator/diretor. Após o envio, ela ficará pendente
