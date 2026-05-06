@@ -157,7 +157,11 @@ export default function AdminContentCreatePage() {
           return;
         }
         const data = await res.json();
-        const list = Array.isArray(data) ? data : data?.items || data?.data || [];
+        // Backend retorna { movies: [...] } pra /movies e { series: [...] }
+        // pra /series. Os fallbacks (items/data) cobrem caso o shape mude.
+        const list = Array.isArray(data)
+          ? data
+          : data?.movies || data?.series || data?.items || data?.data || [];
         setDuplicateMatches(
           list
             .filter((m: any) => m?.id && m?.title)
