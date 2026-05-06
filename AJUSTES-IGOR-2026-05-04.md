@@ -64,8 +64,8 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 - [x] **N13** — Card "Usuários Ativos" só aparece pra admin/moderator ou funcionário com `can_view_active_users: true` (`0a15067`)
 - [x] **N18** — Anti-duplicata: debounce 400ms hits `/content/movies?search=` → alerta amarelo "⚠️ Já existe..." (`c3b9387`+`c3f98d8`)
 
-### 🟢 Baixo (1)
-- [ ] **N17** — Habilitar IA no DM pessoal do Igor (depois de N9 normalizar)
+### 🟢 Baixo (entregue)
+- [x] **N17** — Toggle manual `is_enabled` em business connections + UI no `/admin/ai-chat` (`19f6e82`)
 
 ### 🔧 Operacional Igor (fora do código)
 - [ ] Habilitar **auto-reload** em [console.anthropic.com](https://console.anthropic.com) — saldo $4.58 + auto-reload disabled (resolve N9 imediatamente)
