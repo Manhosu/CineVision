@@ -45,17 +45,17 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 - [x] **URL Vercel sanitizada** + idempotência webhook (`694b808`)
 - [x] **Helper telegramAccess** — detecta link cru vs Chat ID e gera single-use (`bec7684`)
 
-### 🔴 Críticos pendentes (5)
-- [ ] **N5** — PIX duplicado ainda reportado + dashboard "Assistir" não carrega quando bot não está no grupo
-- [ ] **N8** — Criar ator/diretor inline retorna 401 silencioso (PeopleTagInput sem `Authorization: Bearer`)
-- [ ] **N9** — Claude API: logging detalhado de status code + fallback de modelo + métrica
-- [ ] **N12** — TUDO que funcionário fizer fora-da-caixa virar pending (editar conteúdo de outro + excluir)
+### 🔴 Críticos pendentes (1)
+- [x] **N5** — Toast claro quando bot não está no grupo (Chat ID válido mas createChatInviteLink falha) (`36bdcfd`)
+- [x] **N8** — PeopleTagInput envia `Authorization: Bearer` em search e find-or-create (`36bdcfd`)
+- [x] **N9** — ClaudeApiError discriminado + fallback de modelo + banner com causa dominante (`0b363ba`)
+- [x] **N12** — `getEditCapability` retorna `needs_approval` em vez de `blocked` em todos os caminhos não-diretos (`36bdcfd`)
 - [ ] **N15** — PIX Oasyfy reportado: cliente paga, comprovante OK, sistema mostra pendente
 
-### 🟠 Alto (3)
+### 🟠 Alto (1)
 - [ ] **N6** — Enviar 2 links pro cliente: single-use + link fixo (com request-to-join)
-- [ ] **N14** — `/admin/content/manage`: mostrar "adicionado por <funcionário>" + botão "🔗 Telegram" inline
-- [ ] **N16** — Pop-up WhatsApp não aparece mais (regressão do A11 de 03/05)
+- [x] **N14** — `/admin/content/manage`: coluna "Adicionado por" + botão Telegram inline (`7853ec4`)
+- [x] **N16** — `WhatsAppNumberGate` envolvendo `/dashboard` (não só `/minha-lista`) (`36bdcfd`)
 
 ### 🟡 Médio (5)
 - [ ] **N7** — Preço descentralizado em mobile (queria centralizado em cima do botão)
