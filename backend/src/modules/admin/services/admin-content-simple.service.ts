@@ -18,7 +18,7 @@ export class AdminContentSimpleService {
   async getAllContent() {
     console.log('AdminContentSimpleService.getAllContent called');
 
-    const { data, error} = await this.supabaseService.client
+    const { data, error } = await this.supabaseService.client
       .from('content')
       .select('*')
       .order('created_at', { ascending: false });
@@ -28,7 +28,34 @@ export class AdminContentSimpleService {
       throw new Error(`Failed to fetch content: ${error.message}`);
     }
 
-    return data || [];
+    const contents = data || [];
+
+    // N14 (Igor 8:27 PM 04/05): incluir nome do criador (admin ou
+    // funcionário) na lista pra Igor supervisionar sem clicar em editar.
+    // Como `content` não tem FK formal pro users, fazemos lookup em
+    // memória (1 query batch + map em JS). Não filtramos `users` por
+    // role aqui pra também mostrar admin como criador.
+    const creatorIds = Array.from(
+      new Set(contents.map((c: any) => c.createdById).filter(Boolean)),
+    );
+
+    if (creatorIds.length === 0) {
+      return contents;
+    }
+
+    const { data: users } = await this.supabaseService.client
+      .from('users')
+      .select('id, name, email, role')
+      .in('id', creatorIds);
+
+    const byId = new Map<string, { id: string; name: string; email: string; role: string }>(
+      (users || []).map((u: any) => [u.id, u]),
+    );
+
+    return contents.map((c: any) => ({
+      ...c,
+      createdBy: c.createdById ? byId.get(c.createdById) || null : null,
+    }));
   }
 
   async getContentById(id: string) {

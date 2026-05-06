@@ -10,8 +10,10 @@ import {
   CheckCircle,
   ArrowLeft,
   Upload,
-  Pencil
+  Pencil,
+  Send,
 } from 'lucide-react';
+import { openContentGroup } from '@/lib/telegramAccess';
 
 interface Content {
   id: string;
@@ -22,6 +24,10 @@ interface Content {
   total_episodes?: number;
   created_at: string;
   status: string;
+  // N14 — backend agora retorna createdBy populado via JOIN em memória.
+  createdById?: string | null;
+  createdBy?: { id: string; name: string; email: string; role: string } | null;
+  telegram_group_link?: string | null;
 }
 
 export default function ContentManagePage() {
@@ -233,6 +239,9 @@ export default function ContentManagePage() {
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                     Status
                   </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                    Adicionado por
+                  </th>
                   <th className="px-6 py-4 text-right text-sm font-semibold text-gray-300">
                     Ações
                   </th>
@@ -275,6 +284,18 @@ export default function ContentManagePage() {
                         </span>
                       )}
                     </td>
+                    <td className="px-6 py-4">
+                      {content.createdBy ? (
+                        <div>
+                          <div className="text-sm text-white">{content.createdBy.name}</div>
+                          <div className="text-xs text-gray-400 capitalize">
+                            {content.createdBy.role?.toLowerCase() || 'usuário'}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500 italic">Sistema</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {/* Botão Publicar - só aparece se não estiver publicado */}
@@ -292,6 +313,13 @@ export default function ContentManagePage() {
                             )}
                           </button>
                         )}
+                        <button
+                          onClick={() => openContentGroup(content.id, content.telegram_group_link)}
+                          className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                          title="Abrir grupo Telegram"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => router.push(`/admin/content/${content.id}/edit`)}
                           className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
