@@ -142,6 +142,7 @@ export class ContentSupabaseService {
         limit: 500, // safety cap; catálogo atual é ~258
         order: { column: 'created_at', ascending: false },
       });
+      this.logger.log(`[N11] fallbackAccentInsensitiveSearch loaded ${Array.isArray(all) ? all.length : 'NOT_ARRAY'} records for type=${contentType} query="${search}"`);
 
       // U+0300..U+036F = "Combining Diacritical Marks" block (acentos
       // separados depois da decomposição NFD). Removendo, "Mãe" → "mae".
@@ -152,11 +153,18 @@ export class ContentSupabaseService {
           .toLowerCase();
 
       const normalizedQuery = normalize(search.trim());
+      this.logger.log(`[N11] normalizedQuery: "${normalizedQuery}" (from "${search}")`);
+      if (Array.isArray(all) && all.length > 0) {
+        const sample = all[0] as any;
+        this.logger.log(`[N11] sample record: title="${sample?.title}" → normalized="${normalize(sample?.title)}"`);
+      }
+
       const filtered = (Array.isArray(all) ? all : []).filter((c: any) => {
         const title = normalize(c.title);
         const description = normalize(c.description || '');
         return title.includes(normalizedQuery) || description.includes(normalizedQuery);
       });
+      this.logger.log(`[N11] filtered to ${filtered.length} matches`);
 
       const offset = (page - 1) * limit;
       const paged = filtered.slice(offset, offset + limit);

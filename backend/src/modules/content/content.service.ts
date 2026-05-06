@@ -96,15 +96,20 @@ export class ContentService {
     if (genre) qb.andWhere('categories.name = :genre', { genre });
 
     const all = await qb.getMany();
+    console.log(`[N11] Loaded ${all.length} movies for accent-insensitive search of "${search}"`);
 
+    // [̀-ͯ] = bloco "Combining Diacritical Marks". Escape
+    // Unicode explícito (não depende da codificação do source).
     const normalize = (s: string) =>
       (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
     const q = normalize(search.trim());
+    console.log(`[N11] Normalized query "${search}" → "${q}"`);
 
     const filtered = all.filter((m) => {
       return normalize(m.title || '').includes(q)
         || normalize((m as any).description || '').includes(q);
     });
+    console.log(`[N11] Filtered to ${filtered.length} matches`);
 
     // Sort in memory
     const sorted = [...filtered];
