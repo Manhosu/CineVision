@@ -310,11 +310,14 @@ export class EmployeesService {
     const day15 = new Date(now - 15 * 24 * 60 * 60 * 1000).toISOString();
     const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
 
+    // Igor (07/05): produtividade não pode contar filmes deletados.
+    // Soft-delete grava status=ARCHIVED — filtra fora.
     const countSince = async (since: string) => {
       const { count } = await this.supabase.client
         .from('content')
         .select('id', { count: 'exact', head: true })
         .eq('createdById', userId)
+        .neq('status', 'ARCHIVED')
         .gte('created_at', since);
       return count || 0;
     };
@@ -331,6 +334,7 @@ export class EmployeesService {
       .from('content')
       .select('id, title, created_at, content_type, status, telegram_group_link')
       .eq('createdById', userId)
+      .neq('status', 'ARCHIVED')
       .order('created_at', { ascending: false })
       .limit(200);
     return data || [];
@@ -368,6 +372,7 @@ export class EmployeesService {
       .from('content')
       .select('id, title, content_type, status, created_at')
       .eq('createdById', userId)
+      .neq('status', 'ARCHIVED')
       .gte('created_at', fromIso)
       .lte('created_at', toIso)
       .order('created_at', { ascending: false })

@@ -18,9 +18,12 @@ export class AdminContentSimpleService {
   async getAllContent() {
     console.log('AdminContentSimpleService.getAllContent called');
 
+    // Igor (07/05): soft-delete grava status=ARCHIVED. Esconde da lista
+    // de gerenciamento — admin não quer ver itens deletados misturados.
     const { data, error } = await this.supabaseService.client
       .from('content')
       .select('*')
+      .neq('status', 'ARCHIVED')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -122,6 +125,8 @@ export class AdminContentSimpleService {
       quality_label: data.quality_label || null,
       audio_type: data.audio_type || null,
       telegram_group_link: data.telegram_group_link || null,
+      // Igor (07/05): Chat ID separado — opcional, pra invite auto via bot.
+      telegram_chat_id: data.telegram_chat_id || null,
       age_rating: data.age_rating || null,
     };
 
@@ -388,12 +393,20 @@ export class AdminContentSimpleService {
   }
 
   async deleteContent(contentId: string, userId?: string) {
-    this.logger.log(`Deleting content with ID: ${contentId}`);
+    this.logger.log(`Soft-deleting content with ID: ${contentId}`);
 
-    // 1. Buscar o conteúdo para obter informações antes de deletar
+    // Igor (07/05): troca hard-delete por soft-delete (status=ARCHIVED).
+    // Motivo: produtividade do funcionário e queries admin passam a
+    // poder filtrar `.neq('status', 'ARCHIVED')` em vez de depender da
+    // row sumir (que tinha edge case com edit-requests pendentes).
+    // Reversibilidade é bônus — se Igor deletar errado dá pra restaurar.
+    // Queries públicas já filtram status='PUBLISHED', então ARCHIVED
+    // some do site naturalmente.
+
+    // 1. Buscar o conteúdo para validar que existe antes de arquivar.
     const { data: content, error: fetchError } = await this.supabaseService.client
       .from('content')
-      .select('*')
+      .select('id, title, status')
       .eq('id', contentId)
       .single();
 
@@ -402,56 +415,33 @@ export class AdminContentSimpleService {
       throw new NotFoundException(`Content with ID ${contentId} not found`);
     }
 
-    this.logger.log(`Found content: ${content.title}`);
-
-    // 2. Se for série, deletar episódios
-    if (content.content_type === 'series') {
-      const { data: episodes } = await this.supabaseService.client
-        .from('episodes')
-        .select('id')
-        .eq('series_id', contentId);
-
-      if (episodes && episodes.length > 0) {
-        this.logger.log(`Found ${episodes.length} episodes to delete`);
-
-        // Deletar episódios do banco
-        await this.supabaseService.client
-          .from('episodes')
-          .delete()
-          .eq('series_id', contentId);
-
-        this.logger.log(`Deleted ${episodes.length} episodes from database`);
-      }
+    if (content.status === 'ARCHIVED') {
+      this.logger.log(`Content ${contentId} já está arquivado — no-op idempotente`);
+      return {
+        success: true,
+        message: `Content "${content.title}" já estava arquivado`,
+        deletedContent: { id: content.id, title: content.title },
+      };
     }
 
-    // 3. Deletar registros relacionados
-    await this.supabaseService.client
-      .from('content_languages')
-      .delete()
-      .eq('content_id', contentId);
-
-    await this.supabaseService.client
-      .from('purchases')
-      .delete()
-      .eq('content_id', contentId);
-
-    await this.supabaseService.client
-      .from('favorites')
-      .delete()
-      .eq('content_id', contentId);
-
-    // 4. Deletar o conteúdo do banco
+    // 2. Soft-delete: marca como ARCHIVED. Mantém episódios/languages/
+    // purchases/favorites linkados — queries públicas filtram por status
+    // PUBLISHED, então não aparecem no site. Purchases ficam preservadas
+    // pra cliente que já comprou continuar tendo acesso.
     const { error: deleteError } = await this.supabaseService.client
       .from('content')
-      .delete()
+      .update({
+        status: 'ARCHIVED',
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', contentId);
 
     if (deleteError) {
-      this.logger.error('Error deleting content from database:', deleteError);
-      throw new Error(`Failed to delete content: ${deleteError.message}`);
+      this.logger.error('Error archiving content:', deleteError);
+      throw new Error(`Failed to archive content: ${deleteError.message}`);
     }
 
-    this.logger.log(`Content ${contentId} deleted successfully`);
+    this.logger.log(`Content ${contentId} archived successfully`);
 
     return {
       success: true,
@@ -486,7 +476,7 @@ export class AdminContentSimpleService {
     const allowedFields = [
       'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
       'backdrop_position', 'backdrop_position_mobile',
-      'trailer_url', 'telegram_group_link', 'release_year',
+      'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
       'status', 'availability', 'quality_label', 'audio_type'
