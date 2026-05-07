@@ -286,9 +286,12 @@ export class ContentEditRequestsService {
       throw new BadRequestException('Pedido já foi processado.');
     }
 
+    this.logger.log(`approve() id=${id} request_type=${request.request_type} content_id=${request.content_id} person_id=${request.person_id}`);
+
     // Igor (07/05): photo_replace aplica a nova photo_url direto na pessoa
     // (mesmo padrao do approveDirect que existia em admin-people.service).
     if (request.request_type === 'photo_replace') {
+      this.logger.log(`approve() entering photo_replace branch for person ${request.person_id}`);
       const newUrl = request.changes?.photo_url;
       if (!newUrl) {
         throw new BadRequestException('Pedido sem photo_url no changes.');
