@@ -7,7 +7,6 @@ import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
-import { WhatsAppGate } from '@/components/WhatsApp/WhatsAppGate';
 import { WhatsAppNumberGate } from '@/components/WhatsApp/WhatsAppNumberGate';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -48,7 +47,6 @@ export default function DashboardPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [requests, setRequests] = useState<ContentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [whatsappJoined, setWhatsappJoined] = useState(true); // default true to avoid flash
 
   // Redirecionar se não autenticado
   useEffect(() => {
@@ -56,13 +54,6 @@ export default function DashboardPage() {
       router.push('/auth/login');
     }
   }, [authLoading, isAuthenticated, router]);
-
-  // Sync whatsapp_joined from user data
-  useEffect(() => {
-    if (user) {
-      setWhatsappJoined(user.whatsapp_joined ?? false);
-    }
-  }, [user]);
 
   // Função para renovar token usando refresh_token
   const refreshAccessToken = async (): Promise<string | null> => {
@@ -333,12 +324,11 @@ export default function DashboardPage() {
         hasWhatsapp={!needsWhatsappNumber}
         onSaved={() => { /* o gate atualiza localStorage; useAuth refaz o load no próximo navigate */ }}
       >
-      <WhatsAppGate
-        userId={user.id}
-        whatsappJoined={whatsappJoined}
-        whatsappLink="https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy"
-        onConfirmJoined={() => setWhatsappJoined(true)}
-      >
+      {/* Igor (07/05): WhatsAppGate (convite pra entrar no grupo)
+          aninhado com WhatsAppNumberGate (coleta de número) causava
+          o popup duplicado: ao fechar um, o outro aparecia. O popup
+          de convite pro grupo já existe no /home (WhatsAppPopup),
+          então remover daqui elimina a redundância sem perder UX. */}
       <div className="container mx-auto px-4 lg:px-6 py-8 sm:py-12 mt-16 sm:mt-20">
         {/* Header do Dashboard */}
         <div className="mb-8 bg-gradient-to-r from-red-900/20 to-purple-900/20 rounded-xl p-6 border border-red-500/20">
@@ -520,7 +510,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      </WhatsAppGate>
       </WhatsAppNumberGate>
 
       <Footer />
