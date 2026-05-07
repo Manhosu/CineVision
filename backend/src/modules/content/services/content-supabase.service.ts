@@ -291,23 +291,17 @@ export class ContentSupabaseService {
     const offset = (page - 1) * limit;
     const words = search.trim().split(/\s+/).filter(w => w.length > 0);
 
-    // Build OR filter: each word must appear in title OR description
-    // For PostgREST, we build an or() filter string
-    const orConditions = words.map(word => {
-      const encoded = word.replace(/[%_]/g, '');
-      return `title.ilike.%${encoded}%`;
-    });
-
     let query = this.supabaseService.client
       .from('content')
       .select('*', { count: 'exact' })
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', contentType);
 
-    // Apply each word as an ILIKE filter (AND logic - all words must match)
+    // Igor (07/05): cada palavra deve bater em title OU title_en
+    // (admin cadastra em PT mas cliente pode buscar pelo nome em EN).
     for (const word of words) {
-      const encoded = word.replace(/[%_]/g, '');
-      query = query.ilike('title', `%${encoded}%`);
+      const encoded = word.replace(/[%_,()]/g, '');
+      query = query.or(`title.ilike.%${encoded}%,title_en.ilike.%${encoded}%`);
     }
 
     // Apply sorting
@@ -781,7 +775,7 @@ export class ContentSupabaseService {
         )
       `)
       .eq('status', ContentStatus.PUBLISHED)
-      .or(`title.ilike.%${query}%, description.ilike.%${query}%`)
+      .or(`title.ilike.%${query}%,title_en.ilike.%${query}%,description.ilike.%${query}%`)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

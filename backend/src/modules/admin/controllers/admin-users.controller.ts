@@ -36,7 +36,7 @@ export class AdminUsersController {
 
     let query = this.supabase
       .from('users')
-      .select('id, telegram_id, telegram_username, telegram_chat_id, name, role, blocked, created_at', { count: 'exact' })
+      .select('id, telegram_id, telegram_username, telegram_chat_id, name, role, blocked, created_at, whatsapp, whatsapp_joined', { count: 'exact' })
       .not('telegram_id', 'is', null)
       .order('created_at', { ascending: false })
       .range(offset, offset + limitNum - 1);
