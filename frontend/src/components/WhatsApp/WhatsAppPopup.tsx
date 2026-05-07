@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const WHATSAPP_LINK = 'https://chat.whatsapp.com/CK5DVQUWQqG3WRrDgjTbgy';
@@ -18,47 +18,61 @@ const HARD_TIMEOUT_MS = 10000;
 
 export function WhatsAppPopup() {
   const [isVisible, setIsVisible] = useState(false);
+  // Igor (07/05): "fecha um, abre outro" — encontrado race condition:
+  // mainTimer mostra popup em t=7s, user fecha em t=8s, hardTimer
+  // FALLBACK dispara em t=10s e mostra DE NOVO (já vai estar fechado
+  // do ponto de vista do user e parece "outro popup abrindo").
+  // Refs garantem que dismiss limpa TODOS os timers pendentes E que
+  // qualquer setIsVisible(true) tardio é ignorado pós-dismissed.
+  const dismissedRef = useRef(false);
+  const mainTimerRef = useRef<any>(null);
+  const pollTimerRef = useRef<any>(null);
+  const hardTimerRef = useRef<any>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Usar sessionStorage para mostrar uma vez por sessao (aparece toda vez que abrir o site)
-    const dismissed = sessionStorage.getItem(DISMISS_KEY);
-    if (dismissed) return;
+    if (sessionStorage.getItem(DISMISS_KEY)) return;
 
-    let mainTimer: any = null;
-    let pollTimer: any = null;
-    const hardTimer = setTimeout(() => {
-      // Garantia absoluta: mostra mesmo se splash sentinel nunca aparecer.
+    const showIfNotDismissed = () => {
+      if (dismissedRef.current) return;
       setIsVisible(true);
-      if (mainTimer) clearTimeout(mainTimer);
-      if (pollTimer) clearTimeout(pollTimer);
+    };
+
+    hardTimerRef.current = setTimeout(() => {
+      showIfNotDismissed();
+      if (mainTimerRef.current) clearTimeout(mainTimerRef.current);
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     }, HARD_TIMEOUT_MS);
 
     const checkSplash = () => {
+      if (dismissedRef.current) return;
       const splashDone = sessionStorage.getItem(SPLASH_KEY);
       if (splashDone) {
-        mainTimer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
+        mainTimerRef.current = setTimeout(showIfNotDismissed, SHOW_DELAY_MS);
         return;
       }
-      pollTimer = setTimeout(checkSplash, 500);
+      pollTimerRef.current = setTimeout(checkSplash, 500);
     };
 
     checkSplash();
 
     return () => {
-      if (mainTimer) clearTimeout(mainTimer);
-      if (pollTimer) clearTimeout(pollTimer);
-      clearTimeout(hardTimer);
+      if (mainTimerRef.current) clearTimeout(mainTimerRef.current);
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+      if (hardTimerRef.current) clearTimeout(hardTimerRef.current);
     };
   }, []);
 
   const handleDismiss = () => {
+    // Marca dismissed ANTES de limpar timers — qualquer callback
+    // que ainda esteja rodando sai cedo via dismissedRef.current check.
+    dismissedRef.current = true;
+    if (mainTimerRef.current) clearTimeout(mainTimerRef.current);
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    if (hardTimerRef.current) clearTimeout(hardTimerRef.current);
+
     try {
       sessionStorage.setItem(DISMISS_KEY, 'true');
-      // Igor (07/05): se o user fechou o popup do grupo, também não
-      // queremos abrir o NumberGate em seguida na mesma sessão. Os
-      // dois popups são WhatsApp-themed e abrir um após o outro foi
-      // percebido como "popup duplicado".
       sessionStorage.setItem('whatsapp_gate_skipped', '1');
     } catch {
       /* ignore */
