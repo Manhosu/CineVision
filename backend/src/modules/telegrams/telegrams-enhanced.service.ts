@@ -1166,10 +1166,33 @@ export class TelegramsEnhancedService implements OnModuleInit {
       if (reply?.paused) return;
       if (!reply?.text) return;
 
-      // If AI offered a payment link, send a single message with inline button
+      // Igor (07/05): IA salvava resposta no DB mas não chegava no
+      // Telegram quando a resposta tinha asteriscos/underscores
+      // desbalanceados — Telegram retornava 400 com parse_mode=Markdown.
+      // Agora tentamos Markdown primeiro; se falhar com 400, refazemos
+      // sem parse_mode pra garantir entrega.
+      const sendWithMarkdownFallback = async (
+        text: string,
+        opts?: any,
+      ): Promise<void> => {
+        try {
+          await this.sendMessage(chatId, text, { parse_mode: 'Markdown', ...(opts || {}) });
+        } catch (err: any) {
+          const status = err?.response?.status;
+          const desc = err?.response?.data?.description || '';
+          if (status === 400 && /parse|entity|markdown/i.test(desc)) {
+            this.logger.warn(
+              `Markdown sendMessage 400 (${desc}) — retrying as plain text`,
+            );
+            await this.sendMessage(chatId, text, opts || {});
+          } else {
+            throw err;
+          }
+        }
+      };
+
       if (reply.paymentLink) {
-        await this.sendMessage(chatId, reply.text, {
-          parse_mode: 'Markdown',
+        await sendWithMarkdownFallback(reply.text, {
           reply_markup: {
             inline_keyboard: [
               [{ text: '💳 Pagar agora via PIX', url: reply.paymentLink }],
@@ -1177,7 +1200,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           },
         });
       } else {
-        await this.sendMessage(chatId, reply.text, { parse_mode: 'Markdown' });
+        await sendWithMarkdownFallback(reply.text);
       }
     } catch (err: any) {
       this.logger.warn(`AI dispatch failed: ${err.message}`);
@@ -1361,10 +1384,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
       if (reply?.paused) return;
       if (!reply?.text) return;
 
-      await this.sendMessage(chatId, reply.text, {
-        parse_mode: 'Markdown',
-        business_connection_id: businessConnectionId,
-      });
+      // Igor (07/05): mesmo retry do dispatchAiChat — se Telegram
+      // retorna 400 por Markdown malformado, refaz sem parse_mode.
+      try {
+        await this.sendMessage(chatId, reply.text, {
+          parse_mode: 'Markdown',
+          business_connection_id: businessConnectionId,
+        });
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const desc = err?.response?.data?.description || '';
+        if (status === 400 && /parse|entity|markdown/i.test(desc)) {
+          this.logger.warn(
+            `Business Markdown sendMessage 400 (${desc}) — retrying as plain text`,
+          );
+          await this.sendMessage(chatId, reply.text, {
+            business_connection_id: businessConnectionId,
+          });
+        } else {
+          throw err;
+        }
+      }
     } catch (err: any) {
       this.logger.warn(`Business AI dispatch failed: ${err.message}`);
     }
