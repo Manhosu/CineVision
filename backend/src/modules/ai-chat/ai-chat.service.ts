@@ -601,8 +601,13 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     clientExternalChatId: string,
     businessConnectionId?: string,
   ) {
-    const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
-    if (!adminChatId || !this.telegramsService) return;
+    const adminChatId = await this.resolveAdminChatId();
+    if (!adminChatId || !this.telegramsService) {
+      this.logger.warn(
+        `notifyAdminManualPix DROPPED: client=${clientExternalChatId} adminChatId=${adminChatId}`,
+      );
+      return;
+    }
 
     const itemsBlock = summary.items
       .map((it) => `• ${it.title}${it.year ? ` (${it.year})` : ''} — R$ ${this.formatBRL(it.priceCents)}`)
@@ -621,8 +626,11 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       await this.telegramsService.sendMessage(parseInt(adminChatId, 10), text, {
         parse_mode: 'Markdown',
       });
+      this.logger.log(
+        `notifyAdminManualPix OK: client=${clientExternalChatId} → admin=${adminChatId}`,
+      );
     } catch (err: any) {
-      this.logger.warn(`notifyAdminManualPix failed: ${err.message}`);
+      this.logger.error(`notifyAdminManualPix SEND FAILED: ${err.message}`);
     }
   }
 
@@ -963,31 +971,83 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     return true;
   }
 
+  /**
+   * Igor (07/05): "IA não está me chamando no privado quando uma conversa
+   * precisa de atendimento humano". Causa: TELEGRAM_ADMIN_CHAT_ID estava
+   * faltando no Render env. Fallback: busca admin no banco por role.
+   * Cacheia em memória pra não bater no DB toda mensagem.
+   */
+  private adminChatIdCache: { value: string | null; fetchedAt: number } | null = null;
+
+  private async resolveAdminChatId(): Promise<string | null> {
+    // 1. Env var explícita tem prioridade.
+    const envChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    if (envChatId) return envChatId;
+
+    // 2. Fallback DB: cacheia 5min.
+    const now = Date.now();
+    if (this.adminChatIdCache && now - this.adminChatIdCache.fetchedAt < 5 * 60 * 1000) {
+      return this.adminChatIdCache.value;
+    }
+
+    try {
+      const { data: admins } = await this.supabase.client
+        .from('users')
+        .select('id, telegram_id, telegram_chat_id, role')
+        .eq('role', 'admin')
+        .not('telegram_id', 'is', null)
+        .limit(5);
+
+      const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
+      const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
+      this.adminChatIdCache = { value, fetchedAt: now };
+      if (value) {
+        this.logger.log(
+          `Resolved admin chat_id from DB fallback: ${value} (role=admin)`,
+        );
+      } else {
+        this.logger.warn(
+          'No admin found in DB with telegram_id set — admin notifications will silently drop',
+        );
+      }
+      return value;
+    } catch (err: any) {
+      this.logger.error(`resolveAdminChatId failed: ${err.message}`);
+      return null;
+    }
+  }
+
   private async notifyAdminForTakeover(
     platform: string,
     externalChatId: string,
     originalMessage: string,
   ) {
-    const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    const adminChatId = await this.resolveAdminChatId();
     if (!adminChatId || !this.telegramsService) {
-      this.logger.warn('TELEGRAM_ADMIN_CHAT_ID not configured or telegramsService unavailable');
+      this.logger.warn(
+        `notifyAdminForTakeover: chat=${externalChatId} platform=${platform} — adminChatId=${adminChatId} telegrams=${!!this.telegramsService} → DROPPED`,
+      );
       return;
     }
 
     const text =
       `🤖 *IA pausada — atenção necessária*\n\n` +
-      `Cliente pediu um conteúdo que não está no catálogo.\n\n` +
       `*Plataforma:* ${platform}\n` +
-      `*Chat ID:* \`${externalChatId}\`\n\n` +
-      `*Mensagem do cliente:*\n_${originalMessage}_\n\n` +
-      `Acesse o painel de IA para assumir esta conversa.`;
+      `*Chat ID do cliente:* \`${externalChatId}\`\n\n` +
+      `*Última mensagem:*\n_${originalMessage}_\n\n` +
+      `👉 [Assumir no painel de IA](https://www.cinevisionapp.com.br/admin/ai-chat)`;
 
     try {
       await this.telegramsService.sendMessage(parseInt(adminChatId, 10), text, {
         parse_mode: 'Markdown',
       });
+      this.logger.log(
+        `notifyAdminForTakeover OK: client=${externalChatId} → admin=${adminChatId}`,
+      );
     } catch (err: any) {
-      this.logger.warn(`Admin takeover notification failed: ${err.message}`);
+      this.logger.error(
+        `notifyAdminForTakeover SEND FAILED: client=${externalChatId} admin=${adminChatId}: ${err.message}`,
+      );
     }
   }
 }
