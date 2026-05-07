@@ -36,18 +36,26 @@ export default function CineVisionIntro() {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
 
-    // N10 (Igor 04/05): no navegador embutido do Telegram (WebApp), a
-    // animação corta no meio porque a janela é redimensionada pelo
-    // Telegram conforme abre, e o áudio nunca toca por causa do
-    // autoplay block. Igor pediu pra pular splash inteira nesse modo —
-    // cliente cai direto na home. Detectamos por:
-    //   1. window.Telegram.WebApp — SDK injetado quando rodando como
-    //      Mini App ou via in-app browser de chat.
-    //   2. UA contendo "Telegram" — fallback para in-app browser fora
-    //      do contexto de Mini App.
+    // N10 (Igor 04/05) + N8 (Igor 07/05): no navegador embutido do
+    // Telegram, a animação corta no meio. A detecção V1 (`Telegram.WebApp`
+    // + UA "Telegram") só pegava Mini App e Android in-app — Telegram
+    // Desktop (Windows/Mac/Linux) e iOS WebView mais novo NÃO injetam
+    // nenhum desses sinais. Igor relatou que mesmo após o V1 a animação
+    // continuava cortando no app. Ampliamos a detecção com:
+    //   3. window.TelegramWebviewProxy — Android in-app antigo.
+    //   4. window.external?.notify — Telegram Desktop (Windows/Mac).
+    //   5. document.referrer contendo "t.me" ou "telegram" — abertura
+    //      via deep link de chat (cobre o caso "cliente clica no link
+    //      do bot" sem que o WebView SDK esteja injetado).
+    const ua = navigator.userAgent || '';
+    const ref = (document.referrer || '').toLowerCase();
     const isTelegramWebApp =
       Boolean((window as any).Telegram?.WebApp) ||
-      /Telegram/i.test(navigator.userAgent);
+      Boolean((window as any).TelegramWebviewProxy) ||
+      Boolean((window as any).external?.notify) ||
+      /Telegram/i.test(ua) ||
+      ref.includes('t.me') ||
+      ref.includes('telegram');
     if (isTelegramWebApp) {
       sessionStorage.setItem(SESSION_KEY, '1');
       return;
@@ -146,6 +154,16 @@ export default function CineVisionIntro() {
     };
   }, [visible]);
 
+  // Escape hatch: tap/click em qualquer parte da splash dismissa.
+  // Se a detecção de Telegram falhar em algum cliente desconhecido
+  // (Telegram Desktop em alguma plataforma nova, fork do Telegram, etc),
+  // o user toca a tela e cai direto na home — sem ficar preso vendo
+  // animação cortada.
+  const dismiss = () => {
+    sessionStorage.setItem(SESSION_KEY, '1');
+    setVisible(false);
+  };
+
   return (
     <AnimatePresence>
       {visible && (
@@ -153,8 +171,10 @@ export default function CineVisionIntro() {
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ opacity: { duration: 0.6 } }}
-          className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden bg-black"
+          className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden bg-black cursor-pointer"
           aria-hidden="true"
+          onClick={dismiss}
+          onTouchStart={dismiss}
         >
           {/* A coreografia do logo só monta depois que window.load
               dispara — antes disso ficamos só com a tela preta. Sem
@@ -163,6 +183,20 @@ export default function CineVisionIntro() {
               baixo ao mesmo tempo. */}
           {started && <CinematicLogoReveal />}
           <audio ref={audioRef} src="/intro.mp3" preload="auto" />
+          {/* Hint sutil pra usuário saber que pode pular. Aparece só
+              depois de 1.5s pra não competir com a entrada da animação. */}
+          {started && (
+            <motion.div
+              className="pointer-events-none absolute bottom-8 left-0 right-0 flex justify-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              transition={{ delay: 1.5, duration: 0.6 }}
+            >
+              <span className="text-xs text-white/60 tracking-wider uppercase">
+                Toque para pular
+              </span>
+            </motion.div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
