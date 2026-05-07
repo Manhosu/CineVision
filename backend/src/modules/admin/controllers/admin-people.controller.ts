@@ -127,6 +127,19 @@ export class AdminPeopleController {
     return this.peopleService.approvePendingPhoto(id, user.sub);
   }
 
+  // Igor (07/05): aprovar várias de uma vez. Frontend marca checkboxes,
+  // manda lista de personIds, backend itera + retorna sumário.
+  @Post('photos/approve-batch')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Approve multiple pending photos in batch' })
+  async approvePhotosBatch(
+    @Body() body: { person_ids: string[] },
+    @GetUser() user: any,
+  ) {
+    return this.peopleService.approvePendingPhotosBatch(body.person_ids || [], user.sub);
+  }
+
   @Post(':id/photo/reject')
   @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.OK)

@@ -32,6 +32,52 @@ export default function PhotosPendingPage() {
   const [stats, setStats] = useState<PhotoStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Igor (07/05): seleção em batch pra aprovar várias de uma vez.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchApproving, setBatchApproving] = useState(false);
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedIds(new Set(items.map((i) => i.id)));
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const approveBatch = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Aprovar ${selectedIds.size} foto(s) selecionada(s)?`)) return;
+    setBatchApproving(true);
+    try {
+      const result = await api.post<{
+        approved_count: number;
+        failed_count: number;
+        failed: Array<{ id: string; error: string }>;
+      }>('/api/v1/admin/people/photos/approve-batch', {
+        person_ids: Array.from(selectedIds),
+      });
+      if (result.failed_count > 0) {
+        toast.error(
+          `${result.approved_count} aprovada(s), ${result.failed_count} falharam.`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success(`${result.approved_count} foto(s) aprovada(s)!`);
+      }
+      clearSelection();
+      await load();
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao aprovar em batch');
+    } finally {
+      setBatchApproving(false);
+    }
+  };
 
   const load = async () => {
     try {
@@ -143,54 +189,107 @@ export default function PhotosPendingPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((p) => (
-            <div
-              key={p.id}
-              className="overflow-hidden rounded-xl border border-amber-500/30 bg-zinc-900"
-            >
-              <div className="relative aspect-square bg-zinc-950">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.photo_pending_url}
-                  alt={p.name}
-                  className="h-full w-full object-cover"
-                />
-                <span className="absolute right-2 top-2 rounded-full bg-amber-600/90 px-2 py-0.5 text-xs font-semibold">
-                  Pendente
-                </span>
-              </div>
-              <div className="space-y-1 p-3">
-                <div className="font-semibold text-white">{p.name}</div>
-                <div className="text-xs text-zinc-500">
-                  {p.role === 'director' ? 'Diretor' : 'Ator'}
-                </div>
-                <div className="pt-2 text-xs text-zinc-400">
-                  Por: {p.submitted_by?.name || p.submitted_by?.email || '—'}
-                </div>
-                <div className="text-xs text-zinc-500">
-                  {new Date(p.photo_pending_at).toLocaleString('pt-BR')}
-                </div>
-              </div>
-              <div className="flex gap-2 border-t border-white/10 p-3">
+        <>
+          {/* Igor (07/05): barra de batch — marca várias fotos via
+              checkbox e aprova todas de uma vez. Acelera supervisão
+              quando tem muitos cards pra revisar (ele verifica cada
+              grupo em segundo monitor antes de marcar). */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3">
+            <div className="flex items-center gap-3 text-sm text-zinc-300">
+              <span>
+                <strong className="text-white">{selectedIds.size}</strong> de{' '}
+                <strong className="text-white">{items.length}</strong> selecionadas
+              </span>
+              <button
+                onClick={selectAll}
+                disabled={selectedIds.size === items.length}
+                className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5 disabled:opacity-40"
+              >
+                Marcar todas
+              </button>
+              {selectedIds.size > 0 && (
                 <button
-                  onClick={() => approve(p.id)}
-                  disabled={busyId === p.id}
-                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:opacity-60"
+                  onClick={clearSelection}
+                  className="rounded border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
                 >
-                  Aprovar
+                  Limpar seleção
                 </button>
-                <button
-                  onClick={() => reject(p.id)}
-                  disabled={busyId === p.id}
-                  className="flex-1 rounded-lg border border-red-500/40 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-600/10 disabled:opacity-60"
-                >
-                  Rejeitar
-                </button>
-              </div>
+              )}
             </div>
-          ))}
-        </div>
+            <button
+              onClick={approveBatch}
+              disabled={selectedIds.size === 0 || batchApproving}
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-emerald-900 disabled:text-zinc-500"
+            >
+              {batchApproving
+                ? 'Aprovando…'
+                : `Aprovar ${selectedIds.size > 0 ? `${selectedIds.size} ` : ''}selecionada${selectedIds.size === 1 ? '' : 's'}`}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((p) => {
+              const checked = selectedIds.has(p.id);
+              return (
+                <div
+                  key={p.id}
+                  className={`overflow-hidden rounded-xl border bg-zinc-900 transition ${
+                    checked ? 'border-emerald-500/60 ring-2 ring-emerald-500/30' : 'border-amber-500/30'
+                  }`}
+                >
+                  <div className="relative aspect-square bg-zinc-950">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={p.photo_pending_url}
+                      alt={p.name}
+                      className="h-full w-full object-cover"
+                    />
+                    <label className="absolute left-2 top-2 flex cursor-pointer items-center gap-1.5 rounded-full bg-black/70 px-2 py-1 text-xs font-semibold text-white backdrop-blur">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleSelected(p.id)}
+                        className="h-4 w-4 rounded border-white/30 bg-transparent accent-emerald-500"
+                      />
+                      <span>Selecionar</span>
+                    </label>
+                    <span className="absolute right-2 top-2 rounded-full bg-amber-600/90 px-2 py-0.5 text-xs font-semibold">
+                      Pendente
+                    </span>
+                  </div>
+                  <div className="space-y-1 p-3">
+                    <div className="font-semibold text-white">{p.name}</div>
+                    <div className="text-xs text-zinc-500">
+                      {p.role === 'director' ? 'Diretor' : 'Ator'}
+                    </div>
+                    <div className="pt-2 text-xs text-zinc-400">
+                      Por: {p.submitted_by?.name || p.submitted_by?.email || '—'}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      {new Date(p.photo_pending_at).toLocaleString('pt-BR')}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 border-t border-white/10 p-3">
+                    <button
+                      onClick={() => approve(p.id)}
+                      disabled={busyId === p.id}
+                      className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold transition hover:bg-emerald-500 disabled:opacity-60"
+                    >
+                      Aprovar
+                    </button>
+                    <button
+                      onClick={() => reject(p.id)}
+                      disabled={busyId === p.id}
+                      className="flex-1 rounded-lg border border-red-500/40 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-600/10 disabled:opacity-60"
+                    >
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

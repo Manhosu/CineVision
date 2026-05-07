@@ -416,6 +416,36 @@ export class AdminPeopleService {
     }));
   }
 
+  /**
+   * Igor (07/05): aprova várias fotos de uma vez. Pra agilizar
+   * supervisão quando tem muitas pendências (Igor verifica em segundo
+   * monitor, marca tudo, aprova em batch). Aproveita approvePendingPhoto
+   * em loop, retorna ids aprovados/falhos pra o frontend dar feedback.
+   */
+  async approvePendingPhotosBatch(personIds: string[], adminUserId: string) {
+    if (!Array.isArray(personIds) || personIds.length === 0) {
+      throw new BadRequestException('personIds vazio');
+    }
+    const approved: string[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    for (const id of personIds) {
+      try {
+        await this.approvePendingPhoto(id, adminUserId);
+        approved.push(id);
+      } catch (err: any) {
+        failed.push({ id, error: err?.message || 'unknown' });
+      }
+    }
+
+    return {
+      approved_count: approved.length,
+      failed_count: failed.length,
+      approved,
+      failed,
+    };
+  }
+
   /** Admin aprova: promove `photo_pending_url` → `photo_url`. */
   async approvePendingPhoto(personId: string, adminUserId: string) {
     const person = await this.findById(personId);
