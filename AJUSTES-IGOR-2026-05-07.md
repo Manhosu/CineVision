@@ -185,6 +185,32 @@ Atualmente existe a aba "Análise em Tempo Real" mostrando "Usuários Online" �
 
 ---
 
+### N14 — Consolidar aprovação de foto no painel de edit-requests (refactor)
+**Origem**: feedback Igor pós-implementação 07/05.
+
+**Reportado**: "Aquele endpoint de foto pra aprovação só funciona quando o usuário edita um conteúdo após aquela janela de tempo, daí você precisa aceitar ali? Se for isso, remove esse endpoint e adiciona essa função naquele endpoint que já fizemos dedicado a edições para aprovação após janela de tempo."
+
+**Diagnóstico**: tinha 2 sistemas paralelos:
+1. `/admin/photos-pending` (queue própria em `people.photo_pending_url`).
+2. `/admin/edit-requests` (queue genérica em `content_edit_requests` pra update/delete de conteúdo).
+
+Igor quer **um sistema só** — substituição de foto fora da janela vira request no mesmo painel.
+
+**Fix entregue**:
+- Migration: `content_edit_requests` ganhou coluna `person_id UUID REFERENCES people(id)`. `content_id` virou nullable. Constraint `chk_target_required` garante que ao menos um dos dois está set.
+- `EditRequestType` aceita `'photo_replace'` além de `update | delete`.
+- `submitPhotoReplaceRequest({ employeeId, personId, photoUrl })` cria request com `request_type='photo_replace'`, `changes={photo_url}`, `original_snapshot={photo_url, name, role}`.
+- `approve()` detecta `photo_replace` e aplica direto na tabela `people` (com ownership + cleanup de campos legados).
+- `submitPhoto` em `admin-people.service` agora chama `editRequestsService.submitPhotoReplaceRequest` em vez de escrever em `photo_pending_url` — remove o conceito da fila dedicada.
+- `/admin/edit-requests` page renderiza requests `photo_replace` com badge "FOTO" + comparação visual lado-a-lado da foto antes vs depois.
+- `/admin/photos-pending` virou redirect pra `/admin/edit-requests` (preserva bookmarks).
+- Card "Fotos pendentes" removido do dashboard admin (consolidado em "Edições pendentes").
+- Notificação Telegram pro admin tem texto específico ("📷 Nova troca de foto aguardando aprovação") com nome da pessoa.
+
+**Prioridade**: 🟠 alta (consolidação de UX, evita Igor olhar em 2 lugares).
+
+---
+
 ### N10 — Aprovar fotos de funcionário em batch (checkbox + "Aprovar selecionados")
 **Origem**: vídeo `6.30.57 PM`
 

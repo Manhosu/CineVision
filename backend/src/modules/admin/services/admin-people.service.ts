@@ -4,9 +4,13 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
 import { EmployeesService } from '../../employees/employees.service';
+import { ContentEditRequestsService } from '../../content-edit-requests/content-edit-requests.service';
 
 export type PhotoStatus = 'missing' | 'pending' | 'approved' | 'all';
 
@@ -17,6 +21,9 @@ export class AdminPeopleService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly employeesService: EmployeesService,
+    @Optional()
+    @Inject(forwardRef(() => ContentEditRequestsService))
+    private readonly editRequestsService?: ContentEditRequestsService,
   ) {}
 
   async findAll(search?: string, role?: string, photoStatus: PhotoStatus = 'all') {
@@ -262,23 +269,19 @@ export class AdminPeopleService {
       return { status: 'approved' as const, person: updated };
     };
 
-    // Helper: enviar pra fila pending.
-    const submitToPending = async () => {
-      const { data: updated, error } = await this.supabaseService.client
-        .from('people')
-        .update({
-          photo_pending_url: trimmed,
-          photo_pending_by_user_id: actorUserId,
-          photo_pending_at: now,
-          photo_rejected_at: null,
-          photo_rejection_reason: null,
-          updated_at: now,
-        })
-        .eq('id', personId)
-        .select()
-        .single();
-      if (error) throw new Error(`Failed to submit photo: ${error.message}`);
-      return { status: 'pending' as const, person: updated };
+    // Igor (07/05): substituicao de foto fora da janela vai pro mesmo
+    // sistema de aprovacao do /admin/edit-requests (em vez do
+    // photo_pending_url legado). Mantem coerencia com fluxo de delete/edit.
+    const submitToEditRequest = async () => {
+      if (!this.editRequestsService) {
+        throw new Error('ContentEditRequestsService unavailable');
+      }
+      await this.editRequestsService.submitPhotoReplaceRequest({
+        employeeId: actorUserId,
+        personId,
+        photoUrl: trimmed,
+      });
+      return { status: 'pending' as const, person };
     };
 
     // Admin: sempre direto.
@@ -293,8 +296,7 @@ export class AdminPeopleService {
     }
 
     // Caso 1: pessoa NUNCA teve foto → criação inicial → aprovação direta.
-    // (Não há pendência prévia OU rejeição — funcionário pode criar.)
-    if (!person.photo_url && !person.photo_pending_url) {
+    if (!person.photo_url) {
       return approveDirect();
     }
 
@@ -302,33 +304,22 @@ export class AdminPeopleService {
     // Janela usa `edit_window_hours` do funcionário, com referência em
     // `photo_added_at` (último approve) ou `created_at` da pessoa como
     // fallback. Mesmo padrão do `getEditCapability` em conteúdo.
-    if (person.photo_url) {
-      const windowHours = perms.edit_window_hours ?? 5;
-      const referenceTime = person.photo_added_at || person.created_at;
-      const ageMs = referenceTime
-        ? Date.now() - new Date(referenceTime).getTime()
-        : Number.POSITIVE_INFINITY;
-      const maxMs = windowHours * 60 * 60 * 1000;
+    const windowHours = perms.edit_window_hours ?? 5;
+    const referenceTime = person.photo_added_at || person.created_at;
+    const ageMs = referenceTime
+      ? Date.now() - new Date(referenceTime).getTime()
+      : Number.POSITIVE_INFINITY;
+    const maxMs = windowHours * 60 * 60 * 1000;
 
-      if (ageMs <= maxMs) {
-        // Dentro da janela → substitui direto em photo_url.
-        return approveDirect();
-      }
-
-      // Fora da janela → cai pro fluxo de pending abaixo. Mas só se
-      // não houver pendência concorrente (próxima checagem).
+    if (ageMs <= maxMs) {
+      // Dentro da janela → substitui direto em photo_url.
+      return approveDirect();
     }
 
-    // Caso 3: pendência ativa (de outro upload prévio que ainda não foi
-    // aprovado/rejeitado) → bloqueia pra evitar race.
-    if (person.photo_pending_url) {
-      throw new BadRequestException(
-        'Já existe uma foto pendente de aprovação para esta pessoa.',
-      );
-    }
-
-    // Caso 4: substituição fora da janela → fila pending.
-    return submitToPending();
+    // Fora da janela → vai pro /admin/edit-requests (mesmo sistema de
+    // aprovacao que delete/update de conteudo). submitPhotoReplaceRequest
+    // ja trata bloqueio de duplicata pendente.
+    return submitToEditRequest();
   }
 
   /**

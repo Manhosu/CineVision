@@ -7,11 +7,12 @@ import AdminBackButton from '@/components/Admin/AdminBackButton';
 
 type Status = 'pending' | 'approved' | 'rejected';
 
-type RequestType = 'update' | 'delete';
+type RequestType = 'update' | 'delete' | 'photo_replace';
 
 interface EditRequest {
   id: string;
-  content_id: string;
+  content_id: string | null;
+  person_id?: string | null;
   employee_id: string;
   changes: Record<string, any>;
   original_snapshot: Record<string, any>;
@@ -22,6 +23,7 @@ interface EditRequest {
   reviewer_notes?: string;
   employee?: { id: string; name: string; email: string };
   content?: { id: string; title: string; content_type?: string; poster_url?: string };
+  person?: { id: string; name: string; role?: string; photo_url?: string };
   reviewer?: { id: string; name: string };
 }
 
@@ -175,21 +177,40 @@ export default function EditRequestsPage() {
               }`}
             >
               <div className="flex items-center gap-3">
-                {r.content?.poster_url && (
-                  <img
-                    src={r.content.poster_url}
-                    alt=""
-                    className="h-12 w-8 flex-shrink-0 rounded object-cover"
-                  />
+                {r.request_type === 'photo_replace' ? (
+                  r.person?.photo_url ? (
+                    <img
+                      src={r.person.photo_url}
+                      alt=""
+                      className="h-12 w-12 flex-shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 flex-shrink-0 rounded-full bg-zinc-800" />
+                  )
+                ) : (
+                  r.content?.poster_url && (
+                    <img
+                      src={r.content.poster_url}
+                      alt=""
+                      className="h-12 w-8 flex-shrink-0 rounded object-cover"
+                    />
+                  )
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">
-                      {r.content?.title || r.content_id}
+                      {r.request_type === 'photo_replace'
+                        ? r.person?.name || r.person_id
+                        : r.content?.title || r.content_id}
                     </span>
                     {r.request_type === 'delete' && (
                       <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-300">
                         EXCLUIR
+                      </span>
+                    )}
+                    {r.request_type === 'photo_replace' && (
+                      <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-semibold text-purple-300">
+                        FOTO
                       </span>
                     )}
                   </div>
@@ -200,6 +221,8 @@ export default function EditRequestsPage() {
                     {fmtDate(r.created_at)} ·{' '}
                     {r.request_type === 'delete'
                       ? 'pedido de exclusão'
+                      : r.request_type === 'photo_replace'
+                      ? 'troca de foto'
                       : `${Object.keys(r.changes).length} campo(s)`}
                   </div>
                 </div>
@@ -217,8 +240,15 @@ export default function EditRequestsPage() {
             <>
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-bold">{selected.content?.title}</h2>
+                  <h2 className="text-xl font-bold">
+                    {selected.request_type === 'photo_replace'
+                      ? selected.person?.name
+                      : selected.content?.title}
+                  </h2>
                   <p className="text-sm text-zinc-400">
+                    {selected.request_type === 'photo_replace' && selected.person?.role && (
+                      <span className="mr-2 text-zinc-500">{selected.person.role}</span>
+                    )}
                     Proposta por <strong>{selected.employee?.name}</strong> ·{' '}
                     {fmtDate(selected.created_at)}
                   </p>
@@ -247,9 +277,55 @@ export default function EditRequestsPage() {
                 </div>
               )}
 
-              <h3 className="mb-2 text-sm font-semibold text-zinc-300">
-                {selected.request_type === 'delete' ? 'Resumo' : 'Diff'}
-              </h3>
+              {selected.request_type === 'photo_replace' && (
+                <div className="mb-5 rounded-lg border border-purple-500/40 bg-purple-600/10 p-4 text-sm text-purple-200">
+                  <strong>📷 Troca de foto</strong> — funcionário quer substituir a
+                  foto atual de <em>{selected.person?.name}</em>. Aprovação aplica
+                  a nova foto direto na pessoa.
+                </div>
+              )}
+
+              {selected.request_type === 'photo_replace' && (
+                <div className="mb-5 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <div className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
+                      Foto atual
+                    </div>
+                    {selected.original_snapshot?.photo_url ? (
+                      <img
+                        src={selected.original_snapshot.photo_url}
+                        alt="atual"
+                        className="aspect-square w-full rounded-lg object-cover ring-1 ring-red-500/40"
+                      />
+                    ) : (
+                      <div className="aspect-square w-full rounded-lg bg-zinc-800 flex items-center justify-center text-xs text-zinc-500">
+                        sem foto
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
+                      Nova foto proposta
+                    </div>
+                    {selected.changes?.photo_url ? (
+                      <img
+                        src={selected.changes.photo_url}
+                        alt="nova"
+                        className="aspect-square w-full rounded-lg object-cover ring-1 ring-green-500/40"
+                      />
+                    ) : (
+                      <div className="aspect-square w-full rounded-lg bg-zinc-800" />
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selected.request_type !== 'photo_replace' && (
+                <h3 className="mb-2 text-sm font-semibold text-zinc-300">
+                  {selected.request_type === 'delete' ? 'Resumo' : 'Diff'}
+                </h3>
+              )}
+              {selected.request_type !== 'photo_replace' && (
               <div className="mb-5 space-y-3 rounded-lg border border-white/10 bg-zinc-950 p-3 max-h-[50vh] overflow-y-auto">
                 {Object.keys(selected.changes).map((field) => {
                   const before = selected.original_snapshot?.[field];
@@ -294,6 +370,7 @@ export default function EditRequestsPage() {
                   );
                 })}
               </div>
+              )}
 
               {selected.status === 'pending' ? (
                 <>

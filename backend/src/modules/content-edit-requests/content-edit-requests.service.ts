@@ -13,7 +13,7 @@ import { AdminContentSimpleService } from '../admin/services/admin-content-simpl
 import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
 
 export type EditRequestStatus = 'pending' | 'approved' | 'rejected';
-export type EditRequestType = 'update' | 'delete';
+export type EditRequestType = 'update' | 'delete' | 'photo_replace';
 
 @Injectable()
 export class ContentEditRequestsService {
@@ -158,6 +158,76 @@ export class ContentEditRequestsService {
     return request;
   }
 
+  // Igor (07/05): consolidacao do fluxo de aprovacao de foto de pessoa.
+  // Antes tinha endpoint dedicado (/admin/photos-pending) com fila propria
+  // em people.photo_pending_url. Agora substituicao FORA da janela vira
+  // request aqui no mesmo painel de /admin/edit-requests.
+  async submitPhotoReplaceRequest(input: {
+    employeeId: string;
+    personId: string;
+    photoUrl: string;
+  }) {
+    const { employeeId, personId, photoUrl } = input;
+    const trimmed = photoUrl?.trim();
+    if (!trimmed) {
+      throw new BadRequestException('photo_url e obrigatorio');
+    }
+
+    const { data: person, error } = await this.supabase.client
+      .from('people')
+      .select('id, name, role, photo_url')
+      .eq('id', personId)
+      .single();
+
+    if (error || !person) {
+      throw new NotFoundException(`Pessoa ${personId} nao encontrada`);
+    }
+
+    // Bloqueia duplicata: se ja existe photo_replace pendente, nao cria outro.
+    const { data: existing } = await this.supabase.client
+      .from('content_edit_requests')
+      .select('id')
+      .eq('person_id', personId)
+      .eq('request_type', 'photo_replace')
+      .eq('status', 'pending')
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      throw new BadRequestException(
+        'Ja existe uma solicitacao de troca de foto pendente para esta pessoa.',
+      );
+    }
+
+    const { data: request, error: insErr } = await this.supabase.client
+      .from('content_edit_requests')
+      .insert({
+        content_id: null,
+        person_id: personId,
+        employee_id: employeeId,
+        changes: { photo_url: trimmed },
+        original_snapshot: { photo_url: person.photo_url, name: person.name, role: person.role },
+        status: 'pending',
+        request_type: 'photo_replace',
+      })
+      .select(
+        `*, employee:employee_id(id, name, email), person:person_id(id, name, role, photo_url)`,
+      )
+      .single();
+
+    if (insErr || !request) {
+      throw new BadRequestException(
+        `Falha ao registrar pedido de troca de foto: ${insErr?.message}`,
+      );
+    }
+
+    this.notifyAdminNewRequest(request).catch((e: any) =>
+      this.logger.warn(`Notify admin failed: ${e.message}`),
+    );
+
+    return request;
+  }
+
   // ---------------------------------------------------------------------------
   // Listing / details
   // ---------------------------------------------------------------------------
@@ -167,7 +237,8 @@ export class ContentEditRequestsService {
       .select(
         `*,
          employee:employee_id(id, name, email),
-         content:content_id(id, title, content_type, poster_url, status)`,
+         content:content_id(id, title, content_type, poster_url, status),
+         person:person_id(id, name, role, photo_url)`,
       )
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -189,6 +260,7 @@ export class ContentEditRequestsService {
         `*,
          employee:employee_id(id, name, email),
          content:content_id(id, title, content_type, poster_url, status),
+         person:person_id(id, name, role, photo_url),
          reviewer:reviewer_id(id, name, email)`,
       )
       .eq('id', id)
@@ -212,6 +284,43 @@ export class ContentEditRequestsService {
     const request = await this.getById(id);
     if (request.status !== 'pending') {
       throw new BadRequestException('Pedido já foi processado.');
+    }
+
+    // Igor (07/05): photo_replace aplica a nova photo_url direto na pessoa
+    // (mesmo padrao do approveDirect que existia em admin-people.service).
+    if (request.request_type === 'photo_replace') {
+      const newUrl = request.changes?.photo_url;
+      if (!newUrl) {
+        throw new BadRequestException('Pedido sem photo_url no changes.');
+      }
+      const now = new Date().toISOString();
+      await this.supabase.client
+        .from('people')
+        .update({
+          photo_url: newUrl,
+          photo_added_by_user_id: request.employee_id,
+          photo_added_at: now,
+          // Limpa qualquer campo legado de pendencia/rejeicao.
+          photo_pending_url: null,
+          photo_pending_by_user_id: null,
+          photo_pending_at: null,
+          photo_rejected_at: null,
+          photo_rejection_reason: null,
+          updated_at: now,
+        })
+        .eq('id', request.person_id);
+
+      await this.supabase.client
+        .from('content_edit_requests')
+        .update({
+          status: 'approved',
+          reviewer_id: reviewerId,
+          reviewer_notes: reviewerNotes || null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      return this.getById(id);
     }
 
     // A8 — pedido de delete dispara delete real; pedido de update aplica
@@ -280,18 +389,34 @@ export class ContentEditRequestsService {
 
     const employee = Array.isArray(request.employee) ? request.employee[0] : request.employee;
     const content = Array.isArray(request.content) ? request.content[0] : request.content;
+    const person = Array.isArray(request.person) ? request.person[0] : request.person;
     const fields = Object.keys(request.changes || {});
 
     const fieldsLine = fields.length > 6
       ? fields.slice(0, 6).join(', ') + ` (+${fields.length - 6})`
       : fields.join(', ');
 
-    const text =
-      `📝 *Nova edição aguardando aprovação*\n\n` +
-      `*Funcionário:* ${employee?.name || '—'} (${employee?.email || '—'})\n` +
-      `*Conteúdo:* ${content?.title || request.content_id}\n` +
-      `*Campos alterados:* ${fieldsLine || '(nenhum)'}\n\n` +
-      `Acesse o painel admin → "Edições pendentes" para revisar.`;
+    let text: string;
+    if (request.request_type === 'photo_replace') {
+      text =
+        `📷 *Nova troca de foto aguardando aprovação*\n\n` +
+        `*Funcionário:* ${employee?.name || '—'} (${employee?.email || '—'})\n` +
+        `*Pessoa:* ${person?.name || request.person_id} (${person?.role || '—'})\n\n` +
+        `Acesse o painel admin → "Edições pendentes" para revisar.`;
+    } else if (request.request_type === 'delete') {
+      text =
+        `🗑️ *Nova solicitação de exclusão aguardando aprovação*\n\n` +
+        `*Funcionário:* ${employee?.name || '—'} (${employee?.email || '—'})\n` +
+        `*Conteúdo:* ${content?.title || request.content_id}\n\n` +
+        `Acesse o painel admin → "Edições pendentes" para revisar.`;
+    } else {
+      text =
+        `📝 *Nova edição aguardando aprovação*\n\n` +
+        `*Funcionário:* ${employee?.name || '—'} (${employee?.email || '—'})\n` +
+        `*Conteúdo:* ${content?.title || request.content_id}\n` +
+        `*Campos alterados:* ${fieldsLine || '(nenhum)'}\n\n` +
+        `Acesse o painel admin → "Edições pendentes" para revisar.`;
+    }
 
     await this.telegramsService.sendMessage(chatId, text, { parse_mode: 'Markdown' });
   }
