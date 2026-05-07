@@ -7,11 +7,15 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 export interface User {
   id: string;
   email: string;
-  role: 'admin' | 'user';
+  role: 'admin' | 'user' | 'employee' | 'moderator';
   name?: string;
   telegram_id?: string;
   telegram_username?: string;
   whatsapp_joined?: boolean;
+  // Igor (07/05): WhatsApp pessoal salvo via popup do dashboard.
+  // Sem isso aqui no shape, o gate reabria toda vez que voltava na página
+  // (state ficava undefined mesmo com localStorage tendo o valor).
+  whatsapp?: string | null;
 }
 
 export interface AuthState {
@@ -94,6 +98,7 @@ export function useAuth(): AuthState & {
             telegram_id: userData.telegram_id,
             telegram_username: userData.telegram_username,
             whatsapp_joined: userData.whatsapp_joined || false,
+            whatsapp: userData.whatsapp ?? null,
           });
           setIsAuthenticated(true);
           localStorage.setItem('auth_token', backendToken);
@@ -161,6 +166,10 @@ export function useAuth(): AuthState & {
         email: result.user.email,
         role: result.user.role || 'user',
         name: result.user.name || result.user.email.split('@')[0],
+        telegram_id: result.user.telegram_id,
+        telegram_username: result.user.telegram_username,
+        whatsapp_joined: result.user.whatsapp_joined || false,
+        whatsapp: result.user.whatsapp ?? null,
       });
       setIsAuthenticated(true);
     } catch (error: any) {
