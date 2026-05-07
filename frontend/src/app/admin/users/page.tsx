@@ -13,6 +13,8 @@ interface User {
   telegram_id: string;
   telegram_username?: string;
   telegram_chat_id?: string;
+  whatsapp?: string | null;
+  whatsapp_joined?: boolean;
   created_at: string;
 }
 
@@ -430,6 +432,7 @@ export default function AdminUsersPage() {
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Nome</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Telegram ID</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Username</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">WhatsApp</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Funcao</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Status</th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">Criado em</th>
@@ -460,6 +463,25 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         {user.telegram_username ? (
                           <span className="text-blue-400 text-sm">@{user.telegram_username}</span>
+                        ) : (
+                          <span className="text-gray-500 text-sm italic">-</span>
+                        )}
+                      </td>
+
+                      {/* Igor (07/05): WhatsApp pessoal salvo via popup
+                          do dashboard. Ajuda Igor a contactar cliente
+                          fora do Telegram quando necessário. */}
+                      <td className="px-6 py-4">
+                        {user.whatsapp ? (
+                          <a
+                            href={`https://wa.me/${(user.whatsapp || '').replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-emerald-400 text-sm hover:text-emerald-300 hover:underline"
+                            title="Abrir conversa no WhatsApp"
+                          >
+                            📱 {formatWhatsAppDisplay(user.whatsapp)}
+                          </a>
                         ) : (
                           <span className="text-gray-500 text-sm italic">-</span>
                         )}
@@ -645,4 +667,22 @@ export default function AdminUsersPage() {
       </div>
     </div>
   );
+}
+
+// Igor (07/05): formata WhatsApp pra "(21) 99828-0890" sem espaço extra.
+function formatWhatsAppDisplay(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 11) {
+    // BR celular: 21999999999 → (21) 99999-9999
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+  if (digits.length === 13 && digits.startsWith('55')) {
+    // BR com DDI: 5521999999999 → (21) 99999-9999
+    return `(${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  }
+  if (digits.length === 10) {
+    // BR fixo: 2199999999 → (21) 9999-9999
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  return raw;
 }
