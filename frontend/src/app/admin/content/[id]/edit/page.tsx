@@ -85,6 +85,14 @@ export default function AdminContentEditPage() {
   const [trailerUrl, setTrailerUrl] = useState('');
   const [telegramGroupLink, setTelegramGroupLink] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
+  // Igor (07/05): valida Chat ID na hora pra Igor saber se bot é admin
+  // sem precisar comprar pra testar. Botão "Testar" no form.
+  const [chatIdValidating, setChatIdValidating] = useState(false);
+  const [chatIdValidation, setChatIdValidation] = useState<{
+    ok: boolean;
+    reason?: string;
+    chat_title?: string;
+  } | null>(null);
   const [isFeatured, setIsFeatured] = useState(false);
   const [isRelease, setIsRelease] = useState(false);
   const [priceInput, setPriceInput] = useState('');
@@ -612,13 +620,67 @@ export default function AdminContentEditPage() {
                   <label className="block text-sm font-medium mb-2">
                     Chat ID do grupo (opcional — invite automático)
                   </label>
-                  <input
-                    type="text"
-                    value={telegramChatId}
-                    onChange={(e) => setTelegramChatId(e.target.value)}
-                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
-                    placeholder="-1001234567890"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={telegramChatId}
+                      onChange={(e) => {
+                        setTelegramChatId(e.target.value);
+                        setChatIdValidation(null);
+                      }}
+                      className="flex-1 px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                      placeholder="-1001234567890"
+                    />
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const id = telegramChatId.trim();
+                        if (!id) {
+                          toast.error('Cole o Chat ID antes de testar');
+                          return;
+                        }
+                        setChatIdValidating(true);
+                        setChatIdValidation(null);
+                        try {
+                          const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+                          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/telegrams/validate-chat-id`, {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ chat_id: id }),
+                          });
+                          const data = await res.json();
+                          setChatIdValidation(data);
+                          if (data.ok) {
+                            toast.success(`Bot é admin de "${data.chat_title}"`);
+                          } else {
+                            toast.error(data.reason || 'Falha na validação', { duration: 8000 });
+                          }
+                        } catch (err: any) {
+                          toast.error(err.message || 'Erro ao validar');
+                        } finally {
+                          setChatIdValidating(false);
+                        }
+                      }}
+                      disabled={chatIdValidating || !telegramChatId.trim()}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+                    >
+                      {chatIdValidating ? '...' : 'Testar'}
+                    </button>
+                  </div>
+                  {chatIdValidation && (
+                    <p className={`mt-2 text-xs px-3 py-2 rounded-lg border ${
+                      chatIdValidation.ok
+                        ? 'text-green-400 bg-green-900/20 border-green-600/30'
+                        : 'text-red-400 bg-red-900/20 border-red-600/30'
+                    }`}>
+                      {chatIdValidation.ok
+                        ? `✅ Bot é admin de "${chatIdValidation.chat_title}" com permissão de invite`
+                        : `❌ ${chatIdValidation.reason}`}
+                    </p>
+                  )}
                   <p className="mt-1 text-xs text-zinc-500">
                     Quando preenchido, o bot tenta gerar invite de uso único de 24h. Requer @cinevisionv2bot como admin do grupo.
                   </p>
