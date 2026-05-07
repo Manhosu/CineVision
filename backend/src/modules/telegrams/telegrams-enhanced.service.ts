@@ -576,7 +576,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     link: string;
     fixedLink?: string | null;
     expiresInHours?: number;
-    mode: 'single_use' | 'fallback_raw';
+    mode: 'single_use' | 'fallback_raw' | 'fallback_regular';
   }> {
     // 1. Valida que o user tem purchase paga desse content.
     const { data: purchases } = await this.supabase
@@ -591,50 +591,61 @@ export class TelegramsEnhancedService implements OnModuleInit {
       throw new ForbiddenException('Você não tem acesso a este conteúdo.');
     }
 
-    // 2. Lê o telegram_group_link do content.
+    // 2. Lê os 2 campos relacionados ao Telegram do conteúdo.
+    // Igor (07/05): split de `telegram_group_link` em 2 colunas:
+    //   - `telegram_chat_id`: Chat ID numérico (opcional, pra invite auto)
+    //   - `telegram_group_link`: link de convite t.me/+ regular (fallback)
     const { data: content } = await this.supabase
       .from('content')
-      .select('telegram_group_link')
+      .select('telegram_chat_id, telegram_group_link')
       .eq('id', contentId)
       .maybeSingle();
 
-    const raw = content?.telegram_group_link?.trim();
-    if (!raw) {
-      throw new BadRequestException('Conteúdo sem grupo do Telegram configurado.');
+    const chatId = content?.telegram_chat_id?.trim() || null;
+    const regularLink = content?.telegram_group_link?.trim() || null;
+
+    // Caso de compatibilidade: row antiga com Chat ID gravado em
+    // `telegram_group_link` (antes da migration 20260507) — detecta e
+    // trata como Chat ID. Quando chat_id está null mas group_link tem
+    // formato Chat ID puro, usa group_link como Chat ID.
+    let chatIdToTry = chatId;
+    if (!chatIdToTry && regularLink && /^-?\d{6,}$/.test(regularLink)) {
+      chatIdToTry = regularLink;
     }
 
-    // 3. Tenta criar invite single-use 24h. Se for Chat ID numérico ou
-    // username público, getChatIdFromLink resolve e a Bot API gera o
-    // invite. Se for link privado (`t.me/+`), getChatIdFromLink retorna
-    // null e caímos em fallback abaixo (manda o link cru, mesmo
-    // comportamento da entrega original).
-    const single = await this.createInviteLinkForUser(raw, userId);
-    if (single) {
-      // N6 (Igor 04/05): além do single-use, gerar tb um link fixo com
-      // `creates_join_request: true`. Se o cliente compartilhar esse
-      // link com terceiros, eles caem numa fila pra Igor aprovar
-      // manualmente — fica registrado quem está tentando entrar sem
-      // ter comprado. Falha em gerar o fixo não bloqueia o single-use.
-      const fixed = await this.createFixedRequestJoinLink(raw, userId).catch(() => null);
-      return { link: single, fixedLink: fixed, expiresInHours: 24, mode: 'single_use' };
+    // 3. Se temos Chat ID, tenta gerar invite single-use 24h.
+    if (chatIdToTry) {
+      const single = await this.createInviteLinkForUser(chatIdToTry, userId);
+      if (single) {
+        // N6 (Igor 04/05): além do single-use, gerar tb um link fixo com
+        // `creates_join_request: true`. Se o cliente compartilhar esse
+        // link com terceiros, eles caem numa fila pra Igor aprovar
+        // manualmente. Falha em gerar o fixo não bloqueia o single-use.
+        const fixed = await this.createFixedRequestJoinLink(chatIdToTry, userId).catch(() => null);
+        return { link: single, fixedLink: fixed, expiresInHours: 24, mode: 'single_use' };
+      }
+      // Bot não é admin do grupo OU chat not found.
+      // Igor (07/05): em vez de erro, cai pro fallback regular abaixo.
     }
 
-    // N5 (vídeo Igor 7:06 PM): se admin colou Chat ID numérico (`-100XXX`)
-    // mas o bot ainda não foi adicionado como admin do grupo, o
-    // `createInviteLinkForUser` falha (chat not found) e o `raw` é só
-    // um número — não dá pra `window.open(-1003561516755)` no frontend.
-    // Em vez de mandar fallback inválido, devolve erro claro pra Igor
-    // saber que falta o passo operacional.
-    const isChatId = /^-?\d{6,}$/.test(raw);
-    if (isChatId) {
+    // 4. Fallback: link de convite regular (t.me/+...) se cadastrado.
+    // Funciona em qualquer caso: Chat ID falhou OU sem Chat ID. Aceita
+    // qualquer string que abra no Telegram (link privado, username
+    // público, deep link). O frontend `openContentGroup` lida com isso.
+    if (regularLink && regularLink !== chatIdToTry) {
+      // regularLink existe E é diferente do chat_id (não é Chat ID puro
+      // — é link real). Devolve direto.
+      return { link: regularLink, fixedLink: null, mode: 'fallback_regular' };
+    }
+
+    // 5. Sem Chat ID válido (bot não admin) E sem link regular → erro
+    // claro pra Igor saber que precisa cadastrar um link de convite.
+    if (chatIdToTry) {
       throw new BadRequestException(
-        'Não consegui gerar acesso a este grupo do Telegram. Verifique se @cinevisionv2bot foi adicionado como administrador do grupo, com permissão de "Convidar usuários via link".',
+        'Não consegui gerar acesso ao grupo. Verifique se @cinevisionv2bot é admin do grupo, OU cadastre um link de convite (t.me/+...) no painel do conteúdo como fallback.',
       );
     }
-
-    // Caso contrário (link de convite legado tipo `https://t.me/+...`),
-    // manda o link cru — abre direto no Telegram sem precisar do bot.
-    return { link: raw, fixedLink: null, mode: 'fallback_raw' };
+    throw new BadRequestException('Conteúdo sem grupo do Telegram configurado.');
   }
 
   /**

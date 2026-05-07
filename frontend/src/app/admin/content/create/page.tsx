@@ -20,6 +20,7 @@ interface ContentFormData {
   cast: string;
   trailer_url: string;
   telegram_group_link: string;
+  telegram_chat_id: string;
   poster_url: string;
   backdrop_url: string;
   backdrop_position: string;
@@ -94,6 +95,7 @@ export default function AdminContentCreatePage() {
     cast: '',
     trailer_url: '',
     telegram_group_link: '',
+    telegram_chat_id: '',
     poster_url: '',
     backdrop_url: '',
     backdrop_position: '50% 50%',
@@ -198,9 +200,14 @@ export default function AdminContentCreatePage() {
       return;
     }
 
-    // Validar link do Telegram (obrigatório)
-    if (!formData.telegram_group_link || !formData.telegram_group_link.trim()) {
-      toast.error('O link do grupo do Telegram é obrigatório.');
+    // Validar link do Telegram OU Chat ID (pelo menos um obrigatório).
+    // Igor (07/05): Chat ID gera invite single-use auto se bot é admin;
+    // link de convite t.me/+ é fallback. Pelo menos um precisa estar
+    // setado pra cliente conseguir acessar o grupo.
+    const hasGroupLink = !!formData.telegram_group_link?.trim();
+    const hasChatId = !!formData.telegram_chat_id?.trim();
+    if (!hasGroupLink && !hasChatId) {
+      toast.error('Cadastre o link do grupo do Telegram OU o Chat ID (pelo menos um).');
       return;
     }
 
@@ -215,7 +222,8 @@ export default function AdminContentCreatePage() {
         poster_url: formData.poster_url,
         backdrop_url: formData.backdrop_url || undefined,
         trailer_url: formData.trailer_url || undefined,
-        telegram_group_link: formData.telegram_group_link,
+        telegram_group_link: formData.telegram_group_link || undefined,
+        telegram_chat_id: formData.telegram_chat_id || undefined,
         content_type: formData.content_type,
         type: formData.content_type,
         availability: 'telegram',
@@ -897,30 +905,48 @@ export default function AdminContentCreatePage() {
                 />
               </div>
 
+              {/* Igor (07/05): Chat ID e link de convite agora são 2 campos
+                  separados. Chat ID é opcional (gera invite single-use auto se
+                  bot é admin). Link de convite é fallback regular t.me/+. Pelo
+                  menos um precisa ser preenchido. */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Link do Grupo do Telegram *
+                  Chat ID do grupo (opcional — invite automático)
+                </label>
+                <input
+                  type="text"
+                  name="telegram_chat_id"
+                  value={formData.telegram_chat_id}
+                  onChange={handleChange}
+                  placeholder="-1001234567890"
+                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                />
+                <p className="mt-2 text-xs text-zinc-400 bg-zinc-900/40 px-3 py-2 rounded-lg border border-zinc-700/50">
+                  Quando preenchido, o bot tenta gerar invite de uso único de 24h pra cada cliente.
+                  Requer <strong>@cinevisionv2bot como admin do grupo</strong> com permissão de criar links de convite.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Link de convite do grupo {!formData.telegram_chat_id.trim() && '*'}
                 </label>
                 <input
                   type="text"
                   name="telegram_group_link"
                   value={formData.telegram_group_link}
                   onChange={handleChange}
-                  placeholder="https://t.me/+AbCdEfGhIjK ou -1001234567890"
+                  placeholder="https://t.me/+AbCdEfGhIjK"
                   className={`w-full px-4 py-3 bg-gray-900/50 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 ${
-                    !formData.telegram_group_link.trim() ? 'border-red-500/50' : 'border-gray-600/50'
+                    !formData.telegram_chat_id.trim() && !formData.telegram_group_link.trim()
+                      ? 'border-red-500/50'
+                      : 'border-gray-600/50'
                   }`}
-                  required
                 />
                 <p className="mt-2 text-xs text-yellow-400 bg-yellow-900/20 px-3 py-2 rounded-lg border border-yellow-600/30">
-                  <strong>IMPORTANTE:</strong> O bot DEVE estar neste grupo como <strong>administrador</strong> com permissão para <strong>criar links de convite</strong>.
-                  Você pode fornecer o link de convite (https://t.me/+...) ou o Chat ID numérico do grupo (-1001234567890).
+                  <strong>Fallback regular:</strong> usado quando o Chat ID não foi preenchido OU o bot não é admin do grupo.
+                  Sem este link, clientes podem ficar sem acesso.
                 </p>
-                {formData.telegram_group_link && (
-                  <p className="mt-2 text-xs text-blue-400 bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-600/30">
-                    Após a compra, o usuário receberá um link de convite de uso único para entrar neste grupo.
-                  </p>
-                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

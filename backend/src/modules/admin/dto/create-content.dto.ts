@@ -55,10 +55,15 @@ export class CreateContentDto {
   @IsUrl()
   trailer_url?: string;
 
-  @ApiPropertyOptional({ description: 'Telegram group invite link (e.g., https://t.me/+AbCdEfGhIjK). Bot must be admin with invite permission.' })
+  @ApiPropertyOptional({ description: 'Telegram group invite link (e.g., https://t.me/+AbCdEfGhIjK). Used as fallback when bot is not admin of the chat.' })
   @IsOptional()
   @IsString()
   telegram_group_link?: string;
+
+  @ApiPropertyOptional({ description: 'Telegram chat ID (numeric, e.g., -1001234567890). Used to generate single-use invites via Bot API. Requires bot as admin of the group.' })
+  @IsOptional()
+  @IsString()
+  telegram_chat_id?: string;
 
   @ApiPropertyOptional({ description: 'Cover image URL or upload key' })
   @IsOptional()

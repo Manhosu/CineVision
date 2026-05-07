@@ -878,10 +878,11 @@ export class OrdersService {
       }
     }
 
-    // Fetch purchases with their content (so we have telegram_group_link)
+    // Fetch purchases with their content (so we have telegram_group_link
+    // + telegram_chat_id pra gerar invite via Bot API quando bot é admin).
     const { data: purchases } = await this.supabase.client
       .from('purchases')
-      .select('id, content_id, content:content(id, title, telegram_group_link)')
+      .select('id, content_id, content:content(id, title, telegram_group_link, telegram_chat_id)')
       .eq('order_id', orderId);
 
     if (!purchases?.length) {
@@ -919,48 +920,49 @@ export class OrdersService {
         const content: any = Array.isArray(p.content) ? p.content[0] : p.content;
         if (!content) continue;
         const title = content.title || 'Conteúdo';
+
+        // Igor (07/05): split de chat_id vs group_link.
+        // Estratégia: tenta Chat ID primeiro (single-use via Bot API);
+        // se falha (bot não admin), usa o link de convite regular como
+        // fallback. Aceita também row legada onde Chat ID estava em
+        // group_link (regex detecta).
+        const rawChatId: string | null = content.telegram_chat_id?.trim() || null;
         const rawLink: string | null = content.telegram_group_link?.trim() || null;
-        if (!rawLink) {
-          await this.telegramsService.sendMessage(
-            chatId,
-            `⚠️ *${title}*: link pendente, o suporte vai te enviar manualmente.`,
-            sendOpts({ parse_mode: 'Markdown' }),
-          );
-          continue;
+        let chatIdToTry = rawChatId;
+        if (!chatIdToTry && rawLink && /^-?\d{6,}$/.test(rawLink)) {
+          chatIdToTry = rawLink;
         }
 
-        // Igor (07/05): após N5, vários filmes usam Chat ID numérico
-        // (-100XXX...) em vez de link https://t.me/+... O Telegram
-        // rejeita inline_keyboard URL não-http, fazia o sendMessage
-        // falhar silenciosamente — cliente via "Pagamento confirmado"
-        // mas nenhum botão.
-        // Detecção: se rawLink for só dígitos (com - opcional), gera
-        // invite single-use via Bot API. Senão, usa o link cru.
-        const isChatId = /^-?\d{6,}$/.test(rawLink);
         let buttonUrl: string | null = null;
-        if (isChatId) {
+
+        // 1. Tenta gerar invite single-use se temos Chat ID.
+        if (chatIdToTry) {
           try {
             buttonUrl = await this.telegramsService.createInviteLinkForUser(
-              rawLink,
-              p.id, // logging marker (purchase id)
+              chatIdToTry,
+              p.id,
             );
           } catch (err: any) {
             this.logger.warn(
-              `createInviteLinkForUser failed for purchase ${p.id} (chat ${rawLink}): ${err.message}`,
+              `createInviteLinkForUser failed for purchase ${p.id} (chat ${chatIdToTry}): ${err.message}`,
             );
           }
-        } else {
+        }
+
+        // 2. Fallback: link de convite regular (t.me/+...) se cadastrado.
+        if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
           buttonUrl = rawLink;
         }
 
         if (buttonUrl) {
           inlineButtons.push([{ text: `🎬 ${title}`, url: buttonUrl }]);
         } else {
-          // Falhou em gerar invite (bot não é admin do grupo, etc).
-          // Avisa o cliente sem quebrar a mensagem inteira.
+          // Sem nenhum link válido — avisa o cliente.
           await this.telegramsService.sendMessage(
             chatId,
-            `⚠️ *${title}*: link pendente. Avise o suporte que o bot precisa estar no grupo.`,
+            chatIdToTry
+              ? `⚠️ *${title}*: link pendente. Avise o suporte que o bot precisa estar no grupo OU cadastrar um link de convite t.me/+ como fallback.`
+              : `⚠️ *${title}*: link pendente, o suporte vai te enviar manualmente.`,
             sendOpts({ parse_mode: 'Markdown' }),
           );
         }

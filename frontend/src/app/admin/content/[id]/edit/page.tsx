@@ -21,6 +21,7 @@ interface Content {
   cast: string | string[];
   trailer_url: string;
   telegram_group_link: string;
+  telegram_chat_id: string;
   poster_url: string;
   backdrop_url: string;
   content_type: 'movie' | 'series';
@@ -82,6 +83,7 @@ export default function AdminContentEditPage() {
   const [cast, setCast] = useState('');
   const [trailerUrl, setTrailerUrl] = useState('');
   const [telegramGroupLink, setTelegramGroupLink] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
   const [isRelease, setIsRelease] = useState(false);
   const [priceInput, setPriceInput] = useState('');
@@ -153,6 +155,7 @@ export default function AdminContentEditPage() {
 
         setTrailerUrl(data.trailer_url || '');
         setTelegramGroupLink(data.telegram_group_link || '');
+        setTelegramChatId((data as any).telegram_chat_id || '');
         setIsFeatured(data.is_featured || false);
         setIsRelease(data.is_release || false);
         setPriceInput((data.price_cents / 100).toFixed(2));
@@ -281,6 +284,7 @@ export default function AdminContentEditPage() {
         cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : cast.trim(),
         trailer_url: trailerUrl.trim(),
         telegram_group_link: telegramGroupLink.trim(),
+        telegram_chat_id: telegramChatId.trim() || null,
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
@@ -349,6 +353,7 @@ export default function AdminContentEditPage() {
       cast !== (Array.isArray(originalContent.cast) ? originalContent.cast.join(', ') : (originalContent.cast || '')) ||
       trailerUrl !== (originalContent.trailer_url || '') ||
       telegramGroupLink !== (originalContent.telegram_group_link || '') ||
+      telegramChatId !== ((originalContent as any).telegram_chat_id || '') ||
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
       backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
@@ -583,26 +588,42 @@ export default function AdminContentEditPage() {
                   />
                 </div>
 
+                {/* Igor (07/05): Chat ID e link de convite separados.
+                    Chat ID: opcional, gera invite single-use auto.
+                    Link de convite: fallback regular t.me/+. */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
-                    Link do Grupo Telegram (ou Chat ID) *
+                    Chat ID do grupo (opcional — invite automático)
                   </label>
-                  {/* N4 — type="url" rejeitava ID numérico (-100XXX...).
-                      Trocado pra "text" pra aceitar tanto link de
-                      convite quanto Chat ID, em paridade com a tela
-                      de criação. */}
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                    placeholder="-1001234567890"
+                  />
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Quando preenchido, o bot tenta gerar invite de uso único de 24h. Requer @cinevisionv2bot como admin do grupo.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Link de convite do grupo {!telegramChatId.trim() && '*'}
+                  </label>
                   <input
                     type="text"
                     value={telegramGroupLink}
                     onChange={(e) => setTelegramGroupLink(e.target.value)}
                     className={`w-full px-4 py-2 bg-dark-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500 ${
-                      !telegramGroupLink.trim() ? 'border-red-500/50' : 'border-white/10'
+                      !telegramChatId.trim() && !telegramGroupLink.trim()
+                        ? 'border-red-500/50'
+                        : 'border-white/10'
                     }`}
-                    placeholder="https://t.me/+AbCdEfGhIjK ou -1001234567890"
-                    required
+                    placeholder="https://t.me/+AbCdEfGhIjK"
                   />
                   <p className="mt-1 text-xs text-zinc-500">
-                    Chat ID numérico (-100XXX) é o formato recomendado — o bot precisa estar no grupo como admin com permissão de criar links.
+                    Fallback regular usado quando Chat ID não foi preenchido OU bot não é admin.
                   </p>
                 </div>
               </div>
