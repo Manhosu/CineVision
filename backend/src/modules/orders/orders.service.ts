@@ -919,13 +919,48 @@ export class OrdersService {
         const content: any = Array.isArray(p.content) ? p.content[0] : p.content;
         if (!content) continue;
         const title = content.title || 'Conteúdo';
-        const link = content.telegram_group_link;
-        if (link) {
-          inlineButtons.push([{ text: `🎬 ${title}`, url: link }]);
-        } else {
+        const rawLink: string | null = content.telegram_group_link?.trim() || null;
+        if (!rawLink) {
           await this.telegramsService.sendMessage(
             chatId,
             `⚠️ *${title}*: link pendente, o suporte vai te enviar manualmente.`,
+            sendOpts({ parse_mode: 'Markdown' }),
+          );
+          continue;
+        }
+
+        // Igor (07/05): após N5, vários filmes usam Chat ID numérico
+        // (-100XXX...) em vez de link https://t.me/+... O Telegram
+        // rejeita inline_keyboard URL não-http, fazia o sendMessage
+        // falhar silenciosamente — cliente via "Pagamento confirmado"
+        // mas nenhum botão.
+        // Detecção: se rawLink for só dígitos (com - opcional), gera
+        // invite single-use via Bot API. Senão, usa o link cru.
+        const isChatId = /^-?\d{6,}$/.test(rawLink);
+        let buttonUrl: string | null = null;
+        if (isChatId) {
+          try {
+            buttonUrl = await this.telegramsService.createInviteLinkForUser(
+              rawLink,
+              p.id, // logging marker (purchase id)
+            );
+          } catch (err: any) {
+            this.logger.warn(
+              `createInviteLinkForUser failed for purchase ${p.id} (chat ${rawLink}): ${err.message}`,
+            );
+          }
+        } else {
+          buttonUrl = rawLink;
+        }
+
+        if (buttonUrl) {
+          inlineButtons.push([{ text: `🎬 ${title}`, url: buttonUrl }]);
+        } else {
+          // Falhou em gerar invite (bot não é admin do grupo, etc).
+          // Avisa o cliente sem quebrar a mensagem inteira.
+          await this.telegramsService.sendMessage(
+            chatId,
+            `⚠️ *${title}*: link pendente. Avise o suporte que o bot precisa estar no grupo.`,
             sendOpts({ parse_mode: 'Markdown' }),
           );
         }
