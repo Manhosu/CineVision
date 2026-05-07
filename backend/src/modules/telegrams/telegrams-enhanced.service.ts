@@ -782,16 +782,110 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
         return null;
       }
-    } catch (error) {
-      this.logger.error(`Error creating invite link for user ${userId}:`, error);
+    } catch (error: any) {
+      // Igor (07/05): log MUITO mais verboso pra diagnosticar quando
+      // bot não consegue gerar invite (Sirāt deu "indisponível" mesmo
+      // com bot admin). Mostra status HTTP, description da Telegram API,
+      // e o body completo do erro.
+      const apiStatus = error?.response?.status;
+      const apiDesc = error?.response?.data?.description;
+      const apiErrorCode = error?.response?.data?.error_code;
+      this.logger.error(
+        `[createInviteLinkForUser] FAILED user=${userId} link=${groupLink} ` +
+        `httpStatus=${apiStatus} apiCode=${apiErrorCode} desc="${apiDesc}" raw="${error?.message}"`,
+      );
 
       await this.supabase.from('system_logs').insert({
         type: 'telegram_group',
         level: 'error',
-        message: `Exception creating invite link for user ${userId}: ${error.message}`,
+        message: `Exception creating invite link for user ${userId}: status=${apiStatus} apiCode=${apiErrorCode} desc="${apiDesc}" msg=${error.message}`,
       });
 
       return null;
+    }
+  }
+
+  /**
+   * Igor (07/05): valida se o bot é admin do grupo COM permissão
+   * de invite. Usado pelo admin form pra dar feedback imediato em
+   * vez do cliente descobrir pagando.
+   * Retorna { ok: true } ou { ok: false, reason: string } com
+   * mensagem amigável.
+   */
+  async validateChatIdAdmin(chatId: string): Promise<{
+    ok: boolean;
+    reason?: string;
+    chat_title?: string;
+    bot_can_invite?: boolean;
+  }> {
+    const cleanId = chatId.trim();
+    if (!/^-?\d{6,}$/.test(cleanId)) {
+      return {
+        ok: false,
+        reason: `Formato inválido. Chat ID deve ser numérico (ex: -1001234567890). Você forneceu: "${cleanId}"`,
+      };
+    }
+
+    try {
+      // 1. getChat: confirma que o bot está no grupo.
+      const chatRes = await axios.post(`${this.botApiUrl}/getChat`, {
+        chat_id: cleanId,
+      });
+      if (!chatRes.data.ok) {
+        return {
+          ok: false,
+          reason: `Telegram API retornou: ${chatRes.data.description || 'getChat falhou'}`,
+        };
+      }
+      const chatTitle = chatRes.data.result.title;
+
+      // 2. getChatMember pra ver permissões do bot.
+      const meRes = await axios.post(`${this.botApiUrl}/getMe`);
+      if (!meRes.data.ok) return { ok: false, reason: 'Bot info indisponível' };
+      const botId = meRes.data.result.id;
+
+      const memberRes = await axios.post(`${this.botApiUrl}/getChatMember`, {
+        chat_id: cleanId,
+        user_id: botId,
+      });
+      if (!memberRes.data.ok) {
+        return {
+          ok: false,
+          chat_title: chatTitle,
+          reason: `Bot não está no grupo "${chatTitle}". Adicione @${meRes.data.result.username} ao grupo primeiro.`,
+        };
+      }
+      const member = memberRes.data.result;
+      const status = member.status;
+      if (status !== 'administrator' && status !== 'creator') {
+        return {
+          ok: false,
+          chat_title: chatTitle,
+          reason: `Bot está no grupo "${chatTitle}" mas NÃO é admin (status atual: ${status}). Promova @${meRes.data.result.username} a administrador.`,
+        };
+      }
+      const canInvite = member.can_invite_users === true || status === 'creator';
+      if (!canInvite) {
+        return {
+          ok: false,
+          chat_title: chatTitle,
+          bot_can_invite: false,
+          reason: `Bot é admin de "${chatTitle}" mas SEM permissão de "Convidar usuários via link". Habilite essa permissão específica.`,
+        };
+      }
+      return { ok: true, chat_title: chatTitle, bot_can_invite: true };
+    } catch (error: any) {
+      const apiStatus = error?.response?.status;
+      const apiDesc = error?.response?.data?.description;
+      this.logger.warn(
+        `validateChatIdAdmin failed for ${cleanId}: status=${apiStatus} desc="${apiDesc}" msg=${error.message}`,
+      );
+      return {
+        ok: false,
+        reason:
+          apiDesc ||
+          `Erro ao consultar Telegram (HTTP ${apiStatus}): ${error.message}`,
+      };
     }
   }
 

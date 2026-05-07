@@ -9,6 +9,7 @@ import PeopleTagInput from '@/components/Admin/PeopleTagInput';
 
 interface ContentFormData {
   title: string;
+  title_en: string;
   description: string;
   synopsis: string;
   release_date: string;
@@ -84,6 +85,7 @@ export default function AdminContentCreatePage() {
   const [selectedDirectors, setSelectedDirectors] = useState<{ id: string; name: string; photo_url?: string; role: string }[]>([]);
   const [formData, setFormData] = useState<ContentFormData>({
     title: '',
+    title_en: '',
     description: '',
     synopsis: '',
     release_date: '',
@@ -140,6 +142,15 @@ export default function AdminContentCreatePage() {
   // bloqueia o submit — só alerta visualmente, decisão fica com o admin.
   const [duplicateMatches, setDuplicateMatches] = useState<{ id: string; title: string }[]>([]);
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+
+  // Igor (07/05): valida Chat ID na hora pra Igor saber se bot é admin
+  // sem precisar comprar pra testar. Botão "Testar" no form.
+  const [chatIdValidating, setChatIdValidating] = useState(false);
+  const [chatIdValidation, setChatIdValidation] = useState<{
+    ok: boolean;
+    reason?: string;
+    chat_title?: string;
+  } | null>(null);
 
   useEffect(() => {
     const trimmed = formData.title.trim();
@@ -217,6 +228,7 @@ export default function AdminContentCreatePage() {
       // Transformar dados para o formato esperado pelo backend
       const backendData: any = {
         title: formData.title,
+        title_en: formData.title_en || undefined,
         description: formData.description || undefined,
         synopsis: formData.synopsis || undefined,
         poster_url: formData.poster_url,
@@ -657,6 +669,26 @@ export default function AdminContentCreatePage() {
                     <p className="mt-2 text-xs text-gray-500">Verificando duplicatas…</p>
                   )}
                 </div>
+
+                {/* Igor (07/05): título secundário em inglês — opcional.
+                    Quando preenchido, busca no /search também acha o filme
+                    digitando o título original em inglês (ex: "Anora"). */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Título secundário (geralmente em inglês)
+                  </label>
+                  <input
+                    type="text"
+                    name="title_en"
+                    value={formData.title_en}
+                    onChange={handleChange}
+                    placeholder="Ex: Anora"
+                    className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-200"
+                  />
+                  <p className="mt-2 text-xs text-zinc-500">
+                    Quando preenchido, a busca encontra o filme digitando esse título também (útil pra filmes com nome original diferente).
+                  </p>
+                </div>
               </div>
 
               <div>
@@ -913,14 +945,65 @@ export default function AdminContentCreatePage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Chat ID do grupo (opcional — invite automático)
                 </label>
-                <input
-                  type="text"
-                  name="telegram_chat_id"
-                  value={formData.telegram_chat_id}
-                  onChange={handleChange}
-                  placeholder="-1001234567890"
-                  className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="telegram_chat_id"
+                    value={formData.telegram_chat_id}
+                    onChange={handleChange}
+                    placeholder="-1001234567890"
+                    className="flex-1 px-4 py-3 bg-gray-900/50 border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const id = formData.telegram_chat_id.trim();
+                      if (!id) {
+                        toast.error('Cole o Chat ID antes de testar');
+                        return;
+                      }
+                      setChatIdValidating(true);
+                      setChatIdValidation(null);
+                      try {
+                        const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+                        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/telegrams/validate-chat-id`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`,
+                          },
+                          body: JSON.stringify({ chat_id: id }),
+                        });
+                        const data = await res.json();
+                        setChatIdValidation(data);
+                        if (data.ok) {
+                          toast.success(`Bot é admin de "${data.chat_title}" ✅`);
+                        } else {
+                          toast.error(data.reason || 'Falha na validação', { duration: 8000 });
+                        }
+                      } catch (err: any) {
+                        toast.error(err.message || 'Erro ao validar');
+                      } finally {
+                        setChatIdValidating(false);
+                      }
+                    }}
+                    disabled={chatIdValidating || !formData.telegram_chat_id.trim()}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+                  >
+                    {chatIdValidating ? '...' : 'Testar'}
+                  </button>
+                </div>
+                {chatIdValidation && (
+                  <p className={`mt-2 text-xs px-3 py-2 rounded-lg border ${
+                    chatIdValidation.ok
+                      ? 'text-green-400 bg-green-900/20 border-green-600/30'
+                      : 'text-red-400 bg-red-900/20 border-red-600/30'
+                  }`}>
+                    {chatIdValidation.ok
+                      ? `✅ Bot é admin de "${chatIdValidation.chat_title}" com permissão de invite`
+                      : `❌ ${chatIdValidation.reason}`}
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-zinc-400 bg-zinc-900/40 px-3 py-2 rounded-lg border border-zinc-700/50">
                   Quando preenchido, o bot tenta gerar invite de uso único de 24h pra cada cliente.
                   Requer <strong>@cinevisionv2bot como admin do grupo</strong> com permissão de criar links de convite.

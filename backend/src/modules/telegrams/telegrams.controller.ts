@@ -48,6 +48,17 @@ export class TelegramsController {
     );
   }
 
+  // Igor (07/05): valida Chat ID na hora de cadastrar conteúdo —
+  // mostra se bot é admin do grupo + tem permissão de invite, antes
+  // do cliente descobrir pagando.
+  @Post('validate-chat-id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Validate if bot is admin of given chat ID with invite permission' })
+  async validateChatId(@Body() body: { chat_id: string }) {
+    return this.telegramsEnhancedService.validateChatIdAdmin(body.chat_id || '');
+  }
+
   @Post('webhook')
   @ApiOperation({ summary: 'Telegram bot webhook handler' })
   @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
