@@ -329,6 +329,37 @@ export class EmployeesService {
     };
   }
 
+  /**
+   * Igor (07/05): admin Master quer ver quais funcionários estão
+   * online em tempo real. Critério: `last_active_at` dentro dos
+   * últimos 10min (heartbeat do session-guard). Filtra por role
+   * (employee, admin, moderator) — exclui clientes.
+   */
+  async listOnlineEmployees() {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error } = await this.supabase.client
+      .from('users')
+      .select('id, name, email, role, telegram_username, last_active_at, last_login_at')
+      .in('role', ['admin', 'moderator', 'employee'])
+      .gte('last_active_at', tenMinAgo)
+      .order('last_active_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      this.logger.error(`listOnlineEmployees failed: ${error.message}`);
+      return [];
+    }
+    return (data || []).map((u: any) => ({
+      id: u.id,
+      name: u.name || u.email?.split('@')[0] || 'Sem nome',
+      email: u.email,
+      role: u.role,
+      telegram_username: u.telegram_username,
+      last_active_at: u.last_active_at,
+      last_login_at: u.last_login_at,
+    }));
+  }
+
   async listContent(userId: string) {
     const { data } = await this.supabase.client
       .from('content')

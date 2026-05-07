@@ -85,6 +85,16 @@ export class EmployeesController {
     return this.employees.updatePermissions(id, dto);
   }
 
+  // Igor (07/05): "quero ver no painel master quais funcionários
+  // estão online em tempo real". Usa last_active_at do users (heartbeat
+  // a cada navegação no admin). Janela 10min — fora disso = offline.
+  @Get('online')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @ApiOperation({ summary: 'List employees + admins currently online (active last 10min)' })
+  async onlineEmployees() {
+    return this.employees.listOnlineEmployees();
+  }
+
   @Get(':id/stats')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Employee productivity stats' })
@@ -104,6 +114,26 @@ export class EmployeesController {
     @Query('to') to?: string,
   ) {
     return this.employees.getProductivity(id, { from, to });
+  }
+
+  // Igor (07/05): funcionário acessa as PRÓPRIAS stats sem precisar
+  // de role admin. Usa user.sub do JWT — não dá pra ver stats de outro.
+  @Get('me/stats')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Get my own productivity stats (employee self-service)' })
+  async myStats(@GetUser() user: any) {
+    return this.employees.getStats(user.sub || user.id);
+  }
+
+  @Get('me/productivity')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Get my own productivity breakdown (employee self-service)' })
+  async myProductivity(
+    @GetUser() user: any,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.employees.getProductivity(user.sub || user.id, { from, to });
   }
 
   @Get(':id/content')

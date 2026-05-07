@@ -53,6 +53,15 @@ export default function AdminDashboard() {
   const [perms, setPerms] = useState<EmployeePermissions | null>(null);
   const [isEmployee, setIsEmployee] = useState(false);
   const [pendingEditCount, setPendingEditCount] = useState(0);
+  // Igor (07/05): funcionários online em tempo real (last_active_at <10min).
+  const [onlineEmployees, setOnlineEmployees] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    telegram_username?: string;
+    last_active_at: string;
+  }>>([]);
 
   const handleLogout = async () => {
     try {
@@ -130,6 +139,34 @@ export default function AdminDashboard() {
 
     return () => clearInterval(interval);
   }, [mounted]);
+
+  // Igor (07/05): poll funcionários online a cada 30s.
+  useEffect(() => {
+    if (!mounted || isEmployee) return; // só admin/master vê
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+      : null;
+    if (!token) return;
+
+    const loadOnline = async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/v1/admin/employees/online`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (r.ok) {
+          const data = await r.json();
+          setOnlineEmployees(Array.isArray(data) ? data : []);
+        }
+      } catch {
+        /* silent */
+      }
+    };
+
+    loadOnline();
+    const interval = setInterval(loadOnline, 30000);
+    return () => clearInterval(interval);
+  }, [mounted, isEmployee]);
 
   // Detect if logged user is an employee and fetch their permissions
   useEffect(() => {
@@ -385,6 +422,18 @@ export default function AdminDashboard() {
       gradient: 'from-pink-600 to-rose-700',
       shadow: 'shadow-pink-500/50',
     },
+    {
+      title: 'Minha Produtividade',
+      description: 'Ver conteúdos que você adicionou (com gráfico diário)',
+      href: '/employee/productivity',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      ),
+      gradient: 'from-cyan-600 to-blue-700',
+      shadow: 'shadow-cyan-500/50',
+    },
   ];
 
   // Hide cards an employee shouldn't see, based on their permissions.
@@ -394,6 +443,9 @@ export default function AdminDashboard() {
     const allowed = new Set<string>([
       '/admin/content/manage',
       '/admin/my-edit-requests', // employees can always see their own edits
+      // Igor (07/05): produtividade própria sempre disponível pra
+      // funcionário ver suas stats sem precisar de permissão extra.
+      '/employee/productivity',
     ]);
     if (perms?.can_add_movies || perms?.can_add_series) allowed.add('/admin/content/create');
     if (perms?.can_view_users) allowed.add('/admin/users');
@@ -548,6 +600,50 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* Igor (07/05): card específico de funcionários online em
+            tempo real. Só admin/master vê — funcionário não vê outros
+            funcionários online. */}
+        {!isEmployee && onlineEmployees.length > 0 && (
+          <div className="mb-8 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900/10 to-cyan-900/10 p-6">
+            <h2 className="mb-4 flex items-center text-xl font-bold text-white">
+              <span className="mr-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
+              Funcionários Online ({onlineEmployees.length})
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {onlineEmployees.map((u) => (
+                <div
+                  key={u.id}
+                  className="flex items-center gap-3 rounded-lg border border-white/5 bg-zinc-900/50 p-3"
+                >
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                    {u.name?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold text-white">
+                      {u.name}
+                    </div>
+                    <div className="truncate text-xs text-zinc-400">
+                      <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                        u.role === 'admin' || u.role === 'moderator'
+                          ? 'bg-purple-500/20 text-purple-300'
+                          : 'bg-cyan-500/20 text-cyan-300'
+                      }`}>
+                        {u.role}
+                      </span>
+                      {u.telegram_username
+                        ? `@${u.telegram_username}`
+                        : u.email}
+                    </div>
+                    <div className="text-[10px] text-zinc-500">
+                      Ativo {timeAgo(u.last_active_at)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Quick Actions */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center">
@@ -587,4 +683,16 @@ export default function AdminDashboard() {
       </div>
     </div>
   );
+}
+
+// Igor (07/05): formata "Ativo há X" pra card de funcionários online.
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 30) return 'agora';
+  if (sec < 60) return 'há menos de 1min';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `há ${min}min`;
+  const h = Math.floor(min / 60);
+  return `há ${h}h`;
 }
