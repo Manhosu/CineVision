@@ -222,10 +222,13 @@ export class AdminPeopleService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Admin envia foto direto, persiste em `photo_url` com ownership.
-   * Employee envia foto pendente, persiste em `photo_pending_url` (precisa
-   * `can_add_people_photos=true` E pessoa estar sem foto). Roles abaixo
-   * de admin/employee são bloqueadas.
+   * Admin: foto sempre direto em `photo_url`, com ownership.
+   * Employee (Igor 07/05):
+   *   - Pessoa SEM foto (criação inicial) → DIRETO em photo_url (auto-aprovado).
+   *   - Pessoa COM foto + dentro da janela `edit_window_hours` → DIRETO (substitui).
+   *   - Pessoa COM foto + fora da janela → vai pra `photo_pending_url` (fila).
+   *   - Pendência ativa de outro funcionário → bloqueia pra evitar race.
+   * Roles abaixo de admin/employee são bloqueadas (validado no controller).
    */
   async submitPhoto(personId: string, photoUrl: string, actorUserId: string, isAdmin: boolean) {
     if (!photoUrl?.trim()) {
@@ -234,15 +237,17 @@ export class AdminPeopleService {
 
     const person = await this.findById(personId);
     const now = new Date().toISOString();
+    const trimmed = photoUrl.trim();
 
-    if (isAdmin) {
+    // Helper: aplicar foto direto em photo_url (path "approved").
+    const approveDirect = async () => {
       const { data: updated, error } = await this.supabaseService.client
         .from('people')
         .update({
-          photo_url: photoUrl.trim(),
+          photo_url: trimmed,
           photo_added_by_user_id: actorUserId,
           photo_added_at: now,
-          // Limpa qualquer pendência prévia (admin sobrepõe).
+          // Limpa qualquer pendência/rejeição prévia.
           photo_pending_url: null,
           photo_pending_by_user_id: null,
           photo_pending_at: null,
@@ -253,9 +258,32 @@ export class AdminPeopleService {
         .eq('id', personId)
         .select()
         .single();
-
       if (error) throw new Error(`Failed to set photo: ${error.message}`);
       return { status: 'approved' as const, person: updated };
+    };
+
+    // Helper: enviar pra fila pending.
+    const submitToPending = async () => {
+      const { data: updated, error } = await this.supabaseService.client
+        .from('people')
+        .update({
+          photo_pending_url: trimmed,
+          photo_pending_by_user_id: actorUserId,
+          photo_pending_at: now,
+          photo_rejected_at: null,
+          photo_rejection_reason: null,
+          updated_at: now,
+        })
+        .eq('id', personId)
+        .select()
+        .single();
+      if (error) throw new Error(`Failed to submit photo: ${error.message}`);
+      return { status: 'pending' as const, person: updated };
+    };
+
+    // Admin: sempre direto.
+    if (isAdmin) {
+      return approveDirect();
     }
 
     // Path do funcionário.
@@ -263,33 +291,44 @@ export class AdminPeopleService {
     if (!perms?.can_add_people_photos) {
       throw new ForbiddenException('Sem permissão para adicionar fotos');
     }
-    if (person.photo_url) {
-      throw new ForbiddenException(
-        'Esta pessoa já tem foto. Solicite ao admin para substituir.',
-      );
+
+    // Caso 1: pessoa NUNCA teve foto → criação inicial → aprovação direta.
+    // (Não há pendência prévia OU rejeição — funcionário pode criar.)
+    if (!person.photo_url && !person.photo_pending_url) {
+      return approveDirect();
     }
+
+    // Caso 2: pessoa JÁ tem foto → substituição. Aplica janela de edição.
+    // Janela usa `edit_window_hours` do funcionário, com referência em
+    // `photo_added_at` (último approve) ou `created_at` da pessoa como
+    // fallback. Mesmo padrão do `getEditCapability` em conteúdo.
+    if (person.photo_url) {
+      const windowHours = perms.edit_window_hours ?? 5;
+      const referenceTime = person.photo_added_at || person.created_at;
+      const ageMs = referenceTime
+        ? Date.now() - new Date(referenceTime).getTime()
+        : Number.POSITIVE_INFINITY;
+      const maxMs = windowHours * 60 * 60 * 1000;
+
+      if (ageMs <= maxMs) {
+        // Dentro da janela → substitui direto em photo_url.
+        return approveDirect();
+      }
+
+      // Fora da janela → cai pro fluxo de pending abaixo. Mas só se
+      // não houver pendência concorrente (próxima checagem).
+    }
+
+    // Caso 3: pendência ativa (de outro upload prévio que ainda não foi
+    // aprovado/rejeitado) → bloqueia pra evitar race.
     if (person.photo_pending_url) {
       throw new BadRequestException(
         'Já existe uma foto pendente de aprovação para esta pessoa.',
       );
     }
 
-    const { data: updated, error } = await this.supabaseService.client
-      .from('people')
-      .update({
-        photo_pending_url: photoUrl.trim(),
-        photo_pending_by_user_id: actorUserId,
-        photo_pending_at: now,
-        photo_rejected_at: null,
-        photo_rejection_reason: null,
-        updated_at: now,
-      })
-      .eq('id', personId)
-      .select()
-      .single();
-
-    if (error) throw new Error(`Failed to submit photo: ${error.message}`);
-    return { status: 'pending' as const, person: updated };
+    // Caso 4: substituição fora da janela → fila pending.
+    return submitToPending();
   }
 
   /**
