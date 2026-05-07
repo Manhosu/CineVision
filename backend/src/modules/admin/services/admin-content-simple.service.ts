@@ -127,6 +127,8 @@ export class AdminContentSimpleService {
       telegram_group_link: data.telegram_group_link || null,
       // Igor (07/05): Chat ID separado — opcional, pra invite auto via bot.
       telegram_chat_id: data.telegram_chat_id || null,
+      // Igor (07/05): título secundário (geralmente em inglês) — busca também filtra por ele.
+      title_en: data.title_en || null,
       age_rating: data.age_rating || null,
     };
 
@@ -476,7 +478,7 @@ export class AdminContentSimpleService {
     const allowedFields = [
       'title', 'description', 'synopsis', 'poster_url', 'backdrop_url',
       'backdrop_position', 'backdrop_position_mobile',
-      'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'release_year',
+      'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'title_en', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
       'status', 'availability', 'quality_label', 'audio_type'

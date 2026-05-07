@@ -235,7 +235,11 @@ export class ContentSupabaseService {
       this.logger.log(`[N11] normalizedQuery: "${q}"`);
 
       const filtered = (all || []).filter((c: any) => {
+        // Igor (07/05): inclui title_en (título secundário em inglês)
+        // pra busca achar filme cadastrado em PT mesmo quando cliente
+        // digita o nome original em inglês (ex: "Anora").
         return normalize(c.title).includes(q)
+          || normalize(c.title_en || '').includes(q)
           || normalize(c.description || '').includes(q);
       });
       this.logger.log(`[N11] filtered to ${filtered.length} matches`);

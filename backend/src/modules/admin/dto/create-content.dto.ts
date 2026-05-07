@@ -65,6 +65,11 @@ export class CreateContentDto {
   @IsString()
   telegram_chat_id?: string;
 
+  @ApiPropertyOptional({ description: 'Secondary/alternative title (usually in English). Used to find content via search even when cadastrado in Portuguese.' })
+  @IsOptional()
+  @IsString()
+  title_en?: string;
+
   @ApiPropertyOptional({ description: 'Cover image URL or upload key' })
   @IsOptional()
   @IsString()

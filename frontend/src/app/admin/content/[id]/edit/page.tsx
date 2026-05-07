@@ -73,6 +73,7 @@ export default function AdminContentEditPage() {
 
   // Form fields
   const [title, setTitle] = useState('');
+  const [titleEn, setTitleEn] = useState('');
   const [description, setDescription] = useState('');
   const [synopsis, setSynopsis] = useState('');
   const [releaseDate, setReleaseDate] = useState('');
@@ -132,6 +133,7 @@ export default function AdminContentEditPage() {
 
         // Populate form fields
         setTitle(data.title || '');
+        setTitleEn((data as any).title_en || '');
         setDescription(data.description || '');
         setSynopsis(data.synopsis || '');
         setDurationMinutes(data.duration_minutes || 0);
@@ -275,6 +277,7 @@ export default function AdminContentEditPage() {
 
       const updateData = {
         title: title.trim(),
+        title_en: titleEn.trim() || null,
         description: description.trim(),
         synopsis: synopsis.trim(),
         duration_minutes: Number(durationMinutes),
@@ -466,6 +469,20 @@ export default function AdminContentEditPage() {
                     onChange={(e) => setTitle(e.target.value)}
                     className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
                     placeholder="Digite o título"
+                  />
+                </div>
+
+                {/* Igor (07/05): título secundário (geralmente em inglês). */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Título secundário (geralmente em inglês)
+                  </label>
+                  <input
+                    type="text"
+                    value={titleEn}
+                    onChange={(e) => setTitleEn(e.target.value)}
+                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-primary-500"
+                    placeholder="Ex: Anora"
                   />
                 </div>
 
