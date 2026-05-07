@@ -50,22 +50,43 @@ export class EmployeesController {
     return this.employees.previewTelegramLink(url);
   }
 
+  // Rotas estáticas ANTES de :id pra não serem capturadas como param.
+  @Get('online')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
+  @ApiOperation({ summary: 'List employees + admins currently online (active last 10min)' })
+  async onlineEmployees() {
+    return this.employees.listOnlineEmployees();
+  }
+
   @Get('me/stats')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Current employee productivity stats' })
   async meStats(@GetUser() user: any) {
-    return this.employees.getStats(user.sub);
+    return this.employees.getStats(user.sub || user.id);
   }
 
   @Get('me/content')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
   @ApiOperation({ summary: 'Current employee content list' })
   async meContent(@GetUser() user: any) {
-    return this.employees.listContent(user.sub);
+    return this.employees.listContent(user.sub || user.id);
   }
 
   @Get('me/permissions')
   @ApiOperation({ summary: 'Current employee permissions' })
   async mePermissions(@GetUser() user: any) {
-    return this.employees.getPermissions(user.sub);
+    return this.employees.getPermissions(user.sub || user.id);
+  }
+
+  @Get('me/productivity')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
+  @ApiOperation({ summary: 'Current employee productivity breakdown' })
+  async meProductivity(
+    @GetUser() user: any,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.employees.getProductivity(user.sub || user.id, { from, to });
   }
 
   @Get(':id')
@@ -83,16 +104,6 @@ export class EmployeesController {
     @Body(ValidationPipe) dto: UpdateEmployeePermissionsDto,
   ) {
     return this.employees.updatePermissions(id, dto);
-  }
-
-  // Igor (07/05): "quero ver no painel master quais funcionários
-  // estão online em tempo real". Usa last_active_at do users (heartbeat
-  // a cada navegação no admin). Janela 10min — fora disso = offline.
-  @Get('online')
-  @Roles(UserRole.ADMIN, UserRole.MODERATOR)
-  @ApiOperation({ summary: 'List employees + admins currently online (active last 10min)' })
-  async onlineEmployees() {
-    return this.employees.listOnlineEmployees();
   }
 
   @Get(':id/stats')
@@ -114,26 +125,6 @@ export class EmployeesController {
     @Query('to') to?: string,
   ) {
     return this.employees.getProductivity(id, { from, to });
-  }
-
-  // Igor (07/05): funcionário acessa as PRÓPRIAS stats sem precisar
-  // de role admin. Usa user.sub do JWT — não dá pra ver stats de outro.
-  @Get('me/stats')
-  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
-  @ApiOperation({ summary: 'Get my own productivity stats (employee self-service)' })
-  async myStats(@GetUser() user: any) {
-    return this.employees.getStats(user.sub || user.id);
-  }
-
-  @Get('me/productivity')
-  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
-  @ApiOperation({ summary: 'Get my own productivity breakdown (employee self-service)' })
-  async myProductivity(
-    @GetUser() user: any,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
-  ) {
-    return this.employees.getProductivity(user.sub || user.id, { from, to });
   }
 
   @Get(':id/content')
