@@ -35,7 +35,22 @@ export function WhatsAppNumberGate({
   // Self-managed close state. O gate se fecha sozinho quando o save
   // dá certo OU quando o user clica em "pular", sem depender do
   // parent re-renderizar com hasWhatsapp atualizado.
-  const [dismissed, setDismissed] = useState(false);
+  // Igor (07/05): "fecho 1 abre outro" — agora persiste o dismiss
+  // em sessionStorage e também respeita o dismiss do popup do grupo
+  // (WhatsAppPopup na home). Assim, se Igor fechou QUALQUER popup
+  // do WhatsApp na sessão, o NumberGate não aparece de novo até
+  // próximo login.
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return (
+        sessionStorage.getItem('whatsapp_gate_skipped') === '1' ||
+        sessionStorage.getItem('whatsapp_popup_dismissed') === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
 
   if (hasWhatsapp || dismissed) {
     return <>{children}</>;
@@ -94,9 +109,12 @@ export function WhatsAppNumberGate({
   // Igor (06/05): "não tem opção de fechar". Pular guarda flag
   // local na sessão pra não reabrir nesta sessão; servidor continua
   // sem WhatsApp e o gate volta a aparecer no próximo login.
+  // Também marca whatsapp_popup_dismissed pra que o popup da home
+  // (WhatsAppPopup) não reabra depois.
   const handleSkip = () => {
     try {
       sessionStorage.setItem('whatsapp_gate_skipped', '1');
+      sessionStorage.setItem('whatsapp_popup_dismissed', 'true');
     } catch {
       /* ignore */
     }

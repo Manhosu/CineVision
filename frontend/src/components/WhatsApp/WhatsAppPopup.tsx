@@ -53,7 +53,16 @@ export function WhatsAppPopup() {
   }, []);
 
   const handleDismiss = () => {
-    sessionStorage.setItem(DISMISS_KEY, 'true');
+    try {
+      sessionStorage.setItem(DISMISS_KEY, 'true');
+      // Igor (07/05): se o user fechou o popup do grupo, também não
+      // queremos abrir o NumberGate em seguida na mesma sessão. Os
+      // dois popups são WhatsApp-themed e abrir um após o outro foi
+      // percebido como "popup duplicado".
+      sessionStorage.setItem('whatsapp_gate_skipped', '1');
+    } catch {
+      /* ignore */
+    }
     setIsVisible(false);
   };
 
