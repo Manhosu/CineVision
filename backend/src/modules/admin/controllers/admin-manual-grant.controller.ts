@@ -155,20 +155,43 @@ export class AdminManualGrantController {
       const chatId = parseInt(String(chatIdRaw), 10);
       if (!Number.isNaN(chatId)) {
         try {
-          const link = content.telegram_group_link;
+          // Igor (07/05): mesma lógica do notifyBotForDelivery — se
+          // telegram_group_link for Chat ID numérico, gera invite
+          // single-use via Bot API. Telegram rejeita inline_keyboard
+          // URL não-http e mensagem inteira falha sem isso.
+          const rawLink: string | null = content.telegram_group_link?.trim() || null;
+          let buttonUrl: string | null = null;
+          if (rawLink) {
+            const isChatId = /^-?\d{6,}$/.test(rawLink);
+            if (isChatId) {
+              try {
+                buttonUrl = await this.telegrams.createInviteLinkForUser(
+                  rawLink,
+                  purchase.id,
+                );
+              } catch (err: any) {
+                this.logger.warn(
+                  `Manual grant: createInviteLinkForUser failed for chat ${rawLink}: ${err.message}`,
+                );
+              }
+            } else {
+              buttonUrl = rawLink;
+            }
+          }
+
           const header =
             `🎁 *Liberação manual de conteúdo*\n\n` +
             `Você recebeu acesso a *${content.title}*. ` +
-            (link
+            (buttonUrl
               ? 'Clique no botão abaixo pra assistir.'
               : 'Em breve o suporte enviará o link.');
           await this.telegrams.sendMessage(chatId, header, {
             parse_mode: 'Markdown',
-            ...(link
+            ...(buttonUrl
               ? {
                   reply_markup: {
                     inline_keyboard: [
-                      [{ text: `🎬 ${content.title}`, url: link }],
+                      [{ text: `🎬 ${content.title}`, url: buttonUrl }],
                     ],
                   },
                 }
