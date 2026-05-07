@@ -200,7 +200,7 @@ export default function EditRequestsPage() {
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">
                       {r.request_type === 'photo_replace'
-                        ? r.person?.name || r.person_id
+                        ? r.person?.name || r.original_snapshot?.name || r.person_id
                         : r.content?.title || r.content_id}
                     </span>
                     {r.request_type === 'delete' && (
@@ -242,12 +242,12 @@ export default function EditRequestsPage() {
                 <div>
                   <h2 className="text-xl font-bold">
                     {selected.request_type === 'photo_replace'
-                      ? selected.person?.name
+                      ? (selected.person?.name || selected.original_snapshot?.name || selected.person_id)
                       : selected.content?.title}
                   </h2>
                   <p className="text-sm text-zinc-400">
-                    {selected.request_type === 'photo_replace' && selected.person?.role && (
-                      <span className="mr-2 text-zinc-500">{selected.person.role}</span>
+                    {selected.request_type === 'photo_replace' && (selected.person?.role || selected.original_snapshot?.role) && (
+                      <span className="mr-2 text-zinc-500">{selected.person?.role || selected.original_snapshot?.role}</span>
                     )}
                     Proposta por <strong>{selected.employee?.name}</strong> ·{' '}
                     {fmtDate(selected.created_at)}
@@ -280,7 +280,7 @@ export default function EditRequestsPage() {
               {selected.request_type === 'photo_replace' && (
                 <div className="mb-5 rounded-lg border border-purple-500/40 bg-purple-600/10 p-4 text-sm text-purple-200">
                   <strong>📷 Troca de foto</strong> — funcionário quer substituir a
-                  foto atual de <em>{selected.person?.name}</em>. Aprovação aplica
+                  foto atual de <em>{selected.person?.name || selected.original_snapshot?.name}</em>. Aprovação aplica
                   a nova foto direto na pessoa.
                 </div>
               )}
