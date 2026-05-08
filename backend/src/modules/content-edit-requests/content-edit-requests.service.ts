@@ -21,6 +21,12 @@ export class ContentEditRequestsService {
 
   constructor(
     private readonly supabase: SupabaseService,
+    // Igor (08/05): forwardRef necessario porque AdminModule importa
+    // ContentEditRequestsModule (via forwardRef) e essa service injeta
+    // AdminContentSimpleService de volta — circular dep, sem forwardRef
+    // o NestFactory falha com "can't resolve dependency at index [1]".
+    // Foi o que segurou TODOS os deploys recentes (uptime 5h22m sem reset).
+    @Inject(forwardRef(() => AdminContentSimpleService))
     private readonly contentService: AdminContentSimpleService,
     private readonly configService: ConfigService,
     @Optional()
