@@ -286,11 +286,15 @@ export class ContentEditRequestsService {
       throw new BadRequestException('Pedido já foi processado.');
     }
 
-    this.logger.log(`approve() id=${id} request_type=${request.request_type} content_id=${request.content_id} person_id=${request.person_id}`);
+    this.logger.log(`[BUILD-V14-c5cd00c] approve() id=${id} request_type=${request.request_type} content_id=${request.content_id} person_id=${request.person_id}`);
 
     // Igor (07/05): photo_replace aplica a nova photo_url direto na pessoa.
     // Detecta pela presenca de person_id (mais robusto que checar string
     // request_type que parecia nao bater por algum motivo de PostgREST).
+    if (!request.content_id && !request.person_id) {
+      throw new BadRequestException('[BUILD-V14] Pedido sem content_id nem person_id.');
+    }
+
     const isPhotoReplace =
       request.request_type === 'photo_replace' ||
       (request.person_id && !request.content_id);
