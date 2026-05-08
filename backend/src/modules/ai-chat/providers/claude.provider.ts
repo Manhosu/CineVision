@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { SupabaseService } from '../../../config/supabase.service';
 
 export interface AiMessage {
   role: 'user' | 'assistant' | 'system';
@@ -107,8 +108,48 @@ function classifyClaudeError(err: any, model: string): ClaudeApiError {
 export class ClaudeProvider {
   private readonly logger = new Logger(ClaudeProvider.name);
   private readonly apiUrl = 'https://api.anthropic.com/v1/messages';
+  // Igor (08/05): cache de 5min do api key lido do banco. Evita 1 query
+  // por chamada Claude mas ainda permite hot reload se Igor trocar.
+  private dbKeyCache: { value: string | null; fetchedAt: number } | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly supabase: SupabaseService,
+  ) {}
+
+  // Igor (08/05): Render free tier mantém 2 containers durante deploy.
+  // Um deles pode ter env var, outro não. Pra resolver intermitência,
+  // caímos pro DB (admin_settings.anthropic_api_key) quando process.env
+  // não tem. Garante que TODOS os containers leem a MESMA key.
+  private async resolveApiKey(): Promise<string | null> {
+    const envKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+    if (envKey) return envKey;
+
+    const now = Date.now();
+    if (this.dbKeyCache && now - this.dbKeyCache.fetchedAt < 5 * 60 * 1000) {
+      return this.dbKeyCache.value;
+    }
+
+    try {
+      const { data } = await this.supabase.client
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'anthropic_api_key')
+        .maybeSingle();
+      const value = (data?.value as any)?.toString?.() || null;
+      // Cacheia apenas valores positivos (mesmo padrão do resolveAdminChatId).
+      if (value) {
+        this.dbKeyCache = { value, fetchedAt: now };
+        this.logger.log(
+          `[CLAUDE_DEBUG] Loaded ANTHROPIC_API_KEY from DB fallback (len=${value.length})`,
+        );
+      }
+      return value;
+    } catch (err: any) {
+      this.logger.error(`resolveApiKey DB fallback failed: ${err.message}`);
+      return null;
+    }
+  }
 
   async complete(options: {
     system: string;
@@ -116,28 +157,25 @@ export class ClaudeProvider {
     model?: string;
     maxTokens?: number;
   }): Promise<AiCompletionResult> {
-    const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
-    // DEBUG (Igor 08/05): backend reporta config_missing apesar da env
-    // var estar setada no Render. Logando o estado da config pra
-    // identificar discrepancia.
+    const apiKey = await this.resolveApiKey();
     if (!apiKey) {
       const allKeys = Object.keys(process.env)
         .filter((k) => /ANTHROPIC|API_KEY|CLAUDE/i.test(k))
         .map((k) => `${k}=${process.env[k] ? `set(len=${process.env[k]!.length})` : 'EMPTY'}`)
         .join(', ');
       this.logger.error(
-        `[CLAUDE_DEBUG] ANTHROPIC_API_KEY not loaded by ConfigService. process.env scan: ${allKeys || '(no matches)'} | NODE_ENV=${process.env.NODE_ENV} | CWD=${process.cwd()}`,
+        `[CLAUDE_DEBUG] ANTHROPIC_API_KEY not loaded (env nor DB). process.env scan: ${allKeys || '(no matches)'} | NODE_ENV=${process.env.NODE_ENV} | CWD=${process.cwd()} | PID=${process.pid}`,
       );
       throw new ClaudeApiError(
         'config_missing',
         null,
         'n/a',
         null,
-        'ANTHROPIC_API_KEY não configurada no ambiente do backend. Adicione em Render Dashboard → Environment.',
+        'ANTHROPIC_API_KEY não configurada (nem env nem admin_settings DB).',
       );
     }
     this.logger.debug(
-      `[CLAUDE_DEBUG] ANTHROPIC_API_KEY loaded ok (len=${apiKey.length}, starts=${apiKey.slice(0, 12)})`,
+      `[CLAUDE_DEBUG] API key OK (len=${apiKey.length}, PID=${process.pid})`,
     );
 
     const primaryModel =
