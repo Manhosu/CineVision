@@ -105,7 +105,7 @@ export class AdminPeopleController {
   @ApiOperation({
     summary: 'Submit a photo for a person',
     description:
-      'Admin: persiste direto em photo_url. Employee com can_add_people_photos: vai para photo_pending_url até aprovação.',
+      'Admin: direto em photo_url. Employee com can_add_people_photos: pessoa sem foto direto, com foto dentro da janela direto, com foto fora da janela vira request em /admin/edit-requests.',
   })
   async submitPhoto(
     @Param('id') id: string,
@@ -119,38 +119,10 @@ export class AdminPeopleController {
     return this.peopleService.submitPhoto(id, body.photo_url, user.sub, isAdmin);
   }
 
-  @Post(':id/photo/approve')
-  @Roles(UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve a pending photo' })
-  async approvePhoto(@Param('id') id: string, @GetUser() user: any) {
-    return this.peopleService.approvePendingPhoto(id, user.sub);
-  }
-
-  // Igor (07/05): aprovar várias de uma vez. Frontend marca checkboxes,
-  // manda lista de personIds, backend itera + retorna sumário.
-  @Post('photos/approve-batch')
-  @Roles(UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Approve multiple pending photos in batch' })
-  async approvePhotosBatch(
-    @Body() body: { person_ids: string[] },
-    @GetUser() user: any,
-  ) {
-    return this.peopleService.approvePendingPhotosBatch(body.person_ids || [], user.sub);
-  }
-
-  @Post(':id/photo/reject')
-  @Roles(UserRole.ADMIN)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Reject a pending photo' })
-  async rejectPhoto(
-    @Param('id') id: string,
-    @Body() body: { reason?: string },
-    @GetUser() user: any,
-  ) {
-    return this.peopleService.rejectPendingPhoto(id, user.sub, body?.reason);
-  }
+  // Igor (07/05): endpoints /photo/approve, /photo/reject e
+  // /photos/approve-batch removidos. O fluxo de aprovacao consolidou
+  // em /admin/content-edit-requests/:id/approve|reject (mesmo painel
+  // que update/delete de conteudo). Ver migration N14.
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
