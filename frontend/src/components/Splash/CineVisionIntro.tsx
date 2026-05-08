@@ -36,31 +36,14 @@ export default function CineVisionIntro() {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
 
-    // N10 (Igor 04/05) + N8 (Igor 07/05): no navegador embutido do
-    // Telegram, a animação corta no meio. A detecção V1 (`Telegram.WebApp`
-    // + UA "Telegram") só pegava Mini App e Android in-app — Telegram
-    // Desktop (Windows/Mac/Linux) e iOS WebView mais novo NÃO injetam
-    // nenhum desses sinais. Igor relatou que mesmo após o V1 a animação
-    // continuava cortando no app. Ampliamos a detecção com:
-    //   3. window.TelegramWebviewProxy — Android in-app antigo.
-    //   4. window.external?.notify — Telegram Desktop (Windows/Mac).
-    //   5. document.referrer contendo "t.me" ou "telegram" — abertura
-    //      via deep link de chat (cobre o caso "cliente clica no link
-    //      do bot" sem que o WebView SDK esteja injetado).
-    const ua = navigator.userAgent || '';
-    const ref = (document.referrer || '').toLowerCase();
-    const isTelegramWebApp =
-      Boolean((window as any).Telegram?.WebApp) ||
-      Boolean((window as any).TelegramWebviewProxy) ||
-      Boolean((window as any).external?.notify) ||
-      /Telegram/i.test(ua) ||
-      ref.includes('t.me') ||
-      ref.includes('telegram');
-    if (isTelegramWebApp) {
-      sessionStorage.setItem(SESSION_KEY, '1');
-      return;
-    }
-
+    // Igor (08/05): voltei a mostrar splash no Telegram tambem.
+    // Antes era pulada porque a animacao cortava. Agora, com:
+    //  - Effect 2 esperando window.load antes de iniciar coreografia
+    //  - Tap-to-skip se algo der errado
+    //  - Audio so toca em desktop (mobile e in-app browsers bloqueiam
+    //    autoplay sem gesto previo — limitacao de plataforma)
+    // a animacao roda em qualquer navegador. Visual sempre mostra,
+    // som so onde o browser permite.
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
   }, []);
