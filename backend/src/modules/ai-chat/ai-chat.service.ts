@@ -1005,14 +1005,19 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
 
       const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
       const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
-      this.adminChatIdCache = { value, fetchedAt: now };
+      // N28 (Igor 08/05): NUNCA cachear null — se DB demorou ou retornou
+      // vazio numa request, queremos retentar na proxima em vez de
+      // bloquear notify por 5min. Igor reportou que notify Igor "não
+      // chegou" mesmo apos ele testar varias vezes — provavel cache
+      // stale com null da primeira chamada.
       if (value) {
+        this.adminChatIdCache = { value, fetchedAt: now };
         this.logger.log(
           `Resolved admin chat_id from DB fallback: ${value} (role=admin)`,
         );
       } else {
         this.logger.warn(
-          'No admin found in DB with telegram_id set — admin notifications will silently drop',
+          'No admin found in DB with telegram_id set — NOT caching null (will retry next call)',
         );
       }
       return value;

@@ -1321,7 +1321,22 @@ export class TelegramsEnhancedService implements OnModuleInit {
       clearInterval(typingInterval);
 
       const reply = response.data;
-      if (reply?.paused) return;
+
+      // N28 (Igor 08/05): quando IA falha (Claude timeout/rate_limit/etc)
+      // retorna {paused:true, text:''}. Antes o bot silenciosamente nao
+      // mandava nada e cliente ficava vendo "digitando" infinitamente.
+      if (reply?.paused && !reply?.text) {
+        try {
+          await this.sendMessage(
+            chatId,
+            '📩 Recebi sua mensagem! Já chamei alguém da equipe pra te responder — em instantes voltamos. 💕',
+          );
+        } catch (err: any) {
+          this.logger.warn(`Fallback message send failed (telegram): ${err.message}`);
+        }
+        return;
+      }
+
       if (!reply?.text) return;
 
       // Igor (07/05): IA salvava resposta no DB mas não chegava no
@@ -1625,7 +1640,25 @@ export class TelegramsEnhancedService implements OnModuleInit {
       clearInterval(typingInterval);
 
       const reply = response.data;
-      if (reply?.paused) return;
+
+      // N28 (Igor 08/05): quando IA falha (Claude timeout/rate_limit/etc)
+      // retorna {paused:true, text:''}. Antes o bot silenciosamente nao
+      // mandava nada e cliente ficava vendo "digitando" infinitamente.
+      // Agora manda fallback explicito + Igor ja foi notificado pelo
+      // notifyAdminForTakeover do ai-chat.service.
+      if (reply?.paused && !reply?.text) {
+        try {
+          await this.sendMessage(
+            chatId,
+            '📩 Recebi sua mensagem! Já chamei alguém da equipe pra te responder — em instantes voltamos. 💕',
+            { business_connection_id: businessConnectionId },
+          );
+        } catch (err: any) {
+          this.logger.warn(`Fallback message send failed (business): ${err.message}`);
+        }
+        return;
+      }
+
       if (!reply?.text) return;
 
       // Igor (07/05): mesmo retry do dispatchAiChat — se Telegram
