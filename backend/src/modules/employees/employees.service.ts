@@ -337,10 +337,14 @@ export class EmployeesService {
    */
   async listOnlineEmployees() {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // Igor (08/05): bug — usar 'moderator' aqui dava erro de enum
+    // (user_role enum nao tem 'moderator', so 'admin','user','employee').
+    // Supabase client devolvia [] silenciosamente. Por isso o card de
+    // funcionarios online ficava vazio mesmo com Mattheus/Rafaela ativos.
     const { data, error } = await this.supabase.client
       .from('users')
       .select('id, name, email, role, telegram_username, last_active_at, last_login_at')
-      .in('role', ['admin', 'moderator', 'employee'])
+      .in('role', ['admin', 'employee'])
       .gte('last_active_at', tenMinAgo)
       .order('last_active_at', { ascending: false })
       .limit(50);
