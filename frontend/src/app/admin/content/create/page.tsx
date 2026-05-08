@@ -29,6 +29,7 @@ interface ContentFormData {
   content_type: 'movie' | 'series';
   is_featured: boolean;
   is_release: boolean;
+  is_new_season: boolean;
   price_cents: number;
   quality_label: string;
   audio_type: string;
@@ -105,6 +106,7 @@ export default function AdminContentCreatePage() {
     content_type: 'movie',
     is_featured: false,
     is_release: false,
+    is_new_season: false,
     price_cents: 1990, // R$ 19.90 default
     quality_label: '',
     audio_type: '',
@@ -243,6 +245,7 @@ export default function AdminContentCreatePage() {
         currency: 'BRL',
         is_featured: formData.is_featured,
         is_release: formData.is_release,
+        is_new_season: formData.is_new_season,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
         director: selectedDirectors.length > 0 ? selectedDirectors.map(d => d.name).join(', ') : (formData.director || undefined),
         cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : (formData.cast || undefined),
@@ -1202,7 +1205,18 @@ export default function AdminContentCreatePage() {
                       onChange={handleChange}
                       className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
-                    <span className="text-sm font-medium text-gray-300">Marcar como Lançamento</span>
+                    <span className="text-sm font-medium text-gray-300">🆕 Marcar como Novidade (badge sobreposto no card)</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
+                    <input
+                      type="checkbox"
+                      name="is_new_season"
+                      checked={formData.is_new_season || false}
+                      onChange={handleChange}
+                      className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-gray-300">📺 Marcar como Nova Temporada (badge sobreposto no card)</span>
                   </label>
                 </div>
               </div>

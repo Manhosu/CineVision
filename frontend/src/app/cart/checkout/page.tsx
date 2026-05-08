@@ -176,12 +176,17 @@ function CheckoutContent() {
                 ) : (
                   <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-400/5 p-5 text-left">
                     <label htmlFor="orphan-whatsapp" className="mb-1 block text-sm font-semibold text-white">
-                      💬 Cadastre seu WhatsApp para liberar a entrega
+                      💬 Cadastre seu WhatsApp para garantir a entrega
                     </label>
-                    <p className="mb-3 text-xs text-zinc-400">
-                      Precisamos do seu WhatsApp antes de liberar o link do bot — é por ele que
-                      a gente te chama caso o Telegram falhe ou você feche a aba. Obrigatório.
+                    <p className="mb-2 text-xs text-zinc-300">
+                      É só pra te chamar caso aconteça algum problema na entrega pelo Telegram —
+                      a gente libera o acesso por aqui mesmo.
                     </p>
+                    <ul className="mb-3 space-y-1 text-xs text-zinc-400">
+                      <li>🔒 Seu número fica salvo só pra isso. <strong>A gente não compartilha com ninguém</strong>.</li>
+                      <li>📵 Não usamos pra divulgação, nem listas de transmissão.</li>
+                      <li>✅ Promessa.</li>
+                    </ul>
                     <div className="flex gap-2">
                       <input
                         id="orphan-whatsapp"

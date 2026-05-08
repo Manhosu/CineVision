@@ -27,6 +27,7 @@ interface Content {
   content_type: 'movie' | 'series';
   is_featured: boolean;
   is_release: boolean;
+  is_new_season?: boolean;
   price_cents: number;
   imdb_rating?: number;
   release_year?: number;
@@ -95,6 +96,7 @@ export default function AdminContentEditPage() {
   } | null>(null);
   const [isFeatured, setIsFeatured] = useState(false);
   const [isRelease, setIsRelease] = useState(false);
+  const [isNewSeason, setIsNewSeason] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [imdbRating, setImdbRating] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
@@ -168,6 +170,7 @@ export default function AdminContentEditPage() {
         setTelegramChatId((data as any).telegram_chat_id || '');
         setIsFeatured(data.is_featured || false);
         setIsRelease(data.is_release || false);
+        setIsNewSeason((data as any).is_new_season || false);
         setPriceInput((data.price_cents / 100).toFixed(2));
         // Only set IMDB rating if it's valid (0-10)
         setImdbRating(data.imdb_rating && data.imdb_rating >= 0 && data.imdb_rating <= 10 ? data.imdb_rating.toString() : '');
@@ -302,6 +305,7 @@ export default function AdminContentEditPage() {
         backdrop_position_mobile: backdropPositionMobile,
         is_featured: isFeatured,
         is_release: isRelease,
+        is_new_season: isNewSeason,
         price_cents: Math.round(parseFloat(priceInput) * 100),
         imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
@@ -371,6 +375,7 @@ export default function AdminContentEditPage() {
       backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
       isFeatured !== (originalContent.is_featured || false) ||
       isRelease !== (originalContent.is_release || false) ||
+      isNewSeason !== ((originalContent as any).is_new_season || false) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
       imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
       releaseYear !== (originalContent.release_year?.toString() || '') ||
@@ -896,7 +901,21 @@ export default function AdminContentEditPage() {
                   className="w-5 h-5 text-blue-600 bg-dark-700 border-gray-600 rounded focus:ring-blue-500"
                 />
                 <label htmlFor="is_release" className="text-sm font-medium cursor-pointer">
-                  🆕 Marcar como Lançamento
+                  🆕 Marcar como Novidade (badge sobreposto no card)
+                </label>
+              </div>
+
+              {/* New Season Checkbox (Igor 07/05 noite, N18) */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="is_new_season"
+                  checked={isNewSeason}
+                  onChange={(e) => setIsNewSeason(e.target.checked)}
+                  className="w-5 h-5 text-orange-600 bg-dark-700 border-gray-600 rounded focus:ring-orange-500"
+                />
+                <label htmlFor="is_new_season" className="text-sm font-medium cursor-pointer">
+                  📺 Marcar como Nova Temporada (badge sobreposto no card)
                 </label>
               </div>
             </div>

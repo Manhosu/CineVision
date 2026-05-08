@@ -131,6 +131,11 @@ export class CreateContentDto {
   @IsOptional()
   @IsBoolean()
   is_release?: boolean;
+
+  @ApiPropertyOptional({ description: 'Mark as new season (overlay no card pra serie com temporada nova)', default: false })
+  @IsOptional()
+  @IsBoolean()
+  is_new_season?: boolean;
 }
 
 export class InitiateUploadDto {

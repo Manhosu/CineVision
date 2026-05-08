@@ -202,6 +202,25 @@ const Top10MovieCard = memo(function Top10MovieCard({
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
 
+            {/* N18: badges Novidade/Nova Temporada — no Top10 ficam
+                top-LEFT (numero do ranking ja ocupa esquerda fora do
+                card, entao o overlay aqui nao colide). Z menor que
+                add-to-cart pra nao bloquear clique. */}
+            {(movie.is_release || (movie as any).is_new_season) && !isFlashPromo && (
+              <div className="absolute top-1.5 left-1.5 z-30 flex flex-col gap-1">
+                {movie.is_release && (
+                  <span className="rounded bg-gradient-to-r from-red-600 to-rose-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-md shadow-red-500/40">
+                    🆕 Novidade
+                  </span>
+                )}
+                {(movie as any).is_new_season && (
+                  <span className="rounded bg-gradient-to-r from-orange-600 to-amber-500 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white shadow-md shadow-orange-500/40">
+                    📺 Nova Temp.
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Year + badge overlay at bottom-left of poster */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 z-10">
               <div className="flex items-center gap-1.5">

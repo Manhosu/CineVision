@@ -90,13 +90,21 @@ export default function OrphanOrdersPage() {
   };
 
   const dismissOrder = async (orderId: string) => {
-    if (!confirm('Marcar essa compra como perdida? Ela some do painel mas o histórico continua salvo.')) return;
+    if (
+      !confirm(
+        'Tirar essa compra do painel ativo?\n\n' +
+          '✅ O link de acesso continua valendo — o cliente ainda consegue receber pelo Telegram normalmente.\n' +
+          '🗂 A compra só some do painel pra desafogar a fila.\n' +
+          '📜 O histórico continua salvo.',
+      )
+    )
+      return;
     try {
       await api.patch(`/api/v1/orders/${orderId}/dismiss`, {});
-      toast.success('Compra dispensada');
+      toast.success('Compra arquivada — link continua válido');
       load(false);
     } catch (err: any) {
-      toast.error(err.message || 'Falha ao dispensar');
+      toast.error(err.message || 'Falha ao arquivar');
     }
   };
 
@@ -263,10 +271,10 @@ export default function OrphanOrdersPage() {
                   </button>
                   <button
                     onClick={() => dismissOrder(o.id)}
-                    className="rounded-lg border border-red-500/30 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/10"
-                    title="Marcar como perdido (some do painel mas o histórico continua salvo)"
+                    className="rounded-lg border border-zinc-500/30 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-500/10"
+                    title="Arquiva no painel — link continua valendo, cliente ainda recebe pelo Telegram"
                   >
-                    🗑 Marcar perdido
+                    🗂 Arquivar
                   </button>
                 </div>
               </div>

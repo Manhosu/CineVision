@@ -21,6 +21,8 @@ export interface Movie {
   duration_minutes?: number;
   genres?: string[];
   featured?: boolean;
+  is_release?: boolean; // Badge "Novidade" no card (overlay CSS)
+  is_new_season?: boolean; // Badge "Nova Temporada" no card (overlay CSS)
   status?: string; // From database: 'ACTIVE' | 'INACTIVE' | 'PUBLISHED'
   availability?: string; // From database: 'SITE' | 'TELEGRAM' | 'BOTH'
   telegram_group_link?: string; // Telegram group invite link

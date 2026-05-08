@@ -116,6 +116,7 @@ export class AdminContentSimpleService {
       currency: 'BRL',
       is_featured: data.is_featured || false,
       is_release: data.is_release || false,
+      is_new_season: data.is_new_season || false,
       genres: data.genres ? (Array.isArray(data.genres) ? data.genres : [data.genres]) : null, // Coluna genres (plural), tipo array
       director: data.director || null,
       cast: data.cast ? (Array.isArray(data.cast) ? data.cast : data.cast.split(',').map((c: string) => c.trim())) : null, // Tipo array
@@ -480,7 +481,7 @@ export class AdminContentSimpleService {
       'backdrop_position', 'backdrop_position_mobile',
       'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'title_en', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
-      'genres', 'price_cents', 'is_featured', 'is_release', 'total_seasons', 'total_episodes',
+      'genres', 'price_cents', 'is_featured', 'is_release', 'is_new_season', 'total_seasons', 'total_episodes',
       'status', 'availability', 'quality_label', 'audio_type'
     ];
 
