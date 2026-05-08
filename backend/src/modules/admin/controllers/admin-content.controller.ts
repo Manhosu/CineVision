@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -212,6 +213,54 @@ export class AdminContentController {
       { content_id: contentId, ...dto },
       user?.sub || user?.id || null,
     );
+  }
+
+  // Igor (08/05): aprovacao em batch — Igor verifica varios filmes
+  // adicionados pelo Mattheus em segundo monitor, marca checkboxes e
+  // aprova todos de uma vez. Antes precisava clicar 1 por 1 e a pagina
+  // recarregava cada vez.
+  @Post('publish-batch')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({
+    summary: 'Publish multiple contents at once',
+    description: 'Itera por uma lista de IDs e publica cada um. Retorna sumario.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async publishContentBatch(
+    @Body() body: { content_ids: string[]; notify_users?: boolean },
+    @GetUser() user: any,
+  ) {
+    const ids = Array.isArray(body?.content_ids) ? body.content_ids : [];
+    if (ids.length === 0) {
+      throw new BadRequestException('content_ids vazio');
+    }
+    if (ids.length > 100) {
+      throw new BadRequestException('Maximo 100 ids por batch');
+    }
+
+    const userId = user?.sub || user?.id || null;
+    const published: string[] = [];
+    const failed: Array<{ id: string; error: string }> = [];
+
+    for (const contentId of ids) {
+      try {
+        await this.assertCanEditContent(user, contentId);
+        await this.adminContentService.publishContent(
+          { content_id: contentId, notify_users: body?.notify_users },
+          userId,
+        );
+        published.push(contentId);
+      } catch (err: any) {
+        failed.push({ id: contentId, error: err?.message || 'unknown' });
+      }
+    }
+
+    return {
+      published_count: published.length,
+      failed_count: failed.length,
+      published,
+      failed,
+    };
   }
 
   // Series Management Endpoints

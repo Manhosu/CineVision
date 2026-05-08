@@ -39,6 +39,9 @@ export default function ContentManagePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Content | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  // Igor (08/05): aprovacao em batch dos DRAFTs (conteudos do funcionario).
+  const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
+  const [batchPublishing, setBatchPublishing] = useState(false);
 
   useEffect(() => {
     fetchContents();
@@ -153,8 +156,75 @@ export default function ContentManagePage() {
     }
   };
 
+  // Igor (08/05): batch publish — toggle checkbox + acao em massa.
+  const toggleDraftSelection = (contentId: string) => {
+    setSelectedDraftIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(contentId)) next.delete(contentId);
+      else next.add(contentId);
+      return next;
+    });
+  };
+
+  const selectAllVisibleDrafts = () => {
+    const draftIds = filteredContents
+      .filter((c) => c.status === 'DRAFT' || c.status === 'draft')
+      .map((c) => c.id);
+    setSelectedDraftIds(new Set(draftIds));
+  };
+
+  const clearDraftSelection = () => setSelectedDraftIds(new Set());
+
+  const handlePublishBatch = async () => {
+    if (selectedDraftIds.size === 0) return;
+    if (
+      !confirm(
+        `Publicar ${selectedDraftIds.size} conteúdo(s) selecionado(s)?\n\n` +
+          `Eles ficam visíveis no site imediatamente após aprovação.`,
+      )
+    )
+      return;
+
+    try {
+      setBatchPublishing(true);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/publish-batch`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ content_ids: Array.from(selectedDraftIds) }),
+        },
+      );
+      if (response.ok) {
+        const r = await response.json();
+        alert(
+          `✅ ${r.published_count} publicados.${
+            r.failed_count ? `\n❌ ${r.failed_count} falhou(falharam).` : ''
+          }`,
+        );
+        clearDraftSelection();
+        await fetchContents();
+      } else {
+        const errorText = await response.text();
+        alert(`❌ Erro no batch: ${errorText}`);
+      }
+    } catch (err: any) {
+      alert(`❌ Erro de rede: ${err?.message || 'desconhecido'}`);
+    } finally {
+      setBatchPublishing(false);
+    }
+  };
+
   const filteredContents = contents.filter(content =>
     content.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const draftsVisible = filteredContents.filter(
+    (c) => c.status === 'DRAFT' || c.status === 'draft',
   );
 
   if (loading) {
@@ -221,12 +291,52 @@ export default function ContentManagePage() {
           </div>
         </div>
 
+        {/* Igor (08/05): barra de aprovacao em batch dos DRAFTs.
+            Aparece quando ha DRAFTs no filtro atual. */}
+        {draftsVisible.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-sm text-amber-200">
+              <strong>{draftsVisible.length}</strong> conteúdo(s) aguardando aprovação ·{' '}
+              <strong>{selectedDraftIds.size}</strong> selecionado(s)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={selectAllVisibleDrafts}
+                className="px-3 py-1.5 rounded-lg border border-white/10 text-sm text-zinc-200 hover:bg-white/5"
+                disabled={selectedDraftIds.size === draftsVisible.length}
+              >
+                Selecionar todos
+              </button>
+              {selectedDraftIds.size > 0 && (
+                <button
+                  onClick={clearDraftSelection}
+                  className="px-3 py-1.5 rounded-lg border border-white/10 text-sm text-zinc-200 hover:bg-white/5"
+                >
+                  Limpar seleção
+                </button>
+              )}
+              <button
+                onClick={handlePublishBatch}
+                disabled={selectedDraftIds.size === 0 || batchPublishing}
+                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {batchPublishing
+                  ? 'Publicando...'
+                  : `Publicar ${selectedDraftIds.size > 0 ? `${selectedDraftIds.size} ` : ''}selecionado${selectedDraftIds.size === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content Table */}
         <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-dark-900/50">
                 <tr>
+                  <th className="px-3 py-4 text-left text-xs font-semibold text-gray-400 w-10">
+                    {/* checkbox column */}
+                  </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                     Poster
                   </th>
@@ -248,8 +358,28 @@ export default function ContentManagePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filteredContents.map((content) => (
-                  <tr key={content.id} className="hover:bg-white/5 transition-colors">
+                {filteredContents.map((content) => {
+                  const isDraft =
+                    content.status === 'DRAFT' || content.status === 'draft';
+                  const isSelected = selectedDraftIds.has(content.id);
+                  return (
+                  <tr
+                    key={content.id}
+                    className={`hover:bg-white/5 transition-colors ${
+                      isSelected ? 'bg-emerald-500/10' : ''
+                    }`}
+                  >
+                    <td className="px-3 py-4">
+                      {isDraft && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleDraftSelection(content.id)}
+                          className="w-4 h-4 rounded bg-zinc-800 border-zinc-600 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                          aria-label={`Selecionar ${content.title} para publicação em batch`}
+                        />
+                      )}
+                    </td>
                     <td className="px-6 py-4">
                       <img
                         src={content.poster_url || '/images/placeholder-poster.svg'}
@@ -337,7 +467,8 @@ export default function ContentManagePage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
