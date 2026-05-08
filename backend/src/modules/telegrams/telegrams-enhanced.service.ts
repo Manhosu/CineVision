@@ -1259,6 +1259,26 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
 
     try {
+      // N28b (Igor 08/05): tenta primeiro pegar dono da Business connection
+      // ativa — quem tem cliente no DM dele e quem deve receber notify
+      // de comprovante/midia, nao o admin generico do DB (que pode ser
+      // outra pessoa, ex: dev testando local).
+      const { data: businessConns } = await this.supabase
+        .from('telegram_business_connections')
+        .select('telegram_user_id, can_reply, is_enabled')
+        .eq('is_enabled', true)
+        .eq('can_reply', true)
+        .limit(5);
+
+      const businessOwner = (businessConns || []).find(
+        (c: any) => c.telegram_user_id,
+      );
+      if (businessOwner?.telegram_user_id) {
+        const value = String(businessOwner.telegram_user_id);
+        this.adminChatIdCache = { value, fetchedAt: now };
+        return value;
+      }
+
       const { data: admins } = await this.supabase
         .from('users')
         .select('id, telegram_id, telegram_chat_id, role')
@@ -1268,7 +1288,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
       const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
-      this.adminChatIdCache = { value, fetchedAt: now };
+      // N28b: nao cachear null (mesma logica do ai-chat.service).
+      if (value) {
+        this.adminChatIdCache = { value, fetchedAt: now };
+      }
       return value;
     } catch (err: any) {
       this.logger.error(`resolveAdminChatIdLocal failed: ${err.message}`);

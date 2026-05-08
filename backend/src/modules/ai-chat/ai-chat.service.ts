@@ -1032,10 +1032,48 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     externalChatId: string,
     originalMessage: string,
   ) {
-    const adminChatId = await this.resolveAdminChatId();
-    if (!adminChatId || !this.telegramsService) {
+    // N28b (Igor 08/05): em platform=telegram_business, o owner da
+    // Business connection E quem deve receber o ping (e dele que tem
+    // o cliente conversando no DM dele). Antes, notify ia sempre pro
+    // admin do DB — que pode ser outra pessoa (no caso do Eduardo
+    // testando, o admin no DB era ele e nao o Igor). Resultado: Igor
+    // como dono da Business nunca recebia notify quando IA pausava
+    // conversa nas DMs DELE.
+    let targetChatId: string | null = null;
+    let targetSource = 'admin_db';
+
+    if (platform === 'telegram_business') {
+      try {
+        const { data: businessConns } = await this.supabase.client
+          .from('telegram_business_connections')
+          .select('telegram_user_id, can_reply, is_enabled')
+          .eq('is_enabled', true)
+          .eq('can_reply', true)
+          .limit(5);
+
+        const owners = (businessConns || [])
+          .map((c: any) => String(c.telegram_user_id))
+          .filter(Boolean);
+
+        if (owners.length > 0) {
+          targetChatId = owners[0];
+          targetSource = 'business_owner';
+        }
+      } catch (err: any) {
+        this.logger.warn(
+          `notifyAdminForTakeover: lookup business owner failed: ${err.message}`,
+        );
+      }
+    }
+
+    if (!targetChatId) {
+      targetChatId = await this.resolveAdminChatId();
+      targetSource = 'admin_db_fallback';
+    }
+
+    if (!targetChatId || !this.telegramsService) {
       this.logger.warn(
-        `notifyAdminForTakeover: chat=${externalChatId} platform=${platform} — adminChatId=${adminChatId} telegrams=${!!this.telegramsService} → DROPPED`,
+        `notifyAdminForTakeover: chat=${externalChatId} platform=${platform} — targetChatId=${targetChatId} telegrams=${!!this.telegramsService} → DROPPED`,
       );
       return;
     }
@@ -1048,15 +1086,15 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       `👉 [Assumir no painel de IA](https://www.cinevisionapp.com.br/admin/ai-chat)`;
 
     try {
-      await this.telegramsService.sendMessage(parseInt(adminChatId, 10), text, {
+      await this.telegramsService.sendMessage(parseInt(targetChatId, 10), text, {
         parse_mode: 'Markdown',
       });
       this.logger.log(
-        `notifyAdminForTakeover OK: client=${externalChatId} → admin=${adminChatId}`,
+        `notifyAdminForTakeover OK: client=${externalChatId} → target=${targetChatId} (source=${targetSource})`,
       );
     } catch (err: any) {
       this.logger.error(
-        `notifyAdminForTakeover SEND FAILED: client=${externalChatId} admin=${adminChatId}: ${err.message}`,
+        `notifyAdminForTakeover SEND FAILED: client=${externalChatId} target=${targetChatId} source=${targetSource}: ${err.message}`,
       );
     }
   }
