@@ -228,15 +228,21 @@ export class AiChatService {
     await this.appendMessage(conversation.id, 'user', messageText);
 
     // Igor (08/05): cliente mandando gratidao apos compra ("obrigado",
-    // "valeu", "amei") nao deve cair em content_not_found. Pre-check
-    // antes de carregar contexto + chamar Claude. Texto fixo do Igor.
+    // "muitissimo obrigada", "valeu", "amei") deve receber resposta
+    // gentil, MESMO em conversa pausada (admin/owner takeover ja
+    // respondeu o atendimento, o "obrigado" e so um agradecimento
+    // residual que deve receber retorno educado e nao "ja chamei a
+    // equipe").
+    //
+    // Por isso o pre-check fica ANTES do check de ai_enabled.
+    // Texto fixo do Igor — sem chamar Claude.
     const gratitudePattern =
-      /\b(obrigad[oa]|valeu|brigad[oa]|gratid[ãa]o|grato|grata|parab[ée]ns|amei|adorei|melhores|sucesso|maravilhos[ao]|excelente)\b/i;
-    if (gratitudePattern.test(messageText) && conversation.ai_enabled) {
+      /\b(obrigad[oa]s?|muito\s+obrigad[oa]|muit[ií]ssim[oa]\s+obrigad[oa]|valeu|brigad[oa]|gratid[ãa]o|grato|grata|parab[ée]ns|amei|adorei|melhores|sucesso|maravilhos[ao]|excelente|tmj|vlw)\b/i;
+    if (gratitudePattern.test(messageText)) {
       const reply = 'Qualquer coisa só me chamar, ficamos à sua disposição ❤️🍿';
       await this.appendMessage(conversation.id, 'assistant', reply);
       this.logger.log(
-        `Gratitude detected in conv ${conversation.id} — replied with fixed text, skipped Claude`,
+        `Gratitude detected in conv ${conversation.id} (ai_enabled=${conversation.ai_enabled}) — replied with fixed text, skipped Claude`,
       );
       return { text: reply, paused: false, suggestedContentIds: [] };
     }
