@@ -978,6 +978,29 @@ export class TelegramsEnhancedService implements OnModuleInit {
     return false;
   }
 
+  // Igor (08/05): dedup persistido em DB pra resistir a 2 instances do
+  // backend (rolling update no Render free tier). Mesmo update_id em
+  // races chega em 1 instance, a outra falha no insert (unique violation)
+  // e pula. Async pra nao bloquear webhook response.
+  private async claimUpdateInDb(updateId: number | undefined): Promise<boolean> {
+    if (typeof updateId !== 'number') return true; // sem id, processa
+    try {
+      const { error } = await this.supabase
+        .from('processed_telegram_updates')
+        .insert({ update_id: updateId });
+      if (error) {
+        if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
+          this.logger.log(`[dedup-db] update ${updateId} already claimed by another instance`);
+          return false; // outra instance ja pegou
+        }
+        this.logger.warn(`[dedup-db] claim threw for ${updateId}: ${error.message} — proceeding`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`[dedup-db] claim threw for ${updateId}: ${err.message}`);
+    }
+    return true;
+  }
+
   async handleWebhook(webhookData: any, signature?: string) {
     try {
       this.logger.log('🔔 Webhook received:', JSON.stringify(webhookData).substring(0, 200));
@@ -992,10 +1015,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
 
       // Idempotência por update_id (proteção contra instância duplicada).
+      // 1) cache em memoria
       if (this.isUpdateAlreadyProcessed(webhookData?.update_id)) {
         this.logger.warn(
-          `⏭️ Skipping duplicate update_id=${webhookData.update_id} (already processed)`,
+          `⏭️ Skipping duplicate update_id=${webhookData.update_id} (already processed in-memory)`,
         );
+        return { status: 'duplicate' };
+      }
+      // 2) dedup em DB (resiste a multiplas instances)
+      const claimed = await this.claimUpdateInDb(webhookData?.update_id);
+      if (!claimed) {
         return { status: 'duplicate' };
       }
 
@@ -3877,14 +3906,45 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   }
 
   private async handleUpdate(update: any) {
-    // Deduplication: skip if already processed
+    // Igor (08/05): dedup em 2 niveis pra resistir a multiplas instances
+    // do backend (Render rolling update pode manter container antigo vivo).
+    //
+    // 1) In-memory Set (rapido, mata duplicatas dentro da MESMA instance)
+    // 2) DB unique insert (mata duplicatas ENTRE instances)
+    //
+    // Quando 2 containers processam mesmo update_id em race, o segundo
+    // a chegar no DB pega ON CONFLICT/duplicate key e aborta.
+
     if (update.update_id && this.processedUpdates.has(update.update_id)) {
-      this.logger.debug(`Skipping duplicate update ${update.update_id}`);
+      this.logger.debug(`[dedup-mem] Skipping duplicate update ${update.update_id}`);
       return;
     }
+
     if (update.update_id) {
+      // DB-level dedup: insert atomico. Se outra instance ja inseriu, falha
+      // com unique violation e a gente pula. PRIMARY KEY garante atomicidade.
+      try {
+        const { error } = await this.supabase
+          .from('processed_telegram_updates')
+          .insert({ update_id: update.update_id });
+        if (error) {
+          // Codigo 23505 = unique_violation no PostgreSQL.
+          if (error.code === '23505' || /duplicate|unique/i.test(error.message)) {
+            this.logger.log(
+              `[dedup-db] Skipping update ${update.update_id} — already processed by another instance`,
+            );
+            return;
+          }
+          // Outros erros: loga mas segue (melhor processar 2x do que perder).
+          this.logger.warn(
+            `[dedup-db] Insert failed for ${update.update_id}: ${error.message} — proceeding anyway`,
+          );
+        }
+      } catch (err: any) {
+        this.logger.warn(`[dedup-db] threw for ${update.update_id}: ${err.message}`);
+      }
+
       this.processedUpdates.add(update.update_id);
-      // Evict old entries to prevent memory leak
       if (this.processedUpdates.size > this.MAX_PROCESSED_CACHE) {
         const first = this.processedUpdates.values().next().value;
         this.processedUpdates.delete(first);
