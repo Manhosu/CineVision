@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
+import { ActivityTrackerMiddleware } from './common/middleware/activity-tracker.middleware';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -152,4 +153,14 @@ import { AdminSettings } from './modules/admin/entities/admin-settings.entity';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  // N27 (Igor 08/05): aplica ActivityTrackerMiddleware globalmente em
+  // todas as rotas pra atualizar `users.last_active_at` em qualquer
+  // request autenticada. Antes o middleware existia mas nao era
+  // registrado, entao last_active_at so atualizava no login — fazendo
+  // a lista de "Funcionarios Online" ficar vazia depois de 10min
+  // mesmo com Mattheus/Rafaela navegando ativamente no painel.
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(ActivityTrackerMiddleware).forRoutes('*');
+  }
+}

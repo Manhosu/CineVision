@@ -587,47 +587,60 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Igor (07/05): card específico de funcionários online em
-            tempo real. Só admin/master vê — funcionário não vê outros
-            funcionários online. */}
-        {!isEmployee && onlineEmployees.length > 0 && (
+        {/* Igor (07/05 + 08/05): card de funcionários online em tempo real.
+            Só admin/master vê — funcionário não vê outros funcionários.
+            N27: card sempre visível (mesmo com 0 online) pra Igor saber
+            que tá funcionando, com estado vazio claro. */}
+        {!isEmployee && (
           <div className="mb-8 rounded-xl border border-emerald-500/20 bg-gradient-to-br from-emerald-900/10 to-cyan-900/10 p-6">
             <h2 className="mb-4 flex items-center text-xl font-bold text-white">
-              <span className="mr-2 inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
+              <span className={`mr-2 inline-block h-2.5 w-2.5 rounded-full ${
+                onlineEmployees.length > 0
+                  ? 'animate-pulse bg-emerald-400'
+                  : 'bg-zinc-500'
+              }`} />
               Funcionários Online ({onlineEmployees.length})
             </h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {onlineEmployees.map((u) => (
-                <div
-                  key={u.id}
-                  className="flex items-center gap-3 rounded-lg border border-white/5 bg-zinc-900/50 p-3"
-                >
-                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
-                    {u.name?.[0]?.toUpperCase() || '?'}
+            {onlineEmployees.length === 0 ? (
+              <div className="rounded-lg border border-white/5 bg-zinc-900/40 p-4 text-sm text-zinc-400">
+                Nenhum funcionário ativo nos últimos 10 minutos. Quando alguém
+                acessar o painel, aparece aqui em tempo real.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {onlineEmployees.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 rounded-lg border border-white/5 bg-zinc-900/50 p-3"
+                  >
+                    <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                      {u.name?.[0]?.toUpperCase() || '?'}
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-zinc-900 bg-emerald-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-white">
+                        {u.name}
+                      </div>
+                      <div className="truncate text-xs text-zinc-400">
+                        <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                          u.role === 'admin' || u.role === 'moderator'
+                            ? 'bg-purple-500/20 text-purple-300'
+                            : 'bg-cyan-500/20 text-cyan-300'
+                        }`}>
+                          {u.role}
+                        </span>
+                        {u.telegram_username
+                          ? `@${u.telegram_username}`
+                          : u.email}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        Ativo {timeAgo(u.last_active_at)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-white">
-                      {u.name}
-                    </div>
-                    <div className="truncate text-xs text-zinc-400">
-                      <span className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                        u.role === 'admin' || u.role === 'moderator'
-                          ? 'bg-purple-500/20 text-purple-300'
-                          : 'bg-cyan-500/20 text-cyan-300'
-                      }`}>
-                        {u.role}
-                      </span>
-                      {u.telegram_username
-                        ? `@${u.telegram_username}`
-                        : u.email}
-                    </div>
-                    <div className="text-[10px] text-zinc-500">
-                      Ativo {timeAgo(u.last_active_at)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
