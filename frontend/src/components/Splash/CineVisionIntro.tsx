@@ -35,15 +35,6 @@ export default function CineVisionIntro() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
-
-    // Igor (08/05): voltei a mostrar splash no Telegram tambem.
-    // Antes era pulada porque a animacao cortava. Agora, com:
-    //  - Effect 2 esperando window.load antes de iniciar coreografia
-    //  - Tap-to-skip se algo der errado
-    //  - Audio so toca em desktop (mobile e in-app browsers bloqueiam
-    //    autoplay sem gesto previo — limitacao de plataforma)
-    // a animacao roda em qualquer navegador. Visual sempre mostra,
-    // som so onde o browser permite.
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
   }, []);
@@ -59,21 +50,74 @@ export default function CineVisionIntro() {
     if (typeof window === 'undefined') return;
 
     let cancelled = false;
-    const start = () => { if (!cancelled) setStarted(true); };
+    let resizeDebounce: any = null;
 
-    if (document.readyState === 'complete') {
-      start();
-    } else {
-      window.addEventListener('load', start, { once: true });
-    }
+    // Igor (08/05 v3): no Telegram in-app, a animacao cortava porque
+    // o webview redimensionava DURANTE a coreografia (chrome do app
+    // entrando). Agora esperamos:
+    //  1. window.load (DOM + recursos prontos)
+    //  2. logo PNG totalmente carregado (decode pronto)
+    //  3. resize estavel por 350ms (webview parou de redimensionar)
+    // So entao iniciamos a animacao — garantia de tela estavel.
+
+    const start = () => {
+      if (cancelled) return;
+      setStarted(true);
+    };
+
+    const beginResizeWatch = () => {
+      if (cancelled) return;
+      // Reseta debounce a cada resize. Quando passar 350ms sem resize,
+      // dispara start.
+      const onResize = () => {
+        clearTimeout(resizeDebounce);
+        resizeDebounce = setTimeout(start, 350);
+      };
+      window.addEventListener('resize', onResize, { passive: true });
+      // Inicia o timer ja agora — se nao houver resize, dispara em 350ms.
+      resizeDebounce = setTimeout(start, 350);
+      // Cleanup do listener junto com o effect.
+      const cleanup = () => {
+        window.removeEventListener('resize', onResize);
+      };
+      // Stash cleanup pro return.
+      (beginResizeWatch as any)._cleanup = cleanup;
+    };
+
+    const waitForLogo = (): Promise<void> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // falha tambem libera (nao prende)
+        img.src = '/CINEVT.png';
+        // Decode antecipado evita 1o frame branco no Telegram.
+        if ('decode' in img) (img as any).decode().catch(() => {});
+      });
+    };
+
+    const waitForPageLoad = (): Promise<void> => {
+      return new Promise((resolve) => {
+        if (document.readyState === 'complete') {
+          resolve();
+        } else {
+          window.addEventListener('load', () => resolve(), { once: true });
+        }
+      });
+    };
+
+    Promise.all([waitForPageLoad(), waitForLogo()]).then(() => {
+      if (!cancelled) beginResizeWatch();
+    });
 
     // Safety: nunca prender a splash mais que PAGE_LOAD_TIMEOUT_MS.
     const safety = setTimeout(start, PAGE_LOAD_TIMEOUT_MS);
 
     return () => {
       cancelled = true;
-      window.removeEventListener('load', start);
       clearTimeout(safety);
+      clearTimeout(resizeDebounce);
+      const cleanup = (beginResizeWatch as any)._cleanup;
+      if (cleanup) cleanup();
     };
   }, [visible]);
 
