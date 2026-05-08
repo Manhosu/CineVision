@@ -1032,38 +1032,35 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     externalChatId: string,
     originalMessage: string,
   ) {
-    // N28b (Igor 08/05): em platform=telegram_business, o owner da
-    // Business connection E quem deve receber o ping (e dele que tem
-    // o cliente conversando no DM dele). Antes, notify ia sempre pro
-    // admin do DB — que pode ser outra pessoa (no caso do Eduardo
-    // testando, o admin no DB era ele e nao o Igor). Resultado: Igor
-    // como dono da Business nunca recebia notify quando IA pausava
-    // conversa nas DMs DELE.
+    // N28b (Igor 08/05): SEMPRE prefere o owner ativo da Business
+    // connection, qualquer que seja a platform. Quem configurou Business
+    // E o "atendente humano" do sistema todo — recebe notify mesmo se
+    // a mensagem veio do bot publico (platform=telegram). Antes a notify
+    // ia pro admin DB — que pode ser OUTRA pessoa (ex: Eduardo dev
+    // testando, telegram_id 2006803983, enquanto Igor tem 1134910998).
     let targetChatId: string | null = null;
     let targetSource = 'admin_db';
 
-    if (platform === 'telegram_business') {
-      try {
-        const { data: businessConns } = await this.supabase.client
-          .from('telegram_business_connections')
-          .select('telegram_user_id, can_reply, is_enabled')
-          .eq('is_enabled', true)
-          .eq('can_reply', true)
-          .limit(5);
+    try {
+      const { data: businessConns } = await this.supabase.client
+        .from('telegram_business_connections')
+        .select('telegram_user_id, can_reply, is_enabled')
+        .eq('is_enabled', true)
+        .eq('can_reply', true)
+        .limit(5);
 
-        const owners = (businessConns || [])
-          .map((c: any) => String(c.telegram_user_id))
-          .filter(Boolean);
+      const owners = (businessConns || [])
+        .map((c: any) => String(c.telegram_user_id))
+        .filter(Boolean);
 
-        if (owners.length > 0) {
-          targetChatId = owners[0];
-          targetSource = 'business_owner';
-        }
-      } catch (err: any) {
-        this.logger.warn(
-          `notifyAdminForTakeover: lookup business owner failed: ${err.message}`,
-        );
+      if (owners.length > 0) {
+        targetChatId = owners[0];
+        targetSource = 'business_owner';
       }
+    } catch (err: any) {
+      this.logger.warn(
+        `notifyAdminForTakeover: lookup business owner failed: ${err.message}`,
+      );
     }
 
     if (!targetChatId) {
