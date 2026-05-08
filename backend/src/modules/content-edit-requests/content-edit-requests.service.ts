@@ -288,9 +288,14 @@ export class ContentEditRequestsService {
 
     this.logger.log(`approve() id=${id} request_type=${request.request_type} content_id=${request.content_id} person_id=${request.person_id}`);
 
-    // Igor (07/05): photo_replace aplica a nova photo_url direto na pessoa
-    // (mesmo padrao do approveDirect que existia em admin-people.service).
-    if (request.request_type === 'photo_replace') {
+    // Igor (07/05): photo_replace aplica a nova photo_url direto na pessoa.
+    // Detecta pela presenca de person_id (mais robusto que checar string
+    // request_type que parecia nao bater por algum motivo de PostgREST).
+    const isPhotoReplace =
+      request.request_type === 'photo_replace' ||
+      (request.person_id && !request.content_id);
+
+    if (isPhotoReplace) {
       this.logger.log(`approve() entering photo_replace branch for person ${request.person_id}`);
       const newUrl = request.changes?.photo_url;
       if (!newUrl) {
