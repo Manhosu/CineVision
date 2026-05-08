@@ -1407,17 +1407,70 @@ export class TelegramsEnhancedService implements OnModuleInit {
       if (!chatId || !text) return;
 
       // Lookup conexão pra validar can_reply + identificar Igor.
-      const { data: connection } = await this.supabase
+      let { data: connection } = await this.supabase
         .from('telegram_business_connections')
         .select('*')
         .eq('id', businessConnectionId)
         .maybeSingle();
 
+      // Igor (08/05): se a connection nao existe (porque o
+      // business_connection update foi processado por backend bugado
+      // anterior e perdido), recupera via Bot API getBusinessConnection
+      // e cria a row na hora. Self-healing.
       if (!connection) {
         this.logger.warn(
-          `business_message for unknown connection ${businessConnectionId}`,
+          `business_message for unknown connection ${businessConnectionId} — fetching from Bot API`,
         );
-        return;
+        try {
+          const resp = await axios.post(`${this.botApiUrl}/getBusinessConnection`, {
+            business_connection_id: businessConnectionId,
+          });
+          if (resp.data?.ok && resp.data.result) {
+            const conn = resp.data.result;
+            const ownerId = conn.user?.id ?? conn.user_chat_id;
+            const canReply =
+              conn.rights?.can_reply === true ||
+              conn.rights?.can_reply_to_messages === true ||
+              conn.can_reply === true;
+            const isEnabled = conn.is_enabled !== false;
+
+            const { data: created, error } = await this.supabase
+              .from('telegram_business_connections')
+              .upsert(
+                {
+                  id: businessConnectionId,
+                  telegram_user_id: ownerId,
+                  can_reply: canReply,
+                  is_enabled: isEnabled,
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'id' },
+              )
+              .select()
+              .single();
+
+            if (error) {
+              this.logger.error(
+                `Failed to recover business connection ${businessConnectionId}: ${error.message}`,
+              );
+              return;
+            }
+            connection = created;
+            this.logger.log(
+              `Recovered business connection ${businessConnectionId} owner=${ownerId} via Bot API`,
+            );
+          } else {
+            this.logger.error(
+              `getBusinessConnection failed: ${JSON.stringify(resp.data).slice(0, 300)}`,
+            );
+            return;
+          }
+        } catch (recoveryErr: any) {
+          this.logger.error(
+            `Bot API getBusinessConnection threw: ${recoveryErr.message}`,
+          );
+          return;
+        }
       }
 
       if (!connection.is_enabled || !connection.can_reply) {
