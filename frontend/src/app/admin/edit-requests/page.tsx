@@ -30,6 +30,45 @@ interface EditRequest {
 const fmtDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleString('pt-BR') : '—';
 
+// N25 (Igor 08/05): foto nova nao carregava no painel quando URL e
+// invalida (404, hotlink bloqueado, etc). Componente robusto com
+// fallback visual + URL exposta pra debug.
+function PhotoPreview({ label, url, ringColor }: { label: string; url?: string | null; ringColor: string }) {
+  const [errored, setErrored] = useState(false);
+  return (
+    <div>
+      <div className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
+        {label}
+      </div>
+      {url && !errored ? (
+        <img
+          src={url}
+          alt={label}
+          className={`aspect-square w-full rounded-lg object-cover ring-1 ${ringColor}`}
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <div className={`aspect-square w-full rounded-lg bg-zinc-800 flex flex-col items-center justify-center text-xs text-zinc-400 p-3 text-center gap-1 ring-1 ${ringColor}`}>
+          {!url && <span>sem foto</span>}
+          {url && errored && (
+            <>
+              <span className="text-amber-300">⚠ falha ao carregar</span>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="break-all text-[10px] text-blue-400 underline"
+              >
+                {url.length > 80 ? url.slice(0, 80) + '...' : url}
+              </a>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const formatValue = (v: any): string => {
   if (v === null || v === undefined) return '∅';
   if (typeof v === 'boolean') return v ? 'sim' : 'não';
@@ -287,36 +326,16 @@ export default function EditRequestsPage() {
 
               {selected.request_type === 'photo_replace' && (
                 <div className="mb-5 grid gap-3 md:grid-cols-2">
-                  <div>
-                    <div className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
-                      Foto atual
-                    </div>
-                    {selected.original_snapshot?.photo_url ? (
-                      <img
-                        src={selected.original_snapshot.photo_url}
-                        alt="atual"
-                        className="aspect-square w-full rounded-lg object-cover ring-1 ring-red-500/40"
-                      />
-                    ) : (
-                      <div className="aspect-square w-full rounded-lg bg-zinc-800 flex items-center justify-center text-xs text-zinc-500">
-                        sem foto
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <div className="mb-2 text-[10px] uppercase tracking-wide text-zinc-500">
-                      Nova foto proposta
-                    </div>
-                    {selected.changes?.photo_url ? (
-                      <img
-                        src={selected.changes.photo_url}
-                        alt="nova"
-                        className="aspect-square w-full rounded-lg object-cover ring-1 ring-green-500/40"
-                      />
-                    ) : (
-                      <div className="aspect-square w-full rounded-lg bg-zinc-800" />
-                    )}
-                  </div>
+                  <PhotoPreview
+                    label="Foto atual"
+                    url={selected.original_snapshot?.photo_url}
+                    ringColor="ring-red-500/40"
+                  />
+                  <PhotoPreview
+                    label="Nova foto proposta"
+                    url={selected.changes?.photo_url}
+                    ringColor="ring-green-500/40"
+                  />
                 </div>
               )}
 

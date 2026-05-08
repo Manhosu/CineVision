@@ -359,6 +359,7 @@ export default function AdminContentEditPage() {
 
     return (
       title !== (originalContent.title || '') ||
+      titleEn !== ((originalContent as any).title_en || '') ||
       description !== (originalContent.description || '') ||
       synopsis !== (originalContent.synopsis || '') ||
       durationMinutes !== (originalContent.duration_minutes || 0) ||
