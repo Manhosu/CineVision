@@ -677,6 +677,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
       if (access.fixedLink) {
         buttons.push([{ text: '📌 Acesso Fixo', url: access.fixedLink }]);
       }
+
+      // Igor (08/05): adicionar link de "Minhas Compras" pra cliente ter
+      // acesso permanente via dashboard. Se ele nunca usou o bot, o
+      // telegram-login captura o telegram_id no clique. Reusa o mesmo
+      // pattern do handleMyPurchasesCommand.
+      const frontendUrl = this.getFrontendUrl();
+      const dashboardUrl = `${frontendUrl}/auth/telegram-login?telegram_id=${chatId}&redirect=/dashboard`;
+      buttons.push([{ text: '🎬 Minhas Compras', url: dashboardUrl }]);
+
       const fixedDescription = access.fixedLink
         ? `\n📌 *Acesso Fixo*: link permanente pra você assistir outras vezes o conteúdo. Você usará esse link pra não perder acesso ao filme.\n\n⚠ *Se você compartilhar esse link com outra pessoa, essa pessoa irá cair numa malha fina. Não compartilhe.*`
         : '';
@@ -684,6 +693,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         chatId,
         `🎬 *Acesso ao Grupo do Telegram*\n\n` +
           `🔑 *Acesso Único*: link de uso único, válido por 24h. Use pra entrar imediatamente.${fixedDescription}\n\n` +
+          `🎬 *Minhas Compras*: acesse a dashboard a qualquer momento pra rever todos os filmes que você comprou.\n\n` +
           `_Não compartilhe esses links — eles estão vinculados à sua compra._`,
         {
           parse_mode: 'Markdown',

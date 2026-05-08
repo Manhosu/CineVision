@@ -227,6 +227,20 @@ export class AiChatService {
     // estava em takeover e Igor não enxergava as novas mensagens.
     await this.appendMessage(conversation.id, 'user', messageText);
 
+    // Igor (08/05): cliente mandando gratidao apos compra ("obrigado",
+    // "valeu", "amei") nao deve cair em content_not_found. Pre-check
+    // antes de carregar contexto + chamar Claude. Texto fixo do Igor.
+    const gratitudePattern =
+      /\b(obrigad[oa]|valeu|brigad[oa]|gratid[ãa]o|grato|grata|parab[ée]ns|amei|adorei|melhores|sucesso|maravilhos[ao]|excelente)\b/i;
+    if (gratitudePattern.test(messageText) && conversation.ai_enabled) {
+      const reply = 'Qualquer coisa só me chamar, ficamos à sua disposição ❤️🍿';
+      await this.appendMessage(conversation.id, 'assistant', reply);
+      this.logger.log(
+        `Gratitude detected in conv ${conversation.id} — replied with fixed text, skipped Claude`,
+      );
+      return { text: reply, paused: false, suggestedContentIds: [] };
+    }
+
     if (!conversation.ai_enabled) {
       // Admin assumed — bot should not auto-respond, mas a mensagem
       // do cliente já foi salva acima e vai aparecer no painel.
