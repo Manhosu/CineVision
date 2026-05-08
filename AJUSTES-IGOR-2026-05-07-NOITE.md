@@ -68,6 +68,39 @@ Igor quer reescrever pra deixar explícito:
 
 ---
 
+## N19 — IA fazendo perguntas pessoais quando cliente manda título curto
+**Origem**: screenshot Igor 23:22:59 — Cliente: "Meu meio irmão" / IA: "Você procura um filme chamado 'Meu Meio Irmão'? Ou quer me contar algo sobre seu meio irmão mesmo?"
+
+**Reportado**: Cliente mandou um título de filme (curto), e a IA respondeu como se pudesse ser uma conversa pessoal sobre o irmão do cliente. Igor disse: "a IA deve falar única e exclusivamente sobre filmes e séries, jamais da vida da pessoa ou qualquer coisa nesse sentido. Se a pessoa chega e fala um título dessa forma, a IA já deve entender como a existência de um conteúdo".
+
+**Diagnóstico**: o system prompt anterior tinha uma regra "MENSAGEM AMBÍGUA" que classificava frases curtas como ambíguas e mandava a IA fazer pergunta aberta. Isso fazia ela considerar interpretações pessoais.
+
+**Fix entregue**:
+Reescrevi o system prompt da IA (UPDATE direto em `ai_training_config` — efeito imediato, sem redeploy). Mudanças:
+
+1. **Nova regra ABSOLUTA de escopo no topo**: "SEU ÚNICO ASSUNTO É FILMES E SÉRIES DO CATÁLOGO". Proíbe conversa sobre vida pessoal, sentimento, política, religião, conselho. Se cliente puxar assunto pessoal: traz de volta pra filmes ("aqui eu cuido só do catálogo 🎬").
+
+2. **Nova regra CRÍTICA de interpretação**: QUALQUER mensagem que não seja saudação pura (oi/boa noite/tudo bem) ou pergunta de suporte (filme não baixa/como pago/tem reembolso) é **TÍTULO DE FILME OU SÉRIE até prova em contrário**. IA assume direto e busca no catálogo. Se achar: emite `<<DETAIL:uuid>>`. Se não achar: `<<PAUSE:content_not_found>>` com mensagem neutra.
+
+3. **Lista de exemplos explícitos**:
+   - "Meu meio irmão" → busca catálogo, segue protocolo. NUNCA pergunta sobre o irmão.
+   - "Eu te amo" → busca catálogo (existe filme com esse nome).
+   - "Não consigo dormir" → busca catálogo. Se não achar, content_not_found. NÃO oferece conselho.
+   - "Meu pai morreu" → busca primeiro. Se não for título: `needs_human` neutro. **Não oferece pêsames, não entra no assunto**.
+
+4. **Lista explícita de PROIBIÇÕES**:
+   - "Você procura um filme chamado X? Ou quer me contar algo sobre X mesmo?" → ERRADO
+   - "É um filme ou é sobre você?" → ERRADO
+   - "Posso te ajudar com algum sentimento?" → ERRADO
+
+5. **Regra dedicada (item 6) "ASSUNTO PESSOAL / FORA DE ESCOPO"**: resposta padrão "Aqui eu cuido só do catálogo de filmes e séries 🎬 quer dar uma olhada?" — sem entrar no mérito, sem conselho, sem pergunta de acompanhamento.
+
+**Validação**: efeito imediato — próxima mensagem da IA já usa o prompt novo. Igor pode testar mandando "Meu meio irmão" pro bot e a IA deve responder com `<<PAUSE:content_not_found>>` (porque o filme provavelmente não está no catálogo) em vez de fazer pergunta pessoal.
+
+**Prioridade**: 🔴 crítica (UX ruim, faz IA parecer terapeuta amador, atrapalha venda).
+
+---
+
 ## N18 — Toggle "Novidade / Nova Temporada" como sticker no admin (sem editar PNG do pôster)
 **Origem**: vídeo `10.23.48 PM` 07/05
 

@@ -80,8 +80,13 @@ export class AiChatService {
       .maybeSingle();
 
     if (!data) {
+      // N19 (Igor 07/05 noite): default com escopo restrito a
+      // filmes/series. Caso a row real do ai_training_config seja
+      // deletada, esse default cobre — IA nunca cai em conversa
+      // pessoal mesmo sem prompt customizado.
       return {
-        system_prompt: 'Você é o atendente do Cine Vision. Responda de forma humanizada.',
+        system_prompt:
+          'Você é a Yanna, atendente do Cine Vision. Você atende SOMENTE sobre o catálogo de filmes e séries do Cine Vision. Se o cliente mandar qualquer mensagem que não seja saudação pura, assuma que é título de filme/série e busque no catálogo. NÃO converse sobre vida pessoal, sentimento, conselho, política, religião — traga sempre de volta pra filmes/séries ("aqui eu cuido só do catálogo 🎬"). NUNCA pergunte se o cliente está falando da própria vida quando mencionar uma frase curta — assuma direto que é título.',
         faq_pairs: [],
       };
     }
