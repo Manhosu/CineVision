@@ -759,6 +759,12 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
   }
 
   async pauseConversation(conversationId: string, reason: string) {
+    // DEBUG (Igor 08/05): rastreio de TODA pausa pra entender de onde
+    // vem claude_config_missing quando logs anteriores nao mostram.
+    const stack = new Error().stack?.split('\n').slice(2, 5).join(' | ').replace(/\s+/g, ' ');
+    this.logger.warn(
+      `[PAUSE_TRACE] conv=${conversationId} reason=${reason} caller=${stack}`,
+    );
     await this.supabase.client
       .from('ai_conversations')
       .update({
