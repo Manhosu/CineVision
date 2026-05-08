@@ -3840,6 +3840,26 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         await this.handleMessage(update.message);
       } else if (update.callback_query) {
         await this.handleCallbackQuery(update.callback_query);
+      } else if (update.business_connection) {
+        // Igor (08/05): bug critico — handleUpdate do polling so tratava
+        // message + callback_query. Quando o backend caia em polling
+        // (caso default em prod), business_connection e business_message
+        // eram silenciosamente ignorados. Por isso a IA nao respondia
+        // DM do Igor mesmo com Business configurado.
+        this.logger.log('🤝 [polling] Processing business_connection update');
+        await this.processBusinessConnection(update.business_connection);
+      } else if (update.business_message) {
+        this.logger.log('💬 [polling] Processing business_message update');
+        await this.processBusinessMessage(update.business_message);
+      } else if (update.edited_business_message) {
+        // Edicao de business_message — trata como nova mensagem
+        // (cliente corrigiu o que escreveu).
+        this.logger.log('✏️ [polling] Processing edited_business_message update');
+        await this.processBusinessMessage(update.edited_business_message);
+      } else {
+        this.logger.debug(
+          `[polling] Unknown update type: ${Object.keys(update).filter((k) => k !== 'update_id').join(',')}`,
+        );
       }
     } catch (error) {
       this.logger.error('Error handling update:', error);
