@@ -117,11 +117,17 @@ export class ClaudeProvider {
     maxTokens?: number;
   }): Promise<AiCompletionResult> {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+    // DEBUG (Igor 08/05): backend reporta config_missing apesar da env
+    // var estar setada no Render. Logando o estado da config pra
+    // identificar discrepancia.
     if (!apiKey) {
-      // Lança ClaudeApiError com kind específico em vez de Error
-      // genérico — assim ai-chat.service mapeia pra paused_reason
-      // 'claude_config_missing' e o banner mostra hint correto pra
-      // Igor (configurar env var no Render).
+      const allKeys = Object.keys(process.env)
+        .filter((k) => /ANTHROPIC|API_KEY|CLAUDE/i.test(k))
+        .map((k) => `${k}=${process.env[k] ? `set(len=${process.env[k]!.length})` : 'EMPTY'}`)
+        .join(', ');
+      this.logger.error(
+        `[CLAUDE_DEBUG] ANTHROPIC_API_KEY not loaded by ConfigService. process.env scan: ${allKeys || '(no matches)'} | NODE_ENV=${process.env.NODE_ENV} | CWD=${process.cwd()}`,
+      );
       throw new ClaudeApiError(
         'config_missing',
         null,
@@ -130,6 +136,9 @@ export class ClaudeProvider {
         'ANTHROPIC_API_KEY não configurada no ambiente do backend. Adicione em Render Dashboard → Environment.',
       );
     }
+    this.logger.debug(
+      `[CLAUDE_DEBUG] ANTHROPIC_API_KEY loaded ok (len=${apiKey.length}, starts=${apiKey.slice(0, 12)})`,
+    );
 
     const primaryModel =
       options.model ||
