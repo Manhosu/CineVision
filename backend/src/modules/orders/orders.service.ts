@@ -456,7 +456,7 @@ export class OrdersService {
         claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
         whatsapp_url: o.customer_whatsapp
           ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
-              `Olá! Identifiquei aqui que você fez uma compra no nosso site (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) e ainda não recebeu o acesso.\n\nPara receber seu(s) filme(s), abra nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático ❤`,
+              `Olá! Identifiquei aqui que você fez uma compra no nosso site (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) e ainda não recebeu o acesso.\n\nPara receber seu(s) filme(s), abra nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático.`,
             )}`
           : null,
       };
@@ -530,7 +530,7 @@ export class OrdersService {
         claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
         whatsapp_url: o.customer_whatsapp
           ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
-              `Olá! Identifiquei que sua compra (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) foi paga mas o link não chegou.\n\nPara receber, abra o nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático ❤`,
+              `Olá! Identifiquei que sua compra (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) foi paga mas o link não chegou.\n\nPara receber, abra o nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático.`,
             )}`
           : null,
       };
