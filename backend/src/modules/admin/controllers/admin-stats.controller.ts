@@ -15,12 +15,18 @@ import { AdminStatsService } from '../services/admin-stats.service';
 @ApiTags('Admin - Statistics')
 @Controller('admin/stats')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(UserRole.ADMIN)
 @ApiBearerAuth()
 export class AdminStatsController {
   constructor(private readonly statsService: AdminStatsService) {}
 
+  // N22 (Igor 08/05): funcionarios precisam ver "Total de Conteudo" e
+  // "Total de Usuarios" no painel pra ter contexto. Sao counts globais
+  // — sem dados sensiveis. Liberado pra ADMIN, MODERATOR e EMPLOYEE.
+  // 'stats/requests' continua restrito a ADMIN (pode revelar tickets
+  // sensiveis pendentes).
+
   @Get('users')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
   @ApiOperation({
     summary: 'Get total users',
     description: 'Returns the total number of users who have accessed the site',
@@ -35,6 +41,7 @@ export class AdminStatsController {
   }
 
   @Get('content')
+  @Roles(UserRole.ADMIN, UserRole.MODERATOR, UserRole.EMPLOYEE)
   @ApiOperation({
     summary: 'Get content statistics',
     description: 'Returns total content count and other content stats',
@@ -49,6 +56,7 @@ export class AdminStatsController {
   }
 
   @Get('requests')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Get content requests statistics',
     description: 'Returns pending and total content requests',

@@ -59,7 +59,9 @@ export class ReengagementService {
     // re-engajamento desde a última mensagem.
     const { data: candidates, error } = await this.supabase.client
       .from('ai_conversations')
-      .select('id, platform, external_chat_id, last_message_at, last_reengagement_sent_at')
+      .select(
+        'id, platform, external_chat_id, last_message_at, last_reengagement_sent_at, ai_enabled, paused_reason',
+      )
       .eq('platform', 'telegram')
       .lt('last_message_at', cutoff)
       .limit(50);
@@ -83,11 +85,44 @@ export class ReengagementService {
       `ReengagementService: enviando template para ${eligible.length} conversa(s) frias.`,
     );
 
+    // Igor (08/05): N21 — pausas "soft" (content_not_found, needs_human,
+    // media_received, receipt_image_received, manual) podem ser desfeitas
+    // quando a conversa esfriar — Igor obviamente saiu do chat e o cliente
+    // tambem. Reativa IA pra proxima mensagem do cliente cair na IA de
+    // novo. NUNCA reativa pause de owner_takeover (Igor assumiu) ou de
+    // claude_failure (precisa intervencao manual).
+    const SOFT_PAUSE_REASONS = new Set([
+      'content_not_found',
+      'needs_human',
+      'media_received',
+      'receipt_image_received',
+      'detail_ids_invalid',
+      'manual',
+    ]);
+
     let sent = 0;
+    let reactivated = 0;
     for (const conv of eligible) {
       const chatId = parseInt(conv.external_chat_id, 10);
       if (Number.isNaN(chatId)) continue;
       try {
+        // Reativa IA se a pausa atual for soft.
+        if (
+          !conv.ai_enabled &&
+          conv.paused_reason &&
+          SOFT_PAUSE_REASONS.has(conv.paused_reason)
+        ) {
+          await this.supabase.client
+            .from('ai_conversations')
+            .update({
+              ai_enabled: true,
+              paused_reason: null,
+              paused_at: null,
+            })
+            .eq('id', conv.id);
+          reactivated++;
+        }
+
         await this.telegramsService.sendMessage(chatId, REENGAGEMENT_TEMPLATE);
         // Persiste a mensagem no histórico como role='system' pra
         // aparecer no painel admin com etiqueta clara (não confunde
@@ -109,6 +144,8 @@ export class ReengagementService {
       }
     }
 
-    this.logger.log(`ReengagementService: ${sent}/${eligible.length} enviados.`);
+    this.logger.log(
+      `ReengagementService: ${sent}/${eligible.length} enviados, ${reactivated} IA reativada(s).`,
+    );
   }
 }
