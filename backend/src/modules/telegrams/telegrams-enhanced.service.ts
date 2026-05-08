@@ -1190,39 +1190,89 @@ export class TelegramsEnhancedService implements OnModuleInit {
       .update({ last_message_at: new Date().toISOString() })
       .eq('id', conv.id);
 
-    // Heurística de comprovante: pausa pra Igor revisar.
-    const looksLikeReceipt =
-      /comprovante|paguei|pago|pix|deposit|recibo|comprovado/i.test(caption);
+    // Igor (08/05): N20 — qualquer mídia (foto/documento) recebida pelo
+    // bot agora pausa a IA e chama o admin no DM. Antes, só pausava se
+    // o caption mencionasse "comprovante/pix/pago" — mas a maioria dos
+    // clientes manda print SEM caption, então ficava perdido.
+    if (conv.ai_enabled) {
+      const looksLikeReceipt =
+        /comprovante|paguei|pago|pix|deposit|recibo|comprovado/i.test(caption);
+      const pauseReason = looksLikeReceipt
+        ? 'receipt_image_received'
+        : 'media_received';
 
-    if (looksLikeReceipt && conv.ai_enabled) {
       await this.supabase
         .from('ai_conversations')
         .update({
           ai_enabled: false,
-          paused_reason: 'receipt_image_received',
+          paused_reason: pauseReason,
           paused_at: new Date().toISOString(),
         })
         .eq('id', conv.id);
 
       // Avisa o cliente que vamos analisar.
-      await this.sendMessage(
-        chatId,
-        '📩 Recebi seu comprovante! Vou analisar e te confirmar em instantes.',
-      );
+      const clientMsg = looksLikeReceipt
+        ? '📩 Recebi seu comprovante! Já chamei alguém da equipe pra te ajudar — em instantes te respondemos. 💕'
+        : '📩 Recebi sua mensagem! Já chamei alguém da equipe pra dar uma olhada — em instantes te respondemos. 💕';
 
-      // Notifica admin (chat configurado).
-      const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+      await this.sendMessage(chatId, clientMsg);
+
+      // Notifica admin com fallback DB (mesmo padrao do resolveAdminChatId).
+      const adminChatId = await this.resolveAdminChatIdLocal();
       if (adminChatId) {
         try {
+          const mediaLabel =
+            mediaType === 'photo' ? 'uma imagem' : 'um documento';
+          const captionLine = caption ? ` com a legenda: "${caption}"` : '';
+          const reasonLabel = looksLikeReceipt ? 'Comprovante' : 'Mídia';
           await this.sendMessage(
             parseInt(adminChatId, 10),
-            `📷 *Comprovante recebido*\n\nCliente \`${chatId}\` enviou ${mediaType === 'photo' ? 'uma imagem' : 'um documento'}${caption ? ` com a legenda: "${caption}"` : ''}.\n\nAcesse o painel de IA pra revisar e liberar o conteúdo.`,
+            `📷 *${reasonLabel} recebido*\n\nCliente \`${chatId}\` enviou ${mediaLabel}${captionLine}.\n\n👉 [Abrir painel de IA](https://www.cinevisionapp.com.br/admin/ai-chat)`,
             { parse_mode: 'Markdown' },
           );
+          this.logger.log(
+            `Admin notified about ${pauseReason}: client=${chatId} → admin=${adminChatId}`,
+          );
         } catch (err: any) {
-          this.logger.warn(`admin notify (receipt) failed: ${err.message}`);
+          this.logger.warn(`admin notify (media) failed: ${err.message}`);
         }
+      } else {
+        this.logger.warn(
+          `media notify dropped: no admin chat_id resolved for client ${chatId}`,
+        );
       }
+    }
+  }
+
+  // Igor (08/05): N20 — replica do resolveAdminChatId em ai-chat.service.
+  // Antes esse handler usava env var TELEGRAM_ADMIN_CHAT_ID direto (que
+  // Igor nao setou no Render), entao notify silenciosamente droppava.
+  // Agora cai no fallback DB (admin com telegram_id set).
+  private adminChatIdCache: { value: string | null; fetchedAt: number } | null = null;
+  private async resolveAdminChatIdLocal(): Promise<string | null> {
+    const envChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    if (envChatId) return envChatId;
+
+    const now = Date.now();
+    if (this.adminChatIdCache && now - this.adminChatIdCache.fetchedAt < 5 * 60 * 1000) {
+      return this.adminChatIdCache.value;
+    }
+
+    try {
+      const { data: admins } = await this.supabase
+        .from('users')
+        .select('id, telegram_id, telegram_chat_id, role')
+        .eq('role', 'admin')
+        .not('telegram_id', 'is', null)
+        .limit(5);
+
+      const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
+      const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
+      this.adminChatIdCache = { value, fetchedAt: now };
+      return value;
+    } catch (err: any) {
+      this.logger.error(`resolveAdminChatIdLocal failed: ${err.message}`);
+      return null;
     }
   }
 

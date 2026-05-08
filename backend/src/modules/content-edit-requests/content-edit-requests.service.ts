@@ -399,7 +399,7 @@ export class ContentEditRequestsService {
   // Notify master admin via Telegram
   // ---------------------------------------------------------------------------
   private async notifyAdminNewRequest(request: any) {
-    const adminChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    const adminChatId = await this.resolveAdminChatId();
     if (!adminChatId || !this.telegramsService) return;
 
     const chatId = parseInt(adminChatId, 10);
@@ -454,5 +454,36 @@ export class ContentEditRequestsService {
       .order('created_at', { ascending: false })
       .limit(50);
     return data || [];
+  }
+
+  // Igor (08/05): N20 — fallback DB pra resolver admin chat_id quando
+  // env var TELEGRAM_ADMIN_CHAT_ID nao esta setada. Mesmo padrao do
+  // ai-chat.service.resolveAdminChatId.
+  private adminChatIdCache: { value: string | null; fetchedAt: number } | null = null;
+  private async resolveAdminChatId(): Promise<string | null> {
+    const envChatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID');
+    if (envChatId) return envChatId;
+
+    const now = Date.now();
+    if (this.adminChatIdCache && now - this.adminChatIdCache.fetchedAt < 5 * 60 * 1000) {
+      return this.adminChatIdCache.value;
+    }
+
+    try {
+      const { data: admins } = await this.supabase.client
+        .from('users')
+        .select('id, telegram_id, telegram_chat_id, role')
+        .eq('role', 'admin')
+        .not('telegram_id', 'is', null)
+        .limit(5);
+
+      const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
+      const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
+      this.adminChatIdCache = { value, fetchedAt: now };
+      return value;
+    } catch (err: any) {
+      this.logger.error(`resolveAdminChatId failed: ${err.message}`);
+      return null;
+    }
   }
 }
