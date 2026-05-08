@@ -1320,12 +1320,39 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * ao responder e (b) verificar can_reply antes de processar mensagens.
    */
   private async processBusinessConnection(payload: any) {
+    // Igor (08/05): tabela ficava vazia mesmo apos o bot ser adicionado.
+    // Loga payload bruto e usa fallback pra user_chat_id quando user.id
+    // nao vem (Bot API novo as vezes manda so user_chat_id que equivale
+    // ao mesmo id em DM 1-1).
+    this.logger.log(
+      `[BUSINESS_CONN_RAW] ${JSON.stringify(payload).slice(0, 1000)}`,
+    );
+
     try {
       const id = payload.id as string;
-      const ownerId = payload.user?.id ?? payload.user_id;
+      const ownerId =
+        payload.user?.id ??
+        payload.user_id ??
+        payload.user_chat_id ??
+        null;
       const canReply =
-        payload.rights?.can_reply === true || payload.can_reply === true;
+        payload.rights?.can_reply === true ||
+        payload.rights?.can_reply_to_messages === true ||
+        payload.can_reply === true;
       const isEnabled = payload.is_enabled !== false;
+
+      if (!id) {
+        this.logger.error(
+          `[BUSINESS_CONN] payload sem id — abortando: ${JSON.stringify(payload).slice(0, 500)}`,
+        );
+        return;
+      }
+      if (!ownerId) {
+        this.logger.error(
+          `[BUSINESS_CONN] payload sem user.id/user_chat_id — abortando: ${JSON.stringify(payload).slice(0, 500)}`,
+        );
+        return;
+      }
 
       this.logger.log(
         `Business connection ${id} from user ${ownerId} (can_reply=${canReply}, is_enabled=${isEnabled})`,
@@ -1346,11 +1373,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       if (error) {
         this.logger.error(
-          `Failed to upsert business connection ${id}: ${error.message}`,
+          `[BUSINESS_CONN] Failed upsert id=${id} owner=${ownerId} can_reply=${canReply} is_enabled=${isEnabled}: ${error.message} | code=${(error as any).code}`,
+        );
+      } else {
+        this.logger.log(
+          `[BUSINESS_CONN] Upsert OK id=${id} owner=${ownerId}`,
         );
       }
     } catch (err: any) {
-      this.logger.error(`processBusinessConnection failed: ${err.message}`);
+      this.logger.error(
+        `[BUSINESS_CONN] processBusinessConnection threw: ${err.message} | stack=${err.stack?.slice(0, 500)}`,
+      );
     }
   }
 
