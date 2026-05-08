@@ -668,14 +668,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
       );
       if (!access?.link) return;
 
+      // Igor (08/05): trocar nome do botao "Acesso Pessoal (compartilhavel)"
+      // pra "Acesso Fixo" e ajustar copy reforcando que NAO e compartilhavel
+      // (link vinculado a compra; quem usar fora vai pra malha fina).
       const buttons: Array<Array<{ text: string; url: string }>> = [
         [{ text: '🔑 Acesso Único (24h)', url: access.link }],
       ];
       if (access.fixedLink) {
-        buttons.push([{ text: '📌 Acesso Pessoal (compartilhável)', url: access.fixedLink }]);
+        buttons.push([{ text: '📌 Acesso Fixo', url: access.fixedLink }]);
       }
       const fixedDescription = access.fixedLink
-        ? `\n📌 *Acesso Pessoal*: link permanente. Se você compartilhar com alguém, essa pessoa cai numa fila pra ser aprovada manualmente — assim você não perde o acesso.`
+        ? `\n📌 *Acesso Fixo*: link permanente pra você assistir outras vezes o conteúdo. Você usará esse link pra não perder acesso ao filme.\n\n⚠ *Se você compartilhar esse link com outra pessoa, essa pessoa irá cair numa malha fina. Não compartilhe.*`
         : '';
       await this.sendMessage(
         chatId,
