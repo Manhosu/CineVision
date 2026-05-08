@@ -165,23 +165,6 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* N18 (Igor 07/05 noite): badges de Novidade / Nova Temporada
-              renderizados como overlay CSS — Igor nao precisa mais editar
-              o PNG do poster pra adicionar/remover esses stickers. */}
-          {(movie.is_release || (movie as any).is_new_season) && !isFlashPromo && (
-            <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
-              {movie.is_release && (
-                <span className="rounded-md bg-gradient-to-r from-red-600 to-rose-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-red-500/40">
-                  🆕 Novidade
-                </span>
-              )}
-              {(movie as any).is_new_season && (
-                <span className="rounded-md bg-gradient-to-r from-orange-600 to-amber-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-lg shadow-orange-500/40">
-                  📺 Nova Temporada
-                </span>
-              )}
-            </div>
-          )}
 
           {/* Quick add-to-cart icon (top-right corner) */}
           {!isPurchased && (
@@ -201,6 +184,17 @@ const MovieCard = memo(function MovieCard({
             </div>
           )}
         </div>
+
+        {/* N23 (Igor 08/05): badge Netflix-style ABAIXO do poster, largura
+            total, fundo vermelho Netflix, sem padding lateral. Igor nao
+            gostou do overlay anterior em cima do poster. */}
+        {(movie.is_release || (movie as any).is_new_season) && !isFlashPromo && (
+          <div className="bg-[#E50914] py-1 text-center">
+            <span className="text-white text-[11px] font-bold uppercase tracking-wider">
+              {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
+            </span>
+          </div>
+        )}
 
         {/* Info + Buy button below poster */}
         <div className="pt-2 px-0.5">
