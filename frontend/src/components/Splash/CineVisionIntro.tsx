@@ -30,6 +30,11 @@ export default function CineVisionIntro() {
   // do Telegram.
   const [started, setStarted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Guarda o timestamp de quando a splash ficou visível. O dismiss
+  // só é liberado 2.5s depois para evitar que o toque que abre o
+  // link no Telegram propague para o WebView e feche a animação
+  // antes de ela sequer começar.
+  const canDismissAt = useRef<number>(0);
 
   // Effect 1: decide se vai mostrar o splash. Roda 1x no mount.
   useEffect(() => {
@@ -39,32 +44,12 @@ export default function CineVisionIntro() {
     // Verifica parâmetro de URL para desabilitar splash manualmente
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('nosplash') === '1') {
-      console.log('nosplash parameter detected, skipping splash screen');
-      sessionStorage.setItem(SESSION_KEY, '1');
-      return;
-    }
-    
-    // Desabilitar splash no Telegram in-app browser para evitar
-    // problemas com animação cortada e áudio não tocando
-    const isTelegramWebApp = !!(window as any).Telegram?.WebApp;
-    const isTelegramUserAgent = /Telegram/i.test(navigator.userAgent);
-    
-    // Também desabilitar se a viewport height for muito pequena (indicativo de app embutido)
-    const viewportHeight = window.innerHeight;
-    const isSmallViewport = viewportHeight < 600; // Aumentado de 500 para 600
-    
-    // Também desabilitar em mobile para evitar problemas de autoplay e performance
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    
-    console.log('Splash detection:', { isTelegramWebApp, isTelegramUserAgent, viewportHeight, isSmallViewport, isMobile });
-    
-    if (isTelegramWebApp || isTelegramUserAgent || isSmallViewport || isMobile) {
-      console.log('Problematic environment detected, skipping splash screen');
       sessionStorage.setItem(SESSION_KEY, '1');
       return;
     }
     
     setVisible(true);
+    canDismissAt.current = Date.now() + 2500;
     sessionStorage.setItem(SESSION_KEY, '1');
   }, []);
 
@@ -210,13 +195,12 @@ export default function CineVisionIntro() {
     };
   }, [visible]);
 
-  // Escape hatch: tap/click em qualquer parte da splash dismissa.
-  // Se a detecção de Telegram falhar em algum cliente desconhecido
-  // (Telegram Desktop em alguma plataforma nova, fork do Telegram, etc),
-  // o user toca a tela e cai direto na home — sem ficar preso vendo
-  // animação cortada.
+  // Escape hatch: toque após 2.5s dismissa a splash.
+  // O delay evita que o toque que abre o link no Telegram (ou qualquer
+  // evento de pointer gerado pelo app ao montar o WebView) feche a
+  // animação antes dela começar — era o principal motivo do corte.
   const dismiss = () => {
-    sessionStorage.setItem(SESSION_KEY, '1');
+    if (Date.now() < canDismissAt.current) return;
     setVisible(false);
   };
 
@@ -243,7 +227,6 @@ export default function CineVisionIntro() {
           }}
           aria-hidden="true"
           onClick={dismiss}
-          onTouchStart={dismiss}
         >
           {/* A coreografia do logo só monta depois que window.load
               dispara — antes disso ficamos só com a tela preta. Sem
