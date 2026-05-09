@@ -165,6 +165,18 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
+          {/* Badge Novidade / Nova Temporada — top-left do poster.
+              Igor (08/05): visivel sempre, inclusive em flash promo.
+              Quando ha flash promo, posiciona abaixo da faixa OFERTA. */}
+          {(movie.is_release || (movie as any).is_new_season) && (
+            <div
+              className={`absolute left-0 z-30 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40 ${
+                isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'
+              }`}
+            >
+              {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
+            </div>
+          )}
 
           {/* Quick add-to-cart icon (top-right corner) */}
           {!isPurchased && (
@@ -185,20 +197,6 @@ const MovieCard = memo(function MovieCard({
           )}
         </div>
 
-        {/* N23 (Igor 08/05): badge Netflix-style ABAIXO do poster, largura
-            total, fundo vermelho Netflix, sem padding lateral.
-            Igor (08/05 v3): com flash promo o "X% OFF" interno do poster
-            tambem e vermelho — pra nao parecer sobreposto, adicionei
-            margem-top + borda preta superior pra separar visualmente. */}
-        {(movie.is_release || (movie as any).is_new_season) && (
-          <div className={`bg-[#E50914] py-1 text-center ${
-            isFlashPromo ? 'mt-1 border-t-2 border-black' : ''
-          }`}>
-            <span className="text-white text-[11px] font-bold uppercase tracking-wider">
-              {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
-            </span>
-          </div>
-        )}
 
         {/* Info + Buy button below poster */}
         <div className="pt-2 px-0.5">

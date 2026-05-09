@@ -202,6 +202,18 @@ const Top10MovieCard = memo(function Top10MovieCard({
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
 
+            {/* Badge Novidade / Nova Temporada — top-left do poster.
+                Igor (08/05): visivel sempre. Quando ha flash promo,
+                posiciona abaixo da faixa OFERTA. */}
+            {(movie.is_release || (movie as any).is_new_season) && (
+              <div
+                className={`absolute left-0 z-30 px-1.5 py-0.5 bg-[#E50914] text-white text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40 ${
+                  isFlashPromo && promoTimeLeft ? 'top-7' : 'top-1.5'
+                }`}
+              >
+                {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
+              </div>
+            )}
 
             {/* Year + badge overlay at bottom-left of poster */}
             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 z-10">
@@ -216,18 +228,6 @@ const Top10MovieCard = memo(function Top10MovieCard({
             </div>
           </div>
 
-          {/* N23 (Igor 08/05): badge Netflix-style ABAIXO do poster.
-              v3: com flash promo, "X% OFF" interno tambem e vermelho —
-              borda preta superior + margin top separam visualmente. */}
-          {(movie.is_release || (movie as any).is_new_season) && (
-            <div className={`bg-[#E50914] py-1 text-center ${
-              isFlashPromo ? 'mt-1 border-t-2 border-black' : ''
-            }`}>
-              <span className="text-white text-[10px] font-bold uppercase tracking-wider">
-                {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
-              </span>
-            </div>
-          )}
 
           {/* Preço centralizado acima do botão + botão minimalista. */}
           <div className="pt-2 px-0.5 relative z-30">
