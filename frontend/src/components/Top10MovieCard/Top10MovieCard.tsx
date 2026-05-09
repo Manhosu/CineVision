@@ -217,8 +217,9 @@ const Top10MovieCard = memo(function Top10MovieCard({
           </div>
 
           {/* N23 (Igor 08/05): badge Netflix-style ABAIXO do poster, largura
-              total do card, fundo vermelho Netflix. */}
-          {(movie.is_release || (movie as any).is_new_season) && !isFlashPromo && (
+              total do card, fundo vermelho Netflix.
+              Igor (08/05 v2): mostrar TAMBEM durante flash promo. */}
+          {(movie.is_release || (movie as any).is_new_season) && (
             <div className="bg-[#E50914] py-1 text-center">
               <span className="text-white text-[10px] font-bold uppercase tracking-wider">
                 {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
