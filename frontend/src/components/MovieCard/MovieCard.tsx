@@ -186,12 +186,14 @@ const MovieCard = memo(function MovieCard({
         </div>
 
         {/* N23 (Igor 08/05): badge Netflix-style ABAIXO do poster, largura
-            total, fundo vermelho Netflix, sem padding lateral. Igor nao
-            gostou do overlay anterior em cima do poster.
-            Igor (08/05 v2): mostrar TAMBEM durante flash promo — badge
-            fica fora do poster (nao conflita com overlay interno). */}
+            total, fundo vermelho Netflix, sem padding lateral.
+            Igor (08/05 v3): com flash promo o "X% OFF" interno do poster
+            tambem e vermelho — pra nao parecer sobreposto, adicionei
+            margem-top + borda preta superior pra separar visualmente. */}
         {(movie.is_release || (movie as any).is_new_season) && (
-          <div className="bg-[#E50914] py-1 text-center">
+          <div className={`bg-[#E50914] py-1 text-center ${
+            isFlashPromo ? 'mt-1 border-t-2 border-black' : ''
+          }`}>
             <span className="text-white text-[11px] font-bold uppercase tracking-wider">
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
             </span>
