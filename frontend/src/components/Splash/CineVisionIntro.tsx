@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const SESSION_KEY = 'cv_intro_played';
 
-// Total splash window: 5.5s of choreography + 0.6s exit fade.
-// The Netflix-style "tudum" jingle is 4.1s and climaxes at the
-// end. We start audio at 0.4s so the climax lands at ~4.5s of
-// splash time, which is where the logo slam-in resolves.
-const INTRO_DURATION_MS = 5500;
+// Total splash window: 5.5s of choreography + 0.7s hold buffer
+// + 0.6s exit fade. The buffer evita que o fade-out corte o final
+// da animação. The Netflix-style "tudum" jingle is 4.1s and
+// climaxes at the end. We start audio at 0.4s so the climax lands
+// at ~4.5s of splash time, which is where the logo slam-in resolves.
+const INTRO_DURATION_MS = 6200;
 const AUDIO_OFFSET_MS = 400;
 const ANIMATION_DURATION_S = 5.5;
 
