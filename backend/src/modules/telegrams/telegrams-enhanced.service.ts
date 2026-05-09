@@ -642,7 +642,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // claro pra Igor saber que precisa cadastrar um link de convite.
     if (chatIdToTry) {
       throw new BadRequestException(
-        'Não consegui gerar acesso ao grupo. Verifique se @cinevisionv2bot é admin do grupo, OU cadastre um link de convite (t.me/+...) no painel do conteúdo como fallback.',
+        'Não consegui gerar acesso ao grupo. Verifique se @CineVisionApp_rbot é admin do grupo, OU cadastre um link de convite (t.me/+...) no painel do conteúdo como fallback.',
       );
     }
     throw new BadRequestException('Conteúdo sem grupo do Telegram configurado.');

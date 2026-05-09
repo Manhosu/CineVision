@@ -35,6 +35,35 @@ export default function CineVisionIntro() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(SESSION_KEY)) return;
+    
+    // Verifica parâmetro de URL para desabilitar splash manualmente
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('nosplash') === '1') {
+      console.log('nosplash parameter detected, skipping splash screen');
+      sessionStorage.setItem(SESSION_KEY, '1');
+      return;
+    }
+    
+    // Desabilitar splash no Telegram in-app browser para evitar
+    // problemas com animação cortada e áudio não tocando
+    const isTelegramWebApp = !!(window as any).Telegram?.WebApp;
+    const isTelegramUserAgent = /Telegram/i.test(navigator.userAgent);
+    
+    // Também desabilitar se a viewport height for muito pequena (indicativo de app embutido)
+    const viewportHeight = window.innerHeight;
+    const isSmallViewport = viewportHeight < 600; // Aumentado de 500 para 600
+    
+    // Também desabilitar em mobile para evitar problemas de autoplay e performance
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    console.log('Splash detection:', { isTelegramWebApp, isTelegramUserAgent, viewportHeight, isSmallViewport, isMobile });
+    
+    if (isTelegramWebApp || isTelegramUserAgent || isSmallViewport || isMobile) {
+      console.log('Problematic environment detected, skipping splash screen');
+      sessionStorage.setItem(SESSION_KEY, '1');
+      return;
+    }
+    
     setVisible(true);
     sessionStorage.setItem(SESSION_KEY, '1');
   }, []);
@@ -199,6 +228,19 @@ export default function CineVisionIntro() {
           exit={{ opacity: 0 }}
           transition={{ opacity: { duration: 0.6 } }}
           className="fixed inset-0 z-[100000] flex items-center justify-center overflow-hidden bg-black cursor-pointer"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minWidth: '100vw',
+            minHeight: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+          }}
           aria-hidden="true"
           onClick={dismiss}
           onTouchStart={dismiss}

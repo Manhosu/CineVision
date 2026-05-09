@@ -1009,7 +1009,7 @@ export default function AdminContentCreatePage() {
                 )}
                 <p className="mt-2 text-xs text-zinc-400 bg-zinc-900/40 px-3 py-2 rounded-lg border border-zinc-700/50">
                   Quando preenchido, o bot tenta gerar invite de uso único de 24h pra cada cliente.
-                  Requer <strong>@cinevisionv2bot como admin do grupo</strong> com permissão de criar links de convite.
+                  Requer <strong>@CineVisionApp_rbot como admin do grupo</strong> com permissão de criar links de convite.
                 </p>
               </div>
 

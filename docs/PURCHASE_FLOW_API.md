@@ -39,7 +39,7 @@ This document describes the complete purchase flow implementation for Cine Visio
 {
   "id": "123e4567-e89b-12d3-a456-426614174000",
   "purchase_token": "987fcdeb-51a2-43d7-8765-123456789abc",
-  "telegram_deep_link": "https://t.me/CineVisionApp_Bot?start=987fcdeb-51a2-43d7-8765-123456789abc",
+  "telegram_deep_link": "https://t.me/CineVisionApp_rbot?start=987fcdeb-51a2-43d7-8765-123456789abc",
   "status": "pending",
   "amount_cents": 1990,
   "currency": "BRL",
@@ -270,7 +270,7 @@ https://cinevision.com/watch/{content_id}?token={access_token}
 
 ### Backend (.env)
 ```bash
-TELEGRAM_BOT_USERNAME=CineVisionApp_Bot
+TELEGRAM_BOT_USERNAME=CineVisionApp_rbot
 BOT_WEBHOOK_URL=http://localhost:3003
 WEBHOOK_SECRET=your-webhook-secret
 JWT_SECRET=your-jwt-secret

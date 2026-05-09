@@ -140,7 +140,7 @@ export class TestPaymentController {
         status: 'paid',
         telegram_chat_id: telegramChatId,
         content_title: purchase.content.title,
-        test_url: `https://t.me/cinevisionv2bot?start=payment_success_${purchase.id}`,
+        test_url: `https://t.me/CineVisionApp_rbot?start=payment_success_${purchase.id}`,
         notes: [
           'Este foi um pagamento de TESTE',
           'Acesse o link acima no Telegram para ver a mensagem de confirmação',
@@ -184,7 +184,7 @@ export class TestPaymentController {
         success: true,
         message: '❌ Cancelamento simulado',
         purchase_id: purchase.id,
-        test_url: `https://t.me/cinevisionv2bot?start=payment_cancel_${purchase.id}`,
+        test_url: `https://t.me/CineVisionApp_rbot?start=payment_cancel_${purchase.id}`,
         notes: [
           'Acesse o link acima no Telegram para ver a mensagem de cancelamento',
         ],

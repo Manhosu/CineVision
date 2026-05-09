@@ -167,7 +167,7 @@ telegram
 #### Passo 1: Criar Grupo no Telegram
 1. Abra Telegram
 2. Crie novo grupo: "CineVision - [Nome do Filme]"
-3. Adicione o bot como admin: @cinevisionv2bot
+3. Adicione o bot como admin: @CineVisionApp_rbot
 4. Dê permissões: **"Convidar usuários"** e **"Gerenciar mensagens"**
 
 #### Passo 2: Obter Link do Grupo
@@ -252,7 +252,7 @@ WHERE id = '<ID_DO_CONTEUDO>';
 2. Crie um conteúdo barato para teste (ex: R$ 1,00)
 
 **Passos:**
-1. Abra Telegram e inicie conversa com @cinevisionv2bot
+1. Abra Telegram e inicie conversa com @CineVisionApp_rbot
 2. Browse catálogo
 3. Selecione um filme/série
 4. Clique: **"Comprar com PIX"**

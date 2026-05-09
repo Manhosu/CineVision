@@ -69,7 +69,7 @@ Compilação de **todas as transcrições** de áudio/vídeo que o Igor enviou n
 
 ### 🔧 Operacional Igor (fora do código)
 - [ ] Habilitar **auto-reload** em [console.anthropic.com](https://console.anthropic.com) — saldo $4.58 + auto-reload disabled (resolve N9 imediatamente)
-- [ ] Adicionar `@cinevisionv2bot` como **admin** dos grupos Telegram com permissão "Convidar usuários via link"
+- [ ] Adicionar `@CineVisionApp_rbot` como **admin** dos grupos Telegram com permissão "Convidar usuários via link"
 - [ ] Atualizar Chat ID dos filmes existentes — substituir links de convite por `-100XXX` no painel admin
 
 ---
@@ -373,7 +373,7 @@ Conferir saldo/API key em console.anthropic.com.
 - **N17** Habilitar IA no DM pessoal Igor (depois de N9 normalizar)
 
 ### Operacional Igor
-- Adicionar `@cinevisionv2bot` como admin nos grupos do Telegram (com permissão "Convidar usuários via link")
+- Adicionar `@CineVisionApp_rbot` como admin nos grupos do Telegram (com permissão "Convidar usuários via link")
 - Habilitar auto-reload em [console.anthropic.com](https://console.anthropic.com) (saldo $4.58 + auto-reload disabled)
 
 ---

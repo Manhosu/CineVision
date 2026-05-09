@@ -239,7 +239,7 @@ export default function ContentHero({
     // item via cart e mandamos pra /cart/checkout (que já gera Pix
     // e captura WhatsApp).
     if (!isAnonymousUser()) {
-      const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+      const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
       window.open(`https://t.me/${botUsername}?start=buy_${content.id}`, '_blank');
       toast.success('Abrindo Telegram...', { duration: 2000 });
       return;

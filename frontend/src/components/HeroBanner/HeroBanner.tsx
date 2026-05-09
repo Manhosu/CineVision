@@ -111,7 +111,7 @@ export function HeroBanner({
 
   const handleWatchClick = () => {
     // Generate Telegram deep link for purchase
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
     const deepLink = `https://t.me/${botUsername}?start=buy_${currentMovie.id}`;
 
     toast.success('Abrindo Telegram...', {

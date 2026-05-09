@@ -124,7 +124,7 @@ function CheckoutContent() {
   // bot ainda" (Yanna). Mostramos um botão de receber via Telegram
   // que aciona o claim no bot via deep link.
   const needsTelegramClaim = paid && !order.telegram_chat_id;
-  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
   const claimDeepLink = `https://t.me/${botUsername}?start=order_${order.order_token}`;
   const hasWhatsappCaptured = !!order.customer_whatsapp || whatsappSaved;
 

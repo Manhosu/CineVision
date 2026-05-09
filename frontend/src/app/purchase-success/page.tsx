@@ -221,7 +221,7 @@ function PurchaseSuccessContent() {
                     : false;
                   if (!opened) {
                     const botUsername =
-                      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+                      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
                     window.open(`https://t.me/${botUsername}`, '_blank');
                   }
                 }}

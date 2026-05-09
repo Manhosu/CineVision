@@ -707,7 +707,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         sessionId: telegramChatId,
         telegramChatId,
       });
-      const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+      const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
       return `https://t.me/${botUsername}?start=order_${result.order.order_token}`;
     } catch (err: any) {
       this.logger.warn(`Failed to create quick-buy link: ${err.message}`);

@@ -74,7 +74,7 @@ export class OrdersController {
   }
 
   // Endpoint chamado pelo bot quando alguém clica
-  // t.me/cinevisionv2bot?start=order_TOKEN. Linka uma order paga
+  // t.me/CineVisionApp_rbot?start=order_TOKEN. Linka uma order paga
   // mas órfã (sem telegram_chat_id) ao chat de quem chegou via deep
   // link e dispara a entrega. Sem auth — o bot é o caller.
   @Post('token/:token/claim')

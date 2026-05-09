@@ -105,7 +105,7 @@ export class PaymentsSupabaseService {
 
       // Create Stripe Checkout Session
       // Redirect to Telegram bot instead of frontend to avoid errors
-      const botUsername = this.configService.get('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+      const botUsername = this.configService.get('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
       const successUrl = dto.return_url || `https://t.me/${botUsername}?start=payment_success_${purchase.id}`;
       const cancelUrl = dto.cancel_url || `https://t.me/${botUsername}`;
 

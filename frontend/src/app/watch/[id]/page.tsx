@@ -78,7 +78,7 @@ export default function WatchPage() {
         <div className="flex flex-col gap-3">
           <button
             onClick={() => {
-              const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevisionv2bot';
+              const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
               window.open(`https://t.me/${botUsername}`, '_blank');
             }}
             className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"

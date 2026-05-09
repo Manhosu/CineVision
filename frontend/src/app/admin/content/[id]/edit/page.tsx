@@ -688,7 +688,7 @@ export default function AdminContentEditPage() {
                     </p>
                   )}
                   <p className="mt-1 text-xs text-zinc-500">
-                    Quando preenchido, o bot tenta gerar invite de uso único de 24h. Requer @cinevisionv2bot como admin do grupo.
+                    Quando preenchido, o bot tenta gerar invite de uso único de 24h. Requer @CineVisionApp_rbot como admin do grupo.
                   </p>
                 </div>
 

@@ -163,7 +163,7 @@ BASE_URL=https://your-domain.com
 ---
 ## **Links Atuais do Cliente**
 - Grupo Telegram: [Cine Vision Filmes](https://t.me/CineVisionFilme)
-- Bot Atual: [Cine Vision Bot](https://t.me/CineVisionApp_Bot?start=)
+- Bot Atual: [Cine Vision Bot](https://t.me/CineVisionApp_rbot?start=)
 ---
 ## **Público Alvo**
 - Usuários com **baixa familiaridade com tecnologia**.

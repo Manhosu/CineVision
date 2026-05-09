@@ -441,7 +441,7 @@ export class OrdersService {
       purchasesByOrder.set(p.order_id, list);
     }
 
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
 
     return data.map((o: any) => {
       const items = (purchasesByOrder.get(o.id) || [])
@@ -511,7 +511,7 @@ export class OrdersService {
       return list.some((p: any) => !p.delivery_sent);
     });
 
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'cinevisionv2bot';
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
 
     return undelivered.map((o: any) => {
       const list = byOrder.get(o.id) || [];
@@ -619,7 +619,7 @@ export class OrdersService {
   // Caso da Yanna: ela pagou via web, sem ter feito login. A order ficou
   // com user_id=null e telegram_chat_id=null, então /minha-lista não
   // mostra e o bot não entrega. Quando ela clica
-  // t.me/cinevisionv2bot?start=order_TOKEN, este método é chamado:
+  // t.me/CineVisionApp_rbot?start=order_TOKEN, este método é chamado:
   //   1. Linka order.telegram_chat_id ao chat dela
   //   2. Garante user_id (procura por telegram_id; cria temp se não existir)
   //   3. Atribui purchases.user_id pra que /minha-lista funcione daqui pra frente

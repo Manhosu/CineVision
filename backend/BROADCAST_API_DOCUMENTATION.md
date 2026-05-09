@@ -10,7 +10,7 @@ O endpoint de broadcast permite que administradores enviem mensagens personaliza
 
 - ✅ Conexão com Supabase
 - ✅ Tabela `broadcasts` criada e acessível
-- ✅ Bot do Telegram online (@cinevisionv2bot)
+- ✅ Bot do Telegram online (@CineVisionApp_rbot)
 - ✅ 4 usuários com telegram_chat_id disponíveis
 - ✅ AWS S3 configurado para upload de imagens
 
@@ -211,7 +211,7 @@ Todos os endpoints requerem:
 
 ### Bot Information
 - **Nome**: CineVision V2
-- **Username**: @cinevisionv2bot
+- **Username**: @CineVisionApp_rbot
 - **ID**: 8284657866
 
 ### Como Funciona

@@ -644,7 +644,7 @@ export default function AiChatAdmin() {
 
           <ToggleRow
             label="IA atende mensagens no Bot do Telegram"
-            description="Quando alguém manda DM pro @cinevisionv2bot."
+            description="Quando alguém manda DM pro @CineVisionApp_rbot."
             value={flags.telegram}
             onChange={(v) => updateFlag('telegram', v)}
           />
@@ -669,7 +669,7 @@ export default function AiChatAdmin() {
                 <p className="text-xs text-zinc-500">
                   Nenhuma conta conectada ainda. No app do Telegram, vá em{' '}
                   <strong>Configurações → Telegram Business → Chatbots</strong> e adicione{' '}
-                  <code className="rounded bg-black px-1 py-0.5">@cinevisionv2bot</code>.
+                  <code className="rounded bg-black px-1 py-0.5">@CineVisionApp_rbot</code>.
                 </p>
               ) : (
                 <div className="space-y-2">

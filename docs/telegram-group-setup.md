@@ -50,7 +50,7 @@ Usuário clica no botão → Entra automaticamente no grupo
 
 1. No grupo, clique em **⋮** (três pontos) → **Administradores**
 2. Clique em **Adicionar Administrador**
-3. Procure por: `@cinevisionv2bot` (ou seu bot)
+3. Procure por: `@CineVisionApp_rbot` (ou seu bot)
 4. Selecione o bot
 5. **IMPORTANTE:** Ative a permissão **"Convidar usuários via link"**
 6. Confirme
