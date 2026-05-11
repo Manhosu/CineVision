@@ -54,6 +54,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { EmployeesModule } from '../employees/employees.module';
 import { ContentEditRequestsModule } from '../content-edit-requests/content-edit-requests.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
 const conditionalControllers = isTypeOrmEnabled() ? [
@@ -150,6 +151,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     forwardRef(() => PaymentsModule),
     forwardRef(() => EmployeesModule),
     forwardRef(() => ContentEditRequestsModule),
+    WhatsappModule,
   ],
   controllers: conditionalControllers,
   providers: conditionalProviders,

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsUrl, MaxLength, MinLength, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsUrl, MaxLength, MinLength, IsArray, ValidateNested, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class InlineButtonDto {
@@ -38,4 +38,8 @@ export class SendBroadcastDto {
   @IsArray({ message: 'telegram_ids deve ser um array' })
   @IsString({ each: true, message: 'Cada telegram_id deve ser uma string' })
   telegram_ids: string[];
+
+  @IsOptional()
+  @IsIn(['telegram', 'whatsapp'], { message: 'channel deve ser telegram ou whatsapp' })
+  channel?: 'telegram' | 'whatsapp';
 }

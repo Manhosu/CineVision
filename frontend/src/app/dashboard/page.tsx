@@ -315,6 +315,10 @@ export default function DashboardPage() {
   const needsWhatsappNumber =
     !!user?.telegram_id && !(user as any)?.whatsapp;
 
+  // Quem já comprou não pode pular o gate — WhatsApp é obrigatório
+  // para acessar conteúdo (plano B de comunicação / suporte).
+  const isMandatoryGate = needsWhatsappNumber && myContent.length > 0;
+
   return (
     <div className="min-h-screen bg-dark-950">
       <Header />
@@ -322,6 +326,7 @@ export default function DashboardPage() {
       <WhatsAppNumberGate
         userId={user.id}
         hasWhatsapp={!needsWhatsappNumber}
+        mandatory={isMandatoryGate}
         onSaved={() => { /* o gate atualiza localStorage; useAuth refaz o load no próximo navigate */ }}
       >
       {/* Igor (07/05): WhatsAppGate (convite pra entrar no grupo)

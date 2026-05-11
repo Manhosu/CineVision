@@ -17,6 +17,11 @@ interface WhatsAppNumberGateProps {
    * usuários quando a request falhava silenciosamente.
    */
   dismissible?: boolean;
+  /**
+   * Quando true, ignora sessionStorage de dismiss anterior e esconde
+   * o botão pular/X — usado para usuários que já compraram conteúdo.
+   */
+  mandatory?: boolean;
 }
 
 // Gate que pede o WhatsApp pessoal antes de liberar o dashboard. Vira
@@ -29,6 +34,7 @@ export function WhatsAppNumberGate({
   onSaved,
   children,
   dismissible = true,
+  mandatory = false,
 }: WhatsAppNumberGateProps) {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
@@ -40,7 +46,10 @@ export function WhatsAppNumberGate({
   // (WhatsAppPopup na home). Assim, se Igor fechou QUALQUER popup
   // do WhatsApp na sessão, o NumberGate não aparece de novo até
   // próximo login.
+  // Quando mandatory=true (usuário já comprou), ignora sessionStorage
+  // — o gate não pode ser pulado nem "já foi dispensado antes".
   const [dismissed, setDismissed] = useState(() => {
+    if (mandatory) return false;
     if (typeof window === 'undefined') return false;
     try {
       return (
@@ -51,6 +60,7 @@ export function WhatsAppNumberGate({
       return false;
     }
   });
+  const effectiveDismissible = mandatory ? false : dismissible;
 
   if (hasWhatsapp || dismissed) {
     return <>{children}</>;
@@ -144,7 +154,7 @@ export function WhatsAppNumberGate({
             <div className="h-2 bg-gradient-to-r from-[#25D366] to-[#128C7E]" />
 
             {/* Botão X de fechar — Igor (06/05): "não tem opção de fechar". */}
-            {dismissible && (
+            {effectiveDismissible && (
               <button
                 onClick={handleSkip}
                 disabled={saving}
@@ -172,9 +182,9 @@ export function WhatsAppNumberGate({
                   Cadastre seu WhatsApp
                 </h2>
                 <p className="text-gray-300 text-xs sm:text-sm leading-relaxed max-w-sm">
-                  Pra finalizar seu cadastro e liberar o acesso, precisamos do seu número de
-                  WhatsApp. Usamos só para te avisar de pedidos e dar suporte caso o Telegram
-                  falhe.
+                  {mandatory
+                    ? 'Para acessar seu conteúdo comprado, precisamos do seu WhatsApp. É o nosso canal de suporte caso o Telegram falhe.'
+                    : 'Pra finalizar seu cadastro e liberar o acesso, precisamos do seu número de WhatsApp. Usamos só para te avisar de pedidos e dar suporte caso o Telegram falhe.'}
                 </p>
               </div>
 
@@ -216,7 +226,7 @@ export function WhatsAppNumberGate({
                 )}
               </button>
 
-              {dismissible && (
+              {effectiveDismissible && (
                 <button
                   onClick={handleSkip}
                   disabled={saving}

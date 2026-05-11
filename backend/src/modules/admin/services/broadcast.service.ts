@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
 import { SendBroadcastDto } from '../dto/broadcast.dto';
+import { WhatsappService } from '../../whatsapp/whatsapp.service';
 
 @Injectable()
 export class BroadcastService {
@@ -11,7 +12,10 @@ export class BroadcastService {
   private botToken: string;
   private telegramApiUrl: string;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private whatsappService: WhatsappService,
+  ) {
     this.supabase = createClient(
       this.configService.get<string>('SUPABASE_URL') || '',
       this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') || '',
@@ -233,6 +237,167 @@ export class BroadcastService {
   }
 
   /**
+   * Count users with WhatsApp numbers registered
+   */
+  async getWhatsappUsersCount(): Promise<number> {
+    try {
+      const { count } = await this.supabase
+        .from('users')
+        .select('*', { count: 'exact', head: true })
+        .not('whatsapp', 'is', null);
+      return count || 0;
+    } catch (error) {
+      this.logger.error('Error counting WhatsApp users:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Fetch all users with registered WhatsApp numbers
+   */
+  private async getAllWhatsappUsers(): Promise<any[]> {
+    const allUsers: any[] = [];
+    const pageSize = 1000;
+    let page = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('id, name, whatsapp, telegram_id, telegram_username')
+        .not('whatsapp', 'is', null)
+        .range(from, to);
+
+      if (error) {
+        this.logger.error('Error fetching WhatsApp users:', error);
+        throw new Error('Failed to fetch WhatsApp users');
+      }
+
+      if (data && data.length > 0) allUsers.push(...data);
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+      if (page >= 10000) break;
+    }
+
+    return allUsers;
+  }
+
+  /**
+   * Send broadcast via WhatsApp to all users with registered numbers.
+   * Rate-limited to ~1 msg/s to avoid bans.
+   */
+  async sendWhatsappBroadcast(
+    adminId: string,
+    messageText: string,
+  ): Promise<{ success: boolean; broadcast_id: string; total_users: number; status: string; message: string }> {
+    if (!this.whatsappService.isConfigured()) {
+      throw new BadRequestException('WhatsApp não está configurado. Configure WHATSAPP_API_URL, WHATSAPP_API_KEY e WHATSAPP_INSTANCE no servidor.');
+    }
+
+    const users = await this.getAllWhatsappUsers();
+    if (users.length === 0) {
+      throw new BadRequestException('Nenhum usuário com WhatsApp cadastrado.');
+    }
+
+    const { data: broadcast, error: broadcastError } = await this.supabase
+      .from('broadcasts')
+      .insert({
+        admin_id: adminId,
+        message_text: `[WhatsApp] ${messageText}`,
+        image_url: null,
+        button_text: null,
+        button_url: null,
+        recipients_count: 0,
+        recipient_telegram_ids: '',
+        status: 'sending',
+        total_users: users.length,
+        successful_sends: 0,
+        failed_sends: 0,
+        progress_percent: 0,
+        failed_telegram_ids: null,
+      })
+      .select()
+      .single();
+
+    if (broadcastError || !broadcast) {
+      this.logger.error('Error creating WhatsApp broadcast record:', broadcastError);
+      throw new Error('Falha ao criar registro de broadcast');
+    }
+
+    const broadcastId = broadcast.id;
+
+    this.processWhatsappBroadcastAsync(broadcastId, users, messageText).catch((err) => {
+      this.logger.error(`Background WhatsApp broadcast ${broadcastId} crashed:`, err.message);
+    });
+
+    return {
+      success: true,
+      broadcast_id: broadcastId,
+      total_users: users.length,
+      status: 'sending',
+      message: `Broadcast WhatsApp iniciado para ${users.length} usuários.`,
+    };
+  }
+
+  private async processWhatsappBroadcastAsync(
+    broadcastId: string,
+    users: any[],
+    messageText: string,
+  ): Promise<void> {
+    // 1 msg/s: send 1, wait 1s — conservative to avoid Evolution API bans
+    const DELAY_MS = 1000;
+    let successCount = 0;
+    let failCount = 0;
+    const totalUsers = users.length;
+
+    this.logger.log(`[WA Broadcast ${broadcastId}] Starting for ${totalUsers} users`);
+
+    try {
+      for (let i = 0; i < totalUsers; i++) {
+        const user = users[i];
+        const phone = user.whatsapp?.replace(/\D/g, '');
+        if (!phone) { failCount++; continue; }
+
+        const sent = await this.whatsappService.sendText(phone, messageText);
+        if (sent) { successCount++; } else { failCount++; }
+
+        // Update progress every 10 messages
+        if ((i + 1) % 10 === 0 || i === totalUsers - 1) {
+          const progressPercent = Math.round(((i + 1) / totalUsers) * 100);
+          await this.updateBroadcastProgress(broadcastId, {
+            successful_sends: successCount,
+            failed_sends: failCount,
+            progress_percent: progressPercent,
+            recipients_count: successCount,
+          });
+        }
+
+        if (i < totalUsers - 1) await this.sleep(DELAY_MS);
+      }
+
+      await this.updateBroadcastProgress(broadcastId, {
+        status: 'completed',
+        successful_sends: successCount,
+        failed_sends: failCount,
+        progress_percent: 100,
+        recipients_count: successCount,
+      });
+
+      this.logger.log(`[WA Broadcast ${broadcastId}] Done: ${successCount} sent, ${failCount} failed`);
+    } catch (error) {
+      this.logger.error(`[WA Broadcast ${broadcastId}] Error:`, error.message);
+      await this.updateBroadcastProgress(broadcastId, {
+        status: 'failed',
+        successful_sends: successCount,
+        failed_sends: failCount,
+        progress_percent: Math.round(((successCount + failCount) / totalUsers) * 100),
+      });
+    }
+  }
+
+  /**
    * Send broadcast to specific telegram IDs or all users.
    * Returns immediately with broadcast_id; sending continues in background.
    */
@@ -247,6 +412,10 @@ export class BroadcastService {
     message: string;
   }> {
     try {
+      if (broadcastData.channel === 'whatsapp') {
+        return this.sendWhatsappBroadcast(adminId, broadcastData.message_text);
+      }
+
       // Validate that telegram_ids is provided and not empty
       if (!broadcastData.telegram_ids || !Array.isArray(broadcastData.telegram_ids) || broadcastData.telegram_ids.length === 0) {
         throw new BadRequestException('telegram_ids é obrigatório e deve conter pelo menos um ID');

@@ -177,6 +177,57 @@ export default function AdminUsersPage() {
     });
   };
 
+  const exportWhatsappCsv = async () => {
+    try {
+      // Busca todos os usuários com WhatsApp em páginas de 200
+      const allUsers: User[] = [];
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const params = new URLSearchParams({ page: page.toString(), limit: '200' });
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/users?${params}`,
+          { headers: getHeaders() }
+        );
+        if (!res.ok) throw new Error('Falha ao buscar usuários');
+        const data = await res.json();
+        const batch: User[] = data.users || [];
+        allUsers.push(...batch);
+        hasMore = page < (data.totalPages || 1);
+        page++;
+      }
+
+      const withWhatsapp = allUsers.filter((u) => u.whatsapp);
+      if (withWhatsapp.length === 0) {
+        alert('Nenhum usuário com WhatsApp cadastrado.');
+        return;
+      }
+
+      const header = 'nome,telefone_whatsapp,telegram_id,telegram_username,data_cadastro';
+      const rows = withWhatsapp.map((u) => {
+        const name = (u.name || '').replace(/,/g, ' ');
+        const phone = (u.whatsapp || '').replace(/\D/g, '');
+        const tgId = u.telegram_id || '';
+        const tgUser = (u.telegram_username || '').replace(/,/g, ' ');
+        const date = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '';
+        return `${name},${phone},${tgId},${tgUser},${date}`;
+      });
+
+      const csv = [header, ...rows].join('\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `contatos_whatsapp_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Erro ao exportar CSV:', err);
+      alert('Erro ao exportar CSV. Tente novamente.');
+    }
+  };
+
   const getRoleColor = (role: string) => {
     return role === 'admin'
       ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
@@ -244,6 +295,16 @@ export default function AdminUsersPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={exportWhatsappCsv}
+                className="flex items-center gap-2 px-4 py-2 bg-green-700/40 hover:bg-green-700/60 border border-green-500/40 text-green-300 rounded-lg transition-colors"
+                title="Exportar números de WhatsApp para CSV"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Exportar WhatsApp
+              </button>
               <button
                 onClick={() => router.push('/')}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-white rounded-lg transition-colors"

@@ -92,16 +92,20 @@ export class BroadcastController {
   }
 
   /**
-   * Get count of users who can receive broadcasts
+   * Get count of users who can receive broadcasts.
+   * Pass ?channel=whatsapp to get WhatsApp users count instead.
    */
   @Get('users-count')
-  async getUsersCount() {
+  async getUsersCount(@Query('channel') channel?: string) {
     try {
-      const total = await this.broadcastService.getBotUsersCount();
+      const total = channel === 'whatsapp'
+        ? await this.broadcastService.getWhatsappUsersCount()
+        : await this.broadcastService.getBotUsersCount();
 
       return {
         success: true,
         total_users: total,
+        channel: channel || 'telegram',
       };
     } catch (error) {
       this.logger.error('Error in getUsersCount:', error);
