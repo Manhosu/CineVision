@@ -496,6 +496,12 @@ export default function AdminDashboard() {
     ? quickActions.filter((a) => employeeAllowedHrefs.has(a.href))
     : quickActions.filter((a) => !adminHiddenHrefs.has(a.href));
 
+  const formatMigrationRate = (rate: number) => {
+    if (rate === 0) return '0%';
+    if (rate < 1) return `${rate.toFixed(2).replace('.', ',')}%`;
+    return `${Math.round(rate)}%`;
+  };
+
   // N13 (Igor 04/05): card "Usuários Ativos" só aparece pra admin/moderator
   // ou pra funcionário com can_view_active_users explicitamente true.
   // Default no backend é false, então a maioria dos funcionários não vê.
@@ -524,7 +530,7 @@ export default function AdminDashboard() {
               </svg>
             ),
             gradient: 'from-green-500 to-emerald-500',
-            change: botMigration ? `${botMigration.migration_rate}% migrados` : stats.usersChange || '0%',
+            change: botMigration ? `${formatMigrationRate(botMigration.migration_rate)} migrados` : stats.usersChange || '0%',
           },
         ]
       : []),
@@ -640,12 +646,12 @@ export default function AdminDashboard() {
             <div className="mb-4">
               <div className="mb-1 flex justify-between text-sm text-gray-400">
                 <span>Progresso da migração</span>
-                <span className="font-bold text-white">{botMigration.migration_rate}%</span>
+                <span className="font-bold text-white">{formatMigrationRate(botMigration.migration_rate)}</span>
               </div>
               <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-700"
-                  style={{ width: `${botMigration.migration_rate}%` }}
+                  style={{ width: `${Math.max(botMigration.migration_rate, botMigration.new_bot > 0 ? 0.5 : 0)}%` }}
                 />
               </div>
             </div>

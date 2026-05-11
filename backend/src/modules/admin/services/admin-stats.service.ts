@@ -175,7 +175,8 @@ export class AdminStatsService {
       const newBot = newCount || 0;
       const total = totalTelegramCount || 0;
       const oldBot = total - newBot;
-      const migrationRate = total > 0 ? Math.round((newBot / total) * 100) : 0;
+      // Keep 2 decimal places so values < 1% don't round to 0
+      const migrationRate = total > 0 ? Math.round((newBot / total) * 10000) / 100 : 0;
 
       return { new_bot: newBot, old_bot: oldBot, total, migration_rate: migrationRate, new_bot_username: newBotUsername };
     } catch (error) {
