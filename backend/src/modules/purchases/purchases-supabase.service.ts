@@ -380,7 +380,7 @@ export class PurchasesSupabaseService {
     console.log('[findUserContentList] Fetching content for user:', userId);
 
     // Check if user is admin (automatic full access)
-    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983'];
+    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983', '8776400654'];
 
     const { data: userData } = await this.supabase
       .from('users')
@@ -665,7 +665,7 @@ export class PurchasesSupabaseService {
 
   async checkUserOwnership(userId: string, contentId: string): Promise<boolean> {
     // Check if user is admin (automatic full access)
-    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983'];
+    const ADMIN_TELEGRAM_IDS = ['5212925997', '2006803983', '8776400654'];
 
     const { data: userData } = await this.supabase
       .from('users')
