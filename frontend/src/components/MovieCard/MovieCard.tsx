@@ -138,10 +138,17 @@ const MovieCard = memo(function MovieCard({
           isFlashPromo ? 'ring-2 ring-amber-500/70' : ''
         }`} style={{ aspectRatio: '2/3', minHeight: '280px' }}>
 
-          {/* Flash promo overlay badge - TOP */}
+          {/* Flash promo overlay badge - TOP (integra Novidade/Nova Temporada quando ambos ativos) */}
           {isFlashPromo && promoTimeLeft && (
-            <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 px-3 py-1.5 flex items-center justify-center gap-1.5">
-              <span className="text-white text-xs font-black uppercase tracking-wide">&#9889; Oferta</span>
+            <div className="absolute top-0 left-0 right-0 z-30 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 px-2 py-1.5 flex items-center justify-between gap-1">
+              <div className="flex items-center gap-1">
+                {(movie.is_release || (movie as any).is_new_season) && (
+                  <span className="text-white text-[9px] font-black uppercase tracking-wider bg-white/25 px-1.5 py-0.5 rounded">
+                    {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
+                  </span>
+                )}
+                <span className="text-white text-xs font-black uppercase tracking-wide">&#9889; Oferta</span>
+              </div>
               <span className="bg-white/20 text-white text-xs font-mono font-bold px-1.5 py-0.5 rounded">{promoTimeLeft}</span>
             </div>
           )}
@@ -152,6 +159,7 @@ const MovieCard = memo(function MovieCard({
               <span className="text-white text-sm font-black">{movie.discount_percentage}% OFF</span>
             </div>
           )}
+
           <LazyImage
             src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}
@@ -165,9 +173,9 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Badge Novidade / Nova Temporada — sempre no top-left, acima de tudo */}
-          {(movie.is_release || (movie as any).is_new_season) && (
-            <div className="absolute top-2 left-0 z-40 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
+          {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo, fica no bottom-left */}
+          {!isFlashPromo && (movie.is_release || (movie as any).is_new_season) && (
+            <div className="absolute bottom-2 left-0 z-30 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
             </div>
           )}
