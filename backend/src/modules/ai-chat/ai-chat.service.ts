@@ -334,7 +334,15 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         kind === 'network' ? 'claude_network' :
         kind === 'config_missing' ? 'claude_config_missing' :
         'claude_failure';
-      await this.pauseConversation(conversation.id, pauseReason);
+
+      // Erros transientes (timeout, network, overloaded, config_missing)
+      // NÃO pausam a conversa — a próxima mensagem do cliente tentará
+      // de novo normalmente. Só erros permanentes (auth, low_balance)
+      // pausam, pois exigem ação manual para resolver.
+      const isPermanentError = kind === 'auth' || kind === 'low_balance';
+      if (isPermanentError) {
+        await this.pauseConversation(conversation.id, pauseReason);
+      }
       // N3 — throttle: só notifica Igor 1x por conversa em janela de
       // 30 min, pra não spammar quando Anthropic está fora do ar e
       // 50 clientes mandam msg em sequência.
