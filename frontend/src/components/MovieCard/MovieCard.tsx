@@ -165,15 +165,9 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Badge Novidade / Nova Temporada — top-left do poster.
-              Igor (08/05): visivel sempre, inclusive em flash promo.
-              Quando ha flash promo, posiciona abaixo da faixa OFERTA. */}
+          {/* Badge Novidade / Nova Temporada — sempre no top-left, acima de tudo */}
           {(movie.is_release || (movie as any).is_new_season) && (
-            <div
-              className={`absolute left-0 z-30 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40 ${
-                isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'
-              }`}
-            >
+            <div className="absolute top-2 left-0 z-40 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
             </div>
           )}
