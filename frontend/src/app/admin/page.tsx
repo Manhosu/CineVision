@@ -17,6 +17,14 @@ interface AdminStats {
   viewsChange?: string;
 }
 
+interface BotMigrationStats {
+  new_bot: number;
+  old_bot: number;
+  total: number;
+  migration_rate: number;
+  new_bot_username: string;
+}
+
 interface ContentItem {
   id: string;
   title: string;
@@ -53,6 +61,7 @@ export default function AdminDashboard() {
   const [perms, setPerms] = useState<EmployeePermissions | null>(null);
   const [isEmployee, setIsEmployee] = useState(false);
   const [pendingEditCount, setPendingEditCount] = useState(0);
+  const [botMigration, setBotMigration] = useState<BotMigrationStats | null>(null);
   // Igor (07/05): funcionários online em tempo real (last_active_at <10min).
   const [onlineEmployees, setOnlineEmployees] = useState<Array<{
     id: string;
@@ -102,13 +111,18 @@ export default function AdminDashboard() {
         }
 
         // Buscar todas as estatísticas em paralelo
-        const [contentRes, usersRes] = await Promise.all([
+        const [contentRes, usersRes, botMigrationRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/admin/stats/content`, { headers }),
           fetch(`${API_URL}/api/v1/admin/stats/users`, { headers }),
+          fetch(`${API_URL}/api/v1/admin/stats/bot-migration`, { headers }),
         ]);
 
         const contentData = await contentRes.json();
         const usersData = await usersRes.json();
+        if (botMigrationRes.ok) {
+          const migData = await botMigrationRes.json();
+          setBotMigration(migData);
+        }
 
         setStats({
           totalContent: contentData.total || 0,
@@ -578,6 +592,49 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
+        {/* Bot Migration Widget — só admin vê */}
+        {!isEmployee && botMigration && botMigration.total > 0 && (
+          <div className="mb-8 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-900/10 to-indigo-900/10 p-6">
+            <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
+              <span className="text-2xl">🤖</span>
+              Migração de Bot
+              <span className="ml-2 rounded-full bg-blue-500/20 px-2 py-0.5 text-xs font-semibold text-blue-300">
+                @{botMigration.new_bot_username}
+              </span>
+            </h2>
+
+            {/* Progress bar */}
+            <div className="mb-4">
+              <div className="mb-1 flex justify-between text-sm text-gray-400">
+                <span>Progresso da migração</span>
+                <span className="font-bold text-white">{botMigration.migration_rate}%</span>
+              </div>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-emerald-500 transition-all duration-700"
+                  style={{ width: `${botMigration.migration_rate}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Counters */}
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-900/20 p-3">
+                <p className="text-2xl font-bold text-emerald-400">{botMigration.new_bot.toLocaleString('pt-BR')}</p>
+                <p className="mt-0.5 text-xs text-gray-400">Novo bot</p>
+              </div>
+              <div className="rounded-lg border border-amber-500/20 bg-amber-900/20 p-3">
+                <p className="text-2xl font-bold text-amber-400">{botMigration.old_bot.toLocaleString('pt-BR')}</p>
+                <p className="mt-0.5 text-xs text-gray-400">Ainda no antigo</p>
+              </div>
+              <div className="rounded-lg border border-gray-500/20 bg-gray-800/40 p-3">
+                <p className="text-2xl font-bold text-white">{botMigration.total.toLocaleString('pt-BR')}</p>
+                <p className="mt-0.5 text-xs text-gray-400">Total com Telegram</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Real-time Analytics — escondido pra employees sem permissão.
             "Pessoas Online" é considerado dado sensível na ACL do Igor. */}

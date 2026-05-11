@@ -155,6 +155,36 @@ export class AdminStatsService {
   }
 
   /**
+   * Bot migration stats: new bot vs old bot user counts
+   */
+  async getBotMigrationStats() {
+    try {
+      const newBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
+
+      const [{ count: newCount }, { count: totalTelegramCount }] = await Promise.all([
+        this.supabaseService.client
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .eq('bot_username', newBotUsername),
+        this.supabaseService.client
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .not('telegram_id', 'is', null),
+      ]);
+
+      const newBot = newCount || 0;
+      const total = totalTelegramCount || 0;
+      const oldBot = total - newBot;
+      const migrationRate = total > 0 ? Math.round((newBot / total) * 100) : 0;
+
+      return { new_bot: newBot, old_bot: oldBot, total, migration_rate: migrationRate, new_bot_username: newBotUsername };
+    } catch (error) {
+      this.logger.error('Exception getting bot migration stats:', error);
+      return { new_bot: 0, old_bot: 0, total: 0, migration_rate: 0 };
+    }
+  }
+
+  /**
    * Get content requests statistics
    */
   async getRequestStats() {

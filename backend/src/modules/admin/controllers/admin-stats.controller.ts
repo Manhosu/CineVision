@@ -55,6 +55,14 @@ export class AdminStatsController {
     return this.statsService.getContentStats();
   }
 
+  @Get('bot-migration')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get bot migration stats (new vs old bot)' })
+  @HttpCode(HttpStatus.OK)
+  async getBotMigrationStats() {
+    return this.statsService.getBotMigrationStats();
+  }
+
   @Get('requests')
   @Roles(UserRole.ADMIN)
   @ApiOperation({

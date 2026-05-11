@@ -2757,6 +2757,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
           this.logger.log(`Re-activating previously blocked user ${telegramUserId}`);
         }
 
+        // Stamp which bot this user is now on (migration tracking)
+        const currentBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
+        if (existingUser.bot_username !== currentBotUsername) {
+          updates.bot_username = currentBotUsername;
+        }
+
         if (telegramUserData) {
           if (telegramUserData.username && existingUser.telegram_username !== telegramUserData.username) {
             updates.telegram_username = telegramUserData.username;
@@ -2804,6 +2810,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           password_hash: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
           role: 'user',
           status: 'active',
+          bot_username: process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot',
         })
         .select()
         .single();
