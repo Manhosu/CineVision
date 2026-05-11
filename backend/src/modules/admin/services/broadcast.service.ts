@@ -29,9 +29,20 @@ export class BroadcastService {
         .from('users')
         .select('*', { count: 'exact', head: true })
         .not('telegram_chat_id', 'is', null)
-        .eq('blocked', false);
+        .eq('blocked', false)
+        .eq('last_bot_token', this.botToken);
 
       if (error) {
+        // If column doesn't exist yet, fall back to old behavior
+        if (error.message?.includes('last_bot_token')) {
+          this.logger.warn('last_bot_token column not found, falling back to unfiltered count');
+          const { count: fallbackCount, error: fallbackError } = await this.supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .not('telegram_chat_id', 'is', null)
+            .eq('blocked', false);
+          return fallbackCount || 0;
+        }
         this.logger.error('Error counting bot users:', error);
         return 0;
       }
@@ -65,9 +76,28 @@ export class BroadcastService {
           .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
           .not('telegram_chat_id', 'is', null)
           .eq('blocked', false)
+          .eq('last_bot_token', this.botToken)
           .range(from, to);
 
         if (error) {
+          // If column doesn't exist yet, fall back to unfiltered query
+          if (error.message?.includes('last_bot_token')) {
+            this.logger.warn('last_bot_token column not found, falling back to unfiltered fetch');
+            const { data: fallbackData, error: fallbackError } = await this.supabase
+              .from('users')
+              .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
+              .not('telegram_chat_id', 'is', null)
+              .eq('blocked', false)
+              .range(from, to);
+            if (fallbackError) {
+              this.logger.error('Error fetching bot users (fallback):', fallbackError);
+              throw new Error('Failed to fetch users');
+            }
+            if (fallbackData && fallbackData.length > 0) allUsers.push(...fallbackData);
+            hasMore = fallbackData?.length === pageSize;
+            page++;
+            continue;
+          }
           this.logger.error('Error fetching bot users:', error);
           throw new Error('Failed to fetch users');
         }

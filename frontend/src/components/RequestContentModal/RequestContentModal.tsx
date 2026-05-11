@@ -13,7 +13,7 @@ interface RequestContentModalProps {
 export function RequestContentModal({
   isOpen,
   onClose,
-  telegramBotUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'cinevision_bot'
+  telegramBotUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot'
 }: RequestContentModalProps) {
   const [contentRequest, setContentRequest] = useState('');
 

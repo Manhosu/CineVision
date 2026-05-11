@@ -70,6 +70,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private pendingPixPayments = new Map<string, { purchase_id: string; chat_id: number; transaction_id: string; timestamp: number }>();
   // Cache de solicitações de conteúdo em andamento
   private pendingContentRequests = new Map<string, PendingRequest>();
+  // Cache de usuários aguardando digitar número WhatsApp
+  private pendingWhatsappCapture = new Map<number, true>();
 
   // Polling state
   private pollingOffset = 0;
@@ -1093,6 +1095,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     this.logger.log(`📨 processMessage called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
 
+    // Track which bot token this user is using (for broadcast filtering)
+    void Promise.resolve(
+      this.supabase
+        .from('users')
+        .update({ last_bot_token: this.botToken })
+        .eq('telegram_id', telegramUserId.toString()),
+    ).catch((err: any) => {
+      this.logger.warn(`Failed to update last_bot_token: ${err?.message || err}`);
+    });
+
     // Check if user is blocked before processing any command
     try {
       const { data: userData } = await this.supabase
@@ -1113,6 +1125,22 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // Register user as active for catalog sync notifications
     if (this.catalogSyncService) {
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
+    }
+
+    // Verificar se usuário está aguardando digitar número WhatsApp
+    if (telegramUserId && this.pendingWhatsappCapture.has(telegramUserId) && text && !text.startsWith('/')) {
+      this.pendingWhatsappCapture.delete(telegramUserId);
+      const digits = text.replace(/\D/g, '');
+      if (digits.length >= 8 && digits.length <= 15) {
+        await this.supabase
+          .from('users')
+          .update({ whatsapp: digits })
+          .eq('telegram_id', telegramUserId.toString());
+        await this.sendMessage(chatId, '✅ WhatsApp salvo!');
+      } else {
+        await this.sendMessage(chatId, '❌ Número inválido. Tente novamente em Minhas Compras.');
+      }
+      return;
     }
 
     // Verificar se usuário está em processo de solicitação de conteúdo
@@ -2213,6 +2241,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.handleRequestCommand(chatId, telegramUserId);
     } else if (data === 'start' || data === 'menu') {
       await this.handleStartCommand(chatId, '/start', telegramUserId);
+    } else if (data === 'add_whatsapp') {
+      if (telegramUserId) {
+        this.pendingWhatsappCapture.set(telegramUserId, true);
+        await this.sendMessage(chatId, '📱 Me manda seu número com DDD (só números, ex: 11999999999)');
+      }
     }
   }
 
@@ -3027,17 +3060,26 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
 👇 Clique no botão abaixo para ver nosso catálogo:`;
 
-    const siteUrl = this.getFrontendUrl();
+    // Buscar link da comunidade WhatsApp se configurado
+    const { data: settingsRows } = await this.supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'whatsapp_group_link')
+      .single();
+    const whatsappGroupLink: string | null = settingsRows?.value || null;
+
+    const welcomeKeyboard: any[][] = [
+      [{ text: '🌐 Ver Catálogo Completo', url: catalogUrl }],
+      [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
+      [{ text: '❓ Ajuda', callback_data: 'help' }],
+    ];
+    if (whatsappGroupLink) {
+      welcomeKeyboard.splice(1, 0, [{ text: '💬 Comunidade WhatsApp', url: whatsappGroupLink }]);
+    }
 
     await this.sendMessage(chatId, welcomeMessage, {
       parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '🌐 Ver Catálogo Completo', url: catalogUrl }],
-          [{ text: '📱 Minhas Compras', callback_data: 'my_purchases' }],
-          [{ text: '❓ Ajuda', callback_data: 'help' }],
-        ],
-      },
+      reply_markup: { inline_keyboard: welcomeKeyboard },
     });
   }
 
@@ -3102,6 +3144,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         reply_markup: {
           inline_keyboard: [
             [{ text: '🎬 Abrir Dashboard', url: dashboardUrl }],
+            [{ text: '📱 Salvar meu WhatsApp', callback_data: 'add_whatsapp' }],
             [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
           ],
         },

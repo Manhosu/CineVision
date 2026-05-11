@@ -1,4 +1,5 @@
 const axios = require('axios');
+require('dotenv').config();
 
 /**
  * Script para enviar mensagem de confirmação de pagamento PIX
@@ -6,11 +7,16 @@ const axios = require('axios');
  */
 
 async function enviarConfirmacao() {
-  const TELEGRAM_BOT_TOKEN = '8284657866:AAFZ9KhQ3wgr7ms5KJWpNk-8QnrnlIJHcKM';
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
   const CHAT_ID = '6543183277';
   const CONTENT_TITLE = 'Lilo & Stitch';
   const AMOUNT = 'R$ 6,98';
   const USER_ID = '8278c900-effd-40dd-b2bf-bcc6df0129e2';
+
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error('❌ TELEGRAM_BOT_TOKEN não encontrado no .env');
+    process.exit(1);
+  }
 
   // Gerar link de auto-login
   const DASHBOARD_URL = `https://cine-vision-murex.vercel.app/dashboard?userId=${USER_ID}`;

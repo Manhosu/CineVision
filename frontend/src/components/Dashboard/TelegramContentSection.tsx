@@ -53,7 +53,7 @@ export const TelegramContentSection: React.FC<TelegramContentSectionProps> = ({ 
 
         if (botResponse.ok) {
           const botData = await botResponse.json();
-          setBotUsername(botData.username || 'cinevision_bot');
+          setBotUsername(botData.username || 'CineVisionApp_rbot');
         }
       } catch (error) {
         console.error('Error fetching Telegram content:', error);

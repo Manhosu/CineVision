@@ -365,9 +365,10 @@ export default function AdminContentCreatePage() {
       const posterUrl = await uploadPosterFile(file);
       setFileUpload(prev => ({ ...prev, posterUrl, posterUploading: false }));
       setFormData(prev => ({ ...prev, poster_url: posterUrl }));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no upload do pôster:', error);
-      alert('Erro no upload do pôster. Tente novamente.');
+      const errorMsg = error?.message || 'Erro desconhecido';
+      alert(`Erro no upload do pôster: ${errorMsg}`);
       setFileUpload(prev => ({ ...prev, posterUploading: false }));
     }
   };
@@ -396,9 +397,10 @@ export default function AdminContentCreatePage() {
       setFormData(prev => ({ ...prev, backdrop_url: backdropUrl }));
       setShowBackdropEditor(true);
       toast.success('Backdrop enviado! Ajuste o enquadramento.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro no upload do backdrop:', error);
-      alert('Erro no upload do backdrop. Tente novamente.');
+      const errorMsg = error?.message || 'Erro desconhecido';
+      alert(`Erro no upload do backdrop: ${errorMsg}. Detalhes: ${error?.error_description || ''}`);
       setFileUpload(prev => ({ ...prev, backdropUploading: false }));
     }
   };

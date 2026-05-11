@@ -18,12 +18,17 @@ export const maxDuration = 60; // 60 seconds timeout
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📤 Upload request received');
+    
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const bucket = formData.get('bucket') as string || 'cinevision-capas';
     const folder = formData.get('folder') as string;
 
+    console.log(`📦 File: ${file?.name}, Size: ${file?.size}, Bucket: ${bucket}, Folder: ${folder}`);
+
     if (!file) {
+      console.error('❌ No file provided');
       return NextResponse.json(
         { error: 'No file provided' },
         { status: 400 }
@@ -67,9 +72,16 @@ export async function POST(request: NextRequest) {
       });
 
     if (error) {
-      console.error('Supabase upload error:', error);
+      console.error('❌ Supabase upload error:', {
+        message: error.message,
+        name: error.name,
+        fullError: JSON.stringify(error),
+      });
       return NextResponse.json(
-        { error: `Upload failed: ${error.message}` },
+        { 
+          error: `Upload failed: ${error.message}`,
+          errorName: error.name,
+        },
         { status: 500 }
       );
     }
