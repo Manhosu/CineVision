@@ -62,6 +62,7 @@ export default function AdminDashboard() {
   const [isEmployee, setIsEmployee] = useState(false);
   const [pendingEditCount, setPendingEditCount] = useState(0);
   const [botMigration, setBotMigration] = useState<BotMigrationStats | null>(null);
+  const [botMigrationFlash, setBotMigrationFlash] = useState(false);
   // Igor (07/05): funcionários online em tempo real (last_active_at <10min).
   const [onlineEmployees, setOnlineEmployees] = useState<Array<{
     id: string;
@@ -111,18 +112,13 @@ export default function AdminDashboard() {
         }
 
         // Buscar todas as estatísticas em paralelo
-        const [contentRes, usersRes, botMigrationRes] = await Promise.all([
+        const [contentRes, usersRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/admin/stats/content`, { headers }),
           fetch(`${API_URL}/api/v1/admin/stats/users`, { headers }),
-          fetch(`${API_URL}/api/v1/admin/stats/bot-migration`, { headers }),
         ]);
 
         const contentData = await contentRes.json();
         const usersData = await usersRes.json();
-        if (botMigrationRes.ok) {
-          const migData = await botMigrationRes.json();
-          setBotMigration(migData);
-        }
 
         setStats({
           totalContent: contentData.total || 0,
@@ -153,6 +149,38 @@ export default function AdminDashboard() {
 
     return () => clearInterval(interval);
   }, [mounted]);
+
+  // Bot migration stats — poll a cada 3s para atualização quase instantânea
+  useEffect(() => {
+    if (!mounted || isEmployee) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+      : null;
+    if (!token) return;
+
+    const fetchMigration = async () => {
+      try {
+        const r = await fetch(`${API_URL}/api/v1/admin/stats/bot-migration`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) return;
+        const data: BotMigrationStats = await r.json();
+        setBotMigration((prev) => {
+          if (prev && (prev.new_bot !== data.new_bot || prev.old_bot !== data.old_bot)) {
+            // Flash when numbers change
+            setBotMigrationFlash(true);
+            setTimeout(() => setBotMigrationFlash(false), 800);
+          }
+          return data;
+        });
+      } catch { /* silent */ }
+    };
+
+    fetchMigration();
+    const interval = setInterval(fetchMigration, 3000);
+    return () => clearInterval(interval);
+  }, [mounted, isEmployee]);
 
   // Igor (07/05): poll funcionários online a cada 30s.
   useEffect(() => {
@@ -595,7 +623,11 @@ export default function AdminDashboard() {
 
         {/* Bot Migration Widget — só admin vê */}
         {!isEmployee && botMigration && botMigration.total > 0 && (
-          <div className="mb-8 rounded-xl border border-blue-500/20 bg-gradient-to-br from-blue-900/10 to-indigo-900/10 p-6">
+          <div className={`mb-8 rounded-xl border p-6 transition-all duration-300 ${
+            botMigrationFlash
+              ? 'border-emerald-400/60 bg-gradient-to-br from-emerald-900/20 to-blue-900/15 shadow-[0_0_20px_rgba(52,211,153,0.15)]'
+              : 'border-blue-500/20 bg-gradient-to-br from-blue-900/10 to-indigo-900/10'
+          }`}>
             <h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-white">
               <span className="text-2xl">🤖</span>
               Migração de Bot
