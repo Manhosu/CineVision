@@ -187,7 +187,7 @@ const MovieCard = memo(function MovieCard({
 
           {/* Quick add-to-cart icon (top-right corner) */}
           {!isPurchased && (
-            <div className="absolute top-2 right-2 z-30" onClick={(e) => e.stopPropagation()}>
+            <div className={`absolute right-2 z-30 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`} onClick={(e) => e.stopPropagation()}>
               <AddToCartButton
                 content={{
                   id: movie.id,

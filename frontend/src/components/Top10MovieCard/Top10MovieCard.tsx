@@ -157,7 +157,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
                 cart doesn't also fire the parent card click handler. */}
             {!isPurchased && (
               <div
-                className="absolute top-2 right-2 z-40"
+                className={`absolute right-2 z-40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}
                 onClick={(e) => e.stopPropagation()}
               >
                 <AddToCartButton
