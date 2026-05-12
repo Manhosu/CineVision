@@ -138,29 +138,17 @@ const MovieCard = memo(function MovieCard({
           isFlashPromo ? 'ring-2 ring-amber-500/70' : ''
         }`} style={{ aspectRatio: '2/3', minHeight: '280px' }}>
 
-          {/* Flash promo overlay badge - TOP (integra Novidade/Nova Temporada quando ambos ativos) */}
+          {/* Flash promo overlay - TOP */}
           {isFlashPromo && promoTimeLeft && (
             <div className="absolute top-0 left-0 right-0 z-30 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 px-2 py-1.5 flex items-center justify-between gap-1">
-              <div className="flex items-center gap-1">
-                {(movie.is_release || (movie as any).is_new_season) && (
-                  <span className="text-white text-[9px] font-black uppercase tracking-wider bg-white/25 px-1.5 py-0.5 rounded">
-                    {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
-                  </span>
-                )}
-                <span className="text-white text-xs font-black uppercase tracking-wide">&#9889; Oferta</span>
-              </div>
+              <span className="text-white text-xs font-black uppercase tracking-wide">&#9889; Oferta</span>
               <span className="bg-white/20 text-white text-xs font-mono font-bold px-1.5 py-0.5 rounded">{promoTimeLeft}</span>
             </div>
           )}
 
           {/* Flash promo discount badge - BOTTOM */}
           {isFlashPromo && movie.discount_percentage && (
-            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-red-600/90 to-transparent pt-6 pb-2 px-3 flex items-center justify-center gap-2">
-              {!promoTimeLeft && (movie.is_release || (movie as any).is_new_season) && (
-                <span className="text-white text-[9px] font-black uppercase tracking-wider bg-white/25 px-1.5 py-0.5 rounded">
-                  {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
-                </span>
-              )}
+            <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-red-600/90 to-transparent pt-6 pb-2 px-3 flex items-center justify-center">
               <span className="text-white text-sm font-black">{movie.discount_percentage}% OFF</span>
             </div>
           )}
@@ -178,9 +166,9 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo E NÃO há desconto ativo */}
-          {!isFlashPromo && !movie.discount_percentage && (movie.is_release || (movie as any).is_new_season) && (
-            <div className="absolute bottom-2 left-0 z-30 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
+          {/* Badge Novidade / Nova Temporada — sempre no topo, independente de promo */}
+          {(movie.is_release || (movie as any).is_new_season) && (
+            <div className={`absolute left-0 z-40 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
             </div>
           )}
