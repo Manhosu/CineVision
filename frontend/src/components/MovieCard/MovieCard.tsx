@@ -173,7 +173,7 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo ativa */}
+          {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo ativa, fica no bottom-left */}
           {!isFlashPromo && (movie.is_release || (movie as any).is_new_season) && (
             <div className="absolute bottom-2 left-0 z-30 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}

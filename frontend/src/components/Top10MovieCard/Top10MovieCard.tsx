@@ -209,9 +209,9 @@ const Top10MovieCard = memo(function Top10MovieCard({
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
 
-            {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo ativa */}
+            {/* Badge Novidade / Nova Temporada — só quando NÃO há flash promo ativa, fica no bottom-left */}
             {!isFlashPromo && (movie.is_release || (movie as any).is_new_season) && (
-              <div className="absolute top-1.5 left-0 z-30 px-1.5 py-0.5 bg-[#E50914] text-white text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40">
+              <div className="absolute bottom-2 left-0 z-30 px-1.5 py-0.5 bg-[#E50914] text-white text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40">
                 {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
               </div>
             )}
