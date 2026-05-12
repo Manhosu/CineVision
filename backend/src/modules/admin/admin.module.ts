@@ -27,6 +27,8 @@ import { AdminPeopleController } from './controllers/admin-people.controller';
 import { AdminPeopleService } from './services/admin-people.service';
 import { AdminManualGrantController } from './controllers/admin-manual-grant.controller';
 import { BotEphemeralController } from './controllers/bot-ephemeral.controller';
+import { AdminHomepageController } from './controllers/admin-homepage.controller';
+import { HomepageCarouselsService } from './services/homepage-carousels.service';
 import { SupabaseModule } from '../../config/supabase.module';
 import { ContentLanguageService } from '../content/services/content-language.service';
 import { ContentLanguageSupabaseService } from '../content/services/content-language-supabase.service';
@@ -68,6 +70,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminUsersController,
   AdminRequestsPublicController,
   BroadcastController,
+  AdminHomepageController,
 ] : [
   AdminContentController,
   AdminStatsController,
@@ -83,6 +86,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminPeopleController,
   AdminManualGrantController,
   BotEphemeralController,
+  AdminHomepageController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -102,6 +106,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   BroadcastService,
   RequestsSupabaseService,
   PurchasesCleanupService,
+  HomepageCarouselsService,
 ] : [
   AdminContentSimpleService,
   AdminStatsService,
@@ -117,6 +122,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   RequestsSupabaseService,
   AdminTop10Service,
   AdminPeopleService,
+  HomepageCarouselsService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
 ];

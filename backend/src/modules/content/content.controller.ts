@@ -155,4 +155,11 @@ export class ContentController {
   async getPersonWithContent(@Param('id') id: string) {
     return this.contentService.findPersonWithContent(id);
   }
+
+  @Get('homepage')
+  @ApiOperation({ summary: 'Get homepage carousels with populated content' })
+  @ApiResponse({ status: 200, description: 'Homepage carousel data retrieved successfully' })
+  async getHomepageData() {
+    return this.contentService.getHomepageData();
+  }
 }

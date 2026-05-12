@@ -40,6 +40,23 @@ interface ContentSection {
   viewAllUrl?: string;
 }
 
+// Maps DB carousel type to ContentSection type and optional viewAllUrl
+const CAROUSEL_SECTION_TYPE: Record<string, ContentSection['type']> = {
+  top10_films: 'top10',
+  top10_series: 'top10',
+  releases: 'latest',
+  featured: 'featured',
+  all_movies: 'latest',
+  all_series: 'latest',
+  category: 'latest',
+  manual: 'latest',
+};
+
+const CAROUSEL_VIEW_ALL: Record<string, string> = {
+  all_movies: '/movies',
+  all_series: '/series',
+};
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 // In-memory cache for homepage data so a back-navigation from a
@@ -161,112 +178,28 @@ function HomePageContent() {
           headers['Authorization'] = `Bearer ${token}`;
         }
 
-        // Fetch ALL data in a single parallel batch for maximum speed
-        // First, get categories to know which genres to fetch
-        const categoriesRes = await fetch(`${API_URL}/api/v1/content/categories`, { headers });
-        const categories = categoriesRes.ok ? await categoriesRes.json() : [];
-        const activeCategories = (Array.isArray(categories) ? categories : [])
-          .filter((c: any) => c.is_active !== false)
-          .slice(0, 6);
+        // Single call to the homepage endpoint — returns carousels in the
+        // order configured by the admin, with content already populated.
+        const homepageData: Array<{ id: string; slug: string; title: string; type: string; content: Movie[] }> =
+          await fetch(`${API_URL}/api/v1/content/homepage`, { headers })
+            .then((r) => (r.ok ? r.json() : []))
+            .catch(() => []);
 
-        // Now fetch EVERYTHING in one single Promise.all — main content + all genres at once
-        const allFetches = await Promise.all([
-          fetch(`${API_URL}/api/v1/content/featured?limit=5`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-          fetch(`${API_URL}/api/v1/content/top10/films`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-          fetch(`${API_URL}/api/v1/content/top10/series`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-          fetch(`${API_URL}/api/v1/content/releases?limit=20`, { headers }).then(r => r.ok ? r.json() : []).catch(() => []),
-          fetch(`${API_URL}/api/v1/content/movies?limit=20`, { headers }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] })),
-          fetch(`${API_URL}/api/v1/content/series?limit=20`, { headers }).then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] })),
-          ...activeCategories.map((cat: any) =>
-            fetch(`${API_URL}/api/v1/content/movies?genre=${encodeURIComponent(cat.name)}&limit=15`, { headers })
-              .then(r => r.ok ? r.json() : { movies: [] }).catch(() => ({ movies: [] }))
-          ),
-        ]);
+        // Hero: use featured carousel content if present, else first carousel
+        const featuredCarousel = homepageData.find((c) => c.type === 'featured');
+        const heroMoviesData = (featuredCarousel?.content || homepageData[0]?.content || []).slice(0, 5) as Movie[];
+        finalHero = heroMoviesData;
+        setHeroMovies(heroMoviesData);
 
-        const featuredData = allFetches[0];
-        const top10Films = allFetches[1];
-        const top10Series = allFetches[2];
-        const releasesData = allFetches[3];
-        const allMoviesData = allFetches[4];
-        const allSeriesData = allFetches[5];
-        const genreResults = allFetches.slice(6);
-
-        // Use featured content for hero banner - API already returns only featured items
-        const heroMoviesData = (Array.isArray(featuredData) ? featuredData.slice(0, 5) : []) as Movie[];
-
-        // If no featured content, fallback to releases or all movies
-        if (heroMoviesData.length === 0) {
-          const fallbackMovies = (Array.isArray(releasesData) ? releasesData : allMoviesData.movies || []).slice(0, 3);
-          finalHero = fallbackMovies;
-          setHeroMovies(fallbackMovies);
-        } else {
-          finalHero = heroMoviesData;
-          setHeroMovies(heroMoviesData);
-        }
-
-        // Genre display names (more engaging titles)
-        const genreTitles: Record<string, string> = {
-          'Ação': 'Adrenalina Pura',
-          'Aventura': 'Aventuras Épicas',
-          'Animação': 'Animações para Todos',
-          'Comédia': 'Para Rir Muito',
-          'Crime': 'Crimes & Mistérios',
-          'Documentário': 'Documentários',
-          'Drama': 'Dramas Imperdíveis',
-          'Fantasia': 'Mundos Fantásticos',
-          'Ficção Científica': 'Ficção Científica',
-          'Guerra': 'Filmes de Guerra',
-          'História': 'Baseados em Fatos Reais',
-          'Horror': 'Para Quem Tem Coragem',
-          'Musical': 'Musicais',
-          'Mistério': 'Suspense & Mistério',
-          'Romance': 'Romances',
-          'Suspense': 'De Tirar o Fôlego',
-          'Terror': 'Terror que Arrepia',
-          'Thriller': 'Thrillers Tensos',
-          'Western': 'Velho Oeste',
-        };
-
-        // Build genre sections from fetched data
-        const genreSections: ContentSection[] = activeCategories
-          .map((cat: any, i: number) => ({
-            title: genreTitles[cat.name] || cat.name,
-            type: 'latest' as const,
-            movies: genreResults[i]?.movies || [],
-            viewAllUrl: `/movies?genre=${encodeURIComponent(cat.name)}`,
-          }))
-          .filter((s: ContentSection) => s.movies.length > 0);
-
-        // Organize content sections - ORDEM: Top10 → Lançamentos → Gêneros → Todos
-        const sections: ContentSection[] = [
-          {
-            title: 'Brasil: Top 10 em Filmes Hoje',
-            type: 'top10' as const,
-            movies: Array.isArray(top10Films) ? top10Films : []
-          },
-          {
-            title: 'Brasil: Top 10 em Séries Hoje',
-            type: 'top10' as const,
-            movies: Array.isArray(top10Series) ? top10Series : []
-          },
-          {
-            title: 'Lançamentos',
-            type: 'latest' as const,
-            movies: Array.isArray(releasesData) ? releasesData : []
-          },
-          // Genre carousels inserted here
-          ...genreSections,
-          {
-            title: 'Filmes',
-            type: 'latest' as const,
-            movies: allMoviesData.movies || []
-          },
-          {
-            title: 'Séries',
-            type: 'latest' as const,
-            movies: allSeriesData.movies || []
-          }
-        ].filter(section => section.movies.length > 0);
+        // Map carousels → ContentSection[] (skip featured since it feeds the hero)
+        const sections: ContentSection[] = homepageData
+          .filter((c) => c.type !== 'featured' && c.content.length > 0)
+          .map((c) => ({
+            title: c.title,
+            type: CAROUSEL_SECTION_TYPE[c.type] || 'latest',
+            movies: c.content,
+            viewAllUrl: CAROUSEL_VIEW_ALL[c.type],
+          }));
 
         finalSections = sections;
         setContentSections(sections);

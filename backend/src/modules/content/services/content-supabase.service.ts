@@ -1041,4 +1041,121 @@ export class ContentSupabaseService {
     const enriched = await this.enrichContentWithDiscounts(contents || []);
     return { ...person, contents: enriched };
   }
+
+  /**
+   * Returns homepage carousel data: fetches the visible carousel config from
+   * homepage_carousels and populates each entry with content items.
+   */
+  async getHomepageData(): Promise<Array<{ id: string; slug: string; title: string; type: string; content: any[] }>> {
+    const { data: carousels, error } = await this.supabaseService.client
+      .from('homepage_carousels')
+      .select('*')
+      .eq('is_visible', true)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      this.logger.error('Failed to fetch homepage carousels:', error);
+      throw new Error(`Failed to fetch homepage carousels: ${error.message}`);
+    }
+
+    if (!carousels || carousels.length === 0) return [];
+
+    const results = await Promise.all(
+      carousels.map(async (carousel) => {
+        let content: any[] = [];
+
+        try {
+          switch (carousel.type) {
+            case 'top10_films':
+              content = await this.findTop10Films();
+              break;
+
+            case 'top10_series':
+              content = await this.findTop10Series();
+              break;
+
+            case 'releases':
+              content = await this.findReleases(20);
+              break;
+
+            case 'featured':
+              content = await this.findFeaturedContent(20);
+              break;
+
+            case 'all_movies': {
+              const res = await this.findAllMovies(1, 20, undefined, 'newest');
+              content = res.movies || [];
+              break;
+            }
+
+            case 'all_series': {
+              const res = await this.findAllSeries(1, 20, undefined, 'newest');
+              content = res.movies || [];
+              break;
+            }
+
+            case 'category': {
+              if (carousel.category_id) {
+                // Resolve category name from id then delegate to findAllMovies
+                const { data: cat } = await this.supabaseService.client
+                  .from('categories')
+                  .select('name')
+                  .eq('id', carousel.category_id)
+                  .single();
+
+                if (cat?.name) {
+                  const res = await this.findAllMovies(1, 15, cat.name, 'newest');
+                  content = res.movies || [];
+                }
+              }
+              break;
+            }
+
+            case 'manual': {
+              if (Array.isArray(carousel.content_ids) && carousel.content_ids.length > 0) {
+                const { data: items, error: itemsError } = await this.supabaseService.client
+                  .from('content')
+                  .select(`
+                    *,
+                    categories:content_categories(
+                      category:categories(*)
+                    ),
+                    content_languages(
+                      id,
+                      language_name,
+                      video_url,
+                      hls_master_url,
+                      upload_status
+                    )
+                  `)
+                  .in('id', carousel.content_ids)
+                  .eq('status', ContentStatus.PUBLISHED);
+
+                if (!itemsError && items) {
+                  content = await this.enrichContentWithDiscounts(items);
+                }
+              }
+              break;
+            }
+
+            default:
+              this.logger.warn(`Unknown carousel type "${carousel.type}" for slug "${carousel.slug}"`);
+          }
+        } catch (err) {
+          this.logger.error(`Failed to populate carousel "${carousel.slug}": ${err}`);
+          content = [];
+        }
+
+        return {
+          id: carousel.id,
+          slug: carousel.slug,
+          title: carousel.title,
+          type: carousel.type,
+          content,
+        };
+      }),
+    );
+
+    return results;
+  }
 }

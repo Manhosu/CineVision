@@ -465,4 +465,8 @@ export class ContentService {
   async findPersonWithContent(personId: string): Promise<any> {
     throw new NotFoundException('People feature requires Supabase mode');
   }
+
+  async getHomepageData(): Promise<Array<{ id: string; slug: string; title: string; type: string; content: any[] }>> {
+    throw new NotFoundException('Homepage carousel config requires Supabase mode');
+  }
 }
