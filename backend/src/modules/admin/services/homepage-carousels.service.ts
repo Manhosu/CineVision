@@ -158,6 +158,89 @@ export class HomepageCarouselsService {
     }
   }
 
+  // Igor (12/05): carrosséis cujo conteúdo é manualmente curado pelo admin.
+  // Os "auto" (top10_films, top10_series, releases, all_movies, all_series,
+  // category) ignoram content_ids[] e populam por regras — não faz sentido
+  // mostrar pro admin durante create/edit de conteúdo.
+  private readonly MANUAL_CAROUSEL_TYPES = new Set(['featured', 'manual']);
+
+  /**
+   * Retorna os carrosséis em que o admin pode inserir conteúdos manualmente
+   * (featured = banner hero; manual = qualquer um criado pelo admin).
+   * Usado no formulário de create/edit de conteúdo.
+   */
+  async findEligibleForManualInsertion(): Promise<HomepageCarousel[]> {
+    const { data, error } = await this.supabaseService.client
+      .from('homepage_carousels')
+      .select('*')
+      .in('type', Array.from(this.MANUAL_CAROUSEL_TYPES))
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      this.logger.error('Failed to fetch eligible carousels:', error);
+      throw new Error(`Failed to fetch eligible carousels: ${error.message}`);
+    }
+
+    return data || [];
+  }
+
+  /**
+   * Retorna os IDs dos carrosséis em que um conteúdo específico aparece.
+   * Usado para pré-selecionar checkboxes no edit.
+   */
+  async findCarouselsContaining(contentId: string): Promise<string[]> {
+    const { data, error } = await this.supabaseService.client
+      .from('homepage_carousels')
+      .select('id, content_ids, type')
+      .in('type', Array.from(this.MANUAL_CAROUSEL_TYPES));
+
+    if (error) {
+      this.logger.error('Failed to fetch carousels containing content:', error);
+      throw new Error(`Failed to fetch carousels: ${error.message}`);
+    }
+
+    return (data || [])
+      .filter((c: any) => Array.isArray(c.content_ids) && c.content_ids.includes(contentId))
+      .map((c: any) => c.id);
+  }
+
+  /**
+   * Sincroniza atomicamente os carrosséis em que um conteúdo aparece:
+   * adiciona ao content_ids[] dos carrosséis em targetCarouselIds e remove
+   * dos demais (entre os elegíveis para inserção manual).
+   *
+   * Race-safe: faz um SELECT antes de cada UPDATE para garantir que não
+   * sobrescreve content_ids[] em paralelo.
+   */
+  async syncContentToCarousels(contentId: string, targetCarouselIds: string[]): Promise<void> {
+    const target = new Set(targetCarouselIds);
+    const eligible = await this.findEligibleForManualInsertion();
+
+    for (const carousel of eligible) {
+      const currentIds: string[] = Array.isArray(carousel.content_ids) ? carousel.content_ids : [];
+      const hasIt = currentIds.includes(contentId);
+      const shouldHaveIt = target.has(carousel.id);
+
+      if (hasIt === shouldHaveIt) continue; // sem mudança
+
+      const newIds = shouldHaveIt
+        ? [...currentIds, contentId] // adiciona no fim
+        : currentIds.filter((id) => id !== contentId);
+
+      const { error } = await this.supabaseService.client
+        .from('homepage_carousels')
+        .update({ content_ids: newIds, updated_at: new Date().toISOString() })
+        .eq('id', carousel.id);
+
+      if (error) {
+        this.logger.error(
+          `Failed to sync content ${contentId} to carousel ${carousel.id}: ${error.message}`,
+        );
+        throw new Error(`Falha ao sincronizar carrossel: ${error.message}`);
+      }
+    }
+  }
+
   async reorder(items: ReorderItem[]): Promise<void> {
     if (!items || items.length === 0) return;
 

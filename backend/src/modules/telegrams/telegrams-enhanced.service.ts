@@ -905,6 +905,98 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (12/05): testa o grupo Telegram de um conteúdo no admin.
+   * Tenta gerar um invite link real (que o admin pode abrir para verificar
+   * o grupo). Retorna erros estruturados para o frontend mostrar toasts
+   * específicos em vez do genérico "Conteúdo Indisponível".
+   *
+   * Códigos de erro retornados:
+   *  - link_missing: conteúdo sem telegram_chat_id nem telegram_group_link
+   *  - bot_not_admin: bot está no grupo mas sem permissão de invite
+   *  - chat_id_invalid: chat_id mal formatado ou grupo inexistente
+   *  - unknown: erro genérico (ver detail)
+   */
+  async testTelegramGroupForContent(content: {
+    id: string;
+    telegram_chat_id?: string | null;
+    telegram_group_link?: string | null;
+  }): Promise<{
+    success: boolean;
+    inviteLink?: string;
+    chatTitle?: string;
+    error?: 'link_missing' | 'bot_not_admin' | 'chat_id_invalid' | 'unknown';
+    detail?: string;
+  }> {
+    const chatIdRaw = (content.telegram_chat_id || '').trim();
+    const groupLink = (content.telegram_group_link || '').trim();
+
+    if (!chatIdRaw && !groupLink) {
+      return {
+        success: false,
+        error: 'link_missing',
+        detail: 'Conteúdo sem grupo Telegram configurado (telegram_chat_id e telegram_group_link vazios).',
+      };
+    }
+
+    // Caso 1: temos chat_id numérico — validamos permissão antes de gerar
+    if (chatIdRaw) {
+      const validation = await this.validateChatIdAdmin(chatIdRaw);
+      if (!validation.ok) {
+        // Diferencia bot_not_admin de chat_id_invalid pela mensagem
+        const reason = validation.reason || '';
+        const isFormatIssue = /Formato inválido|HTTP 400|getChat falhou|getChat/.test(reason);
+        return {
+          success: false,
+          chatTitle: validation.chat_title,
+          error: isFormatIssue ? 'chat_id_invalid' : 'bot_not_admin',
+          detail: reason,
+        };
+      }
+      // Bot é admin e pode convidar — gera o link
+      try {
+        const expireDate = Math.floor(Date.now() / 1000) + 60 * 60; // 1h
+        const res = await axios.post(`${this.botApiUrl}/createChatInviteLink`, {
+          chat_id: chatIdRaw,
+          member_limit: 1,
+          expire_date: expireDate,
+          name: `Admin Test - ${content.id.substring(0, 8)}`,
+        });
+        if (res.data.ok) {
+          return {
+            success: true,
+            inviteLink: res.data.result.invite_link,
+            chatTitle: validation.chat_title,
+          };
+        }
+        return {
+          success: false,
+          error: 'unknown',
+          detail: res.data.description || 'createChatInviteLink retornou !ok',
+        };
+      } catch (error: any) {
+        return {
+          success: false,
+          error: 'unknown',
+          detail: error?.response?.data?.description || error.message,
+        };
+      }
+    }
+
+    // Caso 2: só temos telegram_group_link (string) — tentamos extrair e gerar
+    const link = await this.createInviteLinkForUser(groupLink, `admin-test-${content.id.substring(0, 8)}`);
+    if (link) {
+      return { success: true, inviteLink: link };
+    }
+    return {
+      success: false,
+      error: 'bot_not_admin',
+      detail:
+        'Não foi possível gerar invite link a partir do telegram_group_link. ' +
+        'Verifique se o bot é admin do grupo com permissão "Convidar usuários via link".',
+    };
+  }
+
+  /**
    * Extracts chat ID from a Telegram group link or ID
    * @param groupLink - The group's invite link, username, or chat ID
    * @returns Chat ID or null if not found

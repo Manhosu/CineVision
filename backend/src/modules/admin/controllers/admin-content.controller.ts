@@ -20,6 +20,9 @@ import { User, UserRole } from '../../users/entities/user.entity';
 import { AdminContentSimpleService } from '../services/admin-content-simple.service';
 import { EmployeesService } from '../../employees/employees.service';
 import { ContentEditRequestsService } from '../../content-edit-requests/content-edit-requests.service';
+import { HomepageCarouselsService } from '../services/homepage-carousels.service';
+import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
+import { SupabaseService } from '../../../config/supabase.service';
 import {
   CreateContentDto,
   InitiateUploadDto,
@@ -37,6 +40,9 @@ export class AdminContentController {
     private readonly adminContentService: AdminContentSimpleService,
     private readonly employeesService: EmployeesService,
     private readonly editRequestsService: ContentEditRequestsService,
+    private readonly homepageCarousels: HomepageCarouselsService,
+    private readonly telegramsService: TelegramsEnhancedService,
+    private readonly supabaseService: SupabaseService,
   ) {
     console.log('AdminContentController loaded successfully');
   }
@@ -396,6 +402,95 @@ export class AdminContentController {
     }
     // direct apply
     return this.adminContentService.updateContent(contentId, updateData);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Igor (12/05): seletor de carrosséis na criação/edição de conteúdo.
+  // Substitui o antigo checkbox "Destacar na página inicial" por uma
+  // associação N:N entre conteúdo e carrosséis manuais (featured + manual).
+  // ---------------------------------------------------------------------------
+
+  @Get('homepage-carousels/eligible')
+  @ApiOperation({
+    summary: 'List carousels eligible for manual content insertion',
+    description:
+      'Retorna apenas carrosséis dos tipos "featured" e "manual" — os outros (top10, releases, all_movies, all_series, category) populam por regras automáticas e ignoram content_ids[].',
+  })
+  async listEligibleCarousels() {
+    const carousels = await this.homepageCarousels.findEligibleForManualInsertion();
+    return carousels.map((c) => ({
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      type: c.type,
+      is_visible: c.is_visible,
+    }));
+  }
+
+  @Get(':id/carousels')
+  @ApiOperation({
+    summary: 'Get IDs of carousels where this content appears',
+    description: 'Usado para pré-selecionar checkboxes no form de edição.',
+  })
+  async getContentCarousels(@Param('id') contentId: string) {
+    const carouselIds = await this.homepageCarousels.findCarouselsContaining(contentId);
+    return { carouselIds };
+  }
+
+  @Post(':id/carousels')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({
+    summary: 'Sync content to carousels (atomic)',
+    description:
+      'Adiciona o conteúdo aos carrosséis em carouselIds[] e remove dos outros (entre os elegíveis). Idempotente.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async setContentCarousels(
+    @Param('id') contentId: string,
+    @Body() body: { carouselIds?: string[] },
+    @GetUser() user: any,
+  ) {
+    const cap = await this.resolveEditCapability(user, contentId);
+    if (cap === 'blocked') {
+      throw new ForbiddenException('Sem permissão para alterar carrosséis deste conteúdo.');
+    }
+    const carouselIds = Array.isArray(body?.carouselIds) ? body.carouselIds : [];
+    await this.homepageCarousels.syncContentToCarousels(contentId, carouselIds);
+    return { success: true, carouselIds };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Igor (12/05): botão "Testar" do grupo Telegram no admin. Antes caía
+  // no fallback genérico "Conteúdo Indisponível" sem motivo. Agora retorna
+  // erro estruturado para o frontend mostrar toast específico.
+  // ---------------------------------------------------------------------------
+
+  @Post(':id/test-telegram-group')
+  @UseGuards(OptionalAuthGuard)
+  @ApiOperation({
+    summary: 'Test access to the Telegram group of a content',
+    description:
+      'Tenta gerar um invite link real para o grupo. Retorna { success, inviteLink } ou { success: false, error, detail }.',
+  })
+  @HttpCode(HttpStatus.OK)
+  async testContentTelegramGroup(@Param('id') contentId: string) {
+    const { data: content, error } = await this.supabaseService.client
+      .from('content')
+      .select('id, telegram_chat_id, telegram_group_link, title')
+      .eq('id', contentId)
+      .maybeSingle();
+
+    if (error || !content) {
+      throw new BadRequestException('Conteúdo não encontrado.');
+    }
+
+    const result = await this.telegramsService.testTelegramGroupForContent({
+      id: content.id,
+      telegram_chat_id: content.telegram_chat_id,
+      telegram_group_link: content.telegram_group_link,
+    });
+
+    return { ...result, contentTitle: content.title };
   }
 
   // Audio/Language Management Endpoints

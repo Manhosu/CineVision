@@ -13,7 +13,7 @@ import {
   Pencil,
   Send,
 } from 'lucide-react';
-import { openContentGroup } from '@/lib/telegramAccess';
+import { toast } from 'react-hot-toast';
 
 interface Content {
   id: string;
@@ -28,7 +28,12 @@ interface Content {
   createdById?: string | null;
   createdBy?: { id: string; name: string; email: string; role: string } | null;
   telegram_group_link?: string | null;
+  // Igor (12/05): badges para filtros clicáveis
+  is_release?: boolean;
+  is_new_season?: boolean;
 }
+
+type ContentTypeFilter = 'all' | 'movie' | 'series' | 'release' | 'new_season';
 
 export default function ContentManagePage() {
   const router = useRouter();
@@ -36,6 +41,8 @@ export default function ContentManagePage() {
   const [contents, setContents] = useState<Content[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  // Igor (12/05): filtro clicável por tipo + flag (toggle).
+  const [typeFilter, setTypeFilter] = useState<ContentTypeFilter>('all');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Content | null>(null);
   const [publishingId, setPublishingId] = useState<string | null>(null);
@@ -219,9 +226,81 @@ export default function ContentManagePage() {
     }
   };
 
-  const filteredContents = contents.filter(content =>
-    content.title.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Igor (12/05): clicar em "Testar grupo Telegram" agora chama o endpoint
+  // admin que tenta gerar invite link de verdade e retorna erro estruturado.
+  const testTelegramGroup = async (content: Content) => {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
+        : '';
+    const loadingToast = toast.loading('Testando acesso ao grupo Telegram...');
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/test-telegram-group`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        },
+      );
+      const data = await res.json();
+      toast.dismiss(loadingToast);
+
+      if (data.success && data.inviteLink) {
+        toast.success(`Grupo "${data.chatTitle || content.title}" acessível! Abrindo...`);
+        window.open(data.inviteLink, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Erros estruturados
+      switch (data.error) {
+        case 'link_missing':
+          toast.error('Conteúdo sem grupo Telegram configurado. Edite e adicione o telegram_chat_id ou telegram_group_link.', { duration: 6000 });
+          break;
+        case 'bot_not_admin':
+          toast.error(
+            `Bot não é admin do grupo com permissão de convite.\n${data.detail || ''}`.trim(),
+            { duration: 8000 },
+          );
+          break;
+        case 'chat_id_invalid':
+          toast.error(`Chat ID inválido.\n${data.detail || ''}`.trim(), { duration: 6000 });
+          break;
+        default:
+          toast.error(`Falha ao testar: ${data.detail || 'erro desconhecido'}`, { duration: 6000 });
+      }
+    } catch (err: any) {
+      toast.dismiss(loadingToast);
+      toast.error(`Erro de rede: ${err?.message || 'desconhecido'}`);
+    }
+  };
+
+  const filteredContents = contents.filter(content => {
+    // search por título
+    if (searchTerm && !content.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+      return false;
+    }
+    // filtro de tipo/flag (Igor 12/05)
+    switch (typeFilter) {
+      case 'movie':
+        return content.content_type === 'movie';
+      case 'series':
+        return content.content_type === 'series';
+      case 'release':
+        return !!content.is_release;
+      case 'new_season':
+        return !!content.is_new_season;
+      default:
+        return true;
+    }
+  });
+
+  const movieCount = contents.filter(c => c.content_type === 'movie').length;
+  const seriesCount = contents.filter(c => c.content_type === 'series').length;
+  const releaseCount = contents.filter(c => c.is_release).length;
+  const newSeasonCount = contents.filter(c => c.is_new_season).length;
 
   const draftsVisible = filteredContents.filter(
     (c) => c.status === 'DRAFT' || c.status === 'draft',
@@ -269,26 +348,97 @@ export default function ContentManagePage() {
           />
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+        {/* Stats clicáveis (Igor 12/05) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`bg-dark-800/50 backdrop-blur-sm border rounded-xl p-6 text-left transition-all ${
+              typeFilter === 'all' ? 'border-white/40' : 'border-white/10 hover:border-white/20'
+            }`}
+          >
             <p className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
               {contents.length}
             </p>
             <p className="text-sm text-gray-400 mt-1">Total de Conteúdos</p>
-          </div>
-          <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'movie' ? 'all' : 'movie')}
+            className={`bg-dark-800/50 backdrop-blur-sm border rounded-xl p-6 text-left transition-all ${
+              typeFilter === 'movie' ? 'border-blue-400/60' : 'border-white/10 hover:border-white/20'
+            }`}
+          >
             <p className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              {contents.filter(c => c.content_type === 'movie').length}
+              {movieCount}
             </p>
             <p className="text-sm text-gray-400 mt-1">Filmes</p>
-          </div>
-          <div className="bg-dark-800/50 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'series' ? 'all' : 'series')}
+            className={`bg-dark-800/50 backdrop-blur-sm border rounded-xl p-6 text-left transition-all ${
+              typeFilter === 'series' ? 'border-purple-400/60' : 'border-white/10 hover:border-white/20'
+            }`}
+          >
             <p className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              {contents.filter(c => c.content_type === 'series').length}
+              {seriesCount}
             </p>
             <p className="text-sm text-gray-400 mt-1">Séries</p>
-          </div>
+          </button>
+        </div>
+
+        {/* Pills de filtro adicional (Igor 12/05) */}
+        <div className="flex gap-2 mb-6 flex-wrap">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              typeFilter === 'all'
+                ? 'bg-white text-black'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            Todos ({contents.length})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'movie' ? 'all' : 'movie')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              typeFilter === 'movie'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            Filmes ({movieCount})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'series' ? 'all' : 'series')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              typeFilter === 'series'
+                ? 'bg-purple-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            Séries ({seriesCount})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'release' ? 'all' : 'release')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
+              typeFilter === 'release'
+                ? 'bg-red-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === 'release' ? 'bg-white' : 'bg-red-500'}`} />
+            Novidades ({releaseCount})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'new_season' ? 'all' : 'new_season')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
+              typeFilter === 'new_season'
+                ? 'bg-orange-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === 'new_season' ? 'bg-white' : 'bg-orange-500'}`} />
+            Nova Temp. ({newSeasonCount})
+          </button>
         </div>
 
         {/* Igor (08/05): barra de aprovacao em batch dos DRAFTs.
@@ -444,9 +594,9 @@ export default function ContentManagePage() {
                           </button>
                         )}
                         <button
-                          onClick={() => openContentGroup(content.id, content.telegram_group_link)}
+                          onClick={() => testTelegramGroup(content)}
                           className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
-                          title="Abrir grupo Telegram"
+                          title="Testar grupo Telegram (gera invite link real)"
                         >
                           <Send className="w-4 h-4" />
                         </button>

@@ -53,10 +53,15 @@ export default function AdminHomepagePage() {
   const [titleDraft, setTitleDraft] = useState('');
   const [editingContentFor, setEditingContentFor] = useState<Carousel | null>(null);
   const [allContent, setAllContent] = useState<ContentItem[]>([]);
-  const [contentFilter, setContentFilter] = useState('');
   const [selectedContents, setSelectedContents] = useState<ContentItem[]>([]);
   const [contentLoading, setContentLoading] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
+
+  // Igor (12/05): modal 2 colunas — search e filtro de tipo na coluna direita
+  // (Disponíveis). Selecionados ficam à esquerda com reordenação e remoção.
+  const [availableSearch, setAvailableSearch] = useState('');
+  const [availableTypeFilter, setAvailableTypeFilter] = useState<'all' | 'movie' | 'series'>('all');
+  const [selectedSearch, setSelectedSearch] = useState('');
 
   const getToken = () =>
     typeof window !== 'undefined'
@@ -165,7 +170,9 @@ export default function AdminHomepagePage() {
 
   const openContentEditor = async (carousel: Carousel) => {
     setEditingContentFor(carousel);
-    setContentFilter('');
+    setAvailableSearch('');
+    setSelectedSearch('');
+    setAvailableTypeFilter('all');
     setContentLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/v1/admin/content`, {
@@ -182,9 +189,13 @@ export default function AdminHomepagePage() {
           }),
         );
         setAllContent(items);
-        // Pre-select existing content_ids
-        const existingIds = new Set(carousel.content_ids || []);
-        setSelectedContents(items.filter((item) => existingIds.has(item.id)));
+        // Pre-select preservando a ORDEM original do content_ids[] do carrossel
+        // (Igor 12/05: ordem importa para a posição na home).
+        const byId = new Map(items.map((item) => [item.id, item]));
+        const ordered = (carousel.content_ids || [])
+          .map((id) => byId.get(id))
+          .filter((item): item is ContentItem => Boolean(item));
+        setSelectedContents(ordered);
       }
     } finally {
       setContentLoading(false);
@@ -223,20 +234,39 @@ export default function AdminHomepagePage() {
     }
   };
 
-  const toggleContentItem = (item: ContentItem) => {
+  const addContent = (item: ContentItem) => {
     setSelectedContents((prev) => {
-      const exists = prev.find((c) => c.id === item.id);
-      if (exists) return prev.filter((c) => c.id !== item.id);
+      if (prev.some((c) => c.id === item.id)) return prev;
       return [...prev, item];
     });
   };
 
-  const filteredContent = allContent.filter((item) => {
-    if (!contentFilter) return true;
-    return item.title.toLowerCase().includes(contentFilter.toLowerCase());
-  });
+  const removeContent = (itemId: string) => {
+    setSelectedContents((prev) => prev.filter((c) => c.id !== itemId));
+  };
+
+  const moveSelected = (index: number, direction: -1 | 1) => {
+    setSelectedContents((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
 
   const selectedIds = new Set(selectedContents.map((c) => c.id));
+
+  const availableContent = allContent.filter((item) => {
+    if (selectedIds.has(item.id)) return false; // só os que NÃO estão selecionados
+    if (availableTypeFilter !== 'all' && item.content_type !== availableTypeFilter) return false;
+    if (availableSearch && !item.title.toLowerCase().includes(availableSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  const selectedFiltered = selectedSearch
+    ? selectedContents.filter((c) => c.title.toLowerCase().includes(selectedSearch.toLowerCase()))
+    : selectedContents;
 
   if (loading) {
     return (
@@ -394,10 +424,10 @@ export default function AdminHomepagePage() {
         )}
       </div>
 
-      {/* Content editor modal */}
+      {/* Content editor modal — 2 colunas (Igor 12/05) */}
       {editingContentFor && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#1a1a1a] rounded-2xl w-full max-w-lg border border-white/10 flex flex-col max-h-[85vh]">
+          <div className="bg-[#1a1a1a] rounded-2xl w-full max-w-5xl border border-white/10 flex flex-col max-h-[90vh]">
             {/* Modal header */}
             <div className="flex items-center justify-between p-5 border-b border-white/8">
               <div>
@@ -418,90 +448,176 @@ export default function AdminHomepagePage() {
               </button>
             </div>
 
-            {/* Search */}
-            <div className="p-4 border-b border-white/8">
-              <input
-                ref={filterRef}
-                value={contentFilter}
-                onChange={(e) => setContentFilter(e.target.value)}
-                placeholder="Filtrar por título..."
-                className="w-full bg-[#252525] border border-white/15 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-white/35 placeholder-gray-600"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                {selectedContents.length} selecionado(s) · {filteredContent.length} exibido(s)
-              </p>
-            </div>
+            {contentLoading ? (
+              <div className="flex-1 flex items-center justify-center py-16 text-gray-500 text-sm">
+                Carregando conteúdo...
+              </div>
+            ) : (
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+                {/* COLUNA ESQUERDA — Selecionados no carrossel */}
+                <div className="flex flex-col border-b md:border-b-0 md:border-r border-white/8 overflow-hidden">
+                  <div className="p-4 border-b border-white/8">
+                    <p className="text-sm font-semibold text-gray-200 mb-2">
+                      Selecionados ({selectedContents.length})
+                    </p>
+                    <input
+                      value={selectedSearch}
+                      onChange={(e) => setSelectedSearch(e.target.value)}
+                      placeholder="Filtrar selecionados..."
+                      className="w-full bg-[#252525] border border-white/15 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/35 placeholder-gray-600"
+                    />
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
+                    {selectedFiltered.length === 0 ? (
+                      <div className="text-center py-10 text-gray-500 text-xs">
+                        {selectedContents.length === 0
+                          ? 'Nenhum item no carrossel. Adicione da coluna direita →'
+                          : 'Nenhum resultado com esse filtro.'}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {selectedFiltered.map((item) => {
+                          const realIndex = selectedContents.findIndex((c) => c.id === item.id);
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-2 px-2 py-2 rounded-lg bg-white/[0.03] hover:bg-white/5 border border-white/5"
+                            >
+                              <div className="flex flex-col gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => moveSelected(realIndex, -1)}
+                                  disabled={realIndex === 0}
+                                  className="p-0.5 rounded hover:bg-white/8 disabled:opacity-20 disabled:cursor-not-allowed"
+                                  title="Mover para cima"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => moveSelected(realIndex, 1)}
+                                  disabled={realIndex === selectedContents.length - 1}
+                                  className="p-0.5 rounded hover:bg-white/8 disabled:opacity-20 disabled:cursor-not-allowed"
+                                  title="Mover para baixo"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                              {item.poster_url ? (
+                                <img src={item.poster_url} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-7 h-10 rounded bg-gray-800 flex-shrink-0" />
+                              )}
+                              <span className="text-sm truncate flex-1">{item.title}</span>
+                              <span className="text-[10px] text-gray-500 flex-shrink-0 capitalize">
+                                {item.content_type === 'series' ? 'Série' : 'Filme'}
+                              </span>
+                              <button
+                                onClick={() => removeContent(item.id)}
+                                className="p-1 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors flex-shrink-0"
+                                title="Remover do carrossel"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            {/* Content list */}
-            <div className="flex-1 overflow-y-auto p-2">
-              {contentLoading ? (
-                <div className="text-center py-8 text-gray-500 text-sm">Carregando conteúdo...</div>
-              ) : filteredContent.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-sm">Nenhum item encontrado</div>
-              ) : (
-                <div className="space-y-1">
-                  {/* Show selected items first */}
-                  {filteredContent
-                    .sort((a, b) => {
-                      const aSelected = selectedIds.has(a.id) ? 0 : 1;
-                      const bSelected = selectedIds.has(b.id) ? 0 : 1;
-                      return aSelected - bSelected || a.title.localeCompare(b.title);
-                    })
-                    .map((item) => {
-                      const isSelected = selectedIds.has(item.id);
-                      return (
+                {/* COLUNA DIREITA — Disponíveis para adicionar */}
+                <div className="flex flex-col overflow-hidden">
+                  <div className="p-4 border-b border-white/8 space-y-2">
+                    <p className="text-sm font-semibold text-gray-200">
+                      Disponíveis ({availableContent.length})
+                    </p>
+                    <input
+                      ref={filterRef}
+                      value={availableSearch}
+                      onChange={(e) => setAvailableSearch(e.target.value)}
+                      placeholder="Buscar por título..."
+                      className="w-full bg-[#252525] border border-white/15 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-white/35 placeholder-gray-600"
+                    />
+                    <div className="flex gap-1">
+                      {(['all', 'movie', 'series'] as const).map((type) => (
                         <button
-                          key={item.id}
-                          onClick={() => toggleContentItem(item)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left ${
-                            isSelected
-                              ? 'bg-green-600/15 border border-green-600/25'
-                              : 'hover:bg-white/5 border border-transparent'
+                          key={type}
+                          onClick={() => setAvailableTypeFilter(type)}
+                          className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                            availableTypeFilter === type
+                              ? 'bg-white text-black font-semibold'
+                              : 'bg-white/5 text-gray-400 hover:bg-white/10'
                           }`}
                         >
-                          <div
-                            className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
-                              isSelected
-                                ? 'bg-green-500 border-green-500'
-                                : 'border-white/25 bg-transparent'
-                            }`}
-                          >
-                            {isSelected && (
-                              <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                              </svg>
-                            )}
-                          </div>
-                          <span className="text-sm truncate flex-1">{item.title}</span>
-                          <span className="text-[10px] text-gray-500 flex-shrink-0 capitalize">
-                            {item.content_type === 'series' ? 'Série' : 'Filme'}
-                          </span>
+                          {type === 'all' ? 'Todos' : type === 'movie' ? 'Filmes' : 'Séries'}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
+                    {availableContent.length === 0 ? (
+                      <div className="text-center py-10 text-gray-500 text-xs">
+                        Nenhum item disponível com esses filtros.
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {availableContent.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => addContent(item)}
+                            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-white/5 border border-transparent transition-colors text-left"
+                          >
+                            {item.poster_url ? (
+                              <img src={item.poster_url} alt="" className="w-7 h-10 rounded object-cover flex-shrink-0" />
+                            ) : (
+                              <div className="w-7 h-10 rounded bg-gray-800 flex-shrink-0" />
+                            )}
+                            <span className="text-sm truncate flex-1">{item.title}</span>
+                            <span className="text-[10px] text-gray-500 flex-shrink-0 capitalize">
+                              {item.content_type === 'series' ? 'Série' : 'Filme'}
+                            </span>
+                            <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Footer */}
-            <div className="p-4 border-t border-white/8 flex gap-2 justify-end">
-              <button
-                onClick={() => {
-                  setEditingContentFor(null);
-                  setSelectedContents([]);
-                  setAllContent([]);
-                }}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={saveContentIds}
-                disabled={saving === editingContentFor.id}
-                className="px-4 py-2 text-sm bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-              >
-                {saving === editingContentFor.id ? 'Salvando...' : `Salvar (${selectedContents.length})`}
-              </button>
+            <div className="p-4 border-t border-white/8 flex gap-2 justify-between items-center">
+              <span className="text-xs text-gray-500">
+                {selectedContents.length} no carrossel · {allContent.length - selectedContents.length} disponíveis
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setEditingContentFor(null);
+                    setSelectedContents([]);
+                    setAllContent([]);
+                  }}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={saveContentIds}
+                  disabled={saving === editingContentFor.id}
+                  className="px-4 py-2 text-sm bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                >
+                  {saving === editingContentFor.id ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

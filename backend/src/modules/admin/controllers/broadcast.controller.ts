@@ -114,6 +114,24 @@ export class BroadcastController {
   }
 
   /**
+   * Igor (12/05): retorna o detalhamento dos contadores para o painel.
+   * - total_registered: usuários com telegram_id (todos os cadastrados)
+   * - broadcast_eligible: usuários com telegram_chat_id (iniciaram /start)
+   * - whatsapp_eligible: usuários com WhatsApp cadastrado
+   * - gap: total_registered - broadcast_eligible (não ativaram o bot ainda)
+   */
+  @Get('users-stats')
+  async getUsersStats() {
+    try {
+      const stats = await this.broadcastService.getBroadcastStats();
+      return { success: true, ...stats };
+    } catch (error) {
+      this.logger.error('Error in getUsersStats:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get list of all users who can receive broadcasts
    */
   @Get('users-list')

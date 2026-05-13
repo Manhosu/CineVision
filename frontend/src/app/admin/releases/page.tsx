@@ -31,6 +31,8 @@ export default function ReleasesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<FilterTab>('active');
+  // Igor (12/05): pills clicáveis pra filtrar por tipo de badge.
+  const [typeFilter, setTypeFilter] = useState<'all' | 'release' | 'new_season'>('all');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchContents = useCallback(async () => {
@@ -74,6 +76,11 @@ export default function ReleasesPage() {
   const filtered = contents
     .filter(c => {
       if (tab === 'active') return c.is_release || c.is_new_season;
+      return true;
+    })
+    .filter(c => {
+      if (typeFilter === 'release') return c.is_release;
+      if (typeFilter === 'new_season') return c.is_new_season;
       return true;
     })
     .filter(c => {
@@ -122,7 +129,7 @@ export default function ReleasesPage() {
         </div>
 
         {/* Tabs + Search */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="flex flex-col sm:flex-row gap-3 mb-3">
           <div className="flex rounded-lg overflow-hidden border border-gray-700/50 shrink-0">
             <button
               onClick={() => setTab('active')}
@@ -149,6 +156,42 @@ export default function ReleasesPage() {
             placeholder="Buscar título..."
             className="flex-1 bg-white/5 border border-gray-700/50 rounded-lg px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-red-500/50"
           />
+        </div>
+
+        {/* Igor (12/05): pills filtro por tipo. Clicar no pill ativo volta para "Todos". */}
+        <div className="flex gap-2 mb-5 flex-wrap">
+          <button
+            onClick={() => setTypeFilter('all')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              typeFilter === 'all'
+                ? 'bg-white text-black'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            Todos
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'release' ? 'all' : 'release')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
+              typeFilter === 'release'
+                ? 'bg-red-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === 'release' ? 'bg-white' : 'bg-red-500'}`} />
+            Novidade ({novidades})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'new_season' ? 'all' : 'new_season')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors flex items-center gap-1.5 ${
+              typeFilter === 'new_season'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${typeFilter === 'new_season' ? 'bg-white' : 'bg-blue-500'}`} />
+            Nova Temp. ({novaTemp})
+          </button>
         </div>
 
         {/* List */}

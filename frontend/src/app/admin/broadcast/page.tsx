@@ -79,6 +79,13 @@ export default function BroadcastPage() {
 
   // Data state
   const [usersCount, setUsersCount] = useState(0);
+  // Igor (12/05): detalhamento da diferença 402/217 (registered vs eligible).
+  const [broadcastStats, setBroadcastStats] = useState<{
+    total_registered: number;
+    broadcast_eligible: number;
+    whatsapp_eligible: number;
+    gap: number;
+  } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastProgress | null>(null);
   const [sendStartTime, setSendStartTime] = useState<number | null>(null);
@@ -96,6 +103,7 @@ export default function BroadcastPage() {
     const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
     if (token) {
       fetchUsersCount();
+      fetchBroadcastStats();
       fetchHistory();
     }
   }, [mounted]);
@@ -190,6 +198,25 @@ export default function BroadcastPage() {
       }
     } catch (err) {
       console.error('Error fetching users count:', err);
+    }
+  };
+
+  // Igor (12/05): busca estatísticas detalhadas para mostrar a diferença
+  // entre cadastrados e disponíveis para broadcast com tooltip explicativo.
+  const fetchBroadcastStats = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/users-stats`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setBroadcastStats({
+          total_registered: data.total_registered || 0,
+          broadcast_eligible: data.broadcast_eligible || 0,
+          whatsapp_eligible: data.whatsapp_eligible || 0,
+          gap: data.gap || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching broadcast stats:', err);
     }
   };
 
@@ -393,6 +420,45 @@ export default function BroadcastPage() {
             Voltar
           </button>
         </div>
+
+        {/* Igor (12/05): contadores duplos com tooltip explicativo
+            (cadastrados vs disponíveis para broadcast). Resolve a confusão
+            "402 ativos vs 217 no marketing". */}
+        {broadcastStats && (
+          <div className="mb-6 bg-[#111] rounded-xl border border-gray-800 p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white/[0.03] rounded-lg p-3">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Cadastrados</p>
+                <p className="text-2xl font-bold text-white mt-1">{broadcastStats.total_registered}</p>
+                <p className="text-xs text-gray-500 mt-1">usuários com Telegram ID</p>
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs text-blue-400 uppercase tracking-wide font-medium">Telegram broadcast</p>
+                  <div className="group relative">
+                    <svg className="w-3.5 h-3.5 text-gray-500 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 border border-white/10 rounded-lg p-3 text-xs text-gray-300 invisible group-hover:visible z-50 shadow-xl pointer-events-none">
+                      O Telegram só permite enviar mensagens para quem iniciou conversa com o bot (/start no @CineVisionBot).
+                      Os <span className="font-bold text-white">{broadcastStats.gap}</span> usuários restantes estão
+                      cadastrados mas não ativaram o bot ainda — alcance-os via WhatsApp ou peça para iniciarem o bot.
+                    </div>
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-blue-400 mt-1">{broadcastStats.broadcast_eligible}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {broadcastStats.gap > 0 && `gap: ${broadcastStats.gap} não ativaram o bot`}
+                </p>
+              </div>
+              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <p className="text-xs text-green-400 uppercase tracking-wide font-medium">WhatsApp broadcast</p>
+                <p className="text-2xl font-bold text-green-400 mt-1">{broadcastStats.whatsapp_eligible}</p>
+                <p className="text-xs text-gray-500 mt-1">com número cadastrado</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Progress Bar (when sending) */}
         {activeBroadcast && (

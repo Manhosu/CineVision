@@ -25,6 +25,42 @@ export class BroadcastService {
   }
 
   /**
+   * Igor (12/05): retorna estatísticas detalhadas para o painel de Broadcast
+   * explicar a diferença entre usuários registrados (telegram_id) e usuários
+   * disponíveis para broadcast (telegram_chat_id + !blocked + bot atual).
+   *
+   * Antes Igor via "402 usuários ativos" no dashboard e "217" na aba de
+   * broadcast e não entendia a diferença. Agora mostramos os dois lado a lado
+   * com tooltip explicativo.
+   */
+  async getBroadcastStats(): Promise<{
+    total_registered: number;
+    broadcast_eligible: number;
+    whatsapp_eligible: number;
+    gap: number;
+  }> {
+    // 1. Total registrados (com telegram_id)
+    const { count: totalReg } = await this.supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .not('telegram_id', 'is', null);
+
+    // 2. Disponíveis para broadcast Telegram
+    const broadcastEligible = await this.getBotUsersCount();
+
+    // 3. Disponíveis para broadcast WhatsApp
+    const whatsappEligible = await this.getWhatsappUsersCount();
+
+    const total = totalReg || 0;
+    return {
+      total_registered: total,
+      broadcast_eligible: broadcastEligible,
+      whatsapp_eligible: whatsappEligible,
+      gap: Math.max(0, total - broadcastEligible),
+    };
+  }
+
+  /**
    * Fast count of users who can receive broadcasts (no data fetched)
    */
   async getBotUsersCount(): Promise<number> {

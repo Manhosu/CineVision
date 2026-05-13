@@ -27,7 +27,6 @@ interface ContentFormData {
   backdrop_position: string;
   backdrop_position_mobile: string;
   content_type: 'movie' | 'series';
-  is_featured: boolean;
   is_release: boolean;
   is_new_season: boolean;
   price_cents: number;
@@ -104,7 +103,7 @@ export default function AdminContentCreatePage() {
     backdrop_position: '50% 50%',
     backdrop_position_mobile: '50% 50%',
     content_type: 'movie',
-    is_featured: false,
+    // is_featured removido — agora via seletor de carrosséis (Igor 12/05)
     is_release: false,
     is_new_season: false,
     price_cents: 1990, // R$ 19.90 default
@@ -113,6 +112,31 @@ export default function AdminContentCreatePage() {
   });
 
   const [showBackdropEditor, setShowBackdropEditor] = useState(false);
+
+  // Igor (12/05): seletor de carrosséis manuais (substitui o antigo
+  // checkbox "Destacar na página inicial"). O admin escolhe em quais
+  // carrosséis o conteúdo recém-criado deve aparecer.
+  const [eligibleCarousels, setEligibleCarousels] = useState<Array<{
+    id: string;
+    slug: string;
+    title: string;
+    type: string;
+    is_visible: boolean;
+  }>>([]);
+  const [selectedCarouselIds, setSelectedCarouselIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const token =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
+        : '';
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/homepage-carousels/eligible`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setEligibleCarousels(Array.isArray(data) ? data : []))
+      .catch(() => setEligibleCarousels([]));
+  }, []);
 
   const [fileUpload, setFileUpload] = useState<FileUploadState>({
     posterFile: null,
@@ -243,7 +267,7 @@ export default function AdminContentCreatePage() {
         availability: 'telegram',
         price_cents: formData.price_cents,
         currency: 'BRL',
-        is_featured: formData.is_featured,
+        // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: formData.is_release,
         is_new_season: formData.is_new_season,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
@@ -293,6 +317,24 @@ export default function AdminContentCreatePage() {
       const data = await response.json();
       toast.success('Conteúdo criado com sucesso!');
       setCreatedContentId(data.id);
+
+      // Igor (12/05): sincroniza carrosséis selecionados após criar o conteúdo.
+      // Falha aqui não bloqueia o fluxo — apenas avisa o admin.
+      if (selectedCarouselIds.length > 0 && data?.id) {
+        try {
+          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${data.id}/carousels`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({ carouselIds: selectedCarouselIds }),
+          });
+        } catch (carouselErr) {
+          console.error('Erro ao sincronizar carrosséis:', carouselErr);
+          toast.error('Conteúdo criado, mas falhou ao vincular carrosséis. Ajuste em /admin/homepage.');
+        }
+      }
 
       // Para séries, mostrar gerenciador de episódios
       if (formData.content_type === 'series') {
@@ -1191,17 +1233,6 @@ export default function AdminContentCreatePage() {
                   <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
                     <input
                       type="checkbox"
-                      name="is_featured"
-                      checked={formData.is_featured}
-                      onChange={handleChange}
-                      className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-red-600 focus:ring-red-500 cursor-pointer"
-                    />
-                    <span className="text-sm font-medium text-gray-300">Destacar na página inicial</span>
-                  </label>
-
-                  <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
-                    <input
-                      type="checkbox"
                       name="is_release"
                       checked={formData.is_release}
                       onChange={handleChange}
@@ -1220,6 +1251,43 @@ export default function AdminContentCreatePage() {
                     />
                     <span className="text-sm font-medium text-gray-300">📺 Marcar como Nova Temporada (badge sobreposto no card)</span>
                   </label>
+
+                  {/* Igor (12/05): seletor de carrosséis manuais. Substitui o
+                      antigo "Destacar na página inicial" — agora dá pra escolher
+                      em quais carrosséis (Destaques + manuais) o conteúdo aparece. */}
+                  {eligibleCarousels.length > 0 && (
+                    <div className="mt-2 p-4 bg-white/[0.02] border border-white/10 rounded-lg">
+                      <p className="text-sm font-semibold text-gray-200 mb-1">Aparecer em quais carrosséis da home?</p>
+                      <p className="text-xs text-gray-500 mb-3">
+                        Top 10 e Lançamentos são preenchidos automaticamente. Marque aqui apenas para Destaques ou carrosséis manuais.
+                      </p>
+                      <div className="space-y-2">
+                        {eligibleCarousels.map((c) => (
+                          <label key={c.id} className="flex items-center gap-3 cursor-pointer py-1 touch-manipulation">
+                            <input
+                              type="checkbox"
+                              checked={selectedCarouselIds.includes(c.id)}
+                              onChange={(e) => {
+                                setSelectedCarouselIds((prev) =>
+                                  e.target.checked
+                                    ? [...prev, c.id]
+                                    : prev.filter((id) => id !== c.id),
+                                );
+                              }}
+                              className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                            />
+                            <span className="text-sm text-gray-300">
+                              {c.title}
+                              <span className="text-xs text-gray-500 ml-2">
+                                ({c.type === 'featured' ? 'Banner Hero' : 'Manual'}
+                                {!c.is_visible && ' — oculto'})
+                              </span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

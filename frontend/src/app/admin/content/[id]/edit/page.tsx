@@ -94,9 +94,21 @@ export default function AdminContentEditPage() {
     reason?: string;
     chat_title?: string;
   } | null>(null);
-  const [isFeatured, setIsFeatured] = useState(false);
   const [isRelease, setIsRelease] = useState(false);
   const [isNewSeason, setIsNewSeason] = useState(false);
+
+  // Igor (12/05): seletor multi-carrossel substitui o antigo checkbox
+  // "Destacar na página inicial". Pré-seleciona carrosséis em que o
+  // conteúdo já aparece.
+  const [eligibleCarousels, setEligibleCarousels] = useState<Array<{
+    id: string;
+    slug: string;
+    title: string;
+    type: string;
+    is_visible: boolean;
+  }>>([]);
+  const [selectedCarouselIds, setSelectedCarouselIds] = useState<string[]>([]);
+  const [originalCarouselIds, setOriginalCarouselIds] = useState<string[]>([]);
   const [priceInput, setPriceInput] = useState('');
   const [imdbRating, setImdbRating] = useState('');
   const [releaseYear, setReleaseYear] = useState('');
@@ -168,9 +180,31 @@ export default function AdminContentEditPage() {
         setTrailerUrl(data.trailer_url || '');
         setTelegramGroupLink(data.telegram_group_link || '');
         setTelegramChatId((data as any).telegram_chat_id || '');
-        setIsFeatured(data.is_featured || false);
         setIsRelease(data.is_release || false);
         setIsNewSeason((data as any).is_new_season || false);
+
+        // Igor (12/05): fetch paralelo dos carrosséis elegíveis e dos
+        // carrosséis em que esse conteúdo já está vinculado.
+        try {
+          const apiBase = process.env.NEXT_PUBLIC_API_URL;
+          const authHeader = { Authorization: `Bearer ${token}` };
+          const [eligibleRes, currentRes] = await Promise.all([
+            fetch(`${apiBase}/api/v1/admin/content/homepage-carousels/eligible`, { headers: authHeader }),
+            fetch(`${apiBase}/api/v1/admin/content/${contentId}/carousels`, { headers: authHeader }),
+          ]);
+          if (eligibleRes.ok) {
+            const eligible = await eligibleRes.json();
+            setEligibleCarousels(Array.isArray(eligible) ? eligible : []);
+          }
+          if (currentRes.ok) {
+            const current = await currentRes.json();
+            const ids = Array.isArray(current?.carouselIds) ? current.carouselIds : [];
+            setSelectedCarouselIds(ids);
+            setOriginalCarouselIds(ids);
+          }
+        } catch (err) {
+          console.warn('Falha ao carregar carrosséis:', err);
+        }
         setPriceInput((data.price_cents / 100).toFixed(2));
         // Only set IMDB rating if it's valid (0-10)
         setImdbRating(data.imdb_rating && data.imdb_rating >= 0 && data.imdb_rating <= 10 ? data.imdb_rating.toString() : '');
@@ -303,7 +337,7 @@ export default function AdminContentEditPage() {
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
         backdrop_position_mobile: backdropPositionMobile,
-        is_featured: isFeatured,
+        // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
         price_cents: Math.round(parseFloat(priceInput) * 100),
@@ -335,6 +369,28 @@ export default function AdminContentEditPage() {
         } else {
           toast.success('Conteúdo atualizado com sucesso!');
         }
+
+        // Igor (12/05): sincroniza carrosséis se a seleção mudou.
+        const carouselsChanged =
+          selectedCarouselIds.length !== originalCarouselIds.length ||
+          selectedCarouselIds.some((id) => !originalCarouselIds.includes(id));
+        if (carouselsChanged) {
+          try {
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}/carousels`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ carouselIds: selectedCarouselIds }),
+            });
+            setOriginalCarouselIds(selectedCarouselIds);
+          } catch (carouselErr) {
+            console.error('Erro ao sincronizar carrosséis:', carouselErr);
+            toast.error('Conteúdo salvo, mas falhou ao vincular carrosséis. Ajuste em /admin/homepage.');
+          }
+        }
+
         await loadContent();
       } else {
         const error = await response.json();
@@ -374,9 +430,10 @@ export default function AdminContentEditPage() {
       backdropUrl !== (originalContent.backdrop_url || '') ||
       backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
       backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
-      isFeatured !== (originalContent.is_featured || false) ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
+      (selectedCarouselIds.length !== originalCarouselIds.length ||
+        selectedCarouselIds.some((id) => !originalCarouselIds.includes(id))) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
       imdbRating !== (originalContent.imdb_rating?.toString() || '') ||
       releaseYear !== (originalContent.release_year?.toString() || '') ||
@@ -878,20 +935,6 @@ export default function AdminContentEditPage() {
                 </div>
               </div>
 
-              {/* Featured Checkbox */}
-              <div className="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="is_featured"
-                  checked={isFeatured}
-                  onChange={(e) => setIsFeatured(e.target.checked)}
-                  className="w-5 h-5 text-primary-600 bg-dark-700 border-gray-600 rounded focus:ring-primary-500"
-                />
-                <label htmlFor="is_featured" className="text-sm font-medium cursor-pointer">
-                  Destacar na página inicial
-                </label>
-              </div>
-
               {/* Release Checkbox */}
               <div className="flex items-center space-x-3">
                 <input
@@ -919,6 +962,43 @@ export default function AdminContentEditPage() {
                   📺 Marcar como Nova Temporada (badge sobreposto no card)
                 </label>
               </div>
+
+              {/* Igor (12/05): seletor de carrosséis manuais. Substitui o
+                  antigo "Destacar na página inicial" — agora dá pra escolher
+                  em quais carrosséis o conteúdo aparece. */}
+              {eligibleCarousels.length > 0 && (
+                <div className="mt-2 p-4 bg-white/[0.02] border border-white/10 rounded-lg">
+                  <p className="text-sm font-semibold text-gray-200 mb-1">Aparecer em quais carrosséis da home?</p>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Top 10 e Lançamentos são preenchidos automaticamente. Marque aqui apenas para Destaques ou carrosséis manuais.
+                  </p>
+                  <div className="space-y-2">
+                    {eligibleCarousels.map((c) => (
+                      <label key={c.id} className="flex items-center gap-3 cursor-pointer py-1 touch-manipulation">
+                        <input
+                          type="checkbox"
+                          checked={selectedCarouselIds.includes(c.id)}
+                          onChange={(e) => {
+                            setSelectedCarouselIds((prev) =>
+                              e.target.checked
+                                ? [...prev, c.id]
+                                : prev.filter((id) => id !== c.id),
+                            );
+                          }}
+                          className="w-4 h-4 rounded bg-gray-700 border-gray-600 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                        />
+                        <span className="text-sm text-gray-300">
+                          {c.title}
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({c.type === 'featured' ? 'Banner Hero' : 'Manual'}
+                            {!c.is_visible && ' — oculto'})
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
         </div>
       </div>

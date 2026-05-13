@@ -956,6 +956,11 @@ export class ContentSupabaseService {
   async findReleases(limit = 20) {
     console.log('[ContentSupabaseService] findReleases called with limit:', limit);
     try {
+      // Igor (12/05): carrossel "Lançamentos" agora é um MIX EMBARALHADO de
+      // filmes com is_release=true + séries com is_new_season=true. Antes
+      // só pegava is_release, então séries em nova temporada nunca apareciam.
+      // Buscamos limit*2 para ter material pra embaralhar e ainda servir
+      // o limit final.
       const { data, error } = await this.supabaseService.client
         .from('content')
         .select(`
@@ -972,17 +977,25 @@ export class ContentSupabaseService {
           )
         `)
         .eq('status', 'PUBLISHED')
-        .eq('is_release', true)
+        .or('is_release.eq.true,is_new_season.eq.true')
         .order('created_at', { ascending: false })
-        .limit(limit);
+        .limit(limit * 2);
 
       if (error) {
         console.error('[ContentSupabaseService] Error fetching releases:', error);
         throw new Error(`Failed to fetch releases: ${error.message}`);
       }
 
-      console.log('[ContentSupabaseService] findReleases returned', data?.length || 0, 'items');
-      return this.enrichContentWithDiscounts(data || []);
+      // Fisher-Yates shuffle para misturar filmes e séries na mesma linha.
+      const shuffled = [...(data || [])];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      const finalList = shuffled.slice(0, limit);
+      console.log('[ContentSupabaseService] findReleases returned', finalList.length, 'items (shuffled mix)');
+      return this.enrichContentWithDiscounts(finalList);
     } catch (error) {
       console.error('[ContentSupabaseService] Exception in findReleases:', error);
       throw error;
