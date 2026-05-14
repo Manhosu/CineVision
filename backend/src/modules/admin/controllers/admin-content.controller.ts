@@ -129,7 +129,10 @@ export class AdminContentController {
   }
 
   @Post('create')
-  @UseGuards(OptionalAuthGuard)
+  // Igor (14/05): exige auth válido. Antes (OptionalAuthGuard) aceitava
+  // request sem token e gravava createdById=null, fazendo conteúdo upado
+  // por funcionário virar "sistema" e sumir da contagem de pagamento.
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Create new content (movie/series/documentary)',
     description: 'Creates content in database and automatically generates Stripe Product + Price',
@@ -199,7 +202,7 @@ export class AdminContentController {
   }
 
   @Put(':id/publish')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Publish content (make available to users)',
     description: 'Sets content status to PUBLISHED and optionally sends Telegram notifications',
@@ -226,7 +229,7 @@ export class AdminContentController {
   // aprova todos de uma vez. Antes precisava clicar 1 por 1 e a pagina
   // recarregava cada vez.
   @Post('publish-batch')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Publish multiple contents at once',
     description: 'Itera por uma lista de IDs e publica cada um. Retorna sumario.',
@@ -272,7 +275,8 @@ export class AdminContentController {
   // Series Management Endpoints
 
   @Post('series/create')
-  @UseGuards(OptionalAuthGuard)
+  // Igor (14/05): mesma correção do POST /create — auth obrigatório.
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Create new TV series',
     description: 'Creates series with optional per-series or per-episode pricing',
@@ -333,7 +337,7 @@ export class AdminContentController {
   }
 
   @Delete(':id')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Delete content',
     description:
@@ -368,7 +372,9 @@ export class AdminContentController {
   }
 
   @Put(':id')
-  @UseGuards(OptionalAuthGuard)
+  // Igor (14/05): resolveEditCapability precisa de user válido pra checar
+  // role e janela de edição do funcionário. Sem auth caía em "blocked".
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Update content metadata',
     description:
@@ -438,7 +444,7 @@ export class AdminContentController {
   }
 
   @Post(':id/carousels')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Sync content to carousels (atomic)',
     description:
@@ -466,7 +472,7 @@ export class AdminContentController {
   // ---------------------------------------------------------------------------
 
   @Post(':id/test-telegram-group')
-  @UseGuards(OptionalAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({
     summary: 'Test access to the Telegram group of a content',
     description:

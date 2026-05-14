@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { authenticatedFetch } from '@/lib/authTokens';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
 import PeopleTagInput from '@/components/Admin/PeopleTagInput';
@@ -127,13 +128,9 @@ export default function AdminContentCreatePage() {
   const [selectedCarouselIds, setSelectedCarouselIds] = useState<string[]>([]);
 
   useEffect(() => {
-    const token =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
-        : '';
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/homepage-carousels/eligible`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    // Igor (14/05): authenticatedFetch faz refresh+retry em 401 — se o
+    // token expirou enquanto a página estava aberta, renova automaticamente.
+    authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/homepage-carousels/eligible`)
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => setEligibleCarousels(Array.isArray(data) ? data : []))
       .catch(() => setEligibleCarousels([]));
@@ -290,22 +287,16 @@ export default function AdminContentCreatePage() {
         backendData.total_episodes = seriesInfo.totalEpisodes;
       }
 
-      // BUG-FIX (E2E): sem Authorization Bearer o backend tratava como
-      // anônimo, gravando createdById=null. Resultado: conteúdo criado
-      // por funcionário ficava órfão — não contava na produtividade,
-      // não passava no getEditCapability, edição depois caía em
-      // "blocked" em vez de "needs_approval". Igor reportou no IMG_8812.
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
-          : '';
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/create`, {
+      // BUG-FIX 2 (Igor 14/05): trocado para authenticatedFetch — se o token
+      // estiver expirado (JWT 24h vence durante a sessão), refresh é feito
+      // ANTES da request. Antes, o fetch ia com token velho, backend tratava
+      // como anônimo, e gravava createdById=null. Combinado com a mudança
+      // no backend de OptionalAuthGuard → JwtAuthGuard, qualquer falha de
+      // auth aqui retorna 401 explícito e o usuário é redirecionado ao login
+      // ANTES de criar conteúdo órfão.
+      const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify(backendData),
       });
@@ -323,12 +314,9 @@ export default function AdminContentCreatePage() {
       // Falha aqui não bloqueia o fluxo — apenas avisa o admin.
       if (selectedCarouselIds.length > 0 && data?.id) {
         try {
-          await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${data.id}/carousels`, {
+          await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${data.id}/carousels`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ carouselIds: selectedCarouselIds }),
           });
         } catch (carouselErr) {

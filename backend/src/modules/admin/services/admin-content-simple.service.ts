@@ -89,6 +89,25 @@ export class AdminContentSimpleService {
   async createContent(data: any, userId?: string, userRole?: string) {
     this.logger.log('Creating content with data:', JSON.stringify(data));
 
+    // Igor (14/05): defesa em profundidade — se chegou aqui sem userId,
+    // significa que algum endpoint ainda está usando OptionalAuthGuard ou
+    // que o token expirou de forma não detectada. Loga warning pra auditoria
+    // (o JwtAuthGuard nos endpoints de criação já deveria ter retornado 401).
+    if (!userId) {
+      this.logger.warn(
+        `createContent called WITHOUT userId — content "${data?.title}" will be orphan (createdById=null)`,
+      );
+      try {
+        await this.supabaseService.client.from('system_logs').insert({
+          type: 'admin_content',
+          level: 'warn',
+          message: `Content created without userId: title="${data?.title || 'unknown'}"`,
+        });
+      } catch (logErr) {
+        // não bloqueia criação se log falhar
+      }
+    }
+
     // A9 (vídeo IMG_8811) — Igor reclamou que conteúdo recém-criado
     // ficava em rascunho mesmo quando criado por admin. Agora:
     // - admin/moderator → PUBLISHED direto, vai pro site sem precisar

@@ -233,7 +233,9 @@ export class TelegramAuthSupabaseService {
 
     const access_token = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET || 'cine-vision-secret-key',
-      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      // Igor (14/05): consistente com auth.module — 24h pra evitar
+      // perda de sessão em uploads longos.
+      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
     });
 
     const refresh_token = this.jwtService.sign(payload, {

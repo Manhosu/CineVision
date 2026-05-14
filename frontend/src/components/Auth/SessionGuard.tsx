@@ -5,7 +5,11 @@ import { usePathname } from 'next/navigation';
 import { refreshAccessToken, getAccessToken, clearTokens } from '@/lib/authTokens';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+// Igor (14/05): heartbeat de 10min era lento demais — funcionário ficava
+// sem saber por até 10min que tinha perdido sessão. Reduzido para 2min.
+// Com JWT de 24h, esse heartbeat praticamente nunca dispara o modal —
+// serve só pra detectar revogação ou deploy do backend que invalida secret.
+const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 export default function SessionGuard() {
   const pathname = usePathname();
@@ -41,8 +45,20 @@ export default function SessionGuard() {
     run();
     timerRef.current = window.setInterval(run, HEARTBEAT_INTERVAL_MS);
 
+    // Igor (14/05): quando o admin volta pra aba após ficar em outra,
+    // browsers throttlam o setInterval. Detecta a volta via visibilitychange
+    // e roda heartbeat imediato — assim o estado da sessão é refrescado na
+    // hora em vez de esperar o próximo tick.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        run();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isAdmin, pathname]);
 

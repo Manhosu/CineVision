@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { authenticatedFetch } from '@/lib/authTokens';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
@@ -142,12 +143,9 @@ export default function AdminContentEditPage() {
   const loadContent = async () => {
     try {
       setIsLoading(true);
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      // Igor (14/05): authenticatedFetch refresha o token em 401 antes
+      // de desistir — evita que o admin fique "sem sessão" durante edição.
+      const response = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -188,10 +186,9 @@ export default function AdminContentEditPage() {
         // carrosséis em que esse conteúdo já está vinculado.
         try {
           const apiBase = process.env.NEXT_PUBLIC_API_URL;
-          const authHeader = { Authorization: `Bearer ${token}` };
           const [eligibleRes, currentRes] = await Promise.all([
-            fetch(`${apiBase}/api/v1/admin/content/homepage-carousels/eligible`, { headers: authHeader }),
-            fetch(`${apiBase}/api/v1/admin/content/${contentId}/carousels`, { headers: authHeader }),
+            authenticatedFetch(`${apiBase}/api/v1/admin/content/homepage-carousels/eligible`),
+            authenticatedFetch(`${apiBase}/api/v1/admin/content/${contentId}/carousels`),
           ]);
           if (eligibleRes.ok) {
             const eligible = await eligibleRes.json();
@@ -310,7 +307,8 @@ export default function AdminContentEditPage() {
     try {
       setIsSaving(true);
 
-      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      // Igor (14/05): authenticatedFetch faz refresh+retry em 401, evitando
+      // que edição salve sem token válido (que caía em "blocked" no backend).
 
       // Validate IMDB rating (must be between 0-10)
       let validatedImdbRating = undefined;
@@ -348,14 +346,11 @@ export default function AdminContentEditPage() {
         audio_type: audioType || null,
       };
 
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}`,
         {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updateData),
         }
       );
@@ -377,12 +372,9 @@ export default function AdminContentEditPage() {
           selectedCarouselIds.some((id) => !originalCarouselIds.includes(id));
         if (carouselsChanged) {
           try {
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}/carousels`, {
+            await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${contentId}/carousels`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ carouselIds: selectedCarouselIds }),
             });
             setOriginalCarouselIds(selectedCarouselIds);

@@ -33,7 +33,11 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
       useFactory: async (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET') || 'cine-vision-secret-key',
         signOptions: {
-          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '15m',
+          // Igor (14/05): 15m era curto demais — uploads de filme levam
+          // 30-60min e funcionário fica 8h+ trabalhando. JWT expirando no
+          // meio do upload fazia conteúdo virar createdById=null ("sistema")
+          // e Igor perdia a contagem pra pagar.
+          expiresIn: configService.get<string>('JWT_EXPIRES_IN') || '24h',
         },
       }),
       inject: [ConfigService],

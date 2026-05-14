@@ -176,7 +176,9 @@ export class AutoLoginService {
 
     const access_token = this.jwtService.sign(payload, {
       secret: process.env.JWT_SECRET || 'cine-vision-secret-key',
-      expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+      // Igor (14/05): manter consistente com auth.module — 24h pra cobrir
+      // uploads longos sem perder a sessão (createdById vinha null antes).
+      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
     });
 
     const refresh_token = this.jwtService.sign(payload, {
