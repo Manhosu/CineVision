@@ -42,6 +42,7 @@ const AVAILABLE_GENRES = [
   'Crime',
   'Documentário',
   'Drama',
+  'Família',
   'Fantasia',
   'Ficção Científica',
   'Guerra',

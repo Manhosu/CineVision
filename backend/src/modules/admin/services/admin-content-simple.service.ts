@@ -175,39 +175,84 @@ export class AdminContentSimpleService {
     return insertedContent;
   }
 
+  /**
+   * Igor (13/05): sincroniza idempotentemente as categorias de um conteúdo
+   * com base no array `genres[]`. Antes, esta função só fazia INSERT —
+   * o que (1) era chamada apenas no createContent e (2) duplicava linhas
+   * se chamada de novo. Agora faz DIFF: remove categorias não mais marcadas
+   * E adiciona novas. Usado tanto no create quanto no update.
+   *
+   * Se categoryNames vier vazio/null, REMOVE todas as categorias do conteúdo.
+   */
   private async associateCategories(contentId: string, categoryNames: string[]) {
-    this.logger.log(`Associating categories for content ${contentId}:`, categoryNames);
+    this.logger.log(`Syncing categories for content ${contentId}:`, categoryNames);
 
-    // Buscar IDs das categorias pelos nomes
-    const { data: categories, error: categoriesError } = await this.supabaseService.client
-      .from('categories')
-      .select('id, name')
-      .in('name', categoryNames);
+    // 1. Resolver IDs das categorias atualmente desejadas pelos nomes
+    let desiredCategoryIds: string[] = [];
+    if (categoryNames && categoryNames.length > 0) {
+      const { data: categories, error: categoriesError } = await this.supabaseService.client
+        .from('categories')
+        .select('id, name')
+        .in('name', categoryNames);
 
-    if (categoriesError) {
-      this.logger.error('Error fetching categories:', categoriesError);
-      return;
+      if (categoriesError) {
+        this.logger.error('Error fetching categories:', categoriesError);
+        return;
+      }
+      desiredCategoryIds = (categories || []).map((c: any) => c.id);
+
+      // Aviso quando algum gênero não tem categoria correspondente cadastrada
+      const foundNames = new Set((categories || []).map((c: any) => c.name));
+      const missing = categoryNames.filter((n) => !foundNames.has(n));
+      if (missing.length > 0) {
+        this.logger.warn(
+          `Genres without matching categories (sync ignored): ${missing.join(', ')}`,
+        );
+      }
     }
 
-    if (!categories || categories.length === 0) {
-      this.logger.warn('No matching categories found for:', categoryNames);
-      return;
-    }
-
-    // Criar associações
-    const associations = categories.map(category => ({
-      content_id: contentId,
-      category_id: category.id
-    }));
-
-    const { error: insertError } = await this.supabaseService.client
+    // 2. Buscar categorias atualmente vinculadas ao conteúdo
+    const { data: existing, error: existingError } = await this.supabaseService.client
       .from('content_categories')
-      .insert(associations);
+      .select('category_id')
+      .eq('content_id', contentId);
 
-    if (insertError) {
-      this.logger.error('Error creating category associations:', insertError);
-    } else {
-      this.logger.log(`Successfully associated ${categories.length} categories`);
+    if (existingError) {
+      this.logger.error('Error fetching existing content_categories:', existingError);
+      return;
+    }
+    const existingIds = new Set((existing || []).map((r: any) => r.category_id));
+    const desiredSet = new Set(desiredCategoryIds);
+
+    // 3. Calcular DIFF
+    const toAdd = desiredCategoryIds.filter((id) => !existingIds.has(id));
+    const toRemove = Array.from(existingIds).filter((id) => !desiredSet.has(id as string)) as string[];
+
+    // 4. Remover as que sobraram
+    if (toRemove.length > 0) {
+      const { error: deleteError } = await this.supabaseService.client
+        .from('content_categories')
+        .delete()
+        .eq('content_id', contentId)
+        .in('category_id', toRemove);
+      if (deleteError) {
+        this.logger.error('Error removing stale category associations:', deleteError);
+      } else {
+        this.logger.log(`Removed ${toRemove.length} category association(s).`);
+      }
+    }
+
+    // 5. Adicionar as novas
+    if (toAdd.length > 0) {
+      const inserts = toAdd.map((category_id) => ({ content_id: contentId, category_id }));
+      const { error: insertError } = await this.supabaseService.client
+        .from('content_categories')
+        .insert(inserts);
+      if (insertError) {
+        this.logger.error('Error creating category associations:', insertError);
+      } else {
+        this.logger.log(`Added ${toAdd.length} category association(s).`);
+      }
     }
   }
 
@@ -516,6 +561,23 @@ export class AdminContentSimpleService {
       }
     } catch (e) {
       this.logger.warn(`Failed to sync people for content ${contentId}: ${e.message}`);
+    }
+
+    // Igor (13/05): sync de genres → content_categories. Antes esse passo só
+    // rodava no create — agora roda também no update, garantindo que se o
+    // admin adiciona/remove um gênero (ex: "Família"), o carrossel da home
+    // correspondente atualiza imediatamente.
+    if (updateData.genres !== undefined) {
+      try {
+        const genresArr = Array.isArray(updateData.genres)
+          ? updateData.genres
+          : updateData.genres
+            ? [updateData.genres]
+            : [];
+        await this.associateCategories(contentId, genresArr);
+      } catch (e) {
+        this.logger.warn(`Failed to sync categories for content ${contentId}: ${e.message}`);
+      }
     }
 
     return {
