@@ -1030,6 +1030,29 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     }
 
     try {
+      // Igor (14/05): N28b — prioriza o DONO do bot Business antes de
+      // cair em admin generico do DB. Quem conectou o bot ao próprio
+      // Telegram Business é por definição quem deve receber notify de
+      // takeover/comprovante. Replicado de telegrams-enhanced.service.
+      const { data: businessConns } = await this.supabase.client
+        .from('telegram_business_connections')
+        .select('telegram_user_id, can_reply, is_enabled')
+        .eq('is_enabled', true)
+        .eq('can_reply', true)
+        .limit(5);
+
+      const businessOwner = (businessConns || []).find(
+        (c: any) => c.telegram_user_id,
+      );
+      if (businessOwner?.telegram_user_id) {
+        const value = String(businessOwner.telegram_user_id);
+        this.adminChatIdCache = { value, fetchedAt: now };
+        this.logger.log(
+          `Resolved admin chat_id via business connection: ${value}`,
+        );
+        return value;
+      }
+
       const { data: admins } = await this.supabase.client
         .from('users')
         .select('id, telegram_id, telegram_chat_id, role')

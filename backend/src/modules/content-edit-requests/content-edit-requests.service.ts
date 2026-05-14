@@ -470,6 +470,30 @@ export class ContentEditRequestsService {
     }
 
     try {
+      // Igor (14/05): N28b — antes de cair em admin do DB (pode ser
+      // outra pessoa, ex: dev ou Eduardo), prioriza o DONO do bot
+      // Business (Igor). Quem conectou o bot ao próprio Telegram
+      // Business é por definição quem deve receber notify de edição
+      // aguardando aprovação. Replicado de telegrams-enhanced.service.
+      const { data: businessConns } = await this.supabase.client
+        .from('telegram_business_connections')
+        .select('telegram_user_id, can_reply, is_enabled')
+        .eq('is_enabled', true)
+        .eq('can_reply', true)
+        .limit(5);
+
+      const businessOwner = (businessConns || []).find(
+        (c: any) => c.telegram_user_id,
+      );
+      if (businessOwner?.telegram_user_id) {
+        const value = String(businessOwner.telegram_user_id);
+        this.adminChatIdCache = { value, fetchedAt: now };
+        this.logger.log(
+          `Resolved admin chat_id via business connection: ${value}`,
+        );
+        return value;
+      }
+
       const { data: admins } = await this.supabase.client
         .from('users')
         .select('id, telegram_id, telegram_chat_id, role')
@@ -479,7 +503,10 @@ export class ContentEditRequestsService {
 
       const chosen = (admins || []).find((u: any) => u.telegram_id || u.telegram_chat_id);
       const value = chosen?.telegram_chat_id || chosen?.telegram_id || null;
-      this.adminChatIdCache = { value, fetchedAt: now };
+      // Não cachear null (mesmo padrão de telegrams-enhanced/ai-chat).
+      if (value) {
+        this.adminChatIdCache = { value, fetchedAt: now };
+      }
       return value;
     } catch (err: any) {
       this.logger.error(`resolveAdminChatId failed: ${err.message}`);
