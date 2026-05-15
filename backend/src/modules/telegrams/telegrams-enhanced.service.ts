@@ -1181,6 +1181,25 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     // Caso 2: link de convite (telegram_group_link)
     if (useLink) {
+      // Igor (15/05): se o telegram_group_link já é um link do Telegram
+      // (t.me/+..., t.me/joinchat/..., t.me/username ou @username), ele
+      // PRÓPRIO é o acesso ao grupo — não dá pra (nem precisa) gerar um
+      // invite novo via bot API. Links de convite privados (t.me/+...)
+      // não têm Chat ID extraível, então createInviteLinkForUser falhava
+      // e o teste dava erro. O "teste" de um link de convite é só abrir
+      // o link cadastrado e o admin ver o grupo.
+      const looksLikeTelegramLink =
+        /^https?:\/\/t\.me\//i.test(groupLink) ||
+        groupLink.includes('t.me/') ||
+        groupLink.startsWith('@');
+      if (looksLikeTelegramLink) {
+        const normalizedLink = groupLink.startsWith('@')
+          ? `https://t.me/${groupLink.slice(1)}`
+          : groupLink;
+        return { success: true, inviteLink: normalizedLink };
+      }
+
+      // Fallback: groupLink é um Chat ID numérico disfarçado (dado legado).
       const link = await this.createInviteLinkForUser(groupLink, `admin-test-${content.id.substring(0, 8)}`);
       if (link) {
         return { success: true, inviteLink: link };
@@ -3514,12 +3533,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
 👇 Clique no botão abaixo para acessar:`;
 
+      // Igor (15/05): removido o botão "Salvar meu WhatsApp" — a coleta
+      // do número agora é feita pelo pop-up automático no dashboard
+      // (WhatsAppNumberGate), não precisa de botão separado aqui.
       await this.sendMessage(chatId, message, {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
             [{ text: '🎬 Abrir Dashboard', url: dashboardUrl }],
-            [{ text: '📱 Salvar meu WhatsApp', callback_data: 'add_whatsapp' }],
             [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
           ],
         },

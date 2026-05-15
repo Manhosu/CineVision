@@ -108,14 +108,19 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Invalid WhatsApp number' })
   @ApiResponse({ status: 404, description: 'User not found' })
   updateWhatsapp(@Param('id') id: string, @Body() body: { whatsapp: string }) {
-    // Sanitização básica: só dígitos. Validação de tamanho fica no
-    // service (rejeita < 10 ou > 13 dígitos para cobrir formatos
-    // BR com e sem DDI).
+    // Sanitização básica: só dígitos.
     const digits = (body?.whatsapp || '').replace(/\D/g, '');
     if (digits.length < 10 || digits.length > 13) {
       throw new BadRequestException('WhatsApp inválido');
     }
-    return this.usersService.updateWhatsapp(id, digits);
+    // Igor (15/05): normaliza com DDI 55 quando é número BR (10-11 dígitos),
+    // pro mesmo formato de orders.customer_whatsapp. Assim a deduplicação
+    // do broadcast (collectWhatsappContacts) bate exato e o mesmo número
+    // nunca conta/envia 2x — mesmo se a pessoa comprou via órfão E salvou
+    // no dashboard.
+    const normalized =
+      digits.length >= 10 && digits.length <= 11 ? `55${digits}` : digits;
+    return this.usersService.updateWhatsapp(id, normalized);
   }
 
   @Delete(':id')

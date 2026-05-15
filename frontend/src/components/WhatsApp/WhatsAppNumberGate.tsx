@@ -179,12 +179,12 @@ export function WhatsAppNumberGate({
                   </svg>
                 </div>
                 <h2 className="text-lg sm:text-2xl font-bold text-white mb-1 sm:mb-2 px-6 sm:px-0">
-                  Cadastre seu WhatsApp
+                  🔒 Valide sua compra
                 </h2>
                 <p className="text-gray-300 text-xs sm:text-sm leading-relaxed max-w-sm">
                   {mandatory
-                    ? 'Para acessar seu conteúdo comprado, precisamos do seu WhatsApp. É o nosso canal de suporte caso o Telegram falhe.'
-                    : 'Pra finalizar seu cadastro e liberar o acesso, precisamos do seu número de WhatsApp. Usamos só para te avisar de pedidos e dar suporte caso o Telegram falhe.'}
+                    ? 'Para confirmar e liberar o acesso ao seu conteúdo, informe o seu número de WhatsApp real. Cadastros com número inexistente podem ter o acesso bloqueado por segurança.'
+                    : 'Para validar sua conta e liberar o acesso, informe o seu número de WhatsApp real. Cadastros com número inexistente podem ter o acesso bloqueado por segurança.'}
                 </p>
               </div>
 
@@ -204,7 +204,7 @@ export function WhatsAppNumberGate({
                   className="w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 sm:py-3 text-sm sm:text-base text-white placeholder-zinc-600 focus:border-[#25D366] focus:outline-none disabled:opacity-50"
                 />
                 <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-zinc-400">
-                  Inclua DDD. Não compartilhamos com ninguém.
+                  Inclua o DDD. Use seu número real — ele garante a validação da sua compra.
                 </p>
               </div>
 
