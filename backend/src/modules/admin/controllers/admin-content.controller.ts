@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -476,10 +477,13 @@ export class AdminContentController {
   @ApiOperation({
     summary: 'Test access to the Telegram group of a content',
     description:
-      'Tenta gerar um invite link real para o grupo. Retorna { success, inviteLink } ou { success: false, error, detail }.',
+      'Tenta gerar um invite link real para o grupo. Aceita ?type=bot ou ?type=link para forçar o modo de teste. Retorna { success, inviteLink } ou { success: false, error, detail }.',
   })
   @HttpCode(HttpStatus.OK)
-  async testContentTelegramGroup(@Param('id') contentId: string) {
+  async testContentTelegramGroup(
+    @Param('id') contentId: string,
+    @Query('type') type?: string,
+  ) {
     const { data: content, error } = await this.supabaseService.client
       .from('content')
       .select('id, telegram_chat_id, telegram_group_link, title')
@@ -490,11 +494,17 @@ export class AdminContentController {
       throw new BadRequestException('Conteúdo não encontrado.');
     }
 
-    const result = await this.telegramsService.testTelegramGroupForContent({
-      id: content.id,
-      telegram_chat_id: content.telegram_chat_id,
-      telegram_group_link: content.telegram_group_link,
-    });
+    // Igor (15/05): aceita type=bot|link para Igor distinguir 2 botões no UI.
+    const preferType = type === 'bot' || type === 'link' ? type : undefined;
+
+    const result = await this.telegramsService.testTelegramGroupForContent(
+      {
+        id: content.id,
+        telegram_chat_id: content.telegram_chat_id,
+        telegram_group_link: content.telegram_group_link,
+      },
+      preferType as 'bot' | 'link' | undefined,
+    );
 
     return { ...result, contentTitle: content.title };
   }

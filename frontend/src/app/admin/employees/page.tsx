@@ -18,6 +18,8 @@ interface ProductivityResponse {
   monthly: Array<{ month: string; movies: number; series: number; total: number }>;
   items: Array<{ id: string; title: string; content_type: string; status: string; created_at: string }>;
   totals: { movies: number; series: number; total: number };
+  // Igor (15/05): dias já marcados como pagos pelo admin.
+  paid_dates?: string[];
 }
 
 function EmployeeProductivity({ employeeId }: { employeeId: string }) {
@@ -25,6 +27,46 @@ function EmployeeProductivity({ employeeId }: { employeeId: string }) {
   const [data, setData] = useState<ProductivityResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  // Igor (15/05): seleção múltipla de dias pra marcar/desmarcar como pagos.
+  // Set<string> guarda os dias selecionados (YYYY-MM-DD). Verde quando paid.
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
+  const [savingPayments, setSavingPayments] = useState(false);
+
+  const toggleSelect = (date: string) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const paidSet = new Set(data?.paid_dates || []);
+
+  // Marca os selecionados como pagos (ou desmarca se já estiverem todos pagos).
+  const submitPayments = async (action: 'mark' | 'unmark') => {
+    const dates = Array.from(selectedDays);
+    if (dates.length === 0) return;
+    setSavingPayments(true);
+    try {
+      await api.post(`/api/v1/admin/employees/${employeeId}/payments`, {
+        dates,
+        action,
+      });
+      toast.success(
+        action === 'mark'
+          ? `${dates.length} dia(s) marcado(s) como pago(s)`
+          : `${dates.length} dia(s) desmarcado(s)`,
+      );
+      setSelectedDays(new Set());
+      await load(true);
+    } catch (err: any) {
+      toast.error(err?.message || 'Falha ao atualizar pagamentos');
+    } finally {
+      setSavingPayments(false);
+    }
+  };
 
   // N1 — Igor reportou que o gráfico não atualiza (dado em cache no
   // React state). Agora load() é reexposto pra botão "Atualizar" e
@@ -130,33 +172,100 @@ function EmployeeProductivity({ employeeId }: { employeeId: string }) {
 
       {/* Daily chart */}
       <div>
-        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
-          Por dia
-        </h4>
+        <div className="mb-2 flex items-center justify-between">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Por dia
+          </h4>
+          {/* Igor (15/05): batch actions quando há seleção. */}
+          {selectedDays.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500">{selectedDays.size} selecionado(s)</span>
+              <button
+                onClick={() => submitPayments('mark')}
+                disabled={savingPayments}
+                className="rounded-lg border border-green-500/30 bg-green-600/15 px-2 py-1 text-xs text-green-300 hover:bg-green-600/25 disabled:opacity-50"
+              >
+                Marcar como pagos
+              </button>
+              <button
+                onClick={() => submitPayments('unmark')}
+                disabled={savingPayments}
+                className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-400 hover:bg-white/10 disabled:opacity-50"
+                title="Desfazer pagamento dos dias selecionados"
+              >
+                Desmarcar
+              </button>
+              <button
+                onClick={() => setSelectedDays(new Set())}
+                className="text-[10px] text-zinc-500 hover:text-white"
+              >
+                Limpar
+              </button>
+            </div>
+          )}
+        </div>
         {data.daily.length === 0 ? (
           <p className="text-xs text-zinc-500">Nenhum conteúdo adicionado no período.</p>
         ) : (
           <div className="space-y-1">
-            {data.daily.slice().reverse().map((d) => (
-              <div key={d.date} className="flex items-center gap-2">
-                <span className="w-12 text-right font-mono text-xs text-zinc-500">{fmtDate(d.date)}</span>
-                <div className="flex h-6 flex-1 overflow-hidden rounded bg-zinc-900">
-                  <div
-                    className="bg-blue-500"
-                    style={{ width: `${(d.movies / maxDaily) * 100}%` }}
-                    title={`${d.movies} filme(s)`}
+            {data.daily.slice().reverse().map((d) => {
+              const isPaid = paidSet.has(d.date);
+              const isSelected = selectedDays.has(d.date);
+              return (
+                <div
+                  key={d.date}
+                  className={`flex items-center gap-2 rounded px-1.5 py-0.5 transition-colors ${
+                    isPaid
+                      ? 'border border-green-500/30 bg-green-500/10'
+                      : isSelected
+                        ? 'border border-blue-500/30 bg-blue-500/10'
+                        : 'border border-transparent'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected || isPaid}
+                    onChange={() => toggleSelect(d.date)}
+                    className="h-3.5 w-3.5 rounded border-white/20 bg-zinc-900 accent-green-500"
+                    title={isPaid ? 'Pago — clique pra selecionar e desmarcar' : 'Selecionar pra marcar como pago'}
                   />
-                  <div
-                    className="bg-purple-500"
-                    style={{ width: `${(d.series / maxDaily) * 100}%` }}
-                    title={`${d.series} série(s)`}
-                  />
+                  <span
+                    className={`w-12 text-right font-mono text-xs ${
+                      isPaid ? 'font-semibold text-green-300' : 'text-zinc-500'
+                    }`}
+                  >
+                    {fmtDate(d.date)}
+                  </span>
+                  <div className="flex h-6 flex-1 overflow-hidden rounded bg-zinc-900">
+                    <div
+                      className="bg-blue-500"
+                      style={{ width: `${(d.movies / maxDaily) * 100}%` }}
+                      title={`${d.movies} filme(s)`}
+                    />
+                    <div
+                      className="bg-purple-500"
+                      style={{ width: `${(d.series / maxDaily) * 100}%` }}
+                      title={`${d.series} série(s)`}
+                    />
+                  </div>
+                  <span
+                    className={`w-10 text-right text-xs font-semibold ${
+                      isPaid ? 'text-green-300' : 'text-white'
+                    }`}
+                  >
+                    {d.total}
+                  </span>
+                  {isPaid && (
+                    <span
+                      className="ml-1 text-[10px] text-green-400"
+                      title="Pago"
+                    >
+                      ✓
+                    </span>
+                  )}
                 </div>
-                <span className="w-10 text-right text-xs font-semibold text-white">
-                  {d.total}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

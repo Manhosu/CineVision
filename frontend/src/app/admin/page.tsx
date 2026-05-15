@@ -248,8 +248,8 @@ export default function AdminDashboard() {
 
   const quickActions = [
     {
-      title: 'Página Inicial',
-      description: 'Configurar carrosséis, ordem e visibilidade na home',
+      title: 'Banner Hero & Carrosséis',
+      description: 'Editar conteúdos do banner do topo e ordem dos carrosséis da home',
       href: '/admin/homepage',
       icon: (
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -27,12 +27,21 @@ const TYPE_LABELS: Record<string, string> = {
   top10_films: 'Top 10 Filmes',
   top10_series: 'Top 10 Séries',
   releases: 'Lançamentos',
-  featured: 'Destaques (Banner)',
+  // Igor (15/05): renomeado de "Destaques (Banner)" pra "Destaques (Banner Hero)"
+  // — match exato com o termo que Igor usa quando se refere ao banner do topo.
+  featured: 'Destaques (Banner Hero)',
   all_movies: 'Todos os Filmes',
   all_series: 'Todas as Séries',
   category: 'Por Categoria',
   manual: 'Seleção Manual',
 };
+
+// Igor (15/05): carrosséis cujos conteúdos são curados manualmente pelo admin.
+// Os outros (top10_films, releases, all_movies, all_series, category) são
+// populados automaticamente por regras do backend e ignoram content_ids[].
+// Antes só 'manual' tinha botão "Editar itens" — Igor não conseguia editar
+// o Banner Hero (type=featured) porque o botão estava escondido pra ele.
+const EDITABLE_CONTENT_TYPES = new Set(['featured', 'manual']);
 
 const TYPE_COLORS: Record<string, string> = {
   top10_films: 'bg-orange-500/20 text-orange-400',
@@ -377,7 +386,7 @@ export default function AdminHomepagePage() {
                     >
                       {TYPE_LABELS[carousel.type] || carousel.type}
                     </span>
-                    {carousel.type === 'manual' && (
+                    {EDITABLE_CONTENT_TYPES.has(carousel.type) && (
                       <span className="text-[10px] text-gray-500">
                         {carousel.content_ids?.length || 0} item(s)
                       </span>
@@ -387,7 +396,7 @@ export default function AdminHomepagePage() {
 
                 {/* Right actions */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {carousel.type === 'manual' && (
+                  {EDITABLE_CONTENT_TYPES.has(carousel.type) && (
                     <button
                       onClick={() => openContentEditor(carousel)}
                       className="text-xs px-2.5 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 rounded-lg transition-colors border border-blue-600/20"

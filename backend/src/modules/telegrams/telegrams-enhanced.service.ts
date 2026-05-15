@@ -916,11 +916,18 @@ export class TelegramsEnhancedService implements OnModuleInit {
    *  - chat_id_invalid: chat_id mal formatado ou grupo inexistente
    *  - unknown: erro genérico (ver detail)
    */
-  async testTelegramGroupForContent(content: {
-    id: string;
-    telegram_chat_id?: string | null;
-    telegram_group_link?: string | null;
-  }): Promise<{
+  async testTelegramGroupForContent(
+    content: {
+      id: string;
+      telegram_chat_id?: string | null;
+      telegram_group_link?: string | null;
+    },
+    // Igor (15/05): preferType permite ao admin escolher explicitamente
+    // qual modo testar (botão "bot" vs botão "link de convite"). Sem isso,
+    // a função usava fallback bot→link e o erro genérico confundia o Igor
+    // quando o grupo só tinha link de convite.
+    preferType?: 'bot' | 'link',
+  ): Promise<{
     success: boolean;
     inviteLink?: string;
     chatTitle?: string;
@@ -930,6 +937,22 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const chatIdRaw = (content.telegram_chat_id || '').trim();
     const groupLink = (content.telegram_group_link || '').trim();
 
+    // Quando preferType vier setado, valida que o campo correspondente existe.
+    if (preferType === 'bot' && !chatIdRaw) {
+      return {
+        success: false,
+        error: 'link_missing',
+        detail: 'Conteúdo sem telegram_chat_id configurado (modo "bot").',
+      };
+    }
+    if (preferType === 'link' && !groupLink) {
+      return {
+        success: false,
+        error: 'link_missing',
+        detail: 'Conteúdo sem telegram_group_link configurado (modo "link de convite").',
+      };
+    }
+
     if (!chatIdRaw && !groupLink) {
       return {
         success: false,
@@ -938,8 +961,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
       };
     }
 
-    // Caso 1: temos chat_id numérico — validamos permissão antes de gerar
-    if (chatIdRaw) {
+    // Decide o caminho: se preferType setado, usa só ele. Senão, tenta bot primeiro.
+    const useBot = preferType === 'bot' || (!preferType && !!chatIdRaw);
+    const useLink = preferType === 'link' || (!preferType && !chatIdRaw && !!groupLink);
+
+    // Caso 1: bot (chat_id numérico)
+    if (useBot) {
       const validation = await this.validateChatIdAdmin(chatIdRaw);
       if (!validation.ok) {
         // Diferencia bot_not_admin de chat_id_invalid pela mensagem
@@ -982,17 +1009,26 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
     }
 
-    // Caso 2: só temos telegram_group_link (string) — tentamos extrair e gerar
-    const link = await this.createInviteLinkForUser(groupLink, `admin-test-${content.id.substring(0, 8)}`);
-    if (link) {
-      return { success: true, inviteLink: link };
+    // Caso 2: link de convite (telegram_group_link)
+    if (useLink) {
+      const link = await this.createInviteLinkForUser(groupLink, `admin-test-${content.id.substring(0, 8)}`);
+      if (link) {
+        return { success: true, inviteLink: link };
+      }
+      return {
+        success: false,
+        error: 'bot_not_admin',
+        detail:
+          'Não foi possível gerar invite link a partir do telegram_group_link. ' +
+          'Verifique se o bot é admin do grupo com permissão "Convidar usuários via link".',
+      };
     }
+
+    // Não deveria chegar aqui — defensive.
     return {
       success: false,
-      error: 'bot_not_admin',
-      detail:
-        'Não foi possível gerar invite link a partir do telegram_group_link. ' +
-        'Verifique se o bot é admin do grupo com permissão "Convidar usuários via link".',
+      error: 'unknown',
+      detail: 'Caminho de teste inválido (preferType inconsistente com campos).',
     };
   }
 
@@ -2855,6 +2891,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
           updates.bot_username = currentBotUsername;
         }
 
+        // Igor (15/05): last_bot_token nunca era populado aqui — só em paths
+        // específicos (linha ~1194). Resultado: users que vieram do bot antigo
+        // ficavam com last_bot_token=NULL ou apontando pro bot antigo, e o
+        // filtro do broadcast (getBotUsersCount) os excluía. Gap de 1528 vs
+        // 612 reportado pelo Igor. Agora todo /start já regista o bot atual.
+        if (this.botToken && existingUser.last_bot_token !== this.botToken) {
+          updates.last_bot_token = this.botToken;
+        }
+
         if (telegramUserData) {
           if (telegramUserData.username && existingUser.telegram_username !== telegramUserData.username) {
             updates.telegram_username = telegramUserData.username;
@@ -2903,6 +2948,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           role: 'user',
           status: 'active',
           bot_username: process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot',
+          // Igor (15/05): garante elegibilidade pro broadcast desde o /start.
+          last_bot_token: this.botToken,
         })
         .select()
         .single();
@@ -2935,6 +2982,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
             }
             if (byEmail.telegram_chat_id !== chatId.toString()) {
               fix.telegram_chat_id = chatId.toString();
+            }
+            // Igor (15/05): também marca o bot atual aqui (recovery path).
+            if (this.botToken && byEmail.last_bot_token !== this.botToken) {
+              fix.last_bot_token = this.botToken;
             }
             if (Object.keys(fix).length > 0) {
               await this.supabase.from('users').update(fix).eq('id', byEmail.id);

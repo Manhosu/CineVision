@@ -396,6 +396,9 @@ export class EmployeesService {
     monthly: Array<{ month: string; movies: number; series: number; total: number }>;
     items: Array<{ id: string; title: string; content_type: string; status: string; created_at: string }>;
     totals: { movies: number; series: number; total: number };
+    // Igor (15/05): dias já marcados como pagos pelo admin. Frontend usa
+    // pra renderizar verde + checkbox marcado em /admin/employees.
+    paid_dates: string[];
   }> {
     const now = new Date();
     const defaultFrom = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -445,13 +448,82 @@ export class EmployeesService {
       .map(([month, v]) => ({ month, ...v }))
       .sort((a, b) => a.month.localeCompare(b.month));
 
+    // Igor (15/05): dias pagos persistidos em employee_day_payments.
+    const { data: payments } = await this.supabase.client
+      .from('employee_day_payments')
+      .select('payment_date')
+      .eq('employee_id', userId);
+    const paidDates: string[] = (payments || []).map((p: any) =>
+      typeof p.payment_date === 'string' ? p.payment_date : new Date(p.payment_date).toISOString().slice(0, 10),
+    );
+
     return {
       range: { from: fromIso, to: toIso },
       daily,
       monthly,
       items: items as any,
       totals: { movies: totMovies, series: totSeries, total: totMovies + totSeries },
+      paid_dates: paidDates,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Igor (15/05): pagamento por dia. Igor marca dias da produtividade como
+  // pagos; viram verde na UI. Tabela employee_day_payments (PK composto
+  // employee_id + payment_date).
+  // ---------------------------------------------------------------------------
+  async markDaysPaid(
+    employeeId: string,
+    dates: string[],
+    paidBy: string,
+  ): Promise<{ marked: number }> {
+    if (!dates || dates.length === 0) return { marked: 0 };
+
+    const rows = dates.map((date) => ({
+      employee_id: employeeId,
+      payment_date: date,
+      paid_by: paidBy || null,
+    }));
+
+    // Upsert idempotente — ignora dias já marcados pelo PK composto.
+    const { data, error } = await this.supabase.client
+      .from('employee_day_payments')
+      .upsert(rows, { onConflict: 'employee_id,payment_date', ignoreDuplicates: true })
+      .select('payment_date');
+
+    if (error) {
+      // PostgREST não suporta ignoreDuplicates em todas as versões; fallback
+      // pra insert simples ignorando erro de PK.
+      const inserted: any[] = [];
+      for (const row of rows) {
+        const { data: r, error: e } = await this.supabase.client
+          .from('employee_day_payments')
+          .insert(row)
+          .select('payment_date')
+          .maybeSingle();
+        if (!e && r) inserted.push(r);
+      }
+      return { marked: inserted.length };
+    }
+
+    return { marked: data?.length || dates.length };
+  }
+
+  async unmarkDaysPaid(
+    employeeId: string,
+    dates: string[],
+  ): Promise<{ removed: number }> {
+    if (!dates || dates.length === 0) return { removed: 0 };
+
+    const { data, error } = await this.supabase.client
+      .from('employee_day_payments')
+      .delete()
+      .eq('employee_id', employeeId)
+      .in('payment_date', dates)
+      .select('payment_date');
+
+    if (error) throw new Error(`Failed to unmark days: ${error.message}`);
+    return { removed: data?.length || 0 };
   }
 
   // ---------------------------------------------------------------------------

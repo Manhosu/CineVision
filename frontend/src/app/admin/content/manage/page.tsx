@@ -12,6 +12,7 @@ import {
   Upload,
   Pencil,
   Send,
+  Bot,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -28,6 +29,8 @@ interface Content {
   createdById?: string | null;
   createdBy?: { id: string; name: string; email: string; role: string } | null;
   telegram_group_link?: string | null;
+  // Igor (15/05): distinção bot ID vs link de convite no botão Testar.
+  telegram_chat_id?: string | null;
   // Igor (12/05): badges para filtros clicáveis
   is_release?: boolean;
   is_new_season?: boolean;
@@ -228,15 +231,20 @@ export default function ContentManagePage() {
 
   // Igor (12/05): clicar em "Testar grupo Telegram" agora chama o endpoint
   // admin que tenta gerar invite link de verdade e retorna erro estruturado.
-  const testTelegramGroup = async (content: Content) => {
+  // Igor (15/05): aceita 'type' pra distinguir teste por bot ID vs link de
+  // convite — o Matheus configura com bot, a esposa do Igor com link, e
+  // antes o botão único dava erro confuso pro caso do link.
+  const testTelegramGroup = async (content: Content, type: 'bot' | 'link') => {
     const token =
       typeof window !== 'undefined'
         ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
         : '';
-    const loadingToast = toast.loading('Testando acesso ao grupo Telegram...');
+    const loadingToast = toast.loading(
+      type === 'bot' ? 'Testando bot...' : 'Testando link de convite...',
+    );
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/test-telegram-group`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/test-telegram-group?type=${type}`,
         {
           method: 'POST',
           headers: {
@@ -593,17 +601,36 @@ export default function ContentManagePage() {
                             )}
                           </button>
                         )}
+                        {/* Igor (15/05): 2 botões condicionais. Bot (roxo) só
+                            se telegram_chat_id setado; Link (ciano) só se
+                            telegram_group_link setado. Cores distintas pra Igor
+                            saber qual modo está testando — Matheus usa bot ID,
+                            esposa do Igor usa link de convite. */}
+                        {content.telegram_chat_id && (
+                          <button
+                            onClick={() => testTelegramGroup(content, 'bot')}
+                            className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors"
+                            title="Testar via bot (chat_id)"
+                          >
+                            <Bot className="w-4 h-4" />
+                          </button>
+                        )}
+                        {content.telegram_group_link && (
+                          <button
+                            onClick={() => testTelegramGroup(content, 'link')}
+                            className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                            title="Testar via link de convite"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        )}
                         <button
-                          onClick={() => testTelegramGroup(content)}
-                          className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
-                          title="Testar grupo Telegram (gera invite link real)"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => router.push(`/admin/content/${content.id}/edit`)}
+                          // Igor (15/05): abre em nova aba pra não perder a seleção
+                          // de batch approve dos drafts. Igor reportou que clicar no
+                          // lápis e voltar zerava o checkbox de todos os outros filmes.
+                          onClick={() => window.open(`/admin/content/${content.id}/edit`, '_blank', 'noopener,noreferrer')}
                           className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                          title="Editar"
+                          title="Editar (abre em nova aba)"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>

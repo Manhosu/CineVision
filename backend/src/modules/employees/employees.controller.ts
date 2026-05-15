@@ -134,6 +134,33 @@ export class EmployeesController {
     return this.employees.listContent(id);
   }
 
+  // Igor (15/05): controle de pagamento por dia. Permite marcar/desmarcar
+  // datas inteiras como pagas (POST + body { dates, action }).
+  @Post(':id/payments')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Mark/unmark productivity days as paid',
+    description:
+      'Body: { dates: string[] (YYYY-MM-DD), action: "mark" | "unmark" }. Idempotente — PK composto em (employee_id, payment_date).',
+  })
+  async setPayments(
+    @Param('id') id: string,
+    @Body() body: { dates?: string[]; action?: 'mark' | 'unmark' },
+    @GetUser() user: any,
+  ) {
+    const action = body?.action === 'unmark' ? 'unmark' : 'mark';
+    const dates = Array.isArray(body?.dates) ? body!.dates : [];
+    const paidBy = user?.sub || user?.id || null;
+
+    if (action === 'mark') {
+      const res = await this.employees.markDaysPaid(id, dates, paidBy);
+      return { success: true, action, ...res };
+    } else {
+      const res = await this.employees.unmarkDaysPaid(id, dates);
+      return { success: true, action, ...res };
+    }
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete employee' })
