@@ -72,6 +72,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private pendingContentRequests = new Map<string, PendingRequest>();
   // Cache de usuários aguardando digitar número WhatsApp
   private pendingWhatsappCapture = new Map<number, true>();
+  // Igor (15/05): cliente que pagou mas ainda não compartilhou o WhatsApp.
+  // Enquanto está aqui, o bot bloqueia o acesso ao grupo até o contato chegar.
+  // chatId → { userId, contentId } da compra aguardando liberação.
+  private pendingWhatsappGate = new Map<number, { userId: string; contentId: string }>();
 
   // Polling state
   private pollingOffset = 0;
@@ -708,6 +712,172 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (15/05): gate de WhatsApp no Telegram. Antes, todo pagamento
+   * confirmado chamava sendGroupAccessLinks direto — o cliente clicava
+   * "Acesso Único" e ia pro grupo sem nunca passar pelo dashboard, então
+   * o WhatsApp dele nunca era coletado pra base de broadcast.
+   *
+   * Agora: se o user já tem WhatsApp → libera o acesso normalmente.
+   * Se não tem → guarda a compra em pendingWhatsappGate e pede o contato
+   * via botão nativo do Telegram (request_contact). O acesso só é liberado
+   * quando o cliente compartilhar (ver handleContactShared).
+   */
+  private async deliverAccessOrRequestWhatsapp(
+    chatId: number,
+    userId: string,
+    contentId: string,
+  ): Promise<void> {
+    try {
+      const { data: user } = await this.supabase
+        .from('users')
+        .select('whatsapp')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const hasWhatsapp = !!(user?.whatsapp && String(user.whatsapp).trim());
+
+      if (hasWhatsapp) {
+        // Já temos o WhatsApp — fluxo normal.
+        await this.sendGroupAccessLinks(chatId, userId, contentId);
+        return;
+      }
+
+      // Sem WhatsApp — bloqueia o acesso e pede o contato.
+      this.pendingWhatsappGate.set(chatId, { userId, contentId });
+      await this.sendMessage(
+        chatId,
+        `🎬 *Seu pagamento foi confirmado!*\n\n` +
+          `Pra liberar seu acesso ao conteúdo, toque no botão abaixo e ` +
+          `compartilhe seu WhatsApp. É rápido e garante que você não perca o filme. 👇`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            keyboard: [
+              [{ text: '📱 Compartilhar meu WhatsApp', request_contact: true }],
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        },
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `deliverAccessOrRequestWhatsapp failed (chat=${chatId}, content=${contentId}): ${err.message}`,
+      );
+      // Fallback de segurança: em caso de erro inesperado, não deixar o
+      // cliente que pagou sem acesso — entrega direto.
+      await this.sendGroupAccessLinks(chatId, userId, contentId);
+    }
+  }
+
+  /**
+   * Igor (15/05): processa o contato compartilhado pelo cliente após o
+   * gate de WhatsApp. Salva o número em users.whatsapp e libera o acesso
+   * ao grupo do conteúdo que estava pendente.
+   */
+  private async handleContactShared(
+    chatId: number,
+    telegramUserId: number,
+    contact: any,
+  ): Promise<void> {
+    try {
+      // Segurança: o cliente precisa compartilhar o PRÓPRIO contato.
+      // O Telegram preenche contact.user_id só quando é o contato dele.
+      if (contact?.user_id && Number(contact.user_id) !== Number(telegramUserId)) {
+        await this.sendMessage(
+          chatId,
+          '⚠️ Por favor, compartilhe o *seu próprio* contato usando o botão abaixo.',
+          {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              keyboard: [
+                [{ text: '📱 Compartilhar meu WhatsApp', request_contact: true }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          },
+        );
+        return;
+      }
+
+      // Normaliza o número (só dígitos; BR ≤11 dígitos ganha prefixo 55).
+      const rawDigits = String(contact?.phone_number || '').replace(/\D/g, '');
+      let normalized = rawDigits;
+      if (rawDigits.length >= 10 && rawDigits.length <= 11) {
+        normalized = `55${rawDigits}`;
+      }
+
+      if (normalized.length < 10) {
+        await this.sendMessage(
+          chatId,
+          '❌ Não consegui ler seu número. Toque no botão e tente de novo.',
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '📱 Compartilhar meu WhatsApp', request_contact: true }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          },
+        );
+        return;
+      }
+
+      // Salva em users.whatsapp.
+      await this.supabase
+        .from('users')
+        .update({ whatsapp: normalized })
+        .eq('telegram_id', telegramUserId.toString());
+
+      // Confirma e remove o teclado de contato.
+      await this.sendMessage(chatId, '✅ *WhatsApp registrado!* Liberando seu acesso...', {
+        parse_mode: 'Markdown',
+        reply_markup: { remove_keyboard: true },
+      });
+
+      // Libera o acesso pendente.
+      const pending = this.pendingWhatsappGate.get(chatId);
+      if (pending) {
+        this.pendingWhatsappGate.delete(chatId);
+        await this.sendGroupAccessLinks(chatId, pending.userId, pending.contentId);
+        return;
+      }
+
+      // Fallback (servidor reiniciou e perdeu o Map): busca a última
+      // compra paga do user e libera o acesso dela.
+      const { data: usr } = await this.supabase
+        .from('users')
+        .select('id')
+        .eq('telegram_id', telegramUserId.toString())
+        .maybeSingle();
+      if (usr?.id) {
+        const { data: lastPurchase } = await this.supabase
+          .from('purchases')
+          .select('id, user_id, content_id, content(telegram_group_link)')
+          .eq('user_id', usr.id)
+          .eq('status', 'paid')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const lpContent = Array.isArray(lastPurchase?.content)
+          ? lastPurchase?.content[0]
+          : lastPurchase?.content;
+        if (lastPurchase?.content_id && lpContent?.telegram_group_link) {
+          await this.sendGroupAccessLinks(chatId, lastPurchase.user_id, lastPurchase.content_id);
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`handleContactShared failed (chat=${chatId}): ${err.message}`);
+      await this.sendMessage(
+        chatId,
+        '❌ Tive um problema ao registrar seu WhatsApp. Acesse "Minhas Compras" pra ver seu conteúdo.',
+      );
+    }
+  }
+
+  /**
    * N6 (Igor 04/05): link fixo do grupo com `creates_join_request: true`.
    * Cliente clica → cai numa fila de aprovação. Se o cliente original
    * compartilhar esse link com um terceiro, o terceiro aparece pro Igor
@@ -1253,6 +1423,38 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // Register user as active for catalog sync notifications
     if (this.catalogSyncService) {
       this.catalogSyncService.registerActiveUser(chatId, telegramUserId);
+    }
+
+    // Igor (15/05): gate de WhatsApp. Cliente pagou mas ainda não
+    // compartilhou o número — bloqueia QUALQUER mensagem que não seja o
+    // contato e reenvia o pedido. Garante que o WhatsApp é coletado antes
+    // de liberar o acesso ao grupo do filme.
+    if (this.pendingWhatsappGate.has(chatId)) {
+      if (message.contact) {
+        await this.handleContactShared(chatId, telegramUserId, message.contact);
+      } else {
+        await this.sendMessage(
+          chatId,
+          '📱 Pra liberar seu acesso ao conteúdo, preciso do seu WhatsApp. Toque no botão abaixo 👇',
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '📱 Compartilhar meu WhatsApp', request_contact: true }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          },
+        );
+      }
+      return;
+    }
+
+    // Igor (15/05): contato compartilhado fora do gate (cliente reenviou
+    // ou compartilhou espontaneamente) — registra o WhatsApp mesmo assim.
+    if (message.contact && message.chat.type === 'private') {
+      await this.handleContactShared(chatId, telegramUserId, message.contact);
+      return;
     }
 
     // Verificar se usuário está aguardando digitar número WhatsApp
@@ -2483,6 +2685,26 @@ export class TelegramsEnhancedService implements OnModuleInit {
         timestamp: Date.now(),
       });
 
+      // Igor (15/05): nome do conteúdo sumiu da tela de Pix. Buscamos
+      // título + tipo da purchase pra mostrar acima do valor no caption.
+      let contentLine = '';
+      try {
+        const { data: pixPurchase } = await this.supabase
+          .from('purchases')
+          .select('content(title, content_type)')
+          .eq('id', purchaseId)
+          .single();
+        const pixContent = Array.isArray(pixPurchase?.content)
+          ? pixPurchase?.content[0]
+          : pixPurchase?.content;
+        if (pixContent?.title) {
+          const isSeries = (pixContent.content_type || '').toLowerCase() === 'series';
+          contentLine = `${isSeries ? '📺 Série' : '🎬 Filme'}: *${pixContent.title}*\n`;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Could not fetch content title for PIX caption: ${err?.message || err}`);
+      }
+
       // Enviar QR Code como foto (se disponível)
       if (pixData.qr_code_image) {
         try {
@@ -2497,7 +2719,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
             filename: 'qrcode.png',
             contentType: 'image/png',
           });
-          form.append('caption', `📱 *Pagamento PIX*\n\n💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`);
+          form.append('caption', `📱 *Pagamento PIX*\n\n${contentLine}💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`);
           form.append('parse_mode', 'Markdown');
 
           await axios.post(`${this.botApiUrl}/sendPhoto`, form, {
@@ -2650,8 +2872,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
           // N6 (Igor 04/05): se o conteúdo tem grupo Telegram configurado,
           // envia 2 links (single-use 24h + fixo com request-to-join).
+          // Igor (15/05): agora via gate de WhatsApp — só libera o acesso
+          // depois que o cliente compartilhar o número.
           if (purchase.user_id && content?.telegram_group_link) {
-            await this.sendGroupAccessLinks(chatId, purchase.user_id, purchase.content_id);
+            await this.deliverAccessOrRequestWhatsapp(chatId, purchase.user_id, purchase.content_id);
           }
         } else {
           await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.\n\n🛍 Para realizar novas compras no aplicativo, digite /start', {
@@ -2701,8 +2925,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
               // N6 — mesma lógica do path principal: envia 2 links se o
               // conteúdo tem grupo Telegram configurado.
+              // Igor (15/05): via gate de WhatsApp.
               if (confirmedPurchase.user_id && content?.telegram_group_link) {
-                await this.sendGroupAccessLinks(chatId, confirmedPurchase.user_id, confirmedPurchase.content_id);
+                await this.deliverAccessOrRequestWhatsapp(chatId, confirmedPurchase.user_id, confirmedPurchase.content_id);
               }
             }
 
@@ -3918,7 +4143,8 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           // sempre envia mensagem com 2 links de acesso (single-use 24h
           // + fixo request-to-join). Auto-add coloca o user no grupo
           // imediatamente, mas se ele sair, ainda precisa dos links.
-          await this.sendGroupAccessLinks(parseInt(user.telegram_id), user.id, content.id);
+          // Igor (15/05): via gate de WhatsApp — pede o número antes.
+          await this.deliverAccessOrRequestWhatsapp(parseInt(user.telegram_id), user.id, content.id);
         }
       }
 

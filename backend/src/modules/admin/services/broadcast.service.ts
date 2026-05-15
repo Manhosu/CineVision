@@ -273,15 +273,86 @@ export class BroadcastService {
   }
 
   /**
-   * Count users with WhatsApp numbers registered
+   * Igor (15/05): normaliza número de WhatsApp pra deduplicação.
+   * Só dígitos; números BR com 10-11 dígitos ganham prefixo 55.
+   */
+  private normalizeWhatsapp(raw: string | null | undefined): string {
+    const digits = String(raw || '').replace(/\D/g, '');
+    if (digits.length >= 10 && digits.length <= 11) return `55${digits}`;
+    return digits;
+  }
+
+  /**
+   * Igor (15/05): coleta contatos de WhatsApp de DUAS fontes:
+   *  1. users.whatsapp — clientes com conta
+   *  2. orders.customer_whatsapp — compras órfãs (cliente web sem login)
+   * Deduplica por número normalizado. Antes só lia users.whatsapp, então
+   * as compras órfãs ficavam invisíveis pro broadcast.
+   */
+  private async collectWhatsappContacts(): Promise<Array<{ name: string; whatsapp: string }>> {
+    const byNumber = new Map<string, { name: string; whatsapp: string }>();
+    const pageSize = 1000;
+
+    // Fonte 1: users.whatsapp
+    let page = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const from = page * pageSize;
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('name, whatsapp')
+        .not('whatsapp', 'is', null)
+        .range(from, from + pageSize - 1);
+      if (error) {
+        this.logger.error('Error fetching users WhatsApp:', error);
+        break;
+      }
+      for (const u of data || []) {
+        const norm = this.normalizeWhatsapp(u.whatsapp);
+        if (norm.length >= 10 && !byNumber.has(norm)) {
+          byNumber.set(norm, { name: u.name || 'Cliente', whatsapp: norm });
+        }
+      }
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+      if (page >= 10000) break;
+    }
+
+    // Fonte 2: orders.customer_whatsapp (compras órfãs)
+    page = 0;
+    hasMore = true;
+    while (hasMore) {
+      const from = page * pageSize;
+      const { data, error } = await this.supabase
+        .from('orders')
+        .select('customer_whatsapp')
+        .not('customer_whatsapp', 'is', null)
+        .range(from, from + pageSize - 1);
+      if (error) {
+        this.logger.error('Error fetching orders WhatsApp:', error);
+        break;
+      }
+      for (const o of data || []) {
+        const norm = this.normalizeWhatsapp(o.customer_whatsapp);
+        if (norm.length >= 10 && !byNumber.has(norm)) {
+          byNumber.set(norm, { name: 'Cliente', whatsapp: norm });
+        }
+      }
+      hasMore = (data?.length ?? 0) === pageSize;
+      page++;
+      if (page >= 10000) break;
+    }
+
+    return Array.from(byNumber.values());
+  }
+
+  /**
+   * Count users with WhatsApp numbers registered (users + compras órfãs).
    */
   async getWhatsappUsersCount(): Promise<number> {
     try {
-      const { count } = await this.supabase
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .not('whatsapp', 'is', null);
-      return count || 0;
+      const contacts = await this.collectWhatsappContacts();
+      return contacts.length;
     } catch (error) {
       this.logger.error('Error counting WhatsApp users:', error);
       return 0;
@@ -289,35 +360,10 @@ export class BroadcastService {
   }
 
   /**
-   * Fetch all users with registered WhatsApp numbers
+   * Fetch all WhatsApp contacts (users + compras órfãs, deduplicados).
    */
   private async getAllWhatsappUsers(): Promise<any[]> {
-    const allUsers: any[] = [];
-    const pageSize = 1000;
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
-      const { data, error } = await this.supabase
-        .from('users')
-        .select('id, name, whatsapp, telegram_id, telegram_username')
-        .not('whatsapp', 'is', null)
-        .range(from, to);
-
-      if (error) {
-        this.logger.error('Error fetching WhatsApp users:', error);
-        throw new Error('Failed to fetch WhatsApp users');
-      }
-
-      if (data && data.length > 0) allUsers.push(...data);
-      hasMore = (data?.length ?? 0) === pageSize;
-      page++;
-      if (page >= 10000) break;
-    }
-
-    return allUsers;
+    return this.collectWhatsappContacts();
   }
 
   /**
