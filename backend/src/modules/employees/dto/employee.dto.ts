@@ -36,6 +36,12 @@ export class CreateEmployeeDto {
   @IsBoolean()
   can_add_series?: boolean;
 
+  // Igor (16/05): permissão pra criar novelinhas (minisséries verticais).
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  can_add_novelinhas?: boolean;
+
   @ApiPropertyOptional({ default: true })
   @IsOptional()
   @IsBoolean()
@@ -106,6 +112,11 @@ export class UpdateEmployeePermissionsDto {
   @IsOptional()
   @IsBoolean()
   can_add_series?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsBoolean()
+  can_add_novelinhas?: boolean;
 
   @ApiPropertyOptional()
   @IsOptional()

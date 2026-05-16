@@ -13,6 +13,7 @@ import axios from 'axios';
 const DEFAULT_PERMISSIONS = {
   can_add_movies: false,
   can_add_series: false,
+  can_add_novelinhas: false,
   can_edit_own_content: true,
   can_edit_any_content: false,
   can_view_users: false,
@@ -81,6 +82,7 @@ export class EmployeesService {
       user_id: user.id,
       can_add_movies: dto.can_add_movies ?? DEFAULT_PERMISSIONS.can_add_movies,
       can_add_series: dto.can_add_series ?? DEFAULT_PERMISSIONS.can_add_series,
+      can_add_novelinhas: dto.can_add_novelinhas ?? DEFAULT_PERMISSIONS.can_add_novelinhas,
       can_edit_own_content: dto.can_edit_own_content ?? DEFAULT_PERMISSIONS.can_edit_own_content,
       can_edit_any_content: dto.can_edit_any_content ?? DEFAULT_PERMISSIONS.can_edit_any_content,
       can_view_users: dto.can_view_users ?? DEFAULT_PERMISSIONS.can_view_users,

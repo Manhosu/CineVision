@@ -27,7 +27,7 @@ interface ContentFormData {
   backdrop_url: string;
   backdrop_position: string;
   backdrop_position_mobile: string;
-  content_type: 'movie' | 'series';
+  content_type: 'movie' | 'series' | 'novelinha';
   is_release: boolean;
   is_new_season: boolean;
   price_cents: number;
@@ -619,6 +619,7 @@ export default function AdminContentCreatePage() {
                   >
                     <option value="movie">Filme</option>
                     <option value="series">Série</option>
+                    <option value="novelinha">Novelinha</option>
                   </select>
                 </div>
 

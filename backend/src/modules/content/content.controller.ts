@@ -61,6 +61,25 @@ export class ContentController {
     return this.contentService.findAllSeries(Number(page), Number(limit), genre, sort, search);
   }
 
+  // Igor (16/05): catálogo público de novelinhas (minisséries verticais).
+  @Get('novelinhas')
+  @ApiOperation({ summary: 'Get all novelinhas (vertical mini-series)' })
+  @ApiQuery({ name: 'page', description: 'Page number', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Items per page', required: false, type: Number })
+  @ApiQuery({ name: 'genre', description: 'Filter by genre', required: false, type: String })
+  @ApiQuery({ name: 'search', description: 'Search by title', required: false, type: String })
+  @ApiQuery({ name: 'sort', description: 'Sort order', required: false, enum: ['newest', 'popular', 'rating', 'price_low', 'price_high'] })
+  @ApiResponse({ status: 200, description: 'Novelinhas retrieved successfully' })
+  async getAllNovelinhas(
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+    @Query('genre') genre?: string,
+    @Query('search') search?: string,
+    @Query('sort') sort = 'newest',
+  ) {
+    return this.contentService.findAllNovelinhas(Number(page), Number(limit), genre, sort, search);
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Get all categories' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })

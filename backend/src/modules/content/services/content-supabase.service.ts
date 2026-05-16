@@ -665,6 +665,102 @@ export class ContentSupabaseService {
     };
   }
 
+  // Igor (16/05): catálogo público de novelinhas (minisséries verticais).
+  // Mesma estrutura de findAllSeries, filtrando content_type='novelinha'.
+  async findAllNovelinhas(page = 1, limit = 20, genre?: string, sort = 'newest', search?: string) {
+    limit = Math.min(limit, 100);
+
+    if (search && search.trim() && !genre) {
+      return this.smartSearch(search, ContentType.NOVELINHA, page, limit, sort);
+    }
+
+    const offset = (page - 1) * limit;
+
+    let contentIds: string[] | null = null;
+    if (genre) {
+      const { data: category } = await this.supabaseService.client
+        .from('categories')
+        .select('id')
+        .eq('name', genre)
+        .single();
+
+      if (category) {
+        const { data: associations } = await this.supabaseService.client
+          .from('content_categories')
+          .select('content_id')
+          .eq('category_id', category.id);
+        contentIds = associations?.map((a) => a.content_id) || [];
+        if (contentIds.length === 0) {
+          return { movies: [], total: 0, page, limit, totalPages: 0 };
+        }
+      } else {
+        return { movies: [], total: 0, page, limit, totalPages: 0 };
+      }
+    }
+
+    let query = this.supabaseService.client
+      .from('content')
+      .select(`
+        *,
+        categories:content_categories(
+          category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
+        )
+      `, { count: 'exact' })
+      .eq('status', ContentStatus.PUBLISHED)
+      .eq('content_type', ContentType.NOVELINHA);
+
+    if (contentIds) {
+      query = query.in('id', contentIds);
+    }
+
+    if (search && search.trim()) {
+      const words = search.trim().split(/\s+/).filter((w) => w.length > 0);
+      for (const word of words) {
+        query = query.ilike('title', `%${word}%`);
+      }
+    }
+
+    switch (sort) {
+      case 'popular':
+        query = query.order('views_count', { ascending: false });
+        break;
+      case 'rating':
+        query = query.order('imdb_rating', { ascending: false });
+        break;
+      case 'price_low':
+        query = query.order('price_cents', { ascending: true });
+        break;
+      case 'price_high':
+        query = query.order('price_cents', { ascending: false });
+        break;
+      default:
+        query = query.order('created_at', { ascending: false });
+    }
+
+    query = query.range(offset, offset + limit - 1);
+
+    const { data: items, error, count } = await query;
+    if (error) {
+      throw new Error(`Failed to fetch novelinhas: ${error.message}`);
+    }
+
+    const enriched = await this.enrichContentWithDiscounts(items || []);
+    return {
+      movies: enriched,
+      total: count || 0,
+      page,
+      limit,
+      totalPages: Math.ceil((count || 0) / limit),
+    };
+  }
+
   async findSeriesById(id: string) {
     const { data: series, error } = await this.supabaseService.client
       .from('content')
@@ -859,6 +955,37 @@ export class ContentSupabaseService {
     }
 
     return this.enrichContentWithDiscounts(series || []);
+  }
+
+  // Igor (16/05): Top 10 das novelinhas (minisséries verticais).
+  async findTop10Novelinhas() {
+    const { data: novelinhas, error } = await this.supabaseService.client
+      .from('content')
+      .select(`
+        *,
+        categories:content_categories(
+          category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
+        )
+      `)
+      .eq('status', ContentStatus.PUBLISHED)
+      .eq('content_type', ContentType.NOVELINHA)
+      .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('views_count', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      throw new Error(`Failed to fetch top 10 novelinhas: ${error.message}`);
+    }
+
+    return this.enrichContentWithDiscounts(novelinhas || []);
   }
 
   async findFeaturedContent(limit = 10) {
@@ -1056,6 +1183,40 @@ export class ContentSupabaseService {
   }
 
   /**
+   * Igor (16/05): busca conteúdos por uma lista de IDs PRESERVANDO a ordem
+   * do array. O Postgres `.in()` retorna em ordem arbitrária — então pra
+   * carrosséis curados manualmente (featured, manual) reordenamos em JS
+   * conforme o content_ids[] salvo pelo admin.
+   */
+  private async fetchContentByIdsOrdered(ids: string[] | null | undefined): Promise<any[]> {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const { data: items, error } = await this.supabaseService.client
+      .from('content')
+      .select(`
+        *,
+        categories:content_categories(
+          category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
+        )
+      `)
+      .in('id', ids)
+      .eq('status', ContentStatus.PUBLISHED);
+
+    if (error || !items) return [];
+    const byId = new Map(items.map((it: any) => [it.id, it]));
+    const ordered = ids
+      .map((id) => byId.get(id))
+      .filter((it): it is any => Boolean(it));
+    return this.enrichContentWithDiscounts(ordered);
+  }
+
+  /**
    * Returns homepage carousel data: fetches the visible carousel config from
    * homepage_carousels and populates each entry with content items.
    */
@@ -1087,12 +1248,24 @@ export class ContentSupabaseService {
               content = await this.findTop10Series();
               break;
 
+            case 'top10_novelinhas':
+              content = await this.findTop10Novelinhas();
+              break;
+
             case 'releases':
               content = await this.findReleases(20);
               break;
 
             case 'featured':
-              content = await this.findFeaturedContent(20);
+              // Igor (16/05): o banner hero é curado/reordenado pelo admin no
+              // modal de /admin/homepage (salva content_ids[]). Antes esse case
+              // chamava findFeaturedContent (is_featured + created_at), ignorando
+              // a curadoria. Agora usa content_ids[] respeitando a ordem salva.
+              if (Array.isArray(carousel.content_ids) && carousel.content_ids.length > 0) {
+                content = await this.fetchContentByIdsOrdered(carousel.content_ids);
+              } else {
+                content = await this.findFeaturedContent(20);
+              }
               break;
 
             case 'all_movies': {
@@ -1125,29 +1298,9 @@ export class ContentSupabaseService {
             }
 
             case 'manual': {
-              if (Array.isArray(carousel.content_ids) && carousel.content_ids.length > 0) {
-                const { data: items, error: itemsError } = await this.supabaseService.client
-                  .from('content')
-                  .select(`
-                    *,
-                    categories:content_categories(
-                      category:categories(*)
-                    ),
-                    content_languages(
-                      id,
-                      language_name,
-                      video_url,
-                      hls_master_url,
-                      upload_status
-                    )
-                  `)
-                  .in('id', carousel.content_ids)
-                  .eq('status', ContentStatus.PUBLISHED);
-
-                if (!itemsError && items) {
-                  content = await this.enrichContentWithDiscounts(items);
-                }
-              }
+              // Igor (16/05): usa o helper que preserva a ordem do content_ids[]
+              // (o .in() do Postgres não garante ordem).
+              content = await this.fetchContentByIdsOrdered(carousel.content_ids);
               break;
             }
 

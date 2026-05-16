@@ -115,6 +115,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
     { label: 'Início', href: '/', icon: HomeIcon },
     { label: 'Filmes', href: '/movies', icon: FilmIcon },
     { label: 'Séries', href: '/series', icon: TvIcon },
+    { label: 'Novelinhas', href: '/novelinhas', icon: TvIcon },
     { label: 'Categorias', href: '/categories', icon: Squares2X2Icon },
     ...(isTelegramUser ? [
       { label: 'Minhas Compras', href: '/dashboard', icon: ShoppingBagIcon },

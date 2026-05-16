@@ -27,41 +27,62 @@ export class AdminPeopleService {
   ) {}
 
   async findAll(search?: string, role?: string, photoStatus: PhotoStatus = 'all') {
-    let query = this.supabaseService.client
-      .from('people')
-      .select('*')
-      .order('name', { ascending: true });
+    // Igor (16/05): o Supabase corta queries em 1000 rows por padrão.
+    // people tem ~1440 e content_people ~2140 — sem paginar, a lista
+    // travava em 1000 pessoas e a contagem de conteúdos saía errada
+    // (a maioria dos atores aparecia com 0 ou 1). Agora paginamos as
+    // duas queries em loop até esgotar.
+    const PAGE = 1000;
 
-    if (search) query = query.ilike('name', `%${search}%`);
-    if (role) query = query.eq('role', role);
-
-    // IMG_8846 — funcionário com `can_add_people_photos` precisa filtrar
-    // só pessoas sem foto. Admin pode listar pendentes pra revisar.
-    if (photoStatus === 'missing') {
-      query = query.is('photo_url', null).is('photo_pending_url', null);
-    } else if (photoStatus === 'pending') {
-      query = query.not('photo_pending_url', 'is', null);
-    } else if (photoStatus === 'approved') {
-      query = query.not('photo_url', 'is', null);
-    }
-
-    const [{ data, error }, { data: counts }] = await Promise.all([
-      query,
-      this.supabaseService.client
-        .from('content_people')
-        .select('person_id'),
-    ]);
-
-    if (error) throw new Error(`Failed to fetch people: ${error.message}`);
-
-    const countMap = new Map<string, number>();
-    if (counts) {
-      for (const row of counts) {
-        countMap.set(row.person_id, (countMap.get(row.person_id) || 0) + 1);
+    // 1. people (com filtros) — paginado
+    const buildPeopleQuery = (from: number, to: number) => {
+      let q = this.supabaseService.client
+        .from('people')
+        .select('*')
+        .order('name', { ascending: true })
+        .range(from, to);
+      if (search) q = q.ilike('name', `%${search}%`);
+      if (role) q = q.eq('role', role);
+      if (photoStatus === 'missing') {
+        q = q.is('photo_url', null).is('photo_pending_url', null);
+      } else if (photoStatus === 'pending') {
+        q = q.not('photo_pending_url', 'is', null);
+      } else if (photoStatus === 'approved') {
+        q = q.not('photo_url', 'is', null);
       }
+      return q;
+    };
+
+    const people: any[] = [];
+    for (let page = 0; page < 100; page++) {
+      const from = page * PAGE;
+      const { data, error } = await buildPeopleQuery(from, from + PAGE - 1);
+      if (error) throw new Error(`Failed to fetch people: ${error.message}`);
+      if (data && data.length) people.push(...data);
+      if (!data || data.length < PAGE) break;
     }
 
-    return (data || []).map((person) => ({
+    // 2. content_people — paginado, pra contagem real de conteúdos/pessoa
+    const countMap = new Map<string, number>();
+    for (let page = 0; page < 100; page++) {
+      const from = page * PAGE;
+      const { data, error } = await this.supabaseService.client
+        .from('content_people')
+        .select('person_id')
+        .range(from, from + PAGE - 1);
+      if (error) {
+        this.logger.warn(`Failed to page content_people: ${error.message}`);
+        break;
+      }
+      if (data && data.length) {
+        for (const row of data) {
+          countMap.set(row.person_id, (countMap.get(row.person_id) || 0) + 1);
+        }
+      }
+      if (!data || data.length < PAGE) break;
+    }
+
+    return people.map((person) => ({
       ...person,
       content_count: countMap.get(person.id) || 0,
     }));

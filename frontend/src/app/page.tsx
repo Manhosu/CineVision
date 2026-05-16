@@ -44,6 +44,7 @@ interface ContentSection {
 const CAROUSEL_SECTION_TYPE: Record<string, ContentSection['type']> = {
   top10_films: 'top10',
   top10_series: 'top10',
+  top10_novelinhas: 'top10',
   releases: 'latest',
   featured: 'featured',
   all_movies: 'latest',
@@ -55,6 +56,7 @@ const CAROUSEL_SECTION_TYPE: Record<string, ContentSection['type']> = {
 const CAROUSEL_VIEW_ALL: Record<string, string> = {
   all_movies: '/movies',
   all_series: '/series',
+  top10_novelinhas: '/novelinhas',
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';

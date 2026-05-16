@@ -51,7 +51,7 @@ export class AdminContentController {
   // ---------------------------------------------------------------------------
   // Helpers — resolve user role + employee permissions
   // ---------------------------------------------------------------------------
-  private async assertCanAddContent(user: any, kind: 'movie' | 'series') {
+  private async assertCanAddContent(user: any, kind: 'movie' | 'series' | 'novelinha') {
     if (!user) return; // public-mode endpoints (legacy)
     const role = user.role;
     if (role === UserRole.ADMIN || role === UserRole.MODERATOR) return;
@@ -65,6 +65,10 @@ export class AdminContentController {
     }
     if (kind === 'series' && !perms.can_add_series) {
       throw new ForbiddenException('Funcionário não pode adicionar séries');
+    }
+    // Igor (16/05): permissão de novelinhas.
+    if (kind === 'novelinha' && !perms.can_add_novelinhas) {
+      throw new ForbiddenException('Funcionário não pode adicionar novelinhas');
     }
     await this.employeesService.checkDailyLimitAndIncrement(user.sub || user.id);
   }
@@ -147,7 +151,10 @@ export class AdminContentController {
     @Body() dto: CreateContentDto,
     @GetUser() user: any,
   ) {
-    const kind = (dto as any).content_type === 'series' ? 'series' : 'movie';
+    // Igor (16/05): suporta os 3 tipos — movie, series, novelinha.
+    const ct = (dto as any).content_type;
+    const kind: 'movie' | 'series' | 'novelinha' =
+      ct === 'series' ? 'series' : ct === 'novelinha' ? 'novelinha' : 'movie';
     await this.assertCanAddContent(user, kind);
     return this.adminContentService.createContent(
       dto,

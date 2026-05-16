@@ -25,7 +25,7 @@ interface Content {
   telegram_chat_id: string;
   poster_url: string;
   backdrop_url: string;
-  content_type: 'movie' | 'series';
+  content_type: 'movie' | 'series' | 'novelinha';
   is_featured: boolean;
   is_release: boolean;
   is_new_season?: boolean;
@@ -553,7 +553,12 @@ export default function AdminContentEditPage() {
                 <div>
                   <label className="block text-sm font-medium mb-2">Tipo</label>
                   <div className="px-4 py-2 bg-dark-900/50 border border-white/10 rounded-lg text-gray-400">
-                    {content.content_type === 'movie' ? 'Filme' : 'Série'} (não editável)
+                    {content.content_type === 'movie'
+                      ? 'Filme'
+                      : content.content_type === 'novelinha'
+                        ? 'Novelinha'
+                        : 'Série'}{' '}
+                    (não editável)
                   </div>
                 </div>
 

@@ -469,4 +469,19 @@ export class ContentService {
   async getHomepageData(): Promise<Array<{ id: string; slug: string; title: string; type: string; content: any[] }>> {
     throw new NotFoundException('Homepage carousel config requires Supabase mode');
   }
+
+  // Igor (16/05): catálogo de novelinhas — implementado no ContentSupabaseService.
+  async findAllNovelinhas(
+    page = 1,
+    limit = 20,
+    genre?: string,
+    sort = 'newest',
+    search?: string,
+  ): Promise<any> {
+    throw new NotFoundException('Novelinhas listing requires Supabase mode');
+  }
+
+  async findTop10Novelinhas(): Promise<any[]> {
+    throw new NotFoundException('Top 10 novelinhas requires Supabase mode');
+  }
 }

@@ -336,6 +336,7 @@ interface Permissions {
   user_id: string;
   can_add_movies: boolean;
   can_add_series: boolean;
+  can_add_novelinhas: boolean;
   can_edit_own_content: boolean;
   can_edit_any_content: boolean;
   can_view_users: boolean;
@@ -364,6 +365,7 @@ const DEFAULT_NEW = {
   password: '',
   can_add_movies: true,
   can_add_series: false,
+  can_add_novelinhas: false,
   edit_window_hours: 5,
   daily_content_limit: 50,
 };
@@ -464,6 +466,10 @@ export default function EmployeesPage() {
             <input type="checkbox" checked={!!newEmp.can_add_series} onChange={(e) => setNewEmp({ ...newEmp, can_add_series: e.target.checked })} />
             Pode adicionar séries
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!newEmp.can_add_novelinhas} onChange={(e) => setNewEmp({ ...newEmp, can_add_novelinhas: e.target.checked })} />
+            Pode adicionar novelinhas
+          </label>
           <div className="flex items-center gap-2 text-sm">
             Janela edição (h):
             <input
@@ -518,6 +524,7 @@ export default function EmployeesPage() {
 const PERMISSION_FIELDS: Array<{ key: keyof Permissions; label: string }> = [
   { key: 'can_add_movies', label: 'Adicionar filmes' },
   { key: 'can_add_series', label: 'Adicionar séries' },
+  { key: 'can_add_novelinhas', label: 'Adicionar novelinhas' },
   { key: 'can_edit_own_content', label: 'Editar próprio conteúdo' },
   { key: 'can_edit_any_content', label: 'Editar qualquer conteúdo' },
   { key: 'can_view_users', label: 'Ver usuários' },

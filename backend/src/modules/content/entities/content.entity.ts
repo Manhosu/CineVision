@@ -31,6 +31,8 @@ export enum ContentType {
   MOVIE = 'movie',
   SERIES = 'series',
   DOCUMENTARY = 'documentary',
+  // Igor (16/05): minisséries verticais (estilo ReelShort/DramaBox).
+  NOVELINHA = 'novelinha',
 }
 
 export enum VideoProcessingStatus {

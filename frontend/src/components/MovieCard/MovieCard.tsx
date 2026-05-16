@@ -200,6 +200,9 @@ const MovieCard = memo(function MovieCard({
             {(movie as any).content_type === 'series' && (
               <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] font-medium">Série</span>
             )}
+            {(movie as any).content_type === 'novelinha' && (
+              <span className="px-1.5 py-0.5 bg-pink-500/20 text-pink-400 rounded text-[10px] font-medium">Novelinha</span>
+            )}
           </div>
 
           {/* Preço grande, centralizado, acima do botão (Igor pediu).

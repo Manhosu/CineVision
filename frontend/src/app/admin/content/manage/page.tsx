@@ -36,7 +36,7 @@ interface Content {
   is_new_season?: boolean;
 }
 
-type ContentTypeFilter = 'all' | 'movie' | 'series' | 'release' | 'new_season';
+type ContentTypeFilter = 'all' | 'movie' | 'series' | 'novelinha' | 'release' | 'new_season';
 
 export default function ContentManagePage() {
   const router = useRouter();
@@ -296,6 +296,8 @@ export default function ContentManagePage() {
         return content.content_type === 'movie';
       case 'series':
         return content.content_type === 'series';
+      case 'novelinha':
+        return content.content_type === 'novelinha';
       case 'release':
         return !!content.is_release;
       case 'new_season':
@@ -307,6 +309,7 @@ export default function ContentManagePage() {
 
   const movieCount = contents.filter(c => c.content_type === 'movie').length;
   const seriesCount = contents.filter(c => c.content_type === 'series').length;
+  const novelinhaCount = contents.filter(c => c.content_type === 'novelinha').length;
   const releaseCount = contents.filter(c => c.is_release).length;
   const newSeasonCount = contents.filter(c => c.is_new_season).length;
 
@@ -424,6 +427,16 @@ export default function ContentManagePage() {
             }`}
           >
             Séries ({seriesCount})
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'novelinha' ? 'all' : 'novelinha')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
+              typeFilter === 'novelinha'
+                ? 'bg-pink-600 text-white'
+                : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            Novelinhas ({novelinhaCount})
           </button>
           <button
             onClick={() => setTypeFilter(typeFilter === 'release' ? 'all' : 'release')}
