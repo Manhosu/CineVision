@@ -10,6 +10,7 @@ export class BroadcastService {
   private readonly logger = new Logger(BroadcastService.name);
   private supabase: SupabaseClient;
   private botToken: string;
+  private botUsername: string;
   private telegramApiUrl: string;
 
   constructor(
@@ -21,6 +22,11 @@ export class BroadcastService {
       this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') || '',
     );
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
+    // Igor (17/05): username do bot NOVO. É o discriminador de "migrou pro
+    // bot novo" — users.bot_username só recebe esse valor quando o cliente
+    // dá /start no bot atual. Mesmo critério do painel de Migração de Bot.
+    this.botUsername =
+      this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
     this.telegramApiUrl = `https://api.telegram.org/bot${this.botToken}`;
   }
 
@@ -61,7 +67,20 @@ export class BroadcastService {
   }
 
   /**
-   * Fast count of users who can receive broadcasts (no data fetched)
+   * Conta os usuários que REALMENTE podem receber broadcast no Telegram.
+   *
+   * Igor (17/05): a migração pro bot novo está em andamento (~3% da base).
+   * O Telegram só entrega DM pra quem deu /start no bot ATUAL — mandar pros
+   * ~104k que ainda estão no bot antigo só gera erro 403 (Bot Blocked).
+   *
+   * O critério correto é `bot_username = <bot novo>`: essa coluna só recebe
+   * o username do bot atual quando o cliente interage com ele. NÃO usar
+   * `telegram_chat_id` nem `last_bot_token` — ambos estão preenchidos pra
+   * TODA a base legada (107k), então não distinguem nada (era esse o bug:
+   * o card "Telegram broadcast" e o botão "Todos" mostravam 107k).
+   *
+   * Fail-safe: se a query der erro, retorna 0 — nunca "cai" pra contagem
+   * sem filtro, pra não arriscar disparar pra base inteira.
    */
   async getBotUsersCount(): Promise<number> {
     try {
@@ -70,19 +89,9 @@ export class BroadcastService {
         .select('*', { count: 'exact', head: true })
         .not('telegram_chat_id', 'is', null)
         .eq('blocked', false)
-        .eq('last_bot_token', this.botToken);
+        .eq('bot_username', this.botUsername);
 
       if (error) {
-        // If column doesn't exist yet, fall back to old behavior
-        if (error.message?.includes('last_bot_token')) {
-          this.logger.warn('last_bot_token column not found, falling back to unfiltered count');
-          const { count: fallbackCount, error: fallbackError } = await this.supabase
-            .from('users')
-            .select('*', { count: 'exact', head: true })
-            .not('telegram_chat_id', 'is', null)
-            .eq('blocked', false);
-          return fallbackCount || 0;
-        }
         this.logger.error('Error counting bot users:', error);
         return 0;
       }
@@ -95,8 +104,13 @@ export class BroadcastService {
   }
 
   /**
-   * Get all users who have started the bot (have telegram_chat_id)
-   * Uses pagination to fetch ALL users (Supabase has max 1000 per request)
+   * Busca todos os usuários ativos no bot NOVO (destinatários do "Todos").
+   * Paginado (Supabase devolve no máx. 1000 por request).
+   *
+   * Igor (17/05): MESMO critério do getBotUsersCount — `bot_username` do
+   * bot atual. Antes filtrava por `last_bot_token`, que está preenchido
+   * pra toda a base legada → o "Todos" buscava os 107k e ~104k falhavam
+   * com 403 (Bot Blocked). Sem fallback sem-filtro: erro propaga.
    */
   async getAllBotUsers(): Promise<any[]> {
     try {
@@ -111,33 +125,15 @@ export class BroadcastService {
 
         this.logger.log(`Fetching users page ${page + 1} (${from}-${to})...`);
 
-        const { data, error, count } = await this.supabase
+        const { data, error } = await this.supabase
           .from('users')
           .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
           .not('telegram_chat_id', 'is', null)
           .eq('blocked', false)
-          .eq('last_bot_token', this.botToken)
+          .eq('bot_username', this.botUsername)
           .range(from, to);
 
         if (error) {
-          // If column doesn't exist yet, fall back to unfiltered query
-          if (error.message?.includes('last_bot_token')) {
-            this.logger.warn('last_bot_token column not found, falling back to unfiltered fetch');
-            const { data: fallbackData, error: fallbackError } = await this.supabase
-              .from('users')
-              .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
-              .not('telegram_chat_id', 'is', null)
-              .eq('blocked', false)
-              .range(from, to);
-            if (fallbackError) {
-              this.logger.error('Error fetching bot users (fallback):', fallbackError);
-              throw new Error('Failed to fetch users');
-            }
-            if (fallbackData && fallbackData.length > 0) allUsers.push(...fallbackData);
-            hasMore = fallbackData?.length === pageSize;
-            page++;
-            continue;
-          }
           this.logger.error('Error fetching bot users:', error);
           throw new Error('Failed to fetch users');
         }
@@ -521,12 +517,17 @@ export class BroadcastService {
 
         this.logger.log(`Fetching users with specific telegram IDs: ${cleanedIds.join(', ')}`);
 
-        // Fetch users by telegram IDs
+        // Fetch users by telegram IDs.
+        // Igor (17/05): filtra também por bot_username (bot novo) + !blocked
+        // — se o admin digitar o ID de um cliente que ainda está no bot
+        // antigo, o envio falharia com 403; melhor descartar antes.
         const { data, error } = await this.supabase
           .from('users')
           .select('id, telegram_id, telegram_chat_id, telegram_username, name')
           .in('telegram_id', cleanedIds)
-          .not('telegram_chat_id', 'is', null);
+          .not('telegram_chat_id', 'is', null)
+          .eq('blocked', false)
+          .eq('bot_username', this.botUsername);
 
         if (error) {
           this.logger.error('Error fetching specific users:', error);
