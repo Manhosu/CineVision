@@ -4259,31 +4259,57 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     // Use webhook mode in production
     const backendUrl = this.configService.get('BACKEND_URL') || this.configService.get('RENDER_EXTERNAL_URL') || (this.configService.get('NODE_ENV') === 'production' ? 'https://cinevisionn.onrender.com' : null);
     if (backendUrl) {
-      // Webhook mode — no 409 conflicts, no duplicate messages
+      // Webhook mode — no 409 conflicts, no duplicate messages.
+      //
+      // Igor (17/05): blindagem do boot. ANTES, uma única falha transitória
+      // do setWebhook (blip de rede no cold start do Render) derrubava o bot
+      // inteiro: caía no fallback de polling e chamava deleteWebhook(),
+      // APAGANDO o webhook de produção — e o bot parava de responder /start.
+      //
+      // AGORA: retry com backoff. Se TODAS as tentativas falharem, NÃO
+      // apaga o webhook nem troca pra polling — um deploy anterior já
+      // registrou a mesma URL, que continua válida. Polling só roda no dev
+      // local (quando não há backendUrl).
       const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
-      try {
-        const url = `${this.botApiUrl}/setWebhook`;
-        const response = await axios.post(url, {
-          url: webhookUrl,
-          allowed_updates: [
-          'message',
-          'callback_query',
-          'business_connection',
-          'business_message',
-        ],
-          drop_pending_updates: true,
-        });
-        if (response.data.ok) {
-          this.logger.log(`✅ Webhook set: ${webhookUrl}`);
-          return; // Don't start polling — webhook handles everything
+      const maxAttempts = 3;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const url = `${this.botApiUrl}/setWebhook`;
+          const response = await axios.post(url, {
+            url: webhookUrl,
+            allowed_updates: [
+              'message',
+              'callback_query',
+              'business_connection',
+              'business_message',
+            ],
+            drop_pending_updates: true,
+          });
+          if (response.data.ok) {
+            this.logger.log(`✅ Webhook set: ${webhookUrl}`);
+            return; // Don't start polling — webhook handles everything
+          }
+          this.logger.warn(
+            `setWebhook attempt ${attempt}/${maxAttempts} rejected: ${JSON.stringify(response.data)}`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `setWebhook attempt ${attempt}/${maxAttempts} failed: ${error.message}`,
+          );
         }
-        this.logger.warn('Failed to set webhook, falling back to polling:', response.data);
-      } catch (error) {
-        this.logger.warn(`Webhook setup failed (${error.message}), falling back to polling`);
+        if (attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 3000 * attempt));
+        }
       }
+      // Todas as tentativas falharam. NÃO apagar o webhook — mantém o que
+      // já estava registrado (mesma URL de sempre). Loga pra investigação.
+      this.logger.error(
+        `⚠️ setWebhook falhou após ${maxAttempts} tentativas — mantendo o webhook existente intacto (produção NÃO cai pra polling).`,
+      );
+      return;
     }
 
-    // Fallback: polling mode (local dev or webhook failed)
+    // Fallback: polling mode — APENAS dev local (sem backendUrl).
     this.logger.log('Using POLLING mode (no webhook URL available)');
     await this.deleteWebhook();
     await this.skipPendingUpdates();
