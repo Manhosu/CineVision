@@ -1,96 +1,107 @@
 import toast from 'react-hot-toast';
 
 /**
- * Abre o grupo do Telegram pra um conteúdo comprado.
+ * Dispara o acesso a um conteúdo comprado (botão "Assistir").
  *
- * Igor (15/05): quando o cliente está logado, consulta o backend
- * `POST /api/v1/telegrams/access-link/:contentId`. O backend
- * (`getOrCreateAccessLinkForPurchasedContent`) valida a compra e
- * resolve sozinho: tenta o Chat ID (invite single-use 24h) e cai no
- * `telegram_group_link` como fallback.
+ * Igor (17/05) — BUG "tela branca about:blank" + "precisa tocar 3-4x":
+ * o fix anterior abria `window.open('about:blank')` síncrono no clique e
+ * depois apontava `win.location.href` pro link após o `await fetch`. Em
+ * mobile (Safari iOS) a aba branca abria mas o redirecionamento posterior
+ * não colava de forma confiável → tela branca travada. Cada toque extra
+ * do usuário abria outra aba branca.
  *
- * Igor (16/05) — BUG CRÍTICO "nada acontece ao clicar em Assistir":
- * o `window.open` rodava DEPOIS do `await fetch`. Navegadores bloqueiam
- * popups que não são abertos de forma síncrona dentro do handler de
- * clique (perde a "user activation"). Resultado: o popup era bloqueado
- * silenciosamente e nada acontecia.
+ * Correção (Igor pediu): o "Assistir" não abre mais aba nenhuma. Ele chama
+ * `POST /api/v1/telegrams/send-access/:contentId` e o BOT envia os links
+ * de acesso (Acesso Único 24h + Acesso Fixo) direto no Telegram do cliente.
+ * Sem `window.open` → sem tela branca, sem dependência de "user activation",
+ * clique único funciona em qualquer celular.
  *
- * Correção: abrimos a aba IMEDIATAMENTE (síncrono, no clique), guardamos
- * a referência e só depois do fetch apontamos o `location.href` dela.
+ * Fallback: cliente sem Telegram vinculado → o backend devolve
+ * `{ sent: false, link }` e navegamos na MESMA aba (não sofre popup blocker,
+ * não gera tela branca).
  *
- * @returns true se conseguiu abrir alguma janela; false em erro.
+ * @param contentId  id do conteúdo comprado
+ * @param _groupRef  mantido por compatibilidade de assinatura — não usado
+ * @param options    `fallbackToast` opcional pra mensagem de erro genérica
+ * @returns true se o acesso foi enviado/aberto; false em erro.
  */
 export async function openContentGroup(
   contentId: string,
-  groupRef: string | null | undefined,
+  _groupRef?: string | null | undefined,
   options?: { fallbackToast?: string },
 ): Promise<boolean> {
-  // 1. Abre a aba JÁ — síncrono, dentro da user activation do clique.
-  //    Sem isso, qualquer window.open após um await é bloqueado.
-  const win =
-    typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
-
-  // Helper: aponta a aba pré-aberta pro destino (ou fecha + toast no erro).
-  const finish = (url?: string, errMsg?: string): boolean => {
-    if (url) {
-      if (win && !win.closed) {
-        win.location.href = url;
-      } else {
-        // Aba pré-aberta foi bloqueada — tenta abrir de novo (pode falhar
-        // se o usuário tiver popup blocker agressivo).
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
-      return true;
-    }
-    if (win && !win.closed) win.close();
-    toast.error(errMsg || 'Conteúdo indisponível no momento', { duration: 7000 });
-    return false;
-  };
+  if (typeof window === 'undefined') return false;
 
   const token =
-    typeof window !== 'undefined'
-      ? localStorage.getItem('access_token') ||
-        localStorage.getItem('auth_token') ||
-        ''
-      : '';
+    localStorage.getItem('access_token') ||
+    localStorage.getItem('auth_token') ||
+    '';
 
-  // 2. Fluxo principal: logado → backend resolve tudo pelo contentId.
-  if (token && contentId) {
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-      const res = await fetch(`${apiUrl}/api/v1/telegrams/access-link/${contentId}`, {
+  if (!token) {
+    toast.error('Faça login para assistir ao conteúdo.', { duration: 6000 });
+    return false;
+  }
+
+  if (!contentId) {
+    toast.error(options?.fallbackToast || 'Conteúdo indisponível no momento', {
+      duration: 7000,
+    });
+    return false;
+  }
+
+  const loadingId = toast.loading('Gerando seu acesso...');
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    const res = await fetch(
+      `${apiUrl}/api/v1/telegrams/send-access/${contentId}`,
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-      });
+      },
+    );
 
-      if (res.ok) {
-        const data = (await res.json()) as { link?: string };
-        if (data.link) return finish(data.link);
-        // Resposta OK mas sem link — cai no fallback do groupRef.
-        const refOk = groupRef?.trim();
-        if (refOk && !/^-?\d{6,}$/.test(refOk)) return finish(refOk);
-        return finish(undefined, 'Link de acesso indisponível');
-      } else {
-        const err = await res.json().catch(() => ({}));
-        const msg = err.message || 'Não foi possível gerar acesso ao grupo';
-        // Backend falhou mas há link cru no card — usa ele.
-        const trimmedRef = groupRef?.trim();
-        if (trimmedRef && !/^-?\d{6,}$/.test(trimmedRef)) return finish(trimmedRef);
-        return finish(undefined, msg);
-      }
-    } catch {
-      // network blip — cai pro fallback abaixo
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast.error(
+        err.message || 'Não foi possível liberar o acesso ao conteúdo.',
+        { id: loadingId, duration: 7000 },
+      );
+      return false;
     }
-  }
 
-  // 3. Fallback (sem login ou backend indisponível): abre o link cru.
-  const trimmed = groupRef?.trim();
-  if (trimmed && !/^-?\d{6,}$/.test(trimmed)) {
-    return finish(trimmed);
-  }
+    const data = (await res.json()) as { sent?: boolean; link?: string };
 
-  return finish(undefined, options?.fallbackToast);
+    // Caminho principal: o bot mandou os links no Telegram do cliente.
+    if (data.sent) {
+      toast.success(
+        '📲 Enviamos o acesso no seu Telegram! Abra o app pra entrar no grupo.',
+        { id: loadingId, duration: 6000 },
+      );
+      return true;
+    }
+
+    // Cliente sem Telegram vinculado — navega na MESMA aba (sem popup
+    // blocker, sem tela branca).
+    if (data.link) {
+      toast.dismiss(loadingId);
+      window.location.href = data.link;
+      return true;
+    }
+
+    toast.error('Link de acesso indisponível no momento.', {
+      id: loadingId,
+      duration: 7000,
+    });
+    return false;
+  } catch {
+    toast.error('Erro de conexão. Tente novamente.', {
+      id: loadingId,
+      duration: 7000,
+    });
+    return false;
+  }
 }

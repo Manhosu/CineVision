@@ -48,6 +48,29 @@ export class TelegramsController {
     );
   }
 
+  // Igor (17/05): o botão "Assistir" do dashboard/home agora dispara o
+  // ENVIO dos links de acesso ao grupo NO TELEGRAM do cliente — em vez
+  // de o frontend abrir uma aba (o `window.open` causava tela branca
+  // `about:blank` travada em mobile). Se o cliente não tem Telegram
+  // vinculado, devolve `{ sent: false, link }` pro frontend abrir.
+  @Post('send-access/:contentId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Send Telegram group access links to the user via the bot',
+    description:
+      'Validates ownership of contentId, then makes the bot send the access links (24h + fixed) to the user\'s Telegram DM. Returns { sent: true } when delivered, or { sent: false, link } if the user has no Telegram linked.',
+  })
+  @ApiResponse({ status: 200, description: 'Access sent or link returned' })
+  @ApiResponse({ status: 403, description: 'User did not purchase this content' })
+  @ApiResponse({ status: 400, description: 'Content has no Telegram group configured' })
+  async sendAccess(
+    @Param('contentId') contentId: string,
+    @GetUser() user: any,
+  ) {
+    return this.telegramsEnhancedService.sendAccessToUser(user.sub, contentId);
+  }
+
   // Igor (07/05): valida Chat ID na hora de cadastrar conteúdo —
   // mostra se bot é admin do grupo + tem permissão de invite, antes
   // do cliente descobrir pagando.

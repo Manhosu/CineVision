@@ -712,6 +712,53 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (17/05): o botão "Assistir" do dashboard/home dispara o envio
+   * dos links de acesso ao grupo NO TELEGRAM do cliente — em vez de
+   * abrir aba no navegador (o `window.open` causava tela branca
+   * `about:blank` travada em mobile e o problema de "3-4 toques").
+   *
+   * Fluxo:
+   *  1. Valida ownership reusando `getOrCreateAccessLinkForPurchasedContent`
+   *     (purchase paga). Se o cliente não comprou → lança ForbiddenException.
+   *  2. Busca o chat do Telegram do cliente logado (`telegram_chat_id`,
+   *     com `telegram_id` como fallback — em chat privado são iguais).
+   *  3. Tem Telegram → o bot manda os botões de acesso (24h + fixo) no DM
+   *     do cliente via `sendGroupAccessLinks`. Retorna `{ sent: true }`.
+   *  4. Sem Telegram (cliente web puro) → retorna `{ sent: false, link }`
+   *     pro frontend abrir o link direto.
+   */
+  async sendAccessToUser(
+    userId: string,
+    contentId: string,
+  ): Promise<{ sent: boolean; link?: string }> {
+    // 1. Valida ownership + gera o link. Lança ForbiddenException se o
+    //    cliente não comprou (ou BadRequestException se sem grupo).
+    const access = await this.getOrCreateAccessLinkForPurchasedContent(userId, contentId);
+
+    // 2. Busca o chat do Telegram do cliente logado.
+    const { data: user } = await this.supabase
+      .from('users')
+      .select('telegram_chat_id, telegram_id')
+      .eq('id', userId)
+      .maybeSingle();
+
+    const chatIdRaw =
+      (user?.telegram_chat_id && String(user.telegram_chat_id).trim()) ||
+      (user?.telegram_id && String(user.telegram_id).trim()) ||
+      '';
+    const chatId = chatIdRaw ? parseInt(chatIdRaw, 10) : NaN;
+
+    // 3. Cliente com Telegram → o bot manda os links no DM dele.
+    if (chatIdRaw && !Number.isNaN(chatId)) {
+      await this.sendGroupAccessLinks(chatId, userId, contentId);
+      return { sent: true };
+    }
+
+    // 4. Cliente sem Telegram vinculado → devolve o link pro frontend abrir.
+    return { sent: false, link: access.link };
+  }
+
+  /**
    * Igor (15/05): gate de WhatsApp no Telegram. Antes, todo pagamento
    * confirmado chamava sendGroupAccessLinks direto — o cliente clicava
    * "Acesso Único" e ia pro grupo sem nunca passar pelo dashboard, então
@@ -2889,13 +2936,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
             }
           );
 
-          // N6 (Igor 04/05): se o conteúdo tem grupo Telegram configurado,
-          // envia 2 links (single-use 24h + fixo com request-to-join).
-          // Igor (15/05): agora via gate de WhatsApp — só libera o acesso
-          // depois que o cliente compartilhar o número.
-          if (purchase.user_id && content?.telegram_group_link) {
-            await this.deliverAccessOrRequestWhatsapp(chatId, purchase.user_id, purchase.content_id);
-          }
+          // Igor (17/05): pós-pagamento manda APENAS a confirmação +
+          // "🎬 Assistir Agora" (acima). Os links de acesso ao grupo
+          // (single-use 24h + fixo) só são enviados quando o cliente
+          // clica em "Assistir" no dashboard/home → endpoint
+          // POST /telegrams/send-access/:contentId (sendAccessToUser).
         } else {
           await this.sendMessage(chatId, '✅ *Pagamento Confirmado!*\n\nSeu conteudo esta sendo preparado.\n\n🛍 Para realizar novas compras no aplicativo, digite /start', {
             parse_mode: 'Markdown'
@@ -2942,12 +2987,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
                 { parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: '🎬 Assistir Agora', url: dashUrl }]] } }
               );
 
-              // N6 — mesma lógica do path principal: envia 2 links se o
-              // conteúdo tem grupo Telegram configurado.
-              // Igor (15/05): via gate de WhatsApp.
-              if (confirmedPurchase.user_id && content?.telegram_group_link) {
-                await this.deliverAccessOrRequestWhatsapp(chatId, confirmedPurchase.user_id, confirmedPurchase.content_id);
-              }
+              // Igor (17/05): pós-pagamento manda só a confirmação +
+              // "🎬 Assistir Agora". Os links de acesso ao grupo só são
+              // enviados quando o cliente clica em "Assistir" no
+              // dashboard → endpoint send-access (sendAccessToUser).
             }
 
             this.pendingPixPayments.delete(purchaseId);
@@ -4160,12 +4203,11 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
             }
           }
 
-          // N6 (Igor 04/05): independente de auto-add ou link único,
-          // sempre envia mensagem com 2 links de acesso (single-use 24h
-          // + fixo request-to-join). Auto-add coloca o user no grupo
-          // imediatamente, mas se ele sair, ainda precisa dos links.
-          // Igor (15/05): via gate de WhatsApp — pede o número antes.
-          await this.deliverAccessOrRequestWhatsapp(parseInt(user.telegram_id), user.id, content.id);
+          // Igor (17/05): os links de acesso ao grupo (single-use 24h +
+          // fixo) não são mais enviados no pós-pagamento. O auto-add
+          // acima já coloca o cliente no grupo; se ele sair, recupera o
+          // acesso clicando em "Assistir" no dashboard → endpoint
+          // send-access (sendAccessToUser).
         }
       }
 
