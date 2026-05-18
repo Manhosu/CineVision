@@ -9,7 +9,18 @@ export interface CatalogHit {
   type?: string;
   genres?: string;
   poster_url?: string;
+  /** 'dubbed' | 'subtitled' | 'dubbed_subtitled' (Igor 18/05). */
+  audio_type?: string;
+  /** Sinopse curta pra IA responder sobre o enredo (Igor 18/05). */
+  synopsis?: string;
 }
+
+/** audio_type → texto amigável que a IA usa pra responder "tá dublado?". */
+const AUDIO_LABEL: Record<string, string> = {
+  dubbed: 'Dublado',
+  subtitled: 'Legendado',
+  dubbed_subtitled: 'Dublado e Legendado',
+};
 
 @Injectable()
 export class CatalogContextService {
@@ -39,7 +50,43 @@ export class CatalogContextService {
   async searchRelevant(query: string, limit = 8): Promise<CatalogHit[]> {
     const term = (query || '').trim();
     if (!term) return [];
+    const hits = await this.searchRaw(term, limit);
+    return this.enrichHits(hits);
+  }
 
+  /**
+   * Igor (18/05): a IA não respondia "tá dublado?" nem sobre o enredo
+   * porque o catálogo mandado pra ela só tinha título/ano/preço. Aqui
+   * puxamos `audio_type` e `synopsis` direto da tabela `content` pelos
+   * IDs das hits (uma query leve, sem tocar na RPC search_content que
+   * também serve a busca pública). Falha aqui não derruba a busca.
+   */
+  private async enrichHits(hits: CatalogHit[]): Promise<CatalogHit[]> {
+    if (!hits.length) return hits;
+    try {
+      const ids = hits.map((h) => h.id).filter(Boolean);
+      const { data } = await this.supabase.client
+        .from('content')
+        .select('id, audio_type, synopsis, description')
+        .in('id', ids);
+      const byId = new Map((data || []).map((d: any) => [d.id, d]));
+      return hits.map((h) => {
+        const d = byId.get(h.id);
+        if (!d) return h;
+        return {
+          ...h,
+          audio_type: d.audio_type || undefined,
+          synopsis: (d.synopsis || d.description || '').trim() || undefined,
+        };
+      });
+    } catch (err: any) {
+      this.logger.warn(`enrichHits failed: ${err.message}`);
+      return hits;
+    }
+  }
+
+  /** Busca crua (RPC search_content + fallback ilike), sem enriquecer. */
+  private async searchRaw(term: string, limit: number): Promise<CatalogHit[]> {
     try {
       const { data, error } = await this.supabase.client.rpc('search_content', {
         search_query: term,
@@ -135,7 +182,13 @@ export class CatalogContextService {
     const lines = hits.map((h) => {
       const price = (h.price_cents / 100).toFixed(2).replace('.', ',');
       const year = h.release_year ? ` (${h.release_year})` : '';
-      return `- ID=${h.id} | ${h.title}${year} | tipo=${h.type || 'filme'} | R$${price}`;
+      const audio = h.audio_type
+        ? ` | Áudio: ${AUDIO_LABEL[h.audio_type] || h.audio_type}`
+        : '';
+      const synopsis = h.synopsis
+        ? `\n    Sinopse: ${h.synopsis.slice(0, 280)}${h.synopsis.length > 280 ? '…' : ''}`
+        : '';
+      return `- ID=${h.id} | ${h.title}${year} | tipo=${h.type || 'filme'} | R$${price}${audio}${synopsis}`;
     });
     return `CATÁLOGO RELEVANTE:\n${lines.join('\n')}`;
   }
