@@ -5,6 +5,7 @@ import { Providers } from '@/components/Providers';
 import CartIcon from '@/components/Cart/CartIcon';
 import CineVisionIntro from '@/components/Splash/CineVisionIntro';
 import SessionGuard from '@/components/Auth/SessionGuard';
+import { TelegramAccessModal } from '@/components/TelegramAccessModal/TelegramAccessModal';
 import './globals.css';
 
 const outfit = Outfit({
@@ -131,6 +132,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
             },
           }}
         />
+
+          {/* Modal global de acesso ao conteúdo (após o botão "Assistir") */}
+          <TelegramAccessModal />
         </Providers>
 
         {/* Service Worker registration - TEMPORARILY DISABLED */}

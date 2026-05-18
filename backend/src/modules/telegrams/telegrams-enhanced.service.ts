@@ -678,7 +678,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       // pra "Acesso Fixo" e ajustar copy reforcando que NAO e compartilhavel
       // (link vinculado a compra; quem usar fora vai pra malha fina).
       const buttons: Array<Array<{ text: string; url: string }>> = [
-        [{ text: '🔑 Acesso Único (24h)', url: access.link }],
+        [{ text: '🔑 Entrar no Grupo', url: access.link }],
       ];
       if (access.fixedLink) {
         buttons.push([{ text: '📌 Acesso Fixo', url: access.fixedLink }]);
@@ -698,7 +698,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
       await this.sendMessage(
         chatId,
         `🎬 *Acesso ao Grupo do Telegram*\n\n` +
-          `🔑 *Acesso Único*: link de uso único, válido por 24h. Use pra entrar imediatamente.${fixedDescription}\n\n` +
+          `🔑 *Entrar no Grupo*: clique no botão abaixo pra entrar agora.\n\n` +
+          `⚠️ *Atenção:* este LINK de entrada expira em 24h por segurança. Mas depois que você entrar no grupo, seu acesso ao filme/série é *VITALÍCIO* — pode assistir quando e quantas vezes quiser.${fixedDescription}\n\n` +
           `🎬 *Minhas Compras*: acesse a dashboard a qualquer momento pra rever todos os filmes que você comprou.\n\n` +
           `_Não compartilhe esses links — eles estão vinculados à sua compra._`,
         {
@@ -722,10 +723,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
    *     (purchase paga). Se o cliente não comprou → lança ForbiddenException.
    *  2. Busca o chat do Telegram do cliente logado (`telegram_chat_id`,
    *     com `telegram_id` como fallback — em chat privado são iguais).
-   *  3. Tem Telegram → o bot manda os botões de acesso (24h + fixo) no DM
-   *     do cliente via `sendGroupAccessLinks`. Retorna `{ sent: true }`.
-   *  4. Sem Telegram (cliente web puro) → retorna `{ sent: false, link }`
-   *     pro frontend abrir o link direto.
+   *  3. Tem Telegram → o bot manda os botões de acesso (link 24h + fixo) no
+   *     DM do cliente via `sendGroupAccessLinks`. Retorna `{ sent: true, link }`.
+   *  4. Sem Telegram (cliente web puro) → retorna `{ sent: false, link }`.
+   *
+   * O `link` volta nos DOIS casos: o frontend abre o modal `TelegramAccessModal`
+   * com um botão direto pro grupo (Igor 17/05 — o leigo não percebia só o toast).
    */
   async sendAccessToUser(
     userId: string,
@@ -751,7 +754,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // 3. Cliente com Telegram → o bot manda os links no DM dele.
     if (chatIdRaw && !Number.isNaN(chatId)) {
       await this.sendGroupAccessLinks(chatId, userId, contentId);
-      return { sent: true };
+      return { sent: true, link: access.link };
     }
 
     // 4. Cliente sem Telegram vinculado → devolve o link pro frontend abrir.
