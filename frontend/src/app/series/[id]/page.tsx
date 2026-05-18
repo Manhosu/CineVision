@@ -1,131 +1,55 @@
-'use client';
+import { Metadata } from 'next';
+import SeriesDetailClient from './SeriesDetailClient';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { toast } from 'react-hot-toast';
-import ContentHero from '@/components/ContentHero/ContentHero';
-import CastSection from '@/components/CastSection/CastSection';
-import TrailerSection from '@/components/TrailerSection/TrailerSection';
-import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
-import { openContentGroup } from '@/lib/telegramAccess';
-import { Movie } from '@/types/movie';
-
-interface Series extends Movie {
-  synopsis?: string;
-  total_seasons?: number;
-  total_episodes?: number;
-  content_type?: string;
+interface SeriesPageProps {
+  params: { id: string };
 }
 
-export default function SeriesDetailsPage() {
-  const params = useParams();
-  const router = useRouter();
-  const seriesId = params?.id as string;
-
-  const [series, setSeries] = useState<Series | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isOwned, setIsOwned] = useState(false);
-  const [checkingOwnership, setCheckingOwnership] = useState(true);
-
-  const normalizeToArray = (value: string | string[] | undefined): string[] => {
-    if (!value) return [];
-    if (Array.isArray(value)) return value;
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) return parsed;
-    } catch {
-      return value.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    return [];
-  };
-
-  useEffect(() => {
-    if (!seriesId) return;
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/content/series/${seriesId}`);
-        if (!res.ok) throw new Error('Série não encontrada');
-        const data = await res.json();
-
-        if (data.content_type !== 'series') { router.push(`/movies/${seriesId}`); return; }
-
-        data.cast = normalizeToArray(data.cast);
-        data.genres = normalizeToArray(data.genres);
-        setSeries(data);
-
-        // Ownership
-        try {
-          const owRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/purchases/check/${seriesId}`, { credentials: 'include' });
-          if (owRes.ok) { const d = await owRes.json(); setIsOwned(d.isOwned || false); }
-        } catch { /* ignore */ } finally { setCheckingOwnership(false); }
-      } catch (err: any) {
-        setError(err.message || 'Erro ao carregar série');
-      } finally { setLoading(false); }
-    };
-    fetchData();
-  }, [seriesId, router]);
-
-  const handlePlay = async () => {
-    if (!series) return;
-    await openContentGroup(series.id, series.telegram_group_link);
-  };
-  // O ContentHero cuida do "Comprar" sozinho — bifurca anônimo
-  // (Pix direto na web) vs logado-Telegram (deep link buy_<id>).
-  // Não passamos onPurchase aqui para não sobrescrever esse fluxo.
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary-500 border-t-transparent" />
-      </div>
-    );
+// Igor (18/05): a página de série era 100% 'use client', então o Next não
+// gerava `generateMetadata` — ao compartilhar o link no WhatsApp/Facebook
+// não aparecia backdrop nenhum (só filme funcionava, porque /movies/[id]
+// já era server component). Agora a página é um server component fino que
+// gera as meta tags Open Graph e renderiza o componente client.
+async function getSeries(id: string): Promise<any | null> {
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) return null;
+    const res = await fetch(`${apiUrl}/api/v1/content/series/${id}`, {
+      cache: 'no-store',
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
   }
+}
 
-  if (error || !series) {
-    return (
-      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-3">Série não encontrada</h2>
-          <p className="text-white/50 mb-6">{error}</p>
-          <Link href="/series" className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition-colors font-medium">
-            Voltar para Séries
-          </Link>
-        </div>
-      </div>
-    );
-  }
+export async function generateMetadata({ params }: SeriesPageProps): Promise<Metadata> {
+  const series = await getSeries(params.id);
+  if (!series) return { title: 'Série não encontrada - Cine Vision' };
 
-  const castString = Array.isArray(series.cast) ? series.cast.join(', ') : series.cast;
+  const image = series.backdrop_url || series.thumbnail_url || undefined;
+  const description = series.description || series.synopsis || undefined;
 
-  return (
-    <main className="bg-dark-950">
-      {/* Captura ?via=business&bid=...&chat=... pro fluxo de IA Business DM. */}
-      <BusinessLinkCapture />
+  return {
+    title: `${series.title} - Cine Vision`,
+    description,
+    openGraph: {
+      title: series.title,
+      description,
+      images: image
+        ? [{ url: image, width: 1920, height: 1080, alt: series.title }]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: series.title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
+}
 
-      <ContentHero
-        content={series}
-        backHref="/"
-        backLabel="Início"
-        contentType="series"
-        isOwned={isOwned}
-        checkingOwnership={checkingOwnership}
-        onPlay={handlePlay}
-      />
-
-      <CastSection
-        cast={castString}
-        director={series.director}
-        people={(series as any).content_people?.map((cp: any) => cp.person).filter(Boolean)}
-      />
-
-      {series.trailer_url && (
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 tv:px-16 pb-10 tv:pb-14">
-          <TrailerSection movie={series as any} />
-        </div>
-      )}
-    </main>
-  );
+export default function SeriesPage() {
+  return <SeriesDetailClient />;
 }

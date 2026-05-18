@@ -15,6 +15,10 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
+  // Igor (18/05): metadataBase resolve URLs relativas (og:image) pra
+  // absolutas — sem isso, o WhatsApp/Facebook não carregavam a imagem
+  // padrão ao compartilhar o link principal do site.
+  metadataBase: new URL('https://www.cinevisionapp.com.br'),
   title: 'Cine Vision - Filmes Online',
   description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
   keywords: ['filmes', 'streaming', 'cinema', 'online', 'telegram'],
@@ -35,15 +39,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'pt_BR',
-    url: 'https://cinevision.com',
+    url: 'https://www.cinevisionapp.com.br',
     title: 'Cine Vision - Filmes Online',
     description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
     siteName: 'Cine Vision',
     images: [
       {
-        url: '/og-image.jpg',
-        width: 1200,
-        height: 630,
+        // Imagem padrão da plataforma (o /og-image.jpg antigo não existia).
+        url: '/cinevision-logo.png',
         alt: 'Cine Vision - Filmes Online',
       },
     ],
@@ -52,7 +55,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Cine Vision - Filmes Online',
     description: 'Plataforma de streaming com filmes em alta qualidade.',
-    images: ['/og-image.jpg'],
+    images: ['/cinevision-logo.png'],
   },
   manifest: '/manifest.json',
   icons: {
