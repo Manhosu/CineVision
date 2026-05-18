@@ -83,6 +83,10 @@ export class AnalyticsController {
         success: true,
         data: sessions,
         count: sessions.length,
+        // Igor (18/05): o painel usa server_time como "agora" pra calcular
+        // "última atividade" — sem depender do relógio (possivelmente
+        // errado) da máquina do admin.
+        server_time: new Date().toISOString(),
       };
     } catch (error) {
       this.logger.error('Error getting active sessions:', error);

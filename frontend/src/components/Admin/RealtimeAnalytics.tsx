@@ -94,6 +94,11 @@ export function RealtimeAnalytics() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  // Igor (18/05): "agora" ancorado no relógio do SERVIDOR, não no do
+  // cliente. O painel mostrava "1h atrás" pra todo mundo quando o relógio
+  // da máquina do admin estava adiantado. `server_time` vem do endpoint
+  // /active-sessions; guardamos o offset (servidor − cliente) em ms.
+  const [serverClockOffset, setServerClockOffset] = useState(0);
 
   // Fetch realtime stats with retry
   const fetchStats = async (retries = 2) => {
@@ -144,6 +149,10 @@ export function RealtimeAnalytics() {
       if (result.success && result.data) {
         setSessions(result.data);
         setError(null);
+        if (result.server_time) {
+          // offset = quanto o relógio do servidor está à frente do cliente
+          setServerClockOffset(Date.parse(result.server_time) - Date.now());
+        }
       }
     } catch (err) {
       console.error('Error fetching sessions:', err);
@@ -340,7 +349,7 @@ export function RealtimeAnalytics() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-gray-400">
-                      {formatTimestamp(sessionGroup.last_activity)}
+                      {formatTimestamp(sessionGroup.last_activity, serverClockOffset)}
                     </td>
                   </tr>
                 ))}
@@ -354,11 +363,12 @@ export function RealtimeAnalytics() {
 }
 
 // Helper function
-function formatTimestamp(timestamp: string): string {
+// Igor (18/05): "agora" = Date.now() + offset do servidor. Sem o offset,
+// um PC com horário adiantado mostrava "1h atrás" pra sessões recém-criadas.
+function formatTimestamp(timestamp: string, clockOffsetMs = 0): string {
   const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
+  const nowMs = Date.now() + clockOffsetMs;
+  const diffMins = Math.floor((nowMs - date.getTime()) / 60000);
 
   if (diffMins < 1) return 'Agora';
   if (diffMins < 60) return `${diffMins}m atrás`;
