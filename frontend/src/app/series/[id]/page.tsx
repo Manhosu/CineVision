@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import SeriesDetailClient from './SeriesDetailClient';
+import { ogImageUrl } from '@/lib/ogImage';
 
 interface SeriesPageProps {
   params: { id: string };
@@ -28,7 +29,8 @@ export async function generateMetadata({ params }: SeriesPageProps): Promise<Met
   const series = await getSeries(params.id);
   if (!series) return { title: 'Série não encontrada - Cine Vision' };
 
-  const image = series.backdrop_url || series.thumbnail_url || undefined;
+  // Igor (18/05): og:image via proxy que força JPEG — WhatsApp não renderiza WebP.
+  const image = ogImageUrl(series.backdrop_url || series.thumbnail_url);
   const description = series.description || series.synopsis || undefined;
 
   return {
@@ -38,7 +40,7 @@ export async function generateMetadata({ params }: SeriesPageProps): Promise<Met
       title: series.title,
       description,
       images: image
-        ? [{ url: image, width: 1920, height: 1080, alt: series.title }]
+        ? [{ url: image, width: 1200, height: 630, alt: series.title }]
         : undefined,
     },
     twitter: {

@@ -7,6 +7,7 @@ import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import RelatedMovies from '@/components/RelatedMovies/RelatedMovies';
 import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
 import { Movie } from '@/types/movie';
+import { ogImageUrl } from '@/lib/ogImage';
 
 interface MoviePageProps {
   params: { id: string };
@@ -45,19 +46,22 @@ export async function generateMetadata({ params }: MoviePageProps): Promise<Meta
   const movie = await getMovie(params.id);
   if (!movie) return { title: 'Filme não encontrado - Cine Vision' };
 
+  // Igor (18/05): og:image via proxy que força JPEG — WhatsApp não renderiza WebP.
+  const ogImg = ogImageUrl(movie.backdrop_url || movie.thumbnail_url);
+
   return {
     title: `${movie.title} - Cine Vision`,
     description: movie.description,
     openGraph: {
       title: movie.title,
       description: movie.description,
-      images: [{ url: movie.backdrop_url || movie.thumbnail_url, width: 1920, height: 1080, alt: movie.title }],
+      images: ogImg ? [{ url: ogImg, width: 1200, height: 630, alt: movie.title }] : undefined,
     },
     twitter: {
       card: 'summary_large_image',
       title: movie.title,
       description: movie.description,
-      images: [movie.backdrop_url || movie.thumbnail_url],
+      images: ogImg ? [ogImg] : undefined,
     },
   };
 }
