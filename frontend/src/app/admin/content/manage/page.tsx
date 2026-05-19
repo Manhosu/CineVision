@@ -52,6 +52,12 @@ export default function ContentManagePage() {
   // Igor (08/05): aprovacao em batch dos DRAFTs (conteudos do funcionario).
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
   const [batchPublishing, setBatchPublishing] = useState(false);
+  // Igor (18/05): confirmação de publicar via modal in-app. Antes usava
+  // window.confirm(), que estava sendo bloqueado no navegador do Igor →
+  // clicar em publicar não fazia nada ("botão morto").
+  const [pendingPublish, setPendingPublish] = useState<
+    { type: 'single'; content: Content } | { type: 'batch' } | null
+  >(null);
 
   useEffect(() => {
     fetchContents();
@@ -126,11 +132,9 @@ export default function ContentManagePage() {
     }
   };
 
-  const handlePublish = async (content: Content) => {
-    if (!confirm(`Tem certeza que deseja publicar "${content.title}"? O conteúdo ficará visível no site.`)) {
-      return;
-    }
-
+  // Publica um conteúdo. Chamado pelo modal de confirmação (não mais por
+  // window.confirm). Feedback via toast (window.alert também era bloqueado).
+  const runPublish = async (content: Content) => {
     try {
       setPublishingId(content.id);
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
@@ -146,21 +150,18 @@ export default function ContentManagePage() {
       );
 
       if (response.ok) {
-        alert('✅ Conteúdo publicado com sucesso! Já está visível no site.');
+        toast.success('Conteúdo publicado! Já está visível no site.');
         await fetchContents();
       } else {
         const errorText = await response.text();
         console.error('Erro ao publicar:', errorText);
-        try {
-          const errorJson = JSON.parse(errorText);
-          alert(`❌ Erro ao publicar: ${errorJson.message || errorText}`);
-        } catch {
-          alert(`❌ Erro ao publicar: ${errorText}`);
-        }
+        let msg = errorText;
+        try { msg = JSON.parse(errorText).message || errorText; } catch { /* texto cru */ }
+        toast.error(`Erro ao publicar: ${msg}`);
       }
     } catch (error) {
       console.error('Error publishing content:', error);
-      alert('❌ Erro ao publicar conteúdo');
+      toast.error('Erro ao publicar conteúdo');
     } finally {
       setPublishingId(null);
     }
@@ -185,16 +186,8 @@ export default function ContentManagePage() {
 
   const clearDraftSelection = () => setSelectedDraftIds(new Set());
 
-  const handlePublishBatch = async () => {
+  const runPublishBatch = async () => {
     if (selectedDraftIds.size === 0) return;
-    if (
-      !confirm(
-        `Publicar ${selectedDraftIds.size} conteúdo(s) selecionado(s)?\n\n` +
-          `Eles ficam visíveis no site imediatamente após aprovação.`,
-      )
-    )
-      return;
-
     try {
       setBatchPublishing(true);
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
@@ -211,22 +204,31 @@ export default function ContentManagePage() {
       );
       if (response.ok) {
         const r = await response.json();
-        alert(
-          `✅ ${r.published_count} publicados.${
-            r.failed_count ? `\n❌ ${r.failed_count} falhou(falharam).` : ''
-          }`,
-        );
+        if (r.failed_count) {
+          toast.error(`${r.published_count} publicado(s), ${r.failed_count} falhou(falharam).`);
+        } else {
+          toast.success(`${r.published_count} conteúdo(s) publicado(s)!`);
+        }
         clearDraftSelection();
         await fetchContents();
       } else {
         const errorText = await response.text();
-        alert(`❌ Erro no batch: ${errorText}`);
+        toast.error(`Erro no batch: ${errorText}`);
       }
     } catch (err: any) {
-      alert(`❌ Erro de rede: ${err?.message || 'desconhecido'}`);
+      toast.error(`Erro de rede: ${err?.message || 'desconhecido'}`);
     } finally {
       setBatchPublishing(false);
     }
+  };
+
+  // Confirmação do modal de publicar (substitui window.confirm).
+  const confirmPublish = async () => {
+    const p = pendingPublish;
+    setPendingPublish(null);
+    if (!p) return;
+    if (p.type === 'single') await runPublish(p.content);
+    else await runPublishBatch();
   };
 
   // Igor (12/05): clicar em "Testar grupo Telegram" agora chama o endpoint
@@ -487,7 +489,7 @@ export default function ContentManagePage() {
                 </button>
               )}
               <button
-                onClick={handlePublishBatch}
+                onClick={() => setPendingPublish({ type: 'batch' })}
                 disabled={selectedDraftIds.size === 0 || batchPublishing}
                 className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -602,7 +604,7 @@ export default function ContentManagePage() {
                         {/* Botão Publicar - só aparece se não estiver publicado */}
                         {(content.status === 'DRAFT' || content.status === 'draft') && (
                           <button
-                            onClick={() => handlePublish(content)}
+                            onClick={() => setPendingPublish({ type: 'single', content })}
                             disabled={publishingId === content.id}
                             className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Publicar conteúdo"
@@ -695,6 +697,43 @@ export default function ContentManagePage() {
                   className="flex-1 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
                 >
                   Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Publish Confirmation Modal — Igor (18/05): substitui o
+            window.confirm() que estava sendo bloqueado ("botão morto"). */}
+        {pendingPublish && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-dark-800 border border-white/10 rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-white mb-4">Publicar conteúdo</h3>
+              <p className="text-gray-300 mb-6">
+                {pendingPublish.type === 'single' ? (
+                  <>
+                    Publicar <strong>{pendingPublish.content.title}</strong>? Ele
+                    ficará visível no site.
+                  </>
+                ) : (
+                  <>
+                    Publicar <strong>{selectedDraftIds.size}</strong> conteúdo(s)
+                    selecionado(s)? Eles ficam visíveis no site imediatamente.
+                  </>
+                )}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPendingPublish(null)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-dark-700 text-white hover:bg-dark-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmPublish}
+                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                >
+                  Publicar
                 </button>
               </div>
             </div>
