@@ -22,10 +22,12 @@ export class AdminTop10Controller {
   @Get('current')
   @RequirePermission('can_view_top10')
   @ApiOperation({ summary: 'Get current top 10 content' })
-  @ApiQuery({ name: 'type', enum: ['movie', 'series'], required: false })
+  @ApiQuery({ name: 'type', enum: ['movie', 'series', 'novelinha'], required: false })
   @ApiResponse({ status: 200, description: 'Current top 10 retrieved successfully' })
   @HttpCode(HttpStatus.OK)
-  async getCurrentTop10(@Query('type') type: 'movie' | 'series' = 'movie') {
+  async getCurrentTop10(
+    @Query('type') type: 'movie' | 'series' | 'novelinha' = 'movie',
+  ) {
     return this.top10Service.getCurrentTop10(type);
   }
 

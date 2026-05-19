@@ -56,7 +56,7 @@ function formatDate(date: Date): string {
 
 export default function AdminTop10Page() {
   const permCheck = useRequirePermission('can_view_top10');
-  const [activeTab, setActiveTab] = useState<'movie' | 'series'>('movie');
+  const [activeTab, setActiveTab] = useState<'movie' | 'series' | 'novelinha'>('movie');
   const [data, setData] = useState<Top10Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
@@ -188,6 +188,17 @@ export default function AdminTop10Page() {
             }`}
           >
             Séries
+          </button>
+          {/* Igor (18/05): Top 10 das Novelinhas — ranqueia por compras igual aos demais. */}
+          <button
+            onClick={() => setActiveTab('novelinha')}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${
+              activeTab === 'novelinha'
+                ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-500/30'
+                : 'bg-gray-800/50 text-gray-400 hover:text-white hover:bg-gray-700/50'
+            }`}
+          >
+            Novelinhas
           </button>
         </div>
 

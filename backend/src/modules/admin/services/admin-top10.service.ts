@@ -8,9 +8,11 @@ export class AdminTop10Service {
   constructor(private readonly supabaseService: SupabaseService) {}
 
   /**
-   * Get current top 10 content by type (movie or series)
+   * Get current top 10 content by type (movie, series or novelinha).
+   * Igor (18/05): novelinha entrou como 3º tipo — a query já é genérica
+   * (`.eq('content_type', type)`), só faltava liberar o tipo na assinatura.
    */
-  async getCurrentTop10(type: 'movie' | 'series') {
+  async getCurrentTop10(type: 'movie' | 'series' | 'novelinha') {
     const { data, error } = await this.supabaseService.client
       .from('content')
       .select('id, title, thumbnail_url, poster_url, content_type, weekly_sales, views_count, price_cents, status')
