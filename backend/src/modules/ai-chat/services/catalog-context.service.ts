@@ -13,6 +13,8 @@ export interface CatalogHit {
   audio_type?: string;
   /** Sinopse curta pra IA responder sobre o enredo (Igor 18/05). */
   synopsis?: string;
+  /** Título em inglês — vem de `title_en` (ou `title_secondary`). Igor (20/05). */
+  title_en?: string;
 }
 
 /** audio_type → texto amigável que a IA usa pra responder "tá dublado?". */
@@ -67,7 +69,7 @@ export class CatalogContextService {
       const ids = hits.map((h) => h.id).filter(Boolean);
       const { data } = await this.supabase.client
         .from('content')
-        .select('id, audio_type, synopsis, description')
+        .select('id, audio_type, synopsis, description, title_en, title_secondary')
         .in('id', ids);
       const byId = new Map((data || []).map((d: any) => [d.id, d]));
       return hits.map((h) => {
@@ -77,6 +79,7 @@ export class CatalogContextService {
           ...h,
           audio_type: d.audio_type || undefined,
           synopsis: (d.synopsis || d.description || '').trim() || undefined,
+          title_en: h.title_en || d.title_en || d.title_secondary || undefined,
         };
       });
     } catch (err: any) {
@@ -85,8 +88,36 @@ export class CatalogContextService {
     }
   }
 
-  /** Busca crua (RPC search_content + fallback ilike), sem enriquecer. */
+  /**
+   * Busca crua: roda a RPC `search_content` (cobre `title` + `description`
+   * com unaccent/trigram/full-text) E a busca ILIKE (cobre `title_en` e
+   * `title_secondary` — onde mora o título em inglês) em PARALELO, e faz
+   * merge deduplicando por id.
+   *
+   * Igor (20/05): a IA não achava a série "Você" quando o cliente pedia
+   * "You" — a RPC só busca em `title`/`description`, e "You" está em
+   * `title_en` (210 dos 522 conteúdos têm). Rodar o ILIKE em paralelo
+   * (não só como reserva) garante que título em inglês entre nas hits.
+   */
   private async searchRaw(term: string, limit: number): Promise<CatalogHit[]> {
+    const [rpcHits, altHits] = await Promise.all([
+      this.searchViaRpc(term, limit),
+      this.searchRelevantFallback(term, limit),
+    ]);
+    const seen = new Set<string>();
+    const out: CatalogHit[] = [];
+    for (const h of [...rpcHits, ...altHits]) {
+      if (h.id && !seen.has(h.id)) {
+        seen.add(h.id);
+        out.push(h);
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
+  }
+
+  /** Wrapper da RPC `search_content` (title + description, unaccent/trigram). */
+  private async searchViaRpc(term: string, limit: number): Promise<CatalogHit[]> {
     try {
       const { data, error } = await this.supabase.client.rpc('search_content', {
         search_query: term,
@@ -94,27 +125,14 @@ export class CatalogContextService {
         result_limit: limit,
         result_offset: 0,
       });
-
       if (error) {
-        this.logger.warn(
-          `search_content RPC failed for "${term}": ${error.message} — falling back to ILIKE`,
-        );
-        return this.searchRelevantFallback(term, limit);
+        this.logger.warn(`search_content RPC failed for "${term}": ${error.message}`);
+        return [];
       }
-
-      if (Array.isArray(data) && data.length) {
-        return this.mapHits(data);
-      }
-
-      // RPC retornou vazio. Antes de devolver "nada encontrado", tenta
-      // o fallback ilike (cobre casos onde o conteúdo recém criado
-      // não está no índice trigram ainda, raríssimo mas existe).
-      return this.searchRelevantFallback(term, limit);
+      return Array.isArray(data) ? this.mapHits(data) : [];
     } catch (err: any) {
-      this.logger.warn(
-        `search_content RPC threw for "${term}": ${err.message} — falling back to ILIKE`,
-      );
-      return this.searchRelevantFallback(term, limit);
+      this.logger.warn(`search_content RPC threw for "${term}": ${err.message}`);
+      return [];
     }
   }
 
@@ -133,14 +151,14 @@ export class CatalogContextService {
       .split(/\s+/)
       .filter((t) => t.length >= 2 && !stopwords.has(t));
 
-    const select = 'id, title, title_secondary, price_cents, release_year, content_type, genres, poster_url, status';
+    const select = 'id, title, title_secondary, title_en, price_cents, release_year, content_type, genres, poster_url, status';
 
     if (!tokens.length) {
       const { data } = await this.supabase.client
         .from('content')
         .select(select)
         .eq('status', 'PUBLISHED')
-        .or(`title.ilike.%${term}%,title_secondary.ilike.%${term}%`)
+        .or(`title.ilike.%${term}%,title_secondary.ilike.%${term}%,title_en.ilike.%${term}%`)
         .limit(limit);
       return this.mapHits(data);
     }
@@ -152,7 +170,7 @@ export class CatalogContextService {
         .from('content')
         .select(select)
         .eq('status', 'PUBLISHED')
-        .or(`title.ilike.%${escaped}%,title_secondary.ilike.%${escaped}%`)
+        .or(`title.ilike.%${escaped}%,title_secondary.ilike.%${escaped}%,title_en.ilike.%${escaped}%`)
         .limit(limit);
       for (const row of data || []) {
         if (!seen.has(row.id)) seen.set(row.id, row);
@@ -173,6 +191,7 @@ export class CatalogContextService {
       type: d.content_type,
       genres: d.genres,
       poster_url: d.poster_url,
+      title_en: d.title_en || d.title_secondary || undefined,
     }));
   }
 
@@ -182,13 +201,17 @@ export class CatalogContextService {
     const lines = hits.map((h) => {
       const price = (h.price_cents / 100).toFixed(2).replace('.', ',');
       const year = h.release_year ? ` (${h.release_year})` : '';
+      const enTitle =
+        h.title_en && h.title_en.toLowerCase() !== (h.title || '').toLowerCase()
+          ? ` | inglês: ${h.title_en}`
+          : '';
       const audio = h.audio_type
         ? ` | Áudio: ${AUDIO_LABEL[h.audio_type] || h.audio_type}`
         : '';
       const synopsis = h.synopsis
         ? `\n    Sinopse: ${h.synopsis.slice(0, 280)}${h.synopsis.length > 280 ? '…' : ''}`
         : '';
-      return `- ID=${h.id} | ${h.title}${year} | tipo=${h.type || 'filme'} | R$${price}${audio}${synopsis}`;
+      return `- ID=${h.id} | ${h.title}${year}${enTitle} | tipo=${h.type || 'filme'} | R$${price}${audio}${synopsis}`;
     });
     return `CATÁLOGO RELEVANTE:\n${lines.join('\n')}`;
   }
