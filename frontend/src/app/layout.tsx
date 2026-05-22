@@ -6,6 +6,7 @@ import CartIcon from '@/components/Cart/CartIcon';
 import CineVisionIntro from '@/components/Splash/CineVisionIntro';
 import SessionGuard from '@/components/Auth/SessionGuard';
 import { TelegramAccessModal } from '@/components/TelegramAccessModal/TelegramAccessModal';
+import { ogImageUrl } from '@/lib/ogImage';
 import './globals.css';
 
 const outfit = Outfit({
@@ -14,56 +15,71 @@ const outfit = Outfit({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  // Igor (18/05): metadataBase resolve URLs relativas (og:image) pra
-  // absolutas — sem isso, o WhatsApp/Facebook não carregavam a imagem
-  // padrão ao compartilhar o link principal do site.
-  metadataBase: new URL('https://www.cinevisionapp.com.br'),
-  title: 'Cine Vision - Filmes Online',
-  description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
-  keywords: ['filmes', 'streaming', 'cinema', 'online', 'telegram'],
-  authors: [{ name: 'Cine Vision Team' }],
-  creator: 'Cine Vision',
-  publisher: 'Cine Vision',
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
-  openGraph: {
-    type: 'website',
-    locale: 'pt_BR',
-    url: 'https://www.cinevisionapp.com.br',
+// Igor (21/05): a og:image da HOME (preview do link principal no
+// WhatsApp/Facebook) agora é editável pelo admin em /admin/homepage.
+// Buscamos o banner salvo no backend; sem banner, cai no logo padrão.
+// O `ogImageUrl` força JPEG (WhatsApp não renderiza WebP).
+export async function generateMetadata(): Promise<Metadata> {
+  let ogImage = '/cinevision-logo.png';
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+    if (apiUrl) {
+      const res = await fetch(`${apiUrl}/api/v1/settings/homepage-banner`, {
+        next: { revalidate: 60 },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { url?: string };
+        const proxied = ogImageUrl(data.url);
+        if (proxied) ogImage = proxied;
+      }
+    }
+  } catch {
+    // mantém o fallback (logo)
+  }
+
+  return {
+    // metadataBase resolve URLs relativas (og:image) pra absolutas.
+    metadataBase: new URL('https://www.cinevisionapp.com.br'),
     title: 'Cine Vision - Filmes Online',
     description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
-    siteName: 'Cine Vision',
-    images: [
-      {
-        // Imagem padrão da plataforma (o /og-image.jpg antigo não existia).
-        url: '/cinevision-logo.png',
-        alt: 'Cine Vision - Filmes Online',
+    keywords: ['filmes', 'streaming', 'cinema', 'online', 'telegram'],
+    authors: [{ name: 'Cine Vision Team' }],
+    creator: 'Cine Vision',
+    publisher: 'Cine Vision',
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        'max-video-preview': -1,
+        'max-image-preview': 'large',
+        'max-snippet': -1,
       },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Cine Vision - Filmes Online',
-    description: 'Plataforma de streaming com filmes em alta qualidade.',
-    images: ['/cinevision-logo.png'],
-  },
-  manifest: '/manifest.json',
-  icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
-  },
-};
+    },
+    openGraph: {
+      type: 'website',
+      locale: 'pt_BR',
+      url: 'https://www.cinevisionapp.com.br',
+      title: 'Cine Vision - Filmes Online',
+      description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
+      siteName: 'Cine Vision',
+      images: [{ url: ogImage, width: 1200, height: 630, alt: 'Cine Vision - Filmes Online' }],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Cine Vision - Filmes Online',
+      description: 'Plataforma de streaming com filmes em alta qualidade.',
+      images: [ogImage],
+    },
+    manifest: '/manifest.json',
+    icons: {
+      icon: '/favicon.ico',
+      shortcut: '/favicon-16x16.png',
+      apple: '/apple-touch-icon.png',
+    },
+  };
+}
 
 interface RootLayoutProps {
   children: React.ReactNode;

@@ -39,4 +39,14 @@ export class AdminSettingsController {
       whatsapp_group_link: body.whatsapp_group_link,
     };
   }
+
+  // Igor (21/05): banner editável que aparece no preview de link da HOME
+  // ao compartilhar cinevisionapp.com.br no WhatsApp/Facebook (og:image).
+  @Patch('homepage-banner')
+  @ApiOperation({ summary: 'Update homepage Open Graph banner (link preview image)' })
+  @ApiResponse({ status: 200, description: 'Homepage banner updated successfully' })
+  async updateHomepageBanner(@Body() body: { url: string }) {
+    await this.settingsService.updateSettingByKey('homepage_og_image_url', body.url || '');
+    return { url: body.url || '' };
+  }
 }

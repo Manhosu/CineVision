@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
+import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -72,6 +74,11 @@ export default function AdminHomepagePage() {
   const [availableTypeFilter, setAvailableTypeFilter] = useState<'all' | 'movie' | 'series'>('all');
   const [selectedSearch, setSelectedSearch] = useState('');
 
+  // Igor (21/05): banner OG editável da home (preview do link principal).
+  const [ogBanner, setOgBanner] = useState('');
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+
   const getToken = () =>
     typeof window !== 'undefined'
       ? localStorage.getItem('access_token') || localStorage.getItem('auth_token') || ''
@@ -103,6 +110,68 @@ export default function AdminHomepagePage() {
   useEffect(() => {
     fetchCarousels();
   }, [fetchCarousels]);
+
+  // Igor (21/05): carrega o banner OG atual (endpoint público).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/settings/homepage-banner`);
+        if (res.ok) {
+          const data = await res.json();
+          setOgBanner(data.url || '');
+        }
+      } catch {
+        /* ignora — fica sem preview até o admin subir um */
+      }
+    })();
+  }, []);
+
+  const saveBanner = async (url: string) => {
+    const res = await fetch(`${API_URL}/api/v1/admin/settings/homepage-banner`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ url }),
+    });
+    return res.ok;
+  };
+
+  const handleBannerUpload = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem');
+      return;
+    }
+    setUploadingBanner(true);
+    try {
+      const result = await uploadImageToSupabase(file, 'cinevision-capas', 'og-banner');
+      if (result.error || !result.publicUrl) {
+        toast.error(`Falha ao enviar: ${result.error || 'erro desconhecido'}`);
+        return;
+      }
+      if (await saveBanner(result.publicUrl)) {
+        setOgBanner(result.publicUrl);
+        toast.success('Banner salvo! Aparece no preview do link em alguns minutos.');
+      } else {
+        toast.error('Imagem enviada, mas falhou ao salvar. Tente de novo.');
+      }
+    } catch (err: any) {
+      toast.error(`Erro: ${err?.message || 'tente de novo'}`);
+    } finally {
+      setUploadingBanner(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveBanner = async () => {
+    setUploadingBanner(true);
+    try {
+      if (await saveBanner('')) {
+        setOgBanner('');
+        toast.success('Banner removido — volta a usar o logo padrão.');
+      }
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
 
   const toggleVisible = async (carousel: Carousel) => {
     setSaving(carousel.id);
@@ -299,6 +368,59 @@ export default function AdminHomepagePage() {
         <p className="text-sm text-gray-500 mb-6">
           Ative, reordene e renomeie os carrosséis da home. Alterações são aplicadas na hora.
         </p>
+
+        {/* Igor (21/05): banner OG editável — imagem do preview do link principal */}
+        <div className="bg-[#161616] rounded-xl p-4 border border-white/8 mb-6">
+          <h2 className="text-sm font-semibold text-white mb-1">
+            Banner de Compartilhamento (link principal)
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Imagem que aparece ao compartilhar <strong>cinevisionapp.com.br</strong> no WhatsApp,
+            Facebook, etc. Tamanho ideal: 1200×630. Sem banner, usa o logo padrão.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <div className="w-full sm:w-72 aspect-[1200/630] rounded-lg overflow-hidden bg-black/40 border border-white/10 flex items-center justify-center flex-shrink-0">
+              {ogBanner ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={ogBanner} alt="Banner de compartilhamento" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs text-gray-600 px-3 text-center">
+                  Nenhum banner — usando o logo
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleBannerUpload(f);
+                }}
+              />
+              <button
+                onClick={() => bannerInputRef.current?.click()}
+                disabled={uploadingBanner}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {uploadingBanner ? 'Enviando...' : ogBanner ? 'Trocar banner' : 'Enviar banner'}
+              </button>
+              {ogBanner && (
+                <button
+                  onClick={handleRemoveBanner}
+                  disabled={uploadingBanner}
+                  className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-sm disabled:opacity-50"
+                >
+                  Remover (voltar ao logo)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         <div className="space-y-2">
           {carousels.map((carousel, index) => (
