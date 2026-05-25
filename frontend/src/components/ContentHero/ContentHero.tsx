@@ -439,6 +439,18 @@ export default function ContentHero({
             </div>
           )}
 
+          {/* Igor (21/05): aviso de acesso vitalício. Cliente achava que era
+              aluguel (tempo limitado) e adiava a compra → venda perdida.
+              Linguagem simples, sem a palavra "vitalício". */}
+          {!isOwned && !checkingOwnership && (
+            <div className="mb-3 sm:mb-4 flex items-center justify-center sm:justify-start gap-1.5 text-xs sm:text-sm text-green-400 font-medium">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Acesso para sempre — assista quantas vezes quiser</span>
+            </div>
+          )}
+
           {/* Actions row — N7 (Igor 04/05): em mobile, centralizar a row
               pra que o botão "Comprar" alinhe visualmente com o preço
               que já fica centralizado. Em sm+ volta pro layout original

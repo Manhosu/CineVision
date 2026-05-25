@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     if (apiUrl) {
       const res = await fetch(`${apiUrl}/api/v1/settings/homepage-banner`, {
-        next: { revalidate: 60 },
+        next: { revalidate: 3600 },
       });
       if (res.ok) {
         const data = (await res.json()) as { url?: string };

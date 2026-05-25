@@ -263,6 +263,16 @@ function CheckoutContent() {
               Escaneie o QR code ou copie o código PIX abaixo. A confirmação acontece em até 1 minuto.
             </p>
 
+            {/* Igor (21/05): reforço de acesso vitalício na hora do pagamento. */}
+            <div className="mb-6 flex items-center gap-3 rounded-xl border border-green-500/20 bg-green-500/10 p-4">
+              <svg className="h-5 w-5 flex-shrink-0 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-green-300">
+                <strong className="text-green-400">Acesso para sempre.</strong> Depois de pagar, o conteúdo é seu — assista quando e quantas vezes quiser.
+              </p>
+            </div>
+
             <div className="mb-6 flex flex-col items-center gap-4 rounded-xl border border-white/10 bg-black p-6">
               {qrB64 ? (
                 <Image
