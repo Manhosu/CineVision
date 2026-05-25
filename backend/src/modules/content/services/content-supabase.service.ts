@@ -816,6 +816,46 @@ export class ContentSupabaseService {
     return enriched;
   }
 
+  // Igor (24/05): detalhe de novelinha. Igual ao findSeriesById, mas
+  // filtra content_type=novelinha — o findSeriesById filtra 'series', então
+  // passar uma novelinha por ele dava 404.
+  async findNovelinhaById(id: string) {
+    const { data: novelinha, error } = await this.supabaseService.client
+      .from('content')
+      .select(`
+        *,
+        categories:content_categories(
+          category:categories(*)
+        ),
+        content_languages(
+          id,
+          language_name,
+          video_url,
+          hls_master_url,
+          upload_status
+        ),
+        content_people(
+          role,
+          character_name,
+          display_order,
+          person:people(id, name, photo_url, role, bio)
+        )
+      `)
+      .eq('id', id)
+      .eq('content_type', ContentType.NOVELINHA)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new NotFoundException(`Novelinha with ID ${id} not found`);
+      }
+      throw new Error(`Failed to fetch novelinha: ${error.message}`);
+    }
+
+    const [enriched] = await this.enrichContentWithDiscounts([novelinha]);
+    return enriched;
+  }
+
   async findSeriesEpisodes(seriesId: string, season?: number) {
     // First check if series exists
     const { data: series, error: seriesError } = await this.supabaseService.client

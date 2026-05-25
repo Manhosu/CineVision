@@ -88,7 +88,7 @@ export class ContentController {
   @ApiResponse({ status: 200, description: 'Novelinha retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Novelinha not found' })
   async getNovelinhaById(@Param('id') id: string) {
-    return this.contentService.findSeriesById(id);
+    return this.contentService.findNovelinhaById(id);
   }
 
   @Get('categories')

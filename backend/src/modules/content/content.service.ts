@@ -294,6 +294,20 @@ export class ContentService {
     return series;
   }
 
+  // Igor (24/05): detalhe de novelinha (rota /novelinhas/:id).
+  async findNovelinhaById(id: string) {
+    const novelinha = await this.contentRepository.findOne({
+      where: { id, status: ContentStatus.PUBLISHED },
+      relations: ['categories', 'languages'],
+    });
+
+    if (!novelinha) {
+      throw new NotFoundException('Novelinha not found');
+    }
+
+    return novelinha;
+  }
+
   async findRelatedMovies(movieId: string, genres: string[] = [], limit = 6) {
     const queryBuilder = this.contentRepository.createQueryBuilder('content')
       .leftJoinAndSelect('content.categories', 'categories')
