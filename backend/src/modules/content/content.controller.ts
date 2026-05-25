@@ -80,6 +80,17 @@ export class ContentController {
     return this.contentService.findAllNovelinhas(Number(page), Number(limit), genre, sort, search);
   }
 
+  // Igor (24/05): detalhe de novelinha. Antes não existia rota → o card caía
+  // em /movies/:id e dava 404. findSeriesById é genérico (retorna qualquer
+  // conteúdo publicado pelo id, independente do content_type).
+  @Get('novelinhas/:id')
+  @ApiOperation({ summary: 'Get novelinha by ID' })
+  @ApiResponse({ status: 200, description: 'Novelinha retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Novelinha not found' })
+  async getNovelinhaById(@Param('id') id: string) {
+    return this.contentService.findSeriesById(id);
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Get all categories' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })

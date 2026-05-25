@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { contentHref } from '@/lib/contentHref';
 
 interface MovieCardProps {
   movie: Movie;
@@ -82,15 +83,8 @@ const MovieCard = memo(function MovieCard({
     e.stopPropagation();
     e.preventDefault();
 
-    // Redirecionar para página de detalhes (filme ou série)
-    const contentType = (movie as any).content_type || 'movie';
-    console.log('[MovieCard] handlePurchase - movie:', movie);
-    console.log('[MovieCard] handlePurchase - content_type:', contentType);
-    if (contentType === 'series') {
-      router.push(`/series/${movie.id}`);
-    } else {
-      router.push(`/movies/${movie.id}`);
-    }
+    // Redireciona pra página de detalhes conforme o tipo (filme/série/novelinha).
+    router.push(contentHref(movie as any));
   };
 
   const handleFavorite = async (e: React.MouseEvent) => {
@@ -116,8 +110,13 @@ const MovieCard = memo(function MovieCard({
   };
 
   const handleCardClick = () => {
+    // Igor (23/05): clicar no pôster/card abre o conteúdo (antes só o
+    // botão "Adicionar" funcionava). Se um onClick custom foi passado,
+    // respeita ele; senão navega pra página de detalhe.
     if (onClick) {
       onClick(movie);
+    } else {
+      router.push(contentHref(movie as any));
     }
   };
 

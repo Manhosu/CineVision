@@ -15,6 +15,7 @@ import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { contentHref } from '@/lib/contentHref';
 
 interface Top10MovieCardProps {
   movie: Movie;
@@ -77,12 +78,7 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const handlePurchase = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    const contentType = (movie as any).content_type || 'movie';
-    if (contentType === 'series') {
-      router.push(`/series/${movie.id}`);
-    } else {
-      router.push(`/movies/${movie.id}`);
-    }
+    router.push(contentHref(movie as any));
   };
 
   const handleFavorite = async (e: React.MouseEvent) => {
@@ -100,8 +96,11 @@ const Top10MovieCard = memo(function Top10MovieCard({
   };
 
   const handleCardClick = () => {
+    // Igor (23/05): pôster/card clicável abre o conteúdo.
     if (onClick) {
       onClick(movie);
+    } else {
+      router.push(contentHref(movie as any));
     }
   };
 
@@ -115,24 +114,26 @@ const Top10MovieCard = memo(function Top10MovieCard({
       {/* HBO Max / Netflix Style - Number on LEFT side */}
       <div className="flex items-end gap-0 relative w-full">
 
-        {/* GIGANTIC Ranking Number - LEFT SIDE */}
+        {/* Ranking Number - LEFT SIDE.
+            Igor (24/05): o número ficava grande demais com marginRight -15px
+            e invadia/poluía o pôster. Reduzido e sem sobreposição — o pôster
+            aparece completo e limpo, com o número ao lado. */}
         <div
           className="relative flex items-end justify-center select-none pointer-events-none z-10 flex-shrink-0"
           style={{
-            width: 'clamp(40px, 7vw, 100px)',
-            marginRight: '-15px'
+            width: 'clamp(34px, 6vw, 78px)',
+            marginRight: '2px'
           }}
         >
           <div
             className="font-black leading-none transition-all duration-500"
             style={{
-              fontSize: 'clamp(60px, 12vw, 180px)',
+              fontSize: 'clamp(42px, 9vw, 124px)',
               fontFamily: 'Impact, system-ui, -apple-system, sans-serif',
               background: 'linear-gradient(180deg, #ffffff 0%, #888888 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-              textStroke: '3px rgba(255, 255, 255, 0.3)',
               WebkitTextStroke: '3px rgba(255, 255, 255, 0.3)',
               filter: 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.9))',
               transform: isHovered ? 'scale(1.05)' : 'scale(1)',

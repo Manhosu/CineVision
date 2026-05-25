@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Movie } from '@/types/movie';
 import Pagination from '@/components/Pagination/Pagination';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
+import { contentHref } from '@/lib/contentHref';
 
 interface MovieGridProps {
   movies: Movie[];
@@ -78,7 +79,7 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
         {movies.map((movie) => {
           const purchased = isPurchased(movie.id);
           const isSeries = (movie as any).content_type === 'series';
-          const detailsPath = isSeries ? `/series/${movie.id}` : `/movies/${movie.id}`;
+          const detailsPath = contentHref(movie as any);
 
           const formatPrice = (cents: number) =>
             new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
