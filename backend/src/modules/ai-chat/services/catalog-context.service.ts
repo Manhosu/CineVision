@@ -15,6 +15,8 @@ export interface CatalogHit {
   synopsis?: string;
   /** Título em inglês — vem de `title_en` (ou `title_secondary`). Igor (20/05). */
   title_en?: string;
+  /** Qualidade do vídeo (ex: "1080p", "4K"). Igor (21/05). */
+  quality_label?: string;
 }
 
 /** audio_type → texto amigável que a IA usa pra responder "tá dublado?". */
@@ -69,7 +71,7 @@ export class CatalogContextService {
       const ids = hits.map((h) => h.id).filter(Boolean);
       const { data } = await this.supabase.client
         .from('content')
-        .select('id, audio_type, synopsis, description, title_en, title_secondary')
+        .select('id, audio_type, synopsis, description, title_en, title_secondary, quality_label')
         .in('id', ids);
       const byId = new Map((data || []).map((d: any) => [d.id, d]));
       return hits.map((h) => {
@@ -80,6 +82,7 @@ export class CatalogContextService {
           audio_type: d.audio_type || undefined,
           synopsis: (d.synopsis || d.description || '').trim() || undefined,
           title_en: h.title_en || d.title_en || d.title_secondary || undefined,
+          quality_label: d.quality_label || undefined,
         };
       });
     } catch (err: any) {
@@ -208,10 +211,11 @@ export class CatalogContextService {
       const audio = h.audio_type
         ? ` | Áudio: ${AUDIO_LABEL[h.audio_type] || h.audio_type}`
         : '';
+      const quality = h.quality_label ? ` | Qualidade: ${h.quality_label}` : '';
       const synopsis = h.synopsis
         ? `\n    Sinopse: ${h.synopsis.slice(0, 280)}${h.synopsis.length > 280 ? '…' : ''}`
         : '';
-      return `- ID=${h.id} | ${h.title}${year}${enTitle} | tipo=${h.type || 'filme'} | R$${price}${audio}${synopsis}`;
+      return `- ID=${h.id} | ${h.title}${year}${enTitle} | tipo=${h.type || 'filme'} | R$${price}${audio}${quality}${synopsis}`;
     });
     return `CATÁLOGO RELEVANTE:\n${lines.join('\n')}`;
   }

@@ -265,7 +265,17 @@ export class AiChatService {
       .map((f: any) => `P: ${f.question}\nR: ${f.answer}`)
       .join('\n\n');
 
+    // Igor (21/05): orientação de venda anexada SEMPRE (sem sobrescrever o
+    // prompt customizado do painel) — IA já manda o link de compra após
+    // responder, cita a qualidade e reforça o acesso vitalício.
+    const salesGuide = `INSTRUÇÕES DE VENDA (sempre seguir):
+- Quando falar de um título específico do catálogo, SEMPRE inclua o marcador <<DETAIL:ID>> usando o ID EXATO que aparece no CATÁLOGO RELEVANTE — isso já envia o link de compra pro cliente. Faça isso logo depois de responder, sem esperar o cliente pedir.
+- Se perguntarem a qualidade, responda pelo campo "Qualidade" do catálogo (ex: 1080p Full HD). Sem esse campo, diga que é em alta qualidade.
+- O acesso ao filme/série é PRA SEMPRE (vitalício): compra uma vez e assiste quando e quantas vezes quiser. Reforce isso quando fizer sentido.`;
+
     const systemPrompt = `${training.system_prompt}
+
+${salesGuide}
 
 ${catalogBlock}
 
@@ -582,7 +592,13 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     }
     const suffix = params.length ? `?${params.join('&')}` : '';
     const links = found.map((c: any) => {
-      const path = c.content_type === 'series' ? 'series' : 'movies';
+      // Igor (24/05): novelinha → /novelinhas/:id (antes caía em /movies → 404).
+      const path =
+        c.content_type === 'series'
+          ? 'series'
+          : c.content_type === 'novelinha'
+            ? 'novelinhas'
+            : 'movies';
       return {
         id: c.id,
         title: c.title,
