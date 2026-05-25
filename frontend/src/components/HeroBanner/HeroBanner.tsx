@@ -13,6 +13,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Movie } from '@/types/movie';
 import { toast } from 'react-hot-toast';
+import { contentHref } from '@/lib/contentHref';
 
 interface HeroBannerProps {
   movies: Movie[];
@@ -215,9 +216,7 @@ export function HeroBanner({
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
-                  const contentType = (currentMovie as any).content_type || (currentMovie as any).type;
-                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
-                  router.push(route);
+                  router.push(contentHref({ id: currentMovie.id, content_type: (currentMovie as any).content_type || (currentMovie as any).type }));
                 }}
                 className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
               >
@@ -226,9 +225,7 @@ export function HeroBanner({
               </button>
               <button
                 onClick={() => {
-                  const contentType = (currentMovie as any).content_type || (currentMovie as any).type;
-                  const route = contentType === 'series' ? `/series/${currentMovie.id}` : `/movies/${currentMovie.id}`;
-                  router.push(route);
+                  router.push(contentHref({ id: currentMovie.id, content_type: (currentMovie as any).content_type || (currentMovie as any).type }));
                 }}
                 className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95 border border-white/10"
               >

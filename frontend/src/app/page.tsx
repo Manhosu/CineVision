@@ -10,6 +10,7 @@ import { LoadingSkeleton } from '@/components/LoadingSkeleton/LoadingSkeleton';
 import { FlashPromotionBanner } from '@/components/FlashPromotion/FlashPromotionBanner';
 import { WhatsAppPopup } from '@/components/WhatsApp/WhatsAppPopup';
 import { useSplash } from '@/contexts/SplashContext';
+import { contentHref } from '@/lib/contentHref';
 
 interface Movie {
   id: string;
@@ -334,13 +335,8 @@ function HomePageContent() {
   }, [notifyContentReady]);
 
   const handleMovieClick = (movie: Movie) => {
-    // Navigate to detail page based on content type
-    const contentType = (movie as any).content_type || 'movie';
-    if (contentType === 'series') {
-      router.push(`/series/${movie.id}`);
-    } else {
-      router.push(`/movies/${movie.id}`);
-    }
+    // Igor (24/05): inclui novelinha (antes caía em /movies/:id -> 404).
+    router.push(contentHref(movie as any));
   };
 
   if (error) {

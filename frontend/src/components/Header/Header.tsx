@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Movie } from '@/types/movie';
+import { contentHref } from '@/lib/contentHref';
 import {
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -238,8 +239,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                       <button
                         key={movie.id}
                         onClick={() => {
-                          const type = (movie as any).content_type === 'series' ? 'series' : 'movies';
-                          window.location.href = `/${type}/${movie.id}`;
+                          window.location.href = contentHref(movie as any);
                           setIsSearchOpen(false);
                           setSearchQuery('');
                           setSearchResults([]);
@@ -466,8 +466,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      const type = (movie as any).content_type === 'series' ? 'series' : 'movies';
-                      const url = `/${type}/${movie.id}`;
+                      const url = contentHref(movie as any);
                       setSearchResults([]);
                       setSearchQuery('');
                       setIsSearchOpen(false);
