@@ -244,27 +244,36 @@ export class ContentSupabaseService {
       });
       this.logger.log(`[N11] filtered to ${filtered.length} matches`);
 
-      // Sort
-      const sorted = [...filtered];
-      switch (sort) {
-        case 'newest':
-          sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-          break;
-        case 'popular':
-          sorted.sort((a, b) => (b.views_count || 0) - (a.views_count || 0));
-          break;
-        case 'rating':
-          sorted.sort((a, b) => (b.imdb_rating || 0) - (a.imdb_rating || 0));
-          break;
-        case 'price_low':
-          sorted.sort((a, b) => (a.price_cents || 0) - (b.price_cents || 0));
-          break;
-        case 'price_high':
-          sorted.sort((a, b) => (b.price_cents || 0) - (a.price_cents || 0));
-          break;
-        default:
-          sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      }
+      // Igor (24/05): ranquear por RELEVÂNCIA primeiro — o título que a
+      // pessoa buscou tem que vir em 1º. Antes ordenava por data, então um
+      // match exato (ex: "The Boys") ficava lá embaixo enquanto matches
+      // parciais ("Bad Boys") apareciam em cima. Score: match exato >
+      // começa com > contém no título (PT) > idem no título EN > descrição.
+      const score = (c: any): number => {
+        const t = normalize(c.title);
+        const te = normalize(c.title_en || '');
+        if (t === q) return 100;
+        if (t.startsWith(q)) return 80;
+        if (te === q) return 75;
+        if (t.includes(q)) return 60;
+        if (te.startsWith(q)) return 50;
+        if (te.includes(q)) return 40;
+        if (normalize(c.description || '').includes(q)) return 10;
+        return 0;
+      };
+      const secondaryCmp = (a: any, b: any): number => {
+        switch (sort) {
+          case 'popular': return (b.views_count || 0) - (a.views_count || 0);
+          case 'rating': return (b.imdb_rating || 0) - (a.imdb_rating || 0);
+          case 'price_low': return (a.price_cents || 0) - (b.price_cents || 0);
+          case 'price_high': return (b.price_cents || 0) - (a.price_cents || 0);
+          default: return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+      };
+      const sorted = [...filtered].sort((a, b) => {
+        const d = score(b) - score(a);
+        return d !== 0 ? d : secondaryCmp(a, b);
+      });
 
       const offset = (page - 1) * limit;
       const paged = sorted.slice(offset, offset + limit);
@@ -348,7 +357,11 @@ export class ContentSupabaseService {
 
     // Use smart search when searching without genre filter
     if (search && search.trim() && !genre) {
-      return this.smartSearch(search, ContentType.MOVIE, page, limit, sort);
+      // Igor (24/05): enriquecer com desconto também na busca (antes só as
+      // listagens enriqueciam → promoção não aparecia nos resultados da busca).
+      const result = await this.smartSearch(search, ContentType.MOVIE, page, limit, sort);
+      result.movies = await this.enrichContentWithDiscounts(result.movies || []);
+      return result;
     }
 
     const offset = (page - 1) * limit;
@@ -530,7 +543,9 @@ export class ContentSupabaseService {
 
     // Use smart search when searching without genre filter
     if (search && search.trim() && !genre) {
-      return this.smartSearch(search, ContentType.SERIES, page, limit, sort);
+      const result = await this.smartSearch(search, ContentType.SERIES, page, limit, sort);
+      result.movies = await this.enrichContentWithDiscounts(result.movies || []);
+      return result;
     }
 
     const offset = (page - 1) * limit;
@@ -671,7 +686,9 @@ export class ContentSupabaseService {
     limit = Math.min(limit, 100);
 
     if (search && search.trim() && !genre) {
-      return this.smartSearch(search, ContentType.NOVELINHA, page, limit, sort);
+      const result = await this.smartSearch(search, ContentType.NOVELINHA, page, limit, sort);
+      result.movies = await this.enrichContentWithDiscounts(result.movies || []);
+      return result;
     }
 
     const offset = (page - 1) * limit;
