@@ -61,6 +61,82 @@ export class AdminContentSimpleService {
     }));
   }
 
+  // Igor (26/05): aba "Histórico" no admin — lista conteúdos arquivados
+  // pra ele poder restaurar se deletou errado. Espelha `getAllContent` mas
+  // filtra status='ARCHIVED'.
+  async getArchivedContent() {
+    const { data, error } = await this.supabaseService.client
+      .from('content')
+      .select('*')
+      .eq('status', 'ARCHIVED')
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      this.logger.error('Error fetching archived content:', error);
+      throw new Error(`Failed to fetch archived content: ${error.message}`);
+    }
+
+    const contents = data || [];
+    const creatorIds = Array.from(
+      new Set(contents.map((c: any) => c.createdById).filter(Boolean)),
+    );
+
+    if (creatorIds.length === 0) return contents;
+
+    const { data: users } = await this.supabaseService.client
+      .from('users')
+      .select('id, name, email, role')
+      .in('id', creatorIds);
+
+    const byId = new Map<string, { id: string; name: string; email: string; role: string }>(
+      (users || []).map((u: any) => [u.id, u]),
+    );
+
+    return contents.map((c: any) => ({
+      ...c,
+      createdBy: c.createdById ? byId.get(c.createdById) || null : null,
+    }));
+  }
+
+  async restoreContent(contentId: string) {
+    this.logger.log(`Restoring content with ID: ${contentId}`);
+
+    const { data: content, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('id, title, status')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !content) {
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    if (content.status !== 'ARCHIVED') {
+      this.logger.log(`Content ${contentId} não está arquivado — no-op idempotente`);
+      return {
+        success: true,
+        message: `Content "${content.title}" não estava arquivado`,
+        restoredContent: { id: content.id, title: content.title },
+      };
+    }
+
+    const { error: updateError } = await this.supabaseService.client
+      .from('content')
+      .update({ status: 'PUBLISHED', updated_at: new Date().toISOString() })
+      .eq('id', contentId);
+
+    if (updateError) {
+      this.logger.error('Error restoring content:', updateError);
+      throw new Error(`Failed to restore content: ${updateError.message}`);
+    }
+
+    return {
+      success: true,
+      message: `Content "${content.title}" restaurado com sucesso`,
+      restoredContent: { id: content.id, title: content.title },
+    };
+  }
+
   async getContentById(id: string) {
     console.log(`AdminContentSimpleService.getContentById called with id: ${id}`);
 

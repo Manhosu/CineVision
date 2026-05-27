@@ -132,6 +132,28 @@ export class ContentSupabaseService {
   }
 
   /**
+   * Igor (27/05): scoring de relevância de título reusado tanto na
+   * reordenação dos resultados da RPC `search_content` quanto no fallback
+   * JS. Garante que match exato do título venha em 1º, depois startsWith,
+   * depois includes — em PT e EN.
+   */
+  private relevanceScore(c: any, query: string): number {
+    const normalize = (s: string) =>
+      (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const q = normalize(query.trim());
+    const t = normalize(c.title);
+    const te = normalize(c.title_en || '');
+    if (t === q) return 100;
+    if (t.startsWith(q)) return 80;
+    if (te === q) return 75;
+    if (t.includes(q)) return 60;
+    if (te.startsWith(q)) return 50;
+    if (te.includes(q)) return 40;
+    if (normalize(c.description || '').includes(q)) return 10;
+    return 0;
+  }
+
+  /**
    * Smart search using PostgreSQL RPC function with fuzzy search, unaccent, and word splitting.
    * Falls back to improved ILIKE if RPC is not available.
    */
@@ -161,9 +183,21 @@ export class ContentSupabaseService {
 
       const total = typeof countData === 'number' ? countData : 0;
 
-      // Apply secondary sort if not using relevance
       let sortedResults = Array.isArray(results) ? results : [];
-      if (sort !== 'newest') {
+
+      // Igor (27/05): "The Boys" ainda perde de "Bad Boys" mesmo com o
+      // ranking SQL da RPC. Causa: stopword "the" no fts portuguese + tie
+      // por created_at quando ranks ficam próximos. Reordena no JS por
+      // relevância de título (exato > startsWith > includes) só quando o
+      // user está usando o sort padrão (newest). Pra popular/rating/preço
+      // ele explicitamente quer outro critério, então respeita.
+      if (sort === 'newest') {
+        sortedResults = [...sortedResults].sort((a: any, b: any) => {
+          const d = this.relevanceScore(b, search) - this.relevanceScore(a, search);
+          if (d !== 0) return d;
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+      } else {
         switch (sort) {
           case 'popular':
             sortedResults.sort((a: any, b: any) => (b.views_count || 0) - (a.views_count || 0));
@@ -247,20 +281,7 @@ export class ContentSupabaseService {
       // Igor (24/05): ranquear por RELEVÂNCIA primeiro — o título que a
       // pessoa buscou tem que vir em 1º. Antes ordenava por data, então um
       // match exato (ex: "The Boys") ficava lá embaixo enquanto matches
-      // parciais ("Bad Boys") apareciam em cima. Score: match exato >
-      // começa com > contém no título (PT) > idem no título EN > descrição.
-      const score = (c: any): number => {
-        const t = normalize(c.title);
-        const te = normalize(c.title_en || '');
-        if (t === q) return 100;
-        if (t.startsWith(q)) return 80;
-        if (te === q) return 75;
-        if (t.includes(q)) return 60;
-        if (te.startsWith(q)) return 50;
-        if (te.includes(q)) return 40;
-        if (normalize(c.description || '').includes(q)) return 10;
-        return 0;
-      };
+      // parciais ("Bad Boys") apareciam em cima.
       const secondaryCmp = (a: any, b: any): number => {
         switch (sort) {
           case 'popular': return (b.views_count || 0) - (a.views_count || 0);
@@ -271,7 +292,7 @@ export class ContentSupabaseService {
         }
       };
       const sorted = [...filtered].sort((a, b) => {
-        const d = score(b) - score(a);
+        const d = this.relevanceScore(b, search) - this.relevanceScore(a, search);
         return d !== 0 ? d : secondaryCmp(a, b);
       });
 

@@ -116,6 +116,15 @@ export class AdminContentController {
     return this.adminContentService.getAllContent();
   }
 
+  // Igor (26/05): aba "Histórico" mostra os arquivados pra ele poder
+  // restaurar se arquivou errado. Endpoint separado pra não poluir a
+  // listagem principal.
+  @Get('archived')
+  @ApiOperation({ summary: 'List archived content', description: 'Conteúdos com status=ARCHIVED' })
+  async getArchivedContent() {
+    return this.adminContentService.getArchivedContent();
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Get content by ID',
@@ -377,6 +386,23 @@ export class AdminContentController {
       };
     }
     return this.adminContentService.deleteContent(contentId, user?.sub || user?.id || null);
+  }
+
+  // Igor (26/05): restaura um conteúdo arquivado de volta pra PUBLISHED.
+  // Só admin/moderator — funcionário não tem alçada de restaurar.
+  @Post(':id/restore')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Restore archived content', description: 'Volta status para PUBLISHED' })
+  @HttpCode(HttpStatus.OK)
+  async restoreContent(
+    @Param('id') contentId: string,
+    @GetUser() user: any,
+  ) {
+    const role = user?.role;
+    if (role !== UserRole.ADMIN && role !== UserRole.MODERATOR) {
+      throw new ForbiddenException('Apenas administradores podem restaurar conteúdo arquivado.');
+    }
+    return this.adminContentService.restoreContent(contentId);
   }
 
   @Put(':id')

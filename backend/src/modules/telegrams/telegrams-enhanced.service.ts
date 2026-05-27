@@ -1460,6 +1460,40 @@ export class TelegramsEnhancedService implements OnModuleInit {
       this.processedCallbacks.delete(first);
     }
 
+    // Igor (26/05): bot apaga as mensagens de serviço do Telegram nos
+    // grupos de filme ("X entrou no grupo" / "X saiu do grupo" / mudança
+    // de título/foto) — substitui o bot externo Group Help que ele tinha
+    // que configurar manualmente em cada grupo novo. Pré-requisito: bot
+    // ser admin no grupo com permissão "Delete messages". Try/catch
+    // silencioso se não tiver permissão (não quebra fluxo).
+    const chatType = message?.chat?.type;
+    if (chatType === 'group' || chatType === 'supergroup') {
+      const isServiceMessage =
+        !!message.new_chat_members ||
+        !!message.left_chat_member ||
+        message.new_chat_title !== undefined ||
+        !!message.new_chat_photo ||
+        message.delete_chat_photo === true ||
+        message.group_chat_created === true ||
+        message.supergroup_chat_created === true ||
+        message.channel_chat_created === true ||
+        message.migrate_to_chat_id !== undefined ||
+        message.migrate_from_chat_id !== undefined;
+      if (isServiceMessage) {
+        try {
+          await axios.post(`${this.botApiUrl}/deleteMessage`, {
+            chat_id: chatId,
+            message_id: messageId,
+          });
+        } catch (err: any) {
+          this.logger.warn(
+            `service-message autodelete falhou em chat ${chatId}: ${err?.response?.data?.description || err.message}`,
+          );
+        }
+        return;
+      }
+    }
+
     this.logger.log(`📨 processMessage called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
 
     // Track which bot token this user is using (for broadcast filtering)

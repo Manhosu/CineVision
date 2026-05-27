@@ -13,6 +13,8 @@ import {
   Pencil,
   Send,
   Bot,
+  RotateCcw,
+  Archive,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -58,16 +60,24 @@ export default function ContentManagePage() {
   const [pendingPublish, setPendingPublish] = useState<
     { type: 'single'; content: Content } | { type: 'batch' } | null
   >(null);
+  // Igor (26/05): aba "Histórico" mostra conteúdos arquivados pra ele
+  // poder restaurar se deletou errado.
+  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchContents();
-  }, []);
+  }, [viewMode]);
 
   const fetchContents = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content`, {
+      const url =
+        viewMode === 'archived'
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/archived`
+          : `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content`;
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -80,6 +90,33 @@ export default function ContentManagePage() {
       console.error('Error fetching contents:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRestore = async (content: Content) => {
+    try {
+      setRestoringId(content.id);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/restore`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        },
+      );
+      if (response.ok) {
+        toast.success(`"${content.title}" restaurado — voltou pro site.`);
+        await fetchContents();
+      } else {
+        const errorText = await response.text();
+        let msg = errorText;
+        try { msg = JSON.parse(errorText).message || errorText; } catch { /* texto cru */ }
+        toast.error(`Erro ao restaurar: ${msg}`);
+      }
+    } catch (err: any) {
+      toast.error(`Erro de rede: ${err?.message || 'desconhecido'}`);
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -349,6 +386,33 @@ export default function ContentManagePage() {
           </div>
         </div>
 
+        {/* Igor (26/05): toggle Ativos / Histórico — Histórico lista os
+            arquivados pra ele poder restaurar se deletou errado. */}
+        <div className="mb-4 inline-flex rounded-xl border border-white/10 bg-dark-800/50 p-1">
+          <button
+            onClick={() => setViewMode('active')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
+              viewMode === 'active'
+                ? 'bg-white text-black'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Film className="w-4 h-4" />
+            Ativos
+          </button>
+          <button
+            onClick={() => setViewMode('archived')}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
+              viewMode === 'archived'
+                ? 'bg-white text-black'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Archive className="w-4 h-4" />
+            Histórico
+          </button>
+        </div>
+
         {/* Search */}
         <div className="mb-6 relative">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -601,61 +665,79 @@ export default function ContentManagePage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {/* Botão Publicar - só aparece se não estiver publicado */}
-                        {(content.status === 'DRAFT' || content.status === 'draft') && (
+                        {viewMode === 'archived' ? (
                           <button
-                            onClick={() => setPendingPublish({ type: 'single', content })}
-                            disabled={publishingId === content.id}
-                            className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Publicar conteúdo"
+                            onClick={() => handleRestore(content)}
+                            disabled={restoringId === content.id}
+                            className="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
+                            title="Restaurar conteúdo"
                           >
-                            {publishingId === content.id ? (
-                              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                            {restoringId === content.id ? (
+                              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                             ) : (
-                              <Upload className="w-4 h-4" />
+                              <RotateCcw className="w-4 h-4" />
                             )}
+                            Restaurar
                           </button>
+                        ) : (
+                          <>
+                            {/* Botão Publicar - só aparece se não estiver publicado */}
+                            {(content.status === 'DRAFT' || content.status === 'draft') && (
+                              <button
+                                onClick={() => setPendingPublish({ type: 'single', content })}
+                                disabled={publishingId === content.id}
+                                className="p-2 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Publicar conteúdo"
+                              >
+                                {publishingId === content.id ? (
+                                  <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Upload className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
+                            {/* Igor (15/05): 2 botões condicionais. Bot (roxo) só
+                                se telegram_chat_id setado; Link (ciano) só se
+                                telegram_group_link setado. Cores distintas pra Igor
+                                saber qual modo está testando — Matheus usa bot ID,
+                                esposa do Igor usa link de convite. */}
+                            {content.telegram_chat_id && (
+                              <button
+                                onClick={() => testTelegramGroup(content, 'bot')}
+                                className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors"
+                                title="Testar via bot (chat_id)"
+                              >
+                                <Bot className="w-4 h-4" />
+                              </button>
+                            )}
+                            {content.telegram_group_link && (
+                              <button
+                                onClick={() => testTelegramGroup(content, 'link')}
+                                className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
+                                title="Testar via link de convite"
+                              >
+                                <Send className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              // Igor (15/05): abre em nova aba pra não perder a seleção
+                              // de batch approve dos drafts. Igor reportou que clicar no
+                              // lápis e voltar zerava o checkbox de todos os outros filmes.
+                              onClick={() => window.open(`/admin/content/${content.id}/edit`, '_blank', 'noopener,noreferrer')}
+                              className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
+                              title="Editar (abre em nova aba)"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(content)}
+                              className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+                              title="Deletar"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
-                        {/* Igor (15/05): 2 botões condicionais. Bot (roxo) só
-                            se telegram_chat_id setado; Link (ciano) só se
-                            telegram_group_link setado. Cores distintas pra Igor
-                            saber qual modo está testando — Matheus usa bot ID,
-                            esposa do Igor usa link de convite. */}
-                        {content.telegram_chat_id && (
-                          <button
-                            onClick={() => testTelegramGroup(content, 'bot')}
-                            className="p-2 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors"
-                            title="Testar via bot (chat_id)"
-                          >
-                            <Bot className="w-4 h-4" />
-                          </button>
-                        )}
-                        {content.telegram_group_link && (
-                          <button
-                            onClick={() => testTelegramGroup(content, 'link')}
-                            className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors"
-                            title="Testar via link de convite"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          // Igor (15/05): abre em nova aba pra não perder a seleção
-                          // de batch approve dos drafts. Igor reportou que clicar no
-                          // lápis e voltar zerava o checkbox de todos os outros filmes.
-                          onClick={() => window.open(`/admin/content/${content.id}/edit`, '_blank', 'noopener,noreferrer')}
-                          className="p-2 rounded-lg bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                          title="Editar (abre em nova aba)"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(content)}
-                          className="p-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-                          title="Deletar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
