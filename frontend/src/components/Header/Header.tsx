@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Movie } from '@/types/movie';
 import { contentHref } from '@/lib/contentHref';
+import { mergeSearchResults } from '@/lib/searchSort';
 import {
   MagnifyingGlassIcon,
   Bars3Icon,
@@ -80,7 +81,13 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
       ]);
       const moviesData = moviesRes.ok ? await moviesRes.json() : { movies: [] };
       const seriesData = seriesRes.ok ? await seriesRes.json() : { movies: [] };
-      const combined = [...(moviesData.movies || []), ...(seriesData.movies || [])].slice(0, 8);
+      // Igor (27/05): merge ordenado por relevância — antes filmes vinham
+      // sempre antes de séries, então "Bad Boys" aparecia antes de "The Boys".
+      const combined = mergeSearchResults<Movie>(
+        moviesData.movies || [],
+        seriesData.movies || [],
+        query,
+      ).slice(0, 8);
       setSearchResults(combined);
     } catch {
       setSearchResults([]);

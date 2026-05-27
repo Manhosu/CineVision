@@ -7,6 +7,7 @@ import { MovieCard } from '@/components/MovieCard/MovieCard';
 import { Movie } from '@/types/movie';
 import { MagnifyingGlassIcon, FilmIcon, PlusCircleIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { mergeSearchResults } from '@/lib/searchSort';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -50,11 +51,13 @@ function SearchResults() {
       const moviesResult = await moviesResponse.json();
       const seriesResult = await seriesResponse.json();
 
-      // Combinar filmes e séries em um único array
-      const allContent = [
-        ...(moviesResult.movies || []),
-        ...(seriesResult.movies || [])
-      ];
+      // Igor (27/05): merge ordenado por relevância — antes filmes vinham
+      // sempre antes de séries, então "Bad Boys" aparecia antes de "The Boys".
+      const allContent = mergeSearchResults<Movie>(
+        moviesResult.movies || [],
+        seriesResult.movies || [],
+        searchQuery,
+      );
 
       setMovies(allContent);
     } catch (error) {
