@@ -730,7 +730,7 @@ export default function AdminUsersPage() {
   );
 }
 
-// Igor (07/05): formata WhatsApp pra "(21) 99828-0890" sem espaço extra.
+// Igor (07/05): formata WhatsApp pra "(11) 11111-1111" sem espaço extra.
 function formatWhatsAppDisplay(raw: string): string {
   const digits = raw.replace(/\D/g, '');
   if (digits.length === 11) {

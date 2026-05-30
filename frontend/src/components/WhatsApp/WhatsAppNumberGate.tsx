@@ -69,7 +69,7 @@ export function WhatsAppNumberGate({
   const handleSave = async () => {
     const digits = value.replace(/\D/g, '');
     if (digits.length < 10 || digits.length > 13) {
-      toast.error('Informe um WhatsApp válido (ex: 21 99828-0890)');
+      toast.error('Informe um WhatsApp válido (ex: 11 11111-1111)');
       return;
     }
     setSaving(true);
@@ -197,7 +197,7 @@ export function WhatsAppNumberGate({
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel"
-                  placeholder="(21) 99828-0890"
+                  placeholder="(11) 11111-1111"
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   disabled={saving}

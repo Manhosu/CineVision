@@ -131,7 +131,7 @@ function CheckoutContent() {
   const saveWhatsapp = async () => {
     const digits = whatsappValue.replace(/\D/g, '');
     if (digits.length < 10 || digits.length > 13) {
-      toast.error('Informe um WhatsApp válido (ex: 21 99828-0890)');
+      toast.error('Informe um WhatsApp válido (ex: 11 11111-1111)');
       return;
     }
     setWhatsappSaving(true);
@@ -192,7 +192,7 @@ function CheckoutContent() {
                         id="orphan-whatsapp"
                         type="tel"
                         inputMode="numeric"
-                        placeholder="(21) 99828-0890"
+                        placeholder="(11) 11111-1111"
                         value={whatsappValue}
                         onChange={(e) => setWhatsappValue(e.target.value)}
                         disabled={whatsappSaving}
