@@ -19,6 +19,15 @@
           "value": "Content-Type, Authorization"
         }
       ]
+    },
+    {
+      "source": "/search(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }
