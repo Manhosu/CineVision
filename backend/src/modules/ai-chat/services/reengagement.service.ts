@@ -88,8 +88,12 @@ export class ReengagementService {
     // Igor (08/05): N21 — pausas "soft" (content_not_found, needs_human,
     // media_received, receipt_image_received, manual) podem ser desfeitas
     // quando a conversa esfriar. NUNCA reativa claude_failure (precisa
-    // intervenção manual). owner_takeover reativa após 1 hora — tempo
-    // suficiente para Igor ter saído do chat sem deixar o cliente abandonado.
+    // intervenção manual). Takeovers (owner pelo Telegram Business OU
+    // admin pelo painel web) reativam após 1 hora — tempo suficiente
+    // pra Igor ter saído do chat sem deixar o cliente abandonado.
+    // Igor (01/06): adicionado 'admin_takeover' à whitelist — antes só
+    // 'owner_takeover' (Telegram) reativava; quando ele clicava "Assumir"
+    // pelo painel web, gravava 'admin_takeover' e ficava em pausa eterna.
     const SOFT_PAUSE_REASONS = new Set([
       'content_not_found',
       'needs_human',
@@ -98,7 +102,8 @@ export class ReengagementService {
       'detail_ids_invalid',
       'manual',
     ]);
-    const OWNER_TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1 hora
+    const TAKEOVER_REASONS = new Set(['owner_takeover', 'admin_takeover']);
+    const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1 hora
 
     let sent = 0;
     let reactivated = 0;
@@ -106,19 +111,20 @@ export class ReengagementService {
       const chatId = parseInt(conv.external_chat_id, 10);
       if (Number.isNaN(chatId)) continue;
       try {
-        // Reativa IA se a pausa atual for soft OU se for owner_takeover com
-        // mais de 1 hora de inatividade (Igor saiu, cliente ficou sozinho).
+        // Reativa IA se a pausa atual for soft OU se for takeover (owner
+        // ou admin) com mais de 1 hora de inatividade.
         const isSoftPause =
           !conv.ai_enabled &&
           conv.paused_reason &&
           SOFT_PAUSE_REASONS.has(conv.paused_reason);
-        const isOwnerTakeoverExpired =
+        const isTakeoverExpired =
           !conv.ai_enabled &&
-          conv.paused_reason === 'owner_takeover' &&
+          conv.paused_reason &&
+          TAKEOVER_REASONS.has(conv.paused_reason) &&
           conv.paused_at &&
-          Date.now() - new Date(conv.paused_at).getTime() >= OWNER_TAKEOVER_TIMEOUT_MS;
+          Date.now() - new Date(conv.paused_at).getTime() >= TAKEOVER_TIMEOUT_MS;
 
-        if (isSoftPause || isOwnerTakeoverExpired) {
+        if (isSoftPause || isTakeoverExpired) {
           await this.supabase.client
             .from('ai_conversations')
             .update({
