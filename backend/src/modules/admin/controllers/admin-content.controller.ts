@@ -405,6 +405,24 @@ export class AdminContentController {
     return this.adminContentService.restoreContent(contentId);
   }
 
+  // Igor (01/06): hard-delete de conteúdo arquivado (limpar testes).
+  // Só admin/moderator. Backend bloqueia se status != ARCHIVED e devolve
+  // erro estruturado se houver FK violation (purchases/episodes).
+  @Delete(':id/purge')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Hard-delete archived content', description: 'Exclui definitivamente da base' })
+  @HttpCode(HttpStatus.OK)
+  async purgeContent(
+    @Param('id') contentId: string,
+    @GetUser() user: any,
+  ) {
+    const role = user?.role;
+    if (role !== UserRole.ADMIN && role !== UserRole.MODERATOR) {
+      throw new ForbiddenException('Apenas administradores podem excluir definitivamente.');
+    }
+    return this.adminContentService.purgeContent(contentId);
+  }
+
   @Put(':id')
   // Igor (14/05): resolveEditCapability precisa de user válido pra checar
   // role e janela de edição do funcionário. Sem auth caía em "blocked".

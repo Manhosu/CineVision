@@ -64,6 +64,9 @@ export default function ContentManagePage() {
   // poder restaurar se deletou errado.
   const [viewMode, setViewMode] = useState<'active' | 'archived'>('active');
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  // Igor (01/06): hard-delete dos arquivados.
+  const [purgeTarget, setPurgeTarget] = useState<Content | null>(null);
+  const [purgingId, setPurgingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchContents();
@@ -123,6 +126,43 @@ export default function ContentManagePage() {
   const handleDelete = async (content: Content) => {
     setDeleteTarget(content);
     setShowDeleteConfirm(true);
+  };
+
+  // Igor (01/06): hard-delete dos arquivados (limpar testes que ele não
+  // quer restaurar). Modal forte porque é irreversível.
+  const handlePurge = (content: Content) => {
+    setPurgeTarget(content);
+  };
+
+  const confirmPurge = async () => {
+    if (!purgeTarget) return;
+    try {
+      setPurgingId(purgeTarget.id);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${purgeTarget.id}/purge`,
+        {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        toast.success(`"${purgeTarget.title}" excluído definitivamente.`);
+        setPurgeTarget(null);
+        await fetchContents();
+      } else if (result?.reason === 'has_dependencies') {
+        toast.error(result.message || 'Tem venda/episódio linkado — não dá pra apagar.', { duration: 6000 });
+      } else if (result?.reason === 'not_archived') {
+        toast.error(result.message || 'Item não está arquivado.');
+      } else {
+        toast.error(result?.message || `Erro ao excluir: ${response.status}`);
+      }
+    } catch (err: any) {
+      toast.error(`Erro de rede: ${err?.message || 'desconhecido'}`);
+    } finally {
+      setPurgingId(null);
+    }
   };
 
   const confirmDelete = async () => {
@@ -692,19 +732,32 @@ export default function ContentManagePage() {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         {viewMode === 'archived' ? (
-                          <button
-                            onClick={() => handleRestore(content)}
-                            disabled={restoringId === content.id}
-                            className="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
-                            title="Restaurar conteúdo"
-                          >
-                            {restoringId === content.id ? (
-                              <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <RotateCcw className="w-4 h-4" />
-                            )}
-                            Restaurar
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleRestore(content)}
+                              disabled={restoringId === content.id}
+                              className="px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
+                              title="Restaurar conteúdo (volta a aparecer no site)"
+                            >
+                              {restoringId === content.id ? (
+                                <div className="w-4 h-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-4 h-4" />
+                              )}
+                              Restaurar
+                            </button>
+                            {/* Igor (01/06): botão pra apagar de vez os testes que ele
+                                não quer restaurar. Modal forte porque é irreversível. */}
+                            <button
+                              onClick={() => handlePurge(content)}
+                              disabled={purgingId === content.id}
+                              className="px-3 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
+                              title="Excluir definitivamente (sem volta)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Excluir definitivo
+                            </button>
+                          </>
                         ) : (
                           <>
                             {/* Botão Publicar - só aparece se não estiver publicado */}
@@ -805,6 +858,40 @@ export default function ContentManagePage() {
                   className="flex-1 px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
                 >
                   Excluir
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Igor (01/06): modal forte de Excluir definitivo (irreversível). */}
+        {purgeTarget && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-dark-800 border border-red-500/40 rounded-xl p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Excluir definitivamente?
+              </h3>
+              <p className="text-gray-300 mb-2">
+                Vai apagar <strong className="text-white">{purgeTarget.title}</strong> de vez. <strong className="text-red-400">Não tem volta.</strong>
+              </p>
+              <p className="text-sm text-gray-400 mb-6">
+                Se tiver venda ou episódio linkado, vai dar erro e você só consegue
+                manter Arquivado mesmo.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPurgeTarget(null)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-dark-700 text-white hover:bg-dark-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmPurge}
+                  disabled={purgingId === purgeTarget.id}
+                  className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {purgingId === purgeTarget.id ? 'Excluindo...' : 'Excluir de vez'}
                 </button>
               </div>
             </div>

@@ -23,7 +23,7 @@ interface OrderEntry {
   purchases_undelivered?: number;
 }
 
-type Tab = 'orphan' | 'undelivered';
+type Tab = 'orphan' | 'undelivered' | 'dismissed';
 
 const fmtMoney = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -35,20 +35,23 @@ export default function OrphanOrdersPage() {
   const [tab, setTab] = useState<Tab>('orphan');
   const [orphan, setOrphan] = useState<OrderEntry[]>([]);
   const [undelivered, setUndelivered] = useState<OrderEntry[]>([]);
+  // Igor (01/06): aba Arquivados — orders com dismissed_at != null pra
+  // ele poder reenviar manual quando o cliente arquivado reaparece.
+  const [dismissed, setDismissed] = useState<OrderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
   const load = useCallback(async (showSpinner = false) => {
     try {
       if (showSpinner) setLoading(true);
-      // Busca as duas listas em paralelo — counts servem pra mostrar
-      // badge nas tabs mesmo quando o usuário está olhando a outra.
-      const [orphanData, undeliveredData] = await Promise.all([
+      const [orphanData, undeliveredData, dismissedData] = await Promise.all([
         api.get<OrderEntry[]>('/api/v1/orders/orphan'),
         api.get<OrderEntry[]>('/api/v1/orders/undelivered'),
+        api.get<OrderEntry[]>('/api/v1/orders/dismissed'),
       ]);
       setOrphan(orphanData);
       setUndelivered(undeliveredData);
+      setDismissed(dismissedData);
       setLastRefresh(new Date());
     } catch (err: any) {
       if (showSpinner) toast.error(err.message);
@@ -89,6 +92,16 @@ export default function OrphanOrdersPage() {
     }
   };
 
+  const undismissOrder = async (orderId: string) => {
+    try {
+      await api.patch(`/api/v1/orders/${orderId}/undismiss`, {});
+      toast.success('Compra desarquivada — voltou pro painel ativo');
+      load(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao desarquivar');
+    }
+  };
+
   const dismissOrder = async (orderId: string) => {
     if (
       !confirm(
@@ -125,7 +138,8 @@ export default function OrphanOrdersPage() {
     }
   };
 
-  const list = tab === 'orphan' ? orphan : undelivered;
+  const list =
+    tab === 'orphan' ? orphan : tab === 'undelivered' ? undelivered : dismissed;
 
   return (
     <div className="mx-auto max-w-5xl p-6 text-white">
@@ -169,6 +183,18 @@ export default function OrphanOrdersPage() {
             </span>
           )}
         </button>
+        {/* Igor (01/06): aba Arquivados — sem badge numérico por pedido
+            explícito dele ("não precisa aparecer esse 13 e 2 ali"). */}
+        <button
+          onClick={() => setTab('dismissed')}
+          className={`px-4 py-2 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+            tab === 'dismissed'
+              ? 'border-zinc-400 text-white'
+              : 'border-transparent text-zinc-400 hover:text-white'
+          }`}
+        >
+          🗂 Arquivados
+        </button>
       </div>
 
       <div className="mb-4 flex items-center gap-3">
@@ -188,7 +214,11 @@ export default function OrphanOrdersPage() {
         <p className="text-zinc-500">Carregando...</p>
       ) : list.length === 0 ? (
         <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-6 text-center">
-          ✅ {tab === 'orphan' ? 'Nenhuma compra órfã no momento.' : 'Nenhuma compra paga sem entrega.'}
+          ✅ {tab === 'orphan'
+            ? 'Nenhuma compra órfã no momento.'
+            : tab === 'undelivered'
+              ? 'Nenhuma compra paga sem entrega.'
+              : 'Nenhuma compra arquivada.'}
         </div>
       ) : (
         <div className="space-y-3">
@@ -269,13 +299,23 @@ export default function OrphanOrdersPage() {
                   >
                     🔗 Copiar link
                   </button>
-                  <button
-                    onClick={() => dismissOrder(o.id)}
-                    className="rounded-lg border border-zinc-500/30 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-500/10"
-                    title="Arquiva no painel — link continua valendo, cliente ainda recebe pelo Telegram"
-                  >
-                    🗂 Arquivar
-                  </button>
+                  {tab === 'dismissed' ? (
+                    <button
+                      onClick={() => undismissOrder(o.id)}
+                      className="rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10"
+                      title="Volta a compra pro painel ativo (Órfãs ou Pagas não entregues)"
+                    >
+                      ↩️ Desarquivar
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => dismissOrder(o.id)}
+                      className="rounded-lg border border-zinc-500/30 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-500/10"
+                      title="Arquiva no painel — link continua valendo, cliente ainda recebe pelo Telegram"
+                    >
+                      🗂 Arquivar
+                    </button>
+                  )}
                 </div>
               </div>
 

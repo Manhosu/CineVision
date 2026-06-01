@@ -137,6 +137,60 @@ export class AdminContentSimpleService {
     };
   }
 
+  // Igor (01/06): hard-delete pra limpar testes que ficaram em ARCHIVED.
+  // Só permite excluir de vez se status já for ARCHIVED (segurança — admin
+  // não consegue apagar conteúdo ativo por acidente). Se o conteúdo tiver
+  // purchases/episodes vinculados, Postgres devolve FK violation e o
+  // método retorna erro estruturado pra UI mostrar mensagem clara.
+  async purgeContent(contentId: string) {
+    this.logger.log(`Hard-deleting content with ID: ${contentId}`);
+
+    const { data: content, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('id, title, status')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !content) {
+      throw new NotFoundException(`Content with ID ${contentId} not found`);
+    }
+
+    if (content.status !== 'ARCHIVED') {
+      return {
+        success: false,
+        reason: 'not_archived',
+        message: 'Só dá pra excluir definitivamente itens que já estão arquivados.',
+      };
+    }
+
+    const { error: deleteError } = await this.supabaseService.client
+      .from('content')
+      .delete()
+      .eq('id', contentId);
+
+    if (deleteError) {
+      this.logger.error('Error purging content:', deleteError);
+      // Postgres FK violation: 23503. Supabase devolve em error.code.
+      const code = (deleteError as any).code;
+      if (code === '23503' || /foreign key/i.test(deleteError.message || '')) {
+        return {
+          success: false,
+          reason: 'has_dependencies',
+          message:
+            'Não dá pra apagar — tem venda ou episódio linkado. Use Restaurar se precisar acessar de novo.',
+          detail: deleteError.message,
+        };
+      }
+      throw new Error(`Failed to purge content: ${deleteError.message}`);
+    }
+
+    return {
+      success: true,
+      message: `Content "${content.title}" excluído definitivamente`,
+      purgedContent: { id: content.id, title: content.title },
+    };
+  }
+
   async getContentById(id: string) {
     console.log(`AdminContentSimpleService.getContentById called with id: ${id}`);
 

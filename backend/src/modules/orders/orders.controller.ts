@@ -62,6 +62,28 @@ export class OrdersController {
     return this.ordersService.dismissOrder(id);
   }
 
+  // Igor (01/06): aba "Arquivados" no painel de Compras a Recuperar.
+  // Lista orders com dismissed_at != null pra ele poder reenviar o link
+  // se o cliente reaparece.
+  @Get('dismissed')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List dismissed (archived) orders (admin)' })
+  async listDismissed(@Query('limit') limit?: string) {
+    return this.ordersService.listDismissedOrders(limit ? parseInt(limit, 10) : 100);
+  }
+
+  // Reverte um dismiss — volta a order pra lista ativa.
+  @Patch(':id/undismiss')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Undismiss order (admin)' })
+  async undismiss(@Param('id') id: string) {
+    return this.ordersService.undismissOrder(id);
+  }
+
   // Re-dispara entrega de uma order paga já vinculada a um chat. Usado
   // quando delivery_sent ficou false e o admin quer reenviar manualmente.
   @Post(':id/redeliver')

@@ -556,6 +556,77 @@ export class OrdersService {
   }
 
   // ---------------------------------------------------------------------------
+  // Igor (01/06): aba "Arquivados" em /admin/orphan-orders. Hoje quando ele
+  // arquiva uma compra (dismiss), perde o claim_url/whatsapp_url e não tem
+  // como reenviar se o cliente reaparece. Esse método lista todas as orders
+  // arquivadas (independentemente de órfã ou undelivered) pra ele poder
+  // recuperar o link e mandar manual.
+  // ---------------------------------------------------------------------------
+  async listDismissedOrders(limit = 100): Promise<any[]> {
+    const { data, error } = await this.supabase.client
+      .from('orders')
+      .select('id, order_token, total_cents, total_items, paid_at, created_at, dismissed_at, user_id, customer_whatsapp, telegram_chat_id')
+      .eq('status', OrderStatus.PAID)
+      .not('dismissed_at', 'is', null)
+      .order('dismissed_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      this.logger.error('listDismissedOrders failed', error);
+      return [];
+    }
+
+    if (!data?.length) return [];
+
+    const orderIds = data.map((o: any) => o.id);
+    const { data: purchases } = await this.supabase.client
+      .from('purchases')
+      .select('order_id, content:content(title, poster_url)')
+      .in('order_id', orderIds);
+
+    const purchasesByOrder = new Map<string, any[]>();
+    for (const p of purchases || []) {
+      const list = purchasesByOrder.get(p.order_id) || [];
+      list.push(p);
+      purchasesByOrder.set(p.order_id, list);
+    }
+
+    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+
+    return data.map((o: any) => {
+      const items = (purchasesByOrder.get(o.id) || [])
+        .map((p: any) => {
+          const c = Array.isArray(p.content) ? p.content[0] : p.content;
+          return c?.title;
+        })
+        .filter(Boolean);
+      return {
+        ...o,
+        items,
+        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        whatsapp_url: o.customer_whatsapp
+          ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
+              `Olá! Aqui está o link pra você receber seu(s) filme(s):\n\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ só abrir que chega automático. ❤️`,
+            )}`
+          : null,
+      };
+    });
+  }
+
+  // Reverte um dismiss — volta a compra pra lista ativa (Órfãs ou
+  // Pagas não entregues, dependendo do estado dela).
+  async undismissOrder(orderId: string): Promise<{ undismissed: boolean }> {
+    const { error } = await this.supabase.client
+      .from('orders')
+      .update({ dismissed_at: null })
+      .eq('id', orderId);
+    if (error) {
+      this.logger.error(`undismissOrder failed for ${orderId}`, error);
+      throw new BadRequestException('Falha ao desarquivar order');
+    }
+    return { undismissed: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Re-dispara entrega de uma order paga. Usada pelo painel admin quando
   // delivery_sent ficou false (provider down, link expirou, etc.).
   // Só funciona se a order tem telegram_chat_id; senão, retornar erro
