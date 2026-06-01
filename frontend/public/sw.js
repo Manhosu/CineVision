@@ -1,6 +1,9 @@
 // Cine Vision Service Worker
-const CACHE_NAME = 'cine-vision-v2';
-const RUNTIME_CACHE = 'cine-vision-runtime-v2';
+// Igor (31/05): bump v2→v3 pra forçar clientes a invalidarem HTML cacheado
+// que ainda apontava cards de novelinha pra /movies/:id → 404. O activate
+// abaixo deleta o cache v2 e re-baixa tudo fresh.
+const CACHE_NAME = 'cine-vision-v3';
+const RUNTIME_CACHE = 'cine-vision-runtime-v3';
 
 // Files to cache on install
 const PRECACHE_URLS = [
@@ -90,7 +93,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Handle pages and static assets (stale while revalidate)
+  // Igor (31/05): navegação de página vai pra rede primeiro — antes era
+  // staleWhileRevalidate, que servia HTML antigo com links pra /movies/
+  // mesmo depois de fix da novelinha. NetworkFirst garante que o usuário
+  // sempre receba HTML atualizado quando online; cai pro cache só offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Outros assets (CSS, fontes, etc): stale while revalidate
   event.respondWith(
     staleWhileRevalidate(request)
   );
