@@ -425,8 +425,8 @@ export default function ContentManagePage() {
           />
         </div>
 
-        {/* Stats clicáveis (Igor 12/05) */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        {/* Stats clicáveis (Igor 12/05; 31/05: 4º card Novelinhas) */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
           <button
             onClick={() => setTypeFilter('all')}
             className={`bg-dark-800/50 backdrop-blur-sm border rounded-xl p-6 text-left transition-all ${
@@ -459,6 +459,17 @@ export default function ContentManagePage() {
               {seriesCount}
             </p>
             <p className="text-sm text-gray-400 mt-1">Séries</p>
+          </button>
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'novelinha' ? 'all' : 'novelinha')}
+            className={`bg-dark-800/50 backdrop-blur-sm border rounded-xl p-6 text-left transition-all ${
+              typeFilter === 'novelinha' ? 'border-pink-400/60' : 'border-white/10 hover:border-white/20'
+            }`}
+          >
+            <p className="text-3xl font-bold bg-gradient-to-r from-pink-400 to-rose-400 bg-clip-text text-transparent">
+              {novelinhaCount}
+            </p>
+            <p className="text-sm text-gray-400 mt-1">Novelinhas</p>
           </button>
         </div>
 
@@ -633,10 +644,25 @@ export default function ContentManagePage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-primary-500/20 text-primary-400">
-                        <Film className="w-3 h-3" />
-                        {content.content_type === 'movie' ? 'Filme' : 'Série'}
-                      </span>
+                      {(() => {
+                        // Igor (31/05): tag colorida por tipo (antes tudo cor única
+                        // e novelinha aparecia como "Série"). Cores alinhadas com
+                        // as pills de filtro logo acima da tabela.
+                        const badge =
+                          content.content_type === 'movie'
+                            ? { label: 'Filme', classes: 'bg-blue-500/20 text-blue-400' }
+                            : content.content_type === 'series'
+                              ? { label: 'Série', classes: 'bg-purple-500/20 text-purple-400' }
+                              : content.content_type === 'novelinha'
+                                ? { label: 'Novelinha', classes: 'bg-pink-500/20 text-pink-400' }
+                                : { label: content.content_type || 'Tipo?', classes: 'bg-zinc-500/20 text-zinc-400' };
+                        return (
+                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${badge.classes}`}>
+                            <Film className="w-3 h-3" />
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       {content.status === 'ACTIVE' ? (
