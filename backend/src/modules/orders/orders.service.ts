@@ -18,6 +18,7 @@ import {
 } from '../purchases/entities/purchase.entity';
 import { OrderStatus } from './entities/order.entity';
 import { TelegramsEnhancedService } from '../telegrams/telegrams-enhanced.service';
+import { pickWhatsappTemplate } from './whatsapp-templates';
 
 export interface CreateOrderFromCartInput {
   userId?: string;
@@ -450,13 +451,14 @@ export class OrdersService {
           return c?.title;
         })
         .filter(Boolean);
+      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
       return {
         ...o,
         items,
-        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        claim_url: claimUrl,
         whatsapp_url: o.customer_whatsapp
           ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
-              `Olá! Identifiquei aqui que você fez uma compra no nosso site (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) e ainda não recebeu o acesso.\n\nPara receber seu(s) filme(s), abra nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático.`,
+              pickWhatsappTemplate(o.id, o.total_cents, claimUrl),
             )}`
           : null,
       };
@@ -522,15 +524,16 @@ export class OrdersService {
         })
         .filter(Boolean);
       const undeliveredCount = list.filter((p: any) => !p.delivery_sent).length;
+      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
       return {
         ...o,
         items,
         purchases_total: list.length,
         purchases_undelivered: undeliveredCount,
-        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        claim_url: claimUrl,
         whatsapp_url: o.customer_whatsapp
           ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
-              `Olá! Identifiquei que sua compra (R$ ${(o.total_cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) foi paga mas o link não chegou.\n\nPara receber, abra o nosso bot pelo link:\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ automático.`,
+              pickWhatsappTemplate(o.id, o.total_cents, claimUrl),
             )}`
           : null,
       };
@@ -599,13 +602,14 @@ export class OrdersService {
           return c?.title;
         })
         .filter(Boolean);
+      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
       return {
         ...o,
         items,
-        claim_url: `https://t.me/${botUsername}?start=order_${o.order_token}`,
+        claim_url: claimUrl,
         whatsapp_url: o.customer_whatsapp
           ? `https://wa.me/${o.customer_whatsapp}?text=${encodeURIComponent(
-              `Olá! Aqui está o link pra você receber seu(s) filme(s):\n\nhttps://t.me/${botUsername}?start=order_${o.order_token}\n\nÉ só abrir que chega automático. ❤️`,
+              pickWhatsappTemplate(o.id, o.total_cents, claimUrl),
             )}`
           : null,
       };
