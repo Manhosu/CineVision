@@ -411,10 +411,7 @@ function HomePageContent() {
       {/* Rodapé */}
       <Footer />
 
-      {/* Igor (02/06): popup do WhatsApp desativado temporariamente — número
-          dele entrou em análise e o link da comunidade ficou inválido.
-          Re-ativar removendo o comentário quando o WhatsApp voltar. */}
-      {/* <WhatsAppPopup /> */}
+      <WhatsAppPopup />
     </div>
   );
 }
