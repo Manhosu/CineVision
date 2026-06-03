@@ -248,12 +248,60 @@ export class AiChatService {
     }
 
     if (!conversation.ai_enabled) {
-      // Admin assumed — bot should not auto-respond, mas a mensagem
-      // do cliente já foi salva acima e vai aparecer no painel.
-      this.logger.log(
-        `Conversation ${conversation.id} paused (reason: ${conversation.paused_reason || 'unknown'}) — message persisted but no AI reply.`,
-      );
-      return { text: '', paused: true };
+      // Igor (02/06): reativa IA AQUI também — não só pelo cron de
+      // reengagement. Cenário real: conversa pausada (admin/owner
+      // takeover) ficou parada dias, cliente volta a falar; o cron
+      // pega só conversas idle (last_message_at < cutoff) e o cliente
+      // falando agora joga ela pra fora dessa janela. Resultado: bot
+      // respondia "chamei a equipe" mesmo a pausa sendo de 3 dias atrás.
+      // Mesma whitelist do reengagement.service.ts pra consistência.
+      const TAKEOVER_REASONS = new Set(['owner_takeover', 'admin_takeover']);
+      const SOFT_PAUSE_REASONS = new Set([
+        'content_not_found',
+        'needs_human',
+        'media_received',
+        'receipt_image_received',
+        'detail_ids_invalid',
+        'manual',
+      ]);
+      const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1h
+      const SOFT_TIMEOUT_MS = 30 * 60 * 1000; // 30min
+
+      const pausedFor = conversation.paused_at
+        ? Date.now() - new Date(conversation.paused_at).getTime()
+        : 0;
+      const isTakeoverExpired =
+        TAKEOVER_REASONS.has(conversation.paused_reason || '') &&
+        pausedFor >= TAKEOVER_TIMEOUT_MS;
+      const isSoftExpired =
+        SOFT_PAUSE_REASONS.has(conversation.paused_reason || '') &&
+        pausedFor >= SOFT_TIMEOUT_MS;
+
+      if (isTakeoverExpired || isSoftExpired) {
+        const oldReason = conversation.paused_reason;
+        await this.supabase.client
+          .from('ai_conversations')
+          .update({
+            ai_enabled: true,
+            paused_reason: null,
+            paused_at: null,
+          })
+          .eq('id', conversation.id);
+        conversation.ai_enabled = true;
+        conversation.paused_reason = null;
+        conversation.paused_at = null;
+        this.logger.log(
+          `Conversation ${conversation.id} auto-reactivated on customer return (was ${oldReason} for ${Math.round(pausedFor / 60000)}min)`,
+        );
+        // Deixa o flow continuar normal — a IA vai responder essa mensagem.
+      } else {
+        // Pausa ainda ativa — Igor está no atendimento recente. Mensagem
+        // do cliente já foi salva acima e vai aparecer no painel.
+        this.logger.log(
+          `Conversation ${conversation.id} paused (reason: ${conversation.paused_reason || 'unknown'}, paused for ${Math.round(pausedFor / 60000)}min) — message persisted but no AI reply.`,
+        );
+        return { text: '', paused: true };
+      }
     }
 
     // Build context: training + catalog hits + history
