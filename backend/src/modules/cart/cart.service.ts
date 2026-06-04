@@ -260,7 +260,7 @@ export class CartService {
 
     const { data: content, error: contentError } = await this.supabase
       .from('content')
-      .select('id, title, price_cents, status')
+      .select('id, title, price_cents, status, is_presale, presale_price_cents')
       .eq('id', contentId)
       .single();
 
