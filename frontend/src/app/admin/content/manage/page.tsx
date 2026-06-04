@@ -36,6 +36,9 @@ interface Content {
   // Igor (12/05): badges para filtros clicáveis
   is_release?: boolean;
   is_new_season?: boolean;
+  // Igor (04/06): pré-venda
+  is_presale?: boolean;
+  presale_purchases_count?: number;
 }
 
 type ContentTypeFilter = 'all' | 'movie' | 'series' | 'novelinha' | 'release' | 'new_season';
@@ -93,6 +96,38 @@ export default function ContentManagePage() {
       console.error('Error fetching contents:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Igor (04/06): liberar pré-venda — notifica todos os pré-compradores.
+  const [releasingPresaleId, setReleasingPresaleId] = useState<string | null>(null);
+  const handleReleasePresale = async (content: Content) => {
+    if (!confirm(`Liberar "${content.title}" agora?\n\nO conteúdo sai do modo pré-venda e TODOS que compraram vão receber a notificação automática no Telegram. Sem volta.`)) {
+      return;
+    }
+    try {
+      setReleasingPresaleId(content.id);
+      const token = localStorage.getItem('access_token') || localStorage.getItem('auth_token');
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/content/${content.id}/release-presale`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        toast.success(`"${content.title}" liberado! ${result.notified || 0} cliente(s) notificado(s).`, { duration: 6000 });
+        await fetchContents();
+      } else if (result?.reason === 'not_in_presale') {
+        toast.error(result.message || 'Esse conteúdo não está em pré-venda.');
+      } else {
+        toast.error(result?.message || `Erro ao liberar: ${response.status}`);
+      }
+    } catch (err: any) {
+      toast.error(`Erro de rede: ${err?.message || 'desconhecido'}`);
+    } finally {
+      setReleasingPresaleId(null);
     }
   };
 
@@ -760,6 +795,23 @@ export default function ContentManagePage() {
                           </>
                         ) : (
                           <>
+                            {/* Igor (04/06): liberar pré-venda — só aparece se o conteúdo está em pré-venda */}
+                            {content.is_presale && (
+                              <button
+                                onClick={() => handleReleasePresale(content)}
+                                disabled={releasingPresaleId === content.id}
+                                className="px-3 py-2 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors flex items-center gap-2 text-sm font-semibold disabled:opacity-50"
+                                title={`Liberar pré-venda (notifica ${content.presale_purchases_count || 0} cliente(s))`}
+                              >
+                                {releasingPresaleId === content.id ? (
+                                  <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <>🚀</>
+                                )}
+                                Liberar pré-venda
+                                {content.presale_purchases_count ? ` (${content.presale_purchases_count})` : ''}
+                              </button>
+                            )}
                             {/* Botão Publicar - só aparece se não estiver publicado */}
                             {(content.status === 'DRAFT' || content.status === 'draft') && (
                               <button

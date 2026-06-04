@@ -7,6 +7,7 @@ import { Movie } from '@/types/movie';
 import Pagination from '@/components/Pagination/Pagination';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import { contentHref } from '@/lib/contentHref';
+import { getPresaleInfo } from '@/lib/presale';
 
 interface MovieGridProps {
   movies: Movie[];
@@ -80,6 +81,7 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
           const purchased = isPurchased(movie.id);
           const isSeries = (movie as any).content_type === 'series';
           const detailsPath = contentHref(movie as any);
+          const presale = getPresaleInfo(movie as any);
 
           const formatPrice = (cents: number) =>
             new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
@@ -100,6 +102,13 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
                   sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1280px) 25vw, 20vw"
                 />
 
+                {/* Igor (04/06): badge Pré-venda */}
+                {presale.isPresale && (
+                  <div className="absolute top-2 left-0 z-40 px-2 py-0.5 bg-amber-500 text-black text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40">
+                    🎟 Pré-venda
+                  </div>
+                )}
+
                 {/* Quick add-to-cart icon (top-right corner) */}
                 {!purchased && (
                   <div className="absolute top-2 right-2 z-30" onClick={(e) => e.preventDefault()}>
@@ -108,10 +117,11 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
                         id: movie.id,
                         title: movie.title,
                         poster_url: movie.poster_url || undefined,
-                        price_cents:
-                          movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
+                        price_cents: presale.isPresale
+                          ? presale.effectivePriceCents
+                          : (movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
                             ? movie.discounted_price_cents
-                            : movie.price_cents,
+                            : movie.price_cents),
                         type: isSeries ? 'series' : 'movie',
                       }}
                       variant="icon"
@@ -132,6 +142,14 @@ export default function MovieGrid({ movies, pagination, currentPage = 1, baseUrl
                 <div className="w-full flex items-center justify-center gap-2 bg-white/10 text-white font-semibold py-2 px-3 rounded-lg border border-white/10">
                   {purchased ? (
                     <span className="text-xs text-emerald-400">Adquirido</span>
+                  ) : presale.isPresale && presale.originalPriceCents ? (
+                    <span className="text-xs flex items-center gap-1.5">
+                      <span className="line-through text-gray-500">{formatPrice(presale.originalPriceCents)}</span>
+                      <span className="text-amber-400 font-bold">{formatPrice(presale.effectivePriceCents)}</span>
+                      {presale.discountPercent && (
+                        <span className="text-[9px] text-amber-300">-{presale.discountPercent}%</span>
+                      )}
+                    </span>
                   ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
                     <span className="text-xs flex items-center gap-1.5">
                       <span className="line-through text-gray-500">{formatPrice(movie.price_cents)}</span>

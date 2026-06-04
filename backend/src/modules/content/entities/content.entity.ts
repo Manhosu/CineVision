@@ -223,6 +223,20 @@ export class Content {
   @Column({ default: false })
   is_release: boolean;
 
+  // Igor (04/06): pré-venda — conteúdo cobrado com desconto antes do release;
+  // compras ficam aguardando até admin clicar "Liberar e notificar todos".
+  @Column({ default: false })
+  is_presale: boolean;
+
+  @Column({ type: 'int', nullable: true })
+  presale_price_cents: number | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  presale_release_at: Date | null;
+
+  @Column({ default: 0 })
+  presale_purchases_count: number;
+
   @Column({ default: 0 })
   views_count: number;
 

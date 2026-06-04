@@ -405,6 +405,23 @@ export class AdminContentController {
     return this.adminContentService.restoreContent(contentId);
   }
 
+  // Igor (04/06): libera a pré-venda — vira filme normal e dispara
+  // notificação Telegram pra todos que pré-compraram. Idempotente.
+  @Post(':id/release-presale')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Release a presale', description: 'Notifica todos que pré-compraram via Telegram' })
+  @HttpCode(HttpStatus.OK)
+  async releasePresale(
+    @Param('id') contentId: string,
+    @GetUser() user: any,
+  ) {
+    const role = user?.role;
+    if (role !== UserRole.ADMIN && role !== UserRole.MODERATOR) {
+      throw new ForbiddenException('Apenas administradores podem liberar pré-venda.');
+    }
+    return this.adminContentService.releasePresale(contentId);
+  }
+
   // Igor (01/06): hard-delete de conteúdo arquivado (limpar testes).
   // Só admin/moderator. Backend bloqueia se status != ARCHIVED e devolve
   // erro estruturado se houver FK violation (purchases/episodes).

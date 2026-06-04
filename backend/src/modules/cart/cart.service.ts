@@ -285,7 +285,21 @@ export class CartService {
     // caímos no preço cheio (mesmo comportamento original) sem
     // abortar a compra.
     let effectivePrice = content.price_cents;
-    try {
+
+    // Igor (04/06): pré-venda sobrescreve qualquer outro desconto. Se o
+    // conteúdo está em pré-venda com presale_price_cents válido, é esse
+    // o preço cobrado e pulamos a busca de discount global/categoria.
+    const isPresaleActive =
+      (content as any).is_presale &&
+      (content as any).presale_price_cents &&
+      (content as any).presale_price_cents > 0 &&
+      (content as any).presale_price_cents < content.price_cents;
+
+    if (isPresaleActive) {
+      effectivePrice = (content as any).presale_price_cents;
+    }
+
+    if (!isPresaleActive) try {
       const now = new Date().toISOString();
 
       // Individual primeiro (mais específico vence sobre global).

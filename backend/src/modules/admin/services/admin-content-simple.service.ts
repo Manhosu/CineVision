@@ -1,7 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef, Optional } from '@nestjs/common';
 import { SupabaseService } from '../../../config/supabase.service';
 import { ConfigService } from '@nestjs/config';
 import { AdminPeopleService } from './admin-people.service';
+import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
 
 @Injectable()
 export class AdminContentSimpleService {
@@ -11,6 +12,9 @@ export class AdminContentSimpleService {
     private readonly supabaseService: SupabaseService,
     private readonly configService: ConfigService,
     private readonly peopleService: AdminPeopleService,
+    @Optional()
+    @Inject(forwardRef(() => TelegramsEnhancedService))
+    private readonly telegramsService?: TelegramsEnhancedService,
   ) {
     console.log('AdminContentSimpleService instantiated successfully');
   }
@@ -134,6 +138,80 @@ export class AdminContentSimpleService {
       success: true,
       message: `Content "${content.title}" restaurado com sucesso`,
       restoredContent: { id: content.id, title: content.title },
+    };
+  }
+
+  // Igor (04/06): libera uma pré-venda — vira filme normal e notifica via
+  // Telegram TODOS que pré-compraram. Idempotente: purchases já liberadas
+  // (presale_released_at preenchido) não são notificadas de novo.
+  async releasePresale(contentId: string) {
+    this.logger.log(`Releasing presale for content ${contentId}`);
+
+    const { data: content, error: fetchError } = await this.supabaseService.client
+      .from('content')
+      .select('id, title, is_presale, telegram_chat_id, telegram_group_link')
+      .eq('id', contentId)
+      .single();
+
+    if (fetchError || !content) {
+      throw new NotFoundException(`Content ${contentId} not found`);
+    }
+
+    if (!content.is_presale) {
+      return {
+        success: false,
+        reason: 'not_in_presale',
+        message: 'Esse conteúdo não está em pré-venda.',
+      };
+    }
+
+    // Busca pré-compras pendentes ANTES de mudar o flag (pra usar o índice).
+    const { data: pendingPurchases } = await this.supabaseService.client
+      .from('purchases')
+      .select('id, user_id, content_id, order_id, provider_meta, amount_cents')
+      .eq('content_id', contentId)
+      .eq('is_presale_purchase', true)
+      .is('presale_released_at', null);
+
+    // 1) Marca content como liberado (sai do modo pré-venda).
+    await this.supabaseService.client
+      .from('content')
+      .update({ is_presale: false, updated_at: new Date().toISOString() })
+      .eq('id', contentId);
+
+    // 2) Pra cada purchase pendente: marca released + dispara delivery.
+    const releasedAt = new Date().toISOString();
+    let notified = 0;
+    let failed = 0;
+    for (const p of pendingPurchases || []) {
+      try {
+        // Marca antes — evita race com retry.
+        await this.supabaseService.client
+          .from('purchases')
+          .update({ presale_released_at: releasedAt, delivery_sent: false })
+          .eq('id', p.id);
+
+        // Despacha mensagem via Telegram. deliverContentAfterPayment já
+        // tem toda a lógica de invite link, fallback, etc.
+        if (this.telegramsService) {
+          await this.telegramsService.deliverPresaleRelease(p, content);
+        }
+        notified++;
+      } catch (err: any) {
+        failed++;
+        this.logger.error(
+          `Failed to deliver presale release for purchase ${p.id}: ${err.message}`,
+        );
+      }
+    }
+
+    return {
+      success: true,
+      message: `Pré-venda liberada. ${notified} cliente(s) notificado(s)${failed ? `, ${failed} falha(s)` : ''}.`,
+      releasedContent: { id: content.id, title: content.title },
+      notified,
+      failed,
+      totalPendingBeforeRelease: pendingPurchases?.length || 0,
     };
   }
 
@@ -676,7 +754,9 @@ export class AdminContentSimpleService {
       'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'title_en', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'is_new_season', 'total_seasons', 'total_episodes',
-      'status', 'availability', 'quality_label', 'audio_type'
+      'status', 'availability', 'quality_label', 'audio_type',
+      // Igor (04/06): pré-venda
+      'is_presale', 'presale_price_cents', 'presale_release_at',
     ];
 
     for (const field of allowedFields) {

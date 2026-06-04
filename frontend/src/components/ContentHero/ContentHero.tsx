@@ -8,6 +8,7 @@ import { BookmarkIcon as BookmarkOutline, FireIcon } from '@heroicons/react/24/o
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
+import { getPresaleInfo, formatPresaleCountdown } from '@/lib/presale';
 import DiscountHint from '@/components/Cart/DiscountHint';
 import { useCartStore } from '@/stores/cartStore';
 import { openContentGroup } from '@/lib/telegramAccess';
@@ -127,6 +128,14 @@ export default function ContentHero({
   }, [content.id, isOwnedProp]);
 
   const isFlashPromo = content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
+  // Igor (04/06): pré-venda — declarado aqui em cima pra ficar acessível
+  // pros handlers de compra (handleMainAction etc.).
+  const presaleInfo = getPresaleInfo(content as any);
+  const effectivePriceCents = presaleInfo.isPresale
+    ? presaleInfo.effectivePriceCents
+    : (content.discounted_price_cents && content.discounted_price_cents < content.price_cents
+      ? content.discounted_price_cents
+      : content.price_cents);
 
   // Simple hash from content ID for consistent pseudo-random per content
   const idHash = (content.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
@@ -256,7 +265,7 @@ export default function ContentHero({
         id: content.id,
         title: content.title,
         poster_url: content.poster_url || undefined,
-        price_cents: hasDiscount ? content.discounted_price_cents! : content.price_cents,
+        price_cents: effectivePriceCents,
         type: contentType,
       });
       const result = await cartCheckout('site');
@@ -279,6 +288,9 @@ export default function ContentHero({
   }
 
   const hasDiscount = content.discounted_price_cents && content.discounted_price_cents < content.price_cents;
+  // Igor (04/06): alias da pré-venda já declarada em cima + countdown formatado.
+  const presale = presaleInfo;
+  const presaleCountdown = formatPresaleCountdown(presale.releaseAt);
 
   return (
     <section className="relative w-full min-h-[100svh] flex flex-col">
@@ -417,9 +429,33 @@ export default function ContentHero({
               botões e perdia hierarquia visual. Só aparece quando
               o usuário ainda não comprou — quem já tem o filme só
               vê "Assistir". */}
+          {/* Igor (04/06): Badge grande de PRÉ-VENDA + countdown — chama atenção forte */}
+          {!isOwned && !checkingOwnership && presale.isPresale && (
+            <div className="mb-3 sm:mb-4 flex flex-col items-center text-center gap-2">
+              <div className="inline-flex items-center gap-2 bg-amber-500 text-black text-sm sm:text-base font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-xl shadow-amber-500/30">
+                🎟 Pré-venda Exclusiva
+                {presale.discountPercent && (
+                  <span className="bg-black/20 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+                    -{presale.discountPercent}%
+                  </span>
+                )}
+              </div>
+              {presaleCountdown && (
+                <span className="text-amber-300 text-xs sm:text-sm font-medium">⏱ {presaleCountdown}</span>
+              )}
+            </div>
+          )}
+
           {!isOwned && !checkingOwnership && (
             <div className="mb-3 sm:mb-4 flex flex-col items-center text-center">
-              {hasDiscount ? (
+              {presale.isPresale && presale.originalPriceCents ? (
+                <>
+                  <span className="text-white/40 line-through text-sm">{formatPrice(presale.originalPriceCents)}</span>
+                  <span className="text-amber-400 font-bold text-2xl sm:text-3xl">
+                    {formatPrice(presale.effectivePriceCents)}
+                  </span>
+                </>
+              ) : hasDiscount ? (
                 <>
                   <div className="flex items-center justify-center gap-2">
                     <span className="text-white/40 line-through text-sm">{formatPrice(content.price_cents)}</span>
@@ -436,6 +472,13 @@ export default function ContentHero({
                   {formatPrice(content.price_cents)}
                 </span>
               )}
+            </div>
+          )}
+
+          {/* Igor (04/06): aviso explicativo pra pré-venda — copy forte. */}
+          {!isOwned && !checkingOwnership && presale.isPresale && (
+            <div className="mb-3 sm:mb-4 px-3 py-2 bg-amber-500/10 border border-amber-400/30 rounded-lg text-xs sm:text-sm text-amber-200 max-w-lg mx-auto sm:mx-0">
+              <strong className="text-amber-300">Garante seu acesso AGORA com desconto exclusivo.</strong> Você já entra no grupo do filme pra acompanhar — assim que liberar, recebe notificação automática no Telegram. Sem stress.
             </div>
           )}
 
@@ -466,13 +509,23 @@ export default function ContentHero({
                 className={`flex items-center gap-2.5 px-6 sm:px-8 py-3 sm:py-3.5 rounded-xl font-bold text-base sm:text-lg transition-all duration-200 disabled:cursor-wait disabled:opacity-70 ${
                   isOwned
                     ? 'bg-white text-dark-950 hover:bg-white/90 shadow-lg shadow-white/20'
-                    : isFlashPromo
-                      ? 'bg-gradient-to-r from-amber-500 to-red-600 text-white hover:from-amber-600 hover:to-red-700 shadow-lg shadow-red-600/30 animate-[pulse_2s_ease-in-out_infinite]'
-                      : 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-600/30'
+                    : presale.isPresale
+                      ? 'bg-amber-500 text-black hover:bg-amber-400 shadow-lg shadow-amber-500/40'
+                      : isFlashPromo
+                        ? 'bg-gradient-to-r from-amber-500 to-red-600 text-white hover:from-amber-600 hover:to-red-700 shadow-lg shadow-red-600/30 animate-[pulse_2s_ease-in-out_infinite]'
+                        : 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-600/30'
                 }`}
               >
-                <PlayIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                {isOwned ? 'Assistir' : buyingNow ? 'Processando...' : isFlashPromo ? 'Comprar Agora' : 'Comprar'}
+                {!presale.isPresale && <PlayIcon className="w-5 h-5 sm:w-6 sm:h-6" />}
+                {isOwned
+                  ? 'Assistir'
+                  : buyingNow
+                    ? 'Processando...'
+                    : presale.isPresale
+                      ? '🎟 Garantir Pré-Venda'
+                      : isFlashPromo
+                        ? 'Comprar Agora'
+                        : 'Comprar'}
               </button>
             )}
 
@@ -483,7 +536,9 @@ export default function ContentHero({
                   id: content.id,
                   title: content.title,
                   poster_url: content.poster_url || undefined,
-                  price_cents: hasDiscount ? content.discounted_price_cents! : content.price_cents,
+                  price_cents: presale.isPresale
+                    ? presale.effectivePriceCents
+                    : (hasDiscount ? content.discounted_price_cents! : content.price_cents),
                   type: contentType,
                 }}
                 variant="hero"

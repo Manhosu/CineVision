@@ -94,6 +94,22 @@ export class OrdersService {
       throw new BadRequestException(`Failed to create order: ${orderError?.message}`);
     }
 
+    // Igor (04/06): pré-carrega flags de pré-venda dos contents pra marcar
+    // is_presale_purchase nas purchases que entrarem. Quando admin clicar
+    // "Liberar pré-venda" depois, a query usa esse flag pra achar todo
+    // mundo que comprou no período de pré-venda.
+    const contentIds = Array.from(new Set(items.map((it: any) => it.content_id)));
+    const presaleFlagByContent = new Map<string, boolean>();
+    if (contentIds.length) {
+      const { data: presaleRows } = await this.supabase.client
+        .from('content')
+        .select('id, is_presale')
+        .in('id', contentIds);
+      for (const row of presaleRows || []) {
+        presaleFlagByContent.set(row.id, !!row.is_presale);
+      }
+    }
+
     // M10 — antes era um INSERT sequencial por item (cart com 5 filmes
     // = 5 round-trips ao banco), o que dominava a latência do checkout
     // (Igor reportou 1.5–8s). Agora 1 INSERT em batch.
@@ -111,6 +127,7 @@ export class OrdersService {
         preferred_delivery: delivery,
         purchase_token: uuidv4(),
         order_id: order.id,
+        is_presale_purchase: presaleFlagByContent.get(item.content_id) === true,
         provider_meta: telegramChatId
           ? { telegram_chat_id: telegramChatId, from_cart: true }
           : { from_cart: true },
@@ -955,15 +972,22 @@ export class OrdersService {
 
     // Fetch purchases with their content (so we have telegram_group_link
     // + telegram_chat_id pra gerar invite via Bot API quando bot é admin).
+    // Igor (04/06): também pega is_presale_purchase pra ajustar o texto
+    // ("Pré-venda confirmada" em vez de "Pagamento confirmado").
     const { data: purchases } = await this.supabase.client
       .from('purchases')
-      .select('id, content_id, content:content(id, title, telegram_group_link, telegram_chat_id)')
+      .select('id, content_id, is_presale_purchase, content:content(id, title, telegram_group_link, telegram_chat_id, is_presale)')
       .eq('order_id', orderId);
 
     if (!purchases?.length) {
       this.logger.warn(`No purchases found for order ${orderId} delivery`);
       return;
     }
+
+    // Considera "ordem de pré-venda" se TODA purchase é flagada — assim o
+    // cabeçalho/rodapé muda. Order mista (raro) cai no fluxo normal e
+    // a pré-venda específica só será notificada quando admin liberar.
+    const isPresaleOrder = purchases.every((p: any) => p.is_presale_purchase);
 
     try {
       // Humanização pro canal Business: "Vou analisar seu comprovante…"
@@ -983,11 +1007,21 @@ export class OrdersService {
       }
 
       const totalItems = purchases.length;
-      const header = businessConnectionId
-        ? `✅ *Pagamento confirmado!*\n\nAqui ${totalItems === 1 ? 'está seu filme' : 'estão seus filmes'}:`
-        : `✅ *Pagamento confirmado!*\n\n` +
+      let header: string;
+      if (isPresaleOrder) {
+        // Igor (04/06): pré-venda confirmada. Cliente já recebe o link
+        // do grupo pra entrar (mensagem fixada no grupo avisa que tá em
+        // pré-venda). Quando admin libera, dispara notificação extra.
+        header = totalItems === 1
+          ? `🎟 *Pré-venda confirmada!*\n\nVocê garantiu seu acesso com desconto exclusivo. Entra no grupo abaixo — quando o filme for liberado, você recebe notificação automática:`
+          : `🎟 *Pré-venda confirmada!*\n\nVocê garantiu ${totalItems} acessos com desconto exclusivo. Entra nos grupos abaixo — você recebe notificação automática quando cada filme for liberado:`;
+      } else if (businessConnectionId) {
+        header = `✅ *Pagamento confirmado!*\n\nAqui ${totalItems === 1 ? 'está seu filme' : 'estão seus filmes'}:`;
+      } else {
+        header = `✅ *Pagamento confirmado!*\n\n` +
           `Você adquiriu ${totalItems} ${totalItems === 1 ? 'conteúdo' : 'conteúdos'}. ` +
           `Os links pra assistir estão abaixo:\n`;
+      }
       await this.telegramsService.sendMessage(chatId, header, sendOpts({ parse_mode: 'Markdown' }));
 
       const inlineButtons: Array<Array<{ text: string; url: string }>> = [];

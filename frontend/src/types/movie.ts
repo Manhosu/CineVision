@@ -23,6 +23,11 @@ export interface Movie {
   featured?: boolean;
   is_release?: boolean; // Badge "Novidade" no card (overlay CSS)
   is_new_season?: boolean; // Badge "Nova Temporada" no card (overlay CSS)
+  // Igor (04/06): pré-venda
+  is_presale?: boolean;
+  presale_price_cents?: number | null;
+  presale_release_at?: string | null;
+  presale_purchases_count?: number;
   status?: string; // From database: 'ACTIVE' | 'INACTIVE' | 'PUBLISHED'
   availability?: string; // From database: 'SITE' | 'TELEGRAM' | 'BOTH'
   telegram_group_link?: string; // Telegram group invite link

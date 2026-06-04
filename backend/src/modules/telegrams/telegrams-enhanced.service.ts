@@ -4074,6 +4074,65 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
    */
 
   /**
+   * Igor (04/06): notifica o cliente que a pré-venda do conteúdo foi
+   * liberada e entrega o link (invite single-use ou group_link). Chamado
+   * pelo admin service quando ele clica "Liberar e notificar todos".
+   * Idempotente: respeita presale_released_at marcado antes da chamada.
+   */
+  public async deliverPresaleRelease(purchase: any, content: any): Promise<void> {
+    const chatId = purchase.provider_meta?.telegram_chat_id;
+    if (!chatId) {
+      this.logger.warn(
+        `[presale-release] purchase ${purchase.id}: sem telegram_chat_id no provider_meta`,
+      );
+      return;
+    }
+
+    const title = content?.title || 'Conteúdo';
+    try {
+      // Tenta gerar invite single-use; se falhar, usa link de convite normal.
+      const rawChatId: string | null = content?.telegram_chat_id?.trim() || null;
+      const rawLink: string | null = content?.telegram_group_link?.trim() || null;
+      let chatIdToTry = rawChatId;
+      if (!chatIdToTry && rawLink && /^-?\d{6,}$/.test(rawLink)) {
+        chatIdToTry = rawLink;
+      }
+      let buttonUrl: string | null = null;
+      if (chatIdToTry) {
+        try {
+          buttonUrl = await this.createInviteLinkForUser(chatIdToTry, purchase.id);
+        } catch (err: any) {
+          this.logger.warn(
+            `[presale-release] invite link failed for purchase ${purchase.id}: ${err.message}`,
+          );
+        }
+      }
+      if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
+        buttonUrl = rawLink;
+      }
+
+      const header = `🎬 *${title} chegou!*\n\nComo prometido na sua pré-venda, aqui está seu acesso:`;
+      await this.sendMessage(parseInt(chatId, 10), header, { parse_mode: 'Markdown' });
+
+      if (buttonUrl) {
+        await this.sendMessage(parseInt(chatId, 10), 'Toque pra entrar 👇', {
+          reply_markup: { inline_keyboard: [[{ text: `🎬 ${title}`, url: buttonUrl }]] },
+        });
+      } else {
+        await this.sendMessage(
+          parseInt(chatId, 10),
+          `⚠️ Link pendente. Entre em contato com o suporte que te enviamos na hora.`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `[presale-release] failed to deliver purchase ${purchase.id}: ${err.message}`,
+      );
+      throw err;
+    }
+  }
+
+  /**
    * PUBLIC API: Deliver content to user after successful payment
    * Called by webhook services (Stripe, Woovi) after payment confirmation
    * @param purchase - Purchase object with content_id and provider_meta.telegram_chat_id

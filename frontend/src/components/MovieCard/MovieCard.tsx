@@ -17,6 +17,7 @@ import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import { openContentGroup } from '@/lib/telegramAccess';
 import { contentHref } from '@/lib/contentHref';
+import { getPresaleInfo } from '@/lib/presale';
 
 interface MovieCardProps {
   movie: Movie;
@@ -42,6 +43,8 @@ const MovieCard = memo(function MovieCard({
   const [promoTimeLeft, setPromoTimeLeft] = useState('');
 
   const isFlashPromo = movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
+  // Igor (04/06): pré-venda
+  const presale = getPresaleInfo(movie as any);
 
   // Flash promo countdown
   useEffect(() => {
@@ -165,8 +168,12 @@ const MovieCard = memo(function MovieCard({
             onError={() => setImageError(true)}
           />
 
-          {/* Badge Novidade / Nova Temporada — sempre no topo, independente de promo */}
-          {(movie.is_release || (movie as any).is_new_season) && (
+          {/* Igor (04/06): Pré-venda tem prioridade sobre Novidade/Nova Temporada */}
+          {presale.isPresale ? (
+            <div className={`absolute left-0 z-40 px-2 py-0.5 bg-amber-500 text-black text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
+              🎟 Pré-venda
+            </div>
+          ) : (movie.is_release || (movie as any).is_new_season) && (
             <div className={`absolute left-0 z-40 px-2 py-0.5 bg-[#E50914] text-white text-[10px] font-bold uppercase tracking-wider rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
               {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
             </div>
@@ -180,9 +187,11 @@ const MovieCard = memo(function MovieCard({
                   id: movie.id,
                   title: movie.title,
                   poster_url: movie.poster_url || undefined,
-                  price_cents: movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
-                    ? movie.discounted_price_cents
-                    : movie.price_cents,
+                  price_cents: presale.isPresale
+                    ? presale.effectivePriceCents
+                    : (movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents
+                      ? movie.discounted_price_cents
+                      : movie.price_cents),
                   type: (movie as any).content_type || 'movie',
                 }}
                 variant="icon"
@@ -206,10 +215,26 @@ const MovieCard = memo(function MovieCard({
 
           {/* Preço grande, centralizado, acima do botão (Igor pediu).
               Botão fica minimalista só com "Adicionar". Para conteúdo
-              já comprado, escondemos o preço — só sobra o "Assistir". */}
+              já comprado, escondemos o preço — só sobra o "Assistir".
+              Igor (04/06): pré-venda mostra preço original riscado + preço de
+              pré-venda em laranja com % de desconto. */}
           {!isPurchased && (
             <div className="mb-2 text-center">
-              {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+              {presale.isPresale && presale.originalPriceCents ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[11px] text-gray-500 line-through">
+                    {formatPrice(presale.originalPriceCents)}
+                  </span>
+                  <span className="text-base font-bold text-amber-400">
+                    {formatPrice(presale.effectivePriceCents)}
+                    {presale.discountPercent && (
+                      <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded">
+                        -{presale.discountPercent}%
+                      </span>
+                    )}
+                  </span>
+                </div>
+              ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
                 <div className="flex flex-col items-center leading-tight">
                   <span className="text-[11px] text-gray-500 line-through">
                     {formatPrice(movie.price_cents)}

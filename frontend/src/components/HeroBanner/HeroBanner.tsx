@@ -14,6 +14,7 @@ import {
 import { Movie } from '@/types/movie';
 import { toast } from 'react-hot-toast';
 import { contentHref } from '@/lib/contentHref';
+import { getPresaleInfo, formatBRL, formatPresaleCountdown } from '@/lib/presale';
 
 interface HeroBannerProps {
   movies: Movie[];
@@ -183,6 +184,29 @@ export function HeroBanner({
       <div className="relative z-10 h-full flex items-end pb-10 md:pb-12 lg:pb-16">
         <div className="container mx-auto px-5 lg:px-8">
           <div className="max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl">
+            {/* Igor (04/06): badge Pré-venda no Hero Banner */}
+            {(() => {
+              const presale = getPresaleInfo(currentMovie as any);
+              if (!presale.isPresale) return null;
+              const countdown = formatPresaleCountdown(presale.releaseAt);
+              return (
+                <div className="mb-3 flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 bg-amber-500 text-black text-xs md:text-sm font-bold uppercase tracking-wider px-3 py-1 rounded-full shadow-lg">
+                    🎟 Pré-venda
+                  </span>
+                  {presale.discountPercent && (
+                    <span className="inline-flex items-center bg-amber-500/20 text-amber-300 text-xs md:text-sm font-bold px-2.5 py-1 rounded-full border border-amber-400/40">
+                      -{presale.discountPercent}% exclusivo
+                    </span>
+                  )}
+                  {countdown && (
+                    <span className="inline-flex items-center text-white/80 text-xs md:text-sm font-medium">
+                      ⏱ {countdown}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
             <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
               {currentMovie.title}
             </h1>
@@ -212,17 +236,32 @@ export function HeroBanner({
               {currentMovie.description || 'Descrição não disponível.'}
             </p>
 
-            {/* Two buttons - FilmZone style: Assistir (white) + Detalhes (gray) */}
+            {/* Two buttons - FilmZone style: Assistir (white) + Detalhes (gray).
+                Igor (04/06): se em pré-venda, troca o "Assistir" pelo "Garantir Pré-Venda" laranja. */}
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => {
-                  router.push(contentHref({ id: currentMovie.id, content_type: (currentMovie as any).content_type || (currentMovie as any).type }));
-                }}
-                className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
-              >
-                <PlayIcon className="w-4 h-4" />
-                Assistir
-              </button>
+              {(() => {
+                const presale = getPresaleInfo(currentMovie as any);
+                const targetHref = contentHref({ id: currentMovie.id, content_type: (currentMovie as any).content_type || (currentMovie as any).type });
+                if (presale.isPresale) {
+                  return (
+                    <button
+                      onClick={() => router.push(targetHref)}
+                      className="inline-flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black px-5 md:px-6 py-2.5 rounded-lg font-bold text-sm transition-all active:scale-95 shadow-lg shadow-amber-500/30"
+                    >
+                      🎟 Garantir Pré-Venda · {formatBRL(presale.effectivePriceCents)}
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    onClick={() => router.push(targetHref)}
+                    className="inline-flex items-center gap-2 bg-white hover:bg-white/90 text-black px-5 md:px-6 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95"
+                  >
+                    <PlayIcon className="w-4 h-4" />
+                    Assistir
+                  </button>
+                );
+              })()}
               <button
                 onClick={() => {
                   router.push(contentHref({ id: currentMovie.id, content_type: (currentMovie as any).content_type || (currentMovie as any).type }));

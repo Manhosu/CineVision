@@ -16,6 +16,7 @@ import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
 import { openContentGroup } from '@/lib/telegramAccess';
 import { contentHref } from '@/lib/contentHref';
+import { getPresaleInfo } from '@/lib/presale';
 
 interface Top10MovieCardProps {
   movie: Movie;
@@ -39,6 +40,8 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const [promoTimeLeft, setPromoTimeLeft] = useState('');
 
   const isFlashPromo = movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
+  // Igor (04/06): pré-venda
+  const presale = getPresaleInfo(movie as any);
 
   useEffect(() => {
     if (!isFlashPromo || !movie.promo_ends_at) return;
@@ -203,8 +206,12 @@ const Top10MovieCard = memo(function Top10MovieCard({
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
 
-            {/* Badge Novidade / Nova Temporada — sempre no topo, independente de promo */}
-            {(movie.is_release || (movie as any).is_new_season) && (
+            {/* Igor (04/06): Pré-venda tem prioridade sobre Novidade/Nova Temporada */}
+            {presale.isPresale ? (
+              <div className={`absolute left-0 z-40 px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
+                🎟 Pré-venda
+              </div>
+            ) : (movie.is_release || (movie as any).is_new_season) && (
               <div className={`absolute left-0 z-40 px-1.5 py-0.5 bg-[#E50914] text-white text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
                 {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
               </div>
@@ -231,7 +238,21 @@ const Top10MovieCard = memo(function Top10MovieCard({
           <div className="pt-2 px-0.5 relative z-30">
             {!isPurchased && (
               <div className="mb-2 text-center">
-                {movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
+                {presale.isPresale && presale.originalPriceCents ? (
+                  <div className="flex flex-col items-center leading-tight">
+                    <span className="text-[11px] text-gray-500 line-through">
+                      {formatPrice(presale.originalPriceCents)}
+                    </span>
+                    <span className="text-base font-bold text-amber-400">
+                      {formatPrice(presale.effectivePriceCents)}
+                      {presale.discountPercent && (
+                        <span className="ml-1 text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded">
+                          -{presale.discountPercent}%
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ) : movie.discounted_price_cents && movie.discounted_price_cents < movie.price_cents ? (
                   <div className="flex flex-col items-center leading-tight">
                     <span className="text-[11px] text-gray-500 line-through">
                       {formatPrice(movie.price_cents)}

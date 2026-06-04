@@ -29,6 +29,10 @@ interface Content {
   is_featured: boolean;
   is_release: boolean;
   is_new_season?: boolean;
+  // Igor (04/06): pré-venda
+  is_presale?: boolean;
+  presale_price_cents?: number | null;
+  presale_release_at?: string | null;
   price_cents: number;
   imdb_rating?: number;
   release_year?: number;
@@ -98,6 +102,10 @@ export default function AdminContentEditPage() {
   } | null>(null);
   const [isRelease, setIsRelease] = useState(false);
   const [isNewSeason, setIsNewSeason] = useState(false);
+  // Igor (04/06): pré-venda
+  const [isPresale, setIsPresale] = useState(false);
+  const [presalePriceCents, setPresalePriceCents] = useState<number | null>(null);
+  const [presaleReleaseAt, setPresaleReleaseAt] = useState<string>('');
 
   // Igor (12/05): seletor multi-carrossel substitui o antigo checkbox
   // "Destacar na página inicial". Pré-seleciona carrosséis em que o
@@ -181,6 +189,10 @@ export default function AdminContentEditPage() {
         setTelegramChatId((data as any).telegram_chat_id || '');
         setIsRelease(data.is_release || false);
         setIsNewSeason((data as any).is_new_season || false);
+        // Igor (04/06): pré-venda
+        setIsPresale((data as any).is_presale || false);
+        setPresalePriceCents((data as any).presale_price_cents ?? null);
+        setPresaleReleaseAt((data as any).presale_release_at || '');
 
         // Igor (12/05): fetch paralelo dos carrosséis elegíveis e dos
         // carrosséis em que esse conteúdo já está vinculado.
@@ -339,6 +351,10 @@ export default function AdminContentEditPage() {
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
+        // Igor (04/06): pré-venda
+        is_presale: isPresale,
+        presale_price_cents: isPresale && presalePriceCents != null ? presalePriceCents : null,
+        presale_release_at: isPresale && presaleReleaseAt ? presaleReleaseAt : null,
         price_cents: Math.round(parseFloat(priceInput) * 100),
         imdb_rating: validatedImdbRating,
         release_year: releaseYear ? parseInt(releaseYear) : undefined,
@@ -960,6 +976,66 @@ export default function AdminContentEditPage() {
                   📺 Marcar como Nova Temporada (badge sobreposto no card)
                 </label>
               </div>
+
+              {/* Igor (04/06): Pré-venda */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="is_presale"
+                  checked={isPresale}
+                  onChange={(e) => setIsPresale(e.target.checked)}
+                  className="w-5 h-5 text-amber-500 bg-dark-700 border-gray-600 rounded focus:ring-amber-500"
+                />
+                <label htmlFor="is_presale" className="text-sm font-medium cursor-pointer">
+                  🎟 Marcar como Pré-Venda (badge laranja + preço com desconto exclusivo)
+                </label>
+              </div>
+
+              {isPresale && (
+                <div className="ml-8 pl-4 border-l-2 border-amber-500/40 space-y-3 py-2">
+                  <p className="text-xs text-amber-300/80">
+                    Cliente compra agora com desconto. Recebe o link do grupo na hora pra entrar e acompanhar.
+                    Quando você liberar pelo botão na tela de gerenciar, todo mundo é notificado automático no Telegram.
+                  </p>
+                  <div>
+                    <label htmlFor="presale_price" className="block text-sm font-medium text-gray-300 mb-1">
+                      Preço da pré-venda (R$)
+                    </label>
+                    <input
+                      type="number"
+                      id="presale_price"
+                      step="0.01"
+                      min="0"
+                      placeholder="Ex: 5.90"
+                      value={presalePriceCents != null ? (presalePriceCents / 100).toFixed(2) : ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        if (val === '') setPresalePriceCents(null);
+                        else setPresalePriceCents(Math.round(parseFloat(val) * 100));
+                      }}
+                      className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:ring-amber-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Deve ser MENOR que o preço normal — é o desconto exclusivo que o cliente vê.
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="presale_release_at" className="block text-sm font-medium text-gray-300 mb-1">
+                      Data prevista de liberação (opcional)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      id="presale_release_at"
+                      value={presaleReleaseAt ? presaleReleaseAt.slice(0, 16) : ''}
+                      onChange={(e) => setPresaleReleaseAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                      className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:ring-amber-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Aparece pro cliente como "Disponível em [data]". Pode deixar em branco.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Igor (12/05): seletor de carrosséis manuais. Substitui o
                   antigo "Destacar na página inicial" — agora dá pra escolher
