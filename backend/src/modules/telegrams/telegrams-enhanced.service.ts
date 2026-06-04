@@ -4124,6 +4124,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           `⚠️ Link pendente. Entre em contato com o suporte que te enviamos na hora.`,
         );
       }
+      // Marca delivery_sent=true pra evitar re-entregas se outro webhook
+      // bater na purchase já liberada. Idempotência ponta-a-ponta.
+      await this.supabase
+        .from('purchases')
+        .update({ delivery_sent: true })
+        .eq('id', purchase.id);
     } catch (err: any) {
       this.logger.error(
         `[presale-release] failed to deliver purchase ${purchase.id}: ${err.message}`,
