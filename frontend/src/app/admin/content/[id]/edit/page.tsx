@@ -441,6 +441,10 @@ export default function AdminContentEditPage() {
       backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
+      // Igor (04/06): pré-venda
+      isPresale !== ((originalContent as any).is_presale || false) ||
+      (presalePriceCents ?? null) !== ((originalContent as any).presale_price_cents ?? null) ||
+      (presaleReleaseAt || '') !== ((originalContent as any).presale_release_at || '') ||
       (selectedCarouselIds.length !== originalCarouselIds.length ||
         selectedCarouselIds.some((id) => !originalCarouselIds.includes(id))) ||
       priceInput !== ((originalContent.price_cents / 100).toFixed(2)) ||
