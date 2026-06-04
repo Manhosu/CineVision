@@ -27,7 +27,7 @@ export function WhatsAppGate({
   }
 
   const handleOpenGroup = () => {
-    window.open(whatsappLink || 'https://chat.whatsapp.com/FekR9W3sHI4FE0rsTGw7eY', '_blank');
+    window.open(whatsappLink || 'https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU', '_blank');
   };
 
   const handleConfirmJoined = async () => {

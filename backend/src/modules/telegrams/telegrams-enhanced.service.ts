@@ -4092,10 +4092,57 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         return;
       }
 
+      // Igor (04/06): blindagem contra entrega cruzada (Alexandre recebeu
+      // filme da Elisabeth). Validações ANTES de marcar como entregue:
+      //   1. user_id na purchase tem que existir (não confiamos só no
+      //      provider_meta.telegram_chat_id, que pode ter sido setado
+      //      em outro fluxo).
+      //   2. O telegram_chat_id do user dono da purchase tem que BATER
+      //      com o provider_meta.telegram_chat_id. Se divergir = sinal
+      //      de que algo cruzou (purchase do user A com chatId do user B)
+      //      e ABORTAMOS, deixando pra Igor entregar manual via painel.
+      try {
+        const { data: ownerUser } = await this.supabase
+          .from('users')
+          .select('id, telegram_chat_id, telegram_id, name')
+          .eq('id', purchase.user_id)
+          .maybeSingle();
+
+        const metaChatId = String(chatId);
+        const ownerChatId = ownerUser?.telegram_chat_id
+          ? String(ownerUser.telegram_chat_id)
+          : null;
+
+        const mismatch = ownerChatId && ownerChatId !== metaChatId;
+        if (mismatch) {
+          this.logger.error(
+            `[SECURITY] Cross-delivery blocked: purchase=${purchase.id} owner.user_id=${purchase.user_id} owner.chatId=${ownerChatId} provider_meta.chatId=${metaChatId} — NOT delivering. Igor pode entregar manual via painel.`,
+          );
+          await this.supabase.from('system_logs').insert({
+            type: 'delivery_blocked',
+            level: 'error',
+            message: `Cross-delivery blocked for purchase ${purchase.id}`,
+            meta: {
+              purchase_id: purchase.id,
+              order_id: purchase.order_id,
+              user_id: purchase.user_id,
+              owner_chat_id: ownerChatId,
+              provider_meta_chat_id: metaChatId,
+              owner_name: ownerUser?.name,
+            },
+          });
+          return;
+        }
+      } catch (validationErr: any) {
+        this.logger.warn(
+          `Owner validation failed for purchase ${purchase.id}, proceeding anyway: ${validationErr.message}`,
+        );
+      }
+
       // Mark as delivered BEFORE sending to prevent race conditions
       await this.supabase.from('purchases').update({ delivery_sent: true }).eq('id', purchase.id);
 
-      this.logger.log(`Delivering content to Telegram chat ${chatId} for purchase ${purchase.id}`);
+      this.logger.log(`Delivering content to Telegram chat ${chatId} for purchase ${purchase.id} (user_id=${purchase.user_id}, order_id=${purchase.order_id})`);
 
       // Buscar content e languages (including telegram_group_link)
       const { data: content, error: contentError } = await this.supabase

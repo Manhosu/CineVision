@@ -24,7 +24,7 @@ export function Footer() {
 
           {/* WhatsApp Community Button */}
           <a
-            href="https://chat.whatsapp.com/FekR9W3sHI4FE0rsTGw7eY"
+            href="https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/20 hover:border-[#25D366]/30 text-[#25D366] rounded-full text-sm font-medium transition-all"

@@ -379,7 +379,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                 {/* WhatsApp Community */}
                 <div className="border-t border-white/10 pt-4 mb-4">
                   <a
-                    href="https://chat.whatsapp.com/FekR9W3sHI4FE0rsTGw7eY"
+                    href="https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU"
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setIsMobileMenuOpen(false)}

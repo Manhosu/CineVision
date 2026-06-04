@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const WHATSAPP_LINK = 'https://chat.whatsapp.com/FekR9W3sHI4FE0rsTGw7eY';
+const WHATSAPP_LINK = 'https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU';
 const DISMISS_KEY = 'whatsapp_popup_dismissed';
 // Splash (CineVisionIntro.tsx) marca essa key quando termina ou quando
 // pula a animação. Igor (06/05) reportou que o popup do WhatsApp não
