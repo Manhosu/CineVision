@@ -28,6 +28,7 @@ import { AdminPeopleService } from './services/admin-people.service';
 import { AdminManualGrantController } from './controllers/admin-manual-grant.controller';
 import { AdminBotsController } from './controllers/admin-bots.controller';
 import { AdminBotsService } from './services/admin-bots.service';
+import { BotMigrationService } from './services/bot-migration.service';
 import { BotEphemeralController } from './controllers/bot-ephemeral.controller';
 import { AdminHomepageController } from './controllers/admin-homepage.controller';
 import { HomepageCarouselsService } from './services/homepage-carousels.service';
@@ -126,6 +127,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   AdminTop10Service,
   AdminPeopleService,
   AdminBotsService,
+  BotMigrationService,
   HomepageCarouselsService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },

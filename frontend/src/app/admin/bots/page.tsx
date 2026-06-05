@@ -154,6 +154,34 @@ export default function AdminBotsPage() {
     }
   };
 
+  const handleMigrate = async (bot: Bot) => {
+    const msg =
+      `Marcar @${bot.username} como CAÍDO e disparar WhatsApp pros usuários dele?\n\n` +
+      `• Bot vira "Banido BR" e perde papel de atendimento (não recebe mais novos /start).\n` +
+      `• Cada usuário cadastrado nesse bot recebe 1 mensagem WhatsApp com link do bot ativo.\n` +
+      `• Disparos respeitam throttle (1 a cada 3s) e param se 5 falharem seguidas.\n\n` +
+      `Confirmar?`;
+    if (!confirm(msg)) return;
+    const t = toast.loading('Iniciando migração...');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/${bot.id}/migrate`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const body = await res.json();
+      toast.dismiss(t);
+      if (!res.ok) throw new Error(body?.message || 'Falha ao iniciar migração');
+      toast.success(
+        `Migração iniciada: ${body.total_users} usuários (${body.no_whatsapp} sem WhatsApp) → @${body.target_bot}`,
+        { duration: 6000 },
+      );
+      await loadBots();
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e.message);
+    }
+  };
+
   const handleDelete = async (id: string, username: string) => {
     if (!confirm(`Remover @${username}? Esta ação é permanente.`)) return;
     try {
@@ -290,6 +318,15 @@ export default function AdminBotsPage() {
                     >
                       🔗
                     </button>
+                    {bot.status === 'active' && bot.roles.includes('attendance') && (
+                      <button
+                        onClick={() => handleMigrate(bot)}
+                        className="px-2 py-1 text-xs bg-dark-900 border border-yellow-500/30 text-yellow-400 rounded hover:bg-yellow-500/10"
+                        title="Marcar como caído + disparar migração WhatsApp"
+                      >
+                        🚨
+                      </button>
+                    )}
                     <button
                       onClick={() => handleDelete(bot.id, bot.username)}
                       className="px-2 py-1 text-xs bg-dark-900 border border-red-500/30 text-red-400 rounded hover:bg-red-500/10"
