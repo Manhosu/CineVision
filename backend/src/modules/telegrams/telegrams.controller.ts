@@ -1,4 +1,5 @@
-import { Controller, Post, Body, Headers, Logger, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Logger, Get, Param, Query, UseGuards, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TelegramsService } from './telegrams.service';
 import { TelegramsEnhancedService } from './telegrams-enhanced.service';
@@ -122,6 +123,31 @@ export class TelegramsController {
   @ApiOperation({ summary: 'Sorteia bot ativo e retorna deeplink t.me' })
   async startDeeplink(@Query('start') startParam?: string) {
     return this.telegramsEnhancedService.getStartDeeplink(startParam);
+  }
+
+  /**
+   * Igor (07/06 noite): redirect 302 round-robin pro botão "Acessar
+   * conteúdos" do grupo portal. Cliente clica no botão do Telegram, abre
+   * essa URL no browser/app, e cai 302 direto pro próximo bot da fila.
+   * Cliente 1 → bot 1, cliente 2 → bot 2, ...; distribuição determinística.
+   *
+   * Headers no-cache pra Telegram/Cloudflare/iOS Safari não cachearem
+   * o redirect — senão a 2ª pessoa pegaria o mesmo bot do 1º.
+   */
+  @Get('portal')
+  @ApiOperation({ summary: 'Redirect 302 round-robin pro próximo bot da fila' })
+  async portalRedirect(
+    @Res() res: Response,
+    @Query('start') startParam?: string,
+  ) {
+    const { url, bot_username } = await this.telegramsEnhancedService.getNextRoundRobinBot();
+    const finalStart = startParam || 'portal';
+    const target = `${url}?start=${encodeURIComponent(finalStart)}`;
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    this.logger.log(`[portal-redirect] → @${bot_username} (start=${finalStart})`);
+    return res.redirect(302, target);
   }
 
   @Post('send-notification')

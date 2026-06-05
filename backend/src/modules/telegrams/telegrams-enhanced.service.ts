@@ -267,6 +267,43 @@ export class TelegramsEnhancedService implements OnModuleInit {
     return { url, bot_username: username };
   }
 
+  /**
+   * Igor (07/06 noite): rotação round-robin determinística pro botão
+   * "Acessar conteúdos" do grupo portal. Diferente do sorteio ponderado
+   * acima (que distribui só em média), aqui cada clique vai pro PRÓXIMO
+   * bot na sequência: cliente 1 → bot 1, cliente 2 → bot 2, ..., cliente
+   * N → bot 1 de novo.
+   *
+   * Atomicidade garantida pela função SQL increment_bot_rotation()
+   * (UPDATE em single row, transação serializável do Postgres).
+   */
+  async getNextRoundRobinBot(): Promise<{ url: string; bot_username: string }> {
+    let username: string | null = null;
+    try {
+      const { data: bots } = await this.supabase
+        .from('telegram_bots')
+        .select('username, attendance_weight')
+        .contains('roles', ['attendance'])
+        .eq('status', 'active')
+        .order('id', { ascending: true });
+      const pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
+
+      if (pool.length) {
+        const { data: counter, error } = await this.supabase.rpc('increment_bot_rotation');
+        if (error) throw error;
+        const idx = Number(counter ?? 0) % pool.length;
+        username = pool[idx].username;
+      }
+    } catch (err: any) {
+      this.logger.warn(`getNextRoundRobinBot failed: ${err.message} — falling back to env username`);
+    }
+    const finalUsername =
+      username ||
+      this.configService.get<string>('TELEGRAM_BOT_USERNAME') ||
+      'CineVisionApp_rbot';
+    return { url: `https://t.me/${finalUsername}`, bot_username: finalUsername };
+  }
+
   // ==================== NOVO FLUXO: VERIFICAÇÃO DE E-MAIL ====================
 
   /**
