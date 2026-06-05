@@ -83,13 +83,29 @@ export class TelegramsController {
   }
 
   @Post('webhook')
-  @ApiOperation({ summary: 'Telegram bot webhook handler' })
+  @ApiOperation({ summary: 'Telegram bot webhook handler (legacy, default bot)' })
   @ApiResponse({ status: 200, description: 'Webhook processed successfully' })
   async handleWebhook(
     @Body() webhookData: any,
     @Headers('x-telegram-bot-api-secret-token') signature?: string
   ) {
     return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
+  }
+
+  /**
+   * Igor (07/06): webhook por bot. Cada bot cadastrado em telegram_bots
+   * pode ter URL própria `/webhook/<botId>` — assim o backend identifica
+   * qual bot recebeu a mensagem (Telegram não envia bot_id no payload).
+   * O `/webhook` legado continua atendendo o bot default pra compat.
+   */
+  @Post('webhook/:botId')
+  @ApiOperation({ summary: 'Telegram bot webhook handler (multi-bot)' })
+  async handleWebhookForBot(
+    @Param('botId') botId: string,
+    @Body() webhookData: any,
+    @Headers('x-telegram-bot-api-secret-token') signature?: string,
+  ) {
+    return this.telegramsEnhancedService.handleWebhook(webhookData, signature, botId);
   }
 
   /**

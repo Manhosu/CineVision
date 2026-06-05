@@ -368,6 +368,18 @@ export default function AdminDashboard() {
       shadow: 'shadow-indigo-500/50'
     },
     {
+      title: 'Bots Telegram',
+      description: 'Gerenciar bots rotativos de atendimento e entrega',
+      href: '/admin/bots',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+      ),
+      gradient: 'from-sky-600 to-blue-700',
+      shadow: 'shadow-sky-500/50'
+    },
+    {
       title: 'Carrinho (descontos)',
       description: 'Configurar faixas de desconto progressivo',
       href: '/admin/cart-settings',

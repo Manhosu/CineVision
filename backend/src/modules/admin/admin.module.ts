@@ -26,6 +26,8 @@ import { AdminTop10Service } from './services/admin-top10.service';
 import { AdminPeopleController } from './controllers/admin-people.controller';
 import { AdminPeopleService } from './services/admin-people.service';
 import { AdminManualGrantController } from './controllers/admin-manual-grant.controller';
+import { AdminBotsController } from './controllers/admin-bots.controller';
+import { AdminBotsService } from './services/admin-bots.service';
 import { BotEphemeralController } from './controllers/bot-ephemeral.controller';
 import { AdminHomepageController } from './controllers/admin-homepage.controller';
 import { HomepageCarouselsService } from './services/homepage-carousels.service';
@@ -85,6 +87,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminSalesController,
   AdminPeopleController,
   AdminManualGrantController,
+  AdminBotsController,
   BotEphemeralController,
   AdminHomepageController,
 ];
@@ -122,6 +125,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   RequestsSupabaseService,
   AdminTop10Service,
   AdminPeopleService,
+  AdminBotsService,
   HomepageCarouselsService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },

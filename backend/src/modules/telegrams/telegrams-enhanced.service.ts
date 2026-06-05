@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException, OnModuleInit } from '@nestjs/common';
 import { createHmac } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
 import { ConfigService } from '@nestjs/config';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import axios from 'axios';
@@ -95,6 +96,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
   // sem precisar reiniciar o serviço.
   private botCache = new Map<string, { token: string; apiUrl: string; fetchedAt: number }>();
   private readonly BOT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  // Igor (07/06): contexto de "qual bot estamos respondendo agora". Setado
+  // por handleWebhook(botId) e lido por sendMessage/sendChatAction/etc.
+  // Assim cliente que falou no bot 2 recebe resposta DO bot 2 sem precisar
+  // propagar botId manualmente em cada chamada de sendMessage no pipeline.
+  private readonly botContext = new AsyncLocalStorage<{ botId: string | null }>();
+  private currentBotId(): string | null {
+    return this.botContext.getStore()?.botId || null;
+  }
 
   constructor(
     private configService: ConfigService,
@@ -1497,9 +1507,21 @@ export class TelegramsEnhancedService implements OnModuleInit {
     return true;
   }
 
-  async handleWebhook(webhookData: any, signature?: string) {
+  /**
+   * Igor (07/06): aceita `botId` opcional. Quando setado (rota
+   * /webhook/:botId), todo o processamento desse update roda dentro de
+   * um AsyncLocalStorage que carrega o botId — sendMessage etc. usam
+   * automaticamente o token correto pra responder pelo bot certo.
+   */
+  async handleWebhook(webhookData: any, signature?: string, botId?: string) {
+    return this.botContext.run({ botId: botId || null }, () =>
+      this._handleWebhookInner(webhookData, signature, botId),
+    );
+  }
+
+  private async _handleWebhookInner(webhookData: any, signature?: string, botId?: string) {
     try {
-      this.logger.log('🔔 Webhook received:', JSON.stringify(webhookData).substring(0, 200));
+      this.logger.log(`🔔 Webhook received${botId ? ` (bot=${botId})` : ''}:`, JSON.stringify(webhookData).substring(0, 200));
 
       // Validate webhook signature if provided
       if (signature && this.webhookSecret) {
@@ -2340,7 +2362,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
       const axios = (await import('axios')).default;
       const body: Record<string, any> = { chat_id: chatId, action };
       if (businessConnectionId) body.business_connection_id = businessConnectionId;
-      await axios.post(`${this.botApiUrl}/sendChatAction`, body, {
+      const ctxBotId = this.currentBotId();
+      const baseUrl = ctxBotId ? await this.apiUrlForBot(ctxBotId) : this.botApiUrl;
+      await axios.post(`${baseUrl}/sendChatAction`, body, {
         timeout: 5000,
       });
     } catch (err: any) {
@@ -4108,12 +4132,22 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
   // Helper methods
   async sendMessage(chatId: number, text: string, options?: any) {
     try {
-      const url = `${this.botApiUrl}/sendMessage`;
-      const payload = {
+      // Igor (07/06): bot resolvido na ordem:
+      //   1) options.bot_id explícito (caller passou)
+      //   2) AsyncLocalStorage do webhook em andamento (cliente falou no bot 2 → responde do bot 2)
+      //   3) default bot do env (this.botApiUrl)
+      const explicitBotId: string | null = options?.bot_id || null;
+      const ctxBotId = this.currentBotId();
+      const resolvedBotId = explicitBotId || ctxBotId;
+      const baseUrl = resolvedBotId ? await this.apiUrlForBot(resolvedBotId) : this.botApiUrl;
+      const url = `${baseUrl}/sendMessage`;
+      const payload: any = {
         chat_id: chatId,
         text,
-        ...options,
+        ...(options || {}),
       };
+      // bot_id é só direcionador, não vai pro Telegram.
+      if (payload.bot_id !== undefined) delete payload.bot_id;
 
       this.logger.log(`Sending message to chat ${chatId}:`, JSON.stringify(payload, null, 2));
 
@@ -4133,7 +4167,9 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
   private async answerCallbackQuery(callbackQueryId: string, text?: string) {
     try {
-      const url = `${this.botApiUrl}/answerCallbackQuery`;
+      const ctxBotId = this.currentBotId();
+      const baseUrl = ctxBotId ? await this.apiUrlForBot(ctxBotId) : this.botApiUrl;
+      const url = `${baseUrl}/answerCallbackQuery`;
       const payload = {
         callback_query_id: callbackQueryId,
         text,

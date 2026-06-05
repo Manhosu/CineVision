@@ -92,6 +92,9 @@ export default function AdminContentEditPage() {
   const [trailerUrl, setTrailerUrl] = useState('');
   const [telegramGroupLink, setTelegramGroupLink] = useState('');
   const [telegramChatId, setTelegramChatId] = useState('');
+  // Igor (07/06): bot responsável por gerar invite no grupo desse content.
+  const [deliveryBotId, setDeliveryBotId] = useState<string | null>(null);
+  const [availableBots, setAvailableBots] = useState<Array<{ id: string; username: string; status: string; roles: string[] }>>([]);
   // Igor (07/05): valida Chat ID na hora pra Igor saber se bot é admin
   // sem precisar comprar pra testar. Botão "Testar" no form.
   const [chatIdValidating, setChatIdValidating] = useState(false);
@@ -148,6 +151,21 @@ export default function AdminContentEditPage() {
     }
   }, [contentId]);
 
+  // Igor (07/06): carrega lista de bots cadastrados pra dropdown "Bot do grupo".
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/bots`);
+        if (res.ok) {
+          const data = await res.json();
+          setAvailableBots(data.bots || []);
+        }
+      } catch {
+        // silencioso — campo só fica sem opções
+      }
+    })();
+  }, []);
+
   const loadContent = async () => {
     try {
       setIsLoading(true);
@@ -187,6 +205,7 @@ export default function AdminContentEditPage() {
         setTrailerUrl(data.trailer_url || '');
         setTelegramGroupLink(data.telegram_group_link || '');
         setTelegramChatId((data as any).telegram_chat_id || '');
+        setDeliveryBotId((data as any).delivery_bot_id || null);
         setIsRelease(data.is_release || false);
         setIsNewSeason((data as any).is_new_season || false);
         // Igor (04/06): pré-venda
@@ -344,6 +363,7 @@ export default function AdminContentEditPage() {
         trailer_url: trailerUrl.trim(),
         telegram_group_link: telegramGroupLink.trim(),
         telegram_chat_id: telegramChatId.trim() || null,
+        delivery_bot_id: deliveryBotId,
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
@@ -435,6 +455,7 @@ export default function AdminContentEditPage() {
       trailerUrl !== (originalContent.trailer_url || '') ||
       telegramGroupLink !== (originalContent.telegram_group_link || '') ||
       telegramChatId !== ((originalContent as any).telegram_chat_id || '') ||
+      deliveryBotId !== ((originalContent as any).delivery_bot_id || null) ||
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
       backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
@@ -784,6 +805,31 @@ export default function AdminContentEditPage() {
                   />
                   <p className="mt-1 text-xs text-zinc-500">
                     Fallback regular usado quando Chat ID não foi preenchido OU bot não é admin.
+                  </p>
+                </div>
+
+                {/* Igor (07/06): bot responsável por gerar invite no grupo desse content.
+                    Default = null → backend usa bot padrão de atendimento. */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Bot responsável pelo grupo
+                  </label>
+                  <select
+                    value={deliveryBotId || ''}
+                    onChange={(e) => setDeliveryBotId(e.target.value || null)}
+                    className="w-full px-4 py-2 bg-dark-700 border border-white/10 rounded-lg text-white focus:outline-none focus:border-primary-500"
+                  >
+                    <option value="">— Bot padrão (default) —</option>
+                    {availableBots
+                      .filter(b => b.roles?.includes('delivery'))
+                      .map(b => (
+                        <option key={b.id} value={b.id}>
+                          @{b.username} {b.status === 'banned_br' ? '(banido BR — só entrega)' : ''}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Qual bot vai gerar o invite quando o cliente comprar. Filmes antigos: bot que já é admin do grupo. Filmes novos: deixe no padrão.
                   </p>
                 </div>
               </div>
