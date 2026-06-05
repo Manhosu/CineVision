@@ -209,6 +209,18 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (07/06): atalho — resolve a apiUrl do bot do contexto atual
+   * (AsyncLocalStorage do webhook). Se não há contexto, cai no bot default.
+   * Use em TODA chamada `axios.post('${this.botApiUrl}/...')` que faz parte
+   * de fluxo de webhook, senão a chamada vai sair pelo bot errado e a
+   * resposta do cliente é misturada entre bots (BUG do Igor 07/06 noite).
+   */
+  private async apiUrlForCurrent(): Promise<string> {
+    const ctxBotId = this.currentBotId();
+    return ctxBotId ? await this.apiUrlForBot(ctxBotId) : this.botApiUrl;
+  }
+
+  /**
    * Igor (07/06): sorteia bot ativo de atendimento e retorna deeplink
    * `t.me/<username>?start=<...>`. Usado pelo botão "Comprar no Telegram"
    * do site. Distribui carga entre os N bots ativos (com peso opcional).
@@ -644,8 +656,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
         return false;
       }
 
-      // Try to add the user directly to the group
-      const response = await axios.post(`${this.botApiUrl}/addChatMember`, {
+      // Try to add the user directly to the group — usa bot do contexto
+      // do webhook (se houver), senão default.
+      const addApiUrl = await this.apiUrlForCurrent();
+      const response = await axios.post(`${addApiUrl}/addChatMember`, {
         chat_id: chatId,
         user_id: telegramUserId,
       });
@@ -1620,7 +1634,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
         message.migrate_from_chat_id !== undefined;
       if (isServiceMessage) {
         try {
-          await axios.post(`${this.botApiUrl}/deleteMessage`, {
+          const delApiUrl = await this.apiUrlForCurrent();
+          await axios.post(`${delApiUrl}/deleteMessage`, {
             chat_id: chatId,
             message_id: messageId,
           });
@@ -2149,7 +2164,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           `business_message for unknown connection ${businessConnectionId} — fetching from Bot API`,
         );
         try {
-          const resp = await axios.post(`${this.botApiUrl}/getBusinessConnection`, {
+          const bcApiUrl = await this.apiUrlForCurrent();
+          const resp = await axios.post(`${bcApiUrl}/getBusinessConnection`, {
             business_connection_id: businessConnectionId,
           });
           if (resp.data?.ok && resp.data.result) {
@@ -2462,7 +2478,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           });
           form.append('caption', header);
           form.append('parse_mode', 'Markdown');
-          await axiosLib.post(`${this.botApiUrl}/sendPhoto`, form, {
+          const qrApiUrl = await this.apiUrlForCurrent();
+          await axiosLib.post(`${qrApiUrl}/sendPhoto`, form, {
             headers: form.getHeaders(),
           });
         } catch (imgErr: any) {
@@ -2966,7 +2983,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           form.append('caption', `📱 *Pagamento PIX*\n\n${contentLine}💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`);
           form.append('parse_mode', 'Markdown');
 
-          await axios.post(`${this.botApiUrl}/sendPhoto`, form, {
+          const qr2ApiUrl = await this.apiUrlForCurrent();
+          await axios.post(`${qr2ApiUrl}/sendPhoto`, form, {
             headers: form.getHeaders(),
           });
 
@@ -4109,9 +4127,10 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       const toDelete = exceptStep ? rows.filter((r: any) => r.step !== exceptStep) : rows;
 
+      const delApiUrl2 = await this.apiUrlForCurrent();
       for (const r of toDelete) {
         try {
-          await axios.post(`${this.botApiUrl}/deleteMessage`, {
+          await axios.post(`${delApiUrl2}/deleteMessage`, {
             chat_id: chatId,
             message_id: r.message_id,
           });
