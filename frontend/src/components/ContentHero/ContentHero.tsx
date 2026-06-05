@@ -12,6 +12,7 @@ import { getPresaleInfo, formatPresaleCountdown } from '@/lib/presale';
 import DiscountHint from '@/components/Cart/DiscountHint';
 import { useCartStore } from '@/stores/cartStore';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 // Anônimo = não tem telegram_id salvo no localStorage. Usuários do
 // bot fazem login e gravam telegram_id no blob `user`; visitantes
@@ -248,8 +249,9 @@ export default function ContentHero({
     // item via cart e mandamos pra /cart/checkout (que já gera Pix
     // e captura WhatsApp).
     if (!isAnonymousUser()) {
-      const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-      window.open(`https://t.me/${botUsername}?start=buy_${content.id}`, '_blank');
+      // Igor (07/06): deeplink rotativo entre bots ativos.
+      const url = await getBotDeeplink(`buy_${content.id}`);
+      window.open(url, '_blank');
       toast.success('Abrindo Telegram...', { duration: 2000 });
       return;
     }

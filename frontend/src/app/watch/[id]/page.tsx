@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 export default function WatchPage() {
   const params = useParams();
@@ -77,9 +78,10 @@ export default function WatchPage() {
         </p>
         <div className="flex flex-col gap-3">
           <button
-            onClick={() => {
-              const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-              window.open(`https://t.me/${botUsername}`, '_blank');
+            onClick={async () => {
+              // Igor (07/06): deeplink rotativo via backend.
+              const url = await getBotDeeplink();
+              window.open(url, '_blank');
             }}
             className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2"
           >

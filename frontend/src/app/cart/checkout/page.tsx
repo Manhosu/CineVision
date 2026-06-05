@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 import { api } from '@/services/api';
 import { useCartStore } from '@/stores/cartStore';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 const fmt = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,6 +40,18 @@ function CheckoutContent() {
   const [whatsappValue, setWhatsappValue] = useState('');
   const [whatsappSaving, setWhatsappSaving] = useState(false);
   const [whatsappSaved, setWhatsappSaved] = useState(false);
+  // Igor (07/06): deeplink rotativo resolvido async — sorteia bot ativo.
+  const [claimDeepLinkAsync, setClaimDeepLinkAsync] = useState<string | null>(null);
+  useEffect(() => {
+    // Resolve quando temos um order_token; backend sorteia bot ativo.
+    const orderToken = order?.order_token;
+    if (!orderToken) return;
+    let cancelled = false;
+    getBotDeeplink(`order_${orderToken}`).then((url) => {
+      if (!cancelled) setClaimDeepLinkAsync(url);
+    });
+    return () => { cancelled = true; };
+  }, [order?.order_token]);
 
   useEffect(() => {
     if (!token) {
@@ -124,8 +137,9 @@ function CheckoutContent() {
   // bot ainda" (Yanna). Mostramos um botão de receber via Telegram
   // que aciona o claim no bot via deep link.
   const needsTelegramClaim = paid && !order.telegram_chat_id;
-  const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-  const claimDeepLink = `https://t.me/${botUsername}?start=order_${order.order_token}`;
+  // Igor (07/06): deeplink rotativo — backend escolhe qual bot ativo.
+  const fallbackUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionBrasil_bot';
+  const claimDeepLink = claimDeepLinkAsync ?? `https://t.me/${fallbackUsername}?start=order_${order.order_token}`;
   const hasWhatsappCaptured = !!order.customer_whatsapp || whatsappSaved;
 
   const saveWhatsapp = async () => {

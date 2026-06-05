@@ -87,6 +87,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private processedCallbacks = new Set<string>();
   private readonly MAX_PROCESSED_CACHE = 500;
 
+  // Igor (07/06): cache de tokens dos bots cadastrados em telegram_bots.
+  // Suporta múltiplos bots paralelos — cada conteúdo aponta pro bot que
+  // é admin do grupo daquele filme (content.delivery_bot_id). Quando o
+  // botId é null, usa o bot default (token do env var carregado no
+  // constructor abaixo). TTL curto pra refletir mudanças no painel admin
+  // sem precisar reiniciar o serviço.
+  private botCache = new Map<string, { token: string; apiUrl: string; fetchedAt: number }>();
+  private readonly BOT_CACHE_TTL_MS = 5 * 60 * 1000;
+
   constructor(
     private configService: ConfigService,
     private autoLoginService: AutoLoginService,
@@ -144,6 +153,96 @@ export class TelegramsEnhancedService implements OnModuleInit {
       return OFFICIAL;
     }
     return configured;
+  }
+
+  /**
+   * Igor (07/06): resolve a base URL da Bot API pra um bot específico
+   * cadastrado em `telegram_bots`. Quando botId é null/undefined ou
+   * resolve pro bot default, retorna `this.botApiUrl` (do env var,
+   * bootstrap).
+   *
+   * Cache em memória com TTL pra não bater no banco a cada chamada;
+   * invalidar via `invalidateBotCache(botId)` quando admin editar o bot.
+   *
+   * Fallback de segurança: se o bot existe mas tem token vazio no banco,
+   * cai pro env var atual — mantém o sistema rodando enquanto admin
+   * configura tokens corretos via painel.
+   */
+  private async apiUrlForBot(botId?: string | null): Promise<string> {
+    if (!botId) return this.botApiUrl;
+    const cached = this.botCache.get(botId);
+    if (cached && Date.now() - cached.fetchedAt < this.BOT_CACHE_TTL_MS) {
+      return cached.apiUrl;
+    }
+    try {
+      const { data } = await this.supabase
+        .from('telegram_bots')
+        .select('token, status')
+        .eq('id', botId)
+        .maybeSingle();
+      const token = (data?.token || '').trim() || this.botToken;
+      const apiUrl = `https://api.telegram.org/bot${token}`;
+      this.botCache.set(botId, { token, apiUrl, fetchedAt: Date.now() });
+      return apiUrl;
+    } catch (err: any) {
+      this.logger.warn(
+        `apiUrlForBot(${botId}) lookup failed: ${err.message} — falling back to default bot`,
+      );
+      return this.botApiUrl;
+    }
+  }
+
+  /** Igor (07/06): invalida cache de um bot — admin trocou token, etc. */
+  public invalidateBotCache(botId?: string) {
+    if (!botId) this.botCache.clear();
+    else this.botCache.delete(botId);
+  }
+
+  /**
+   * Igor (07/06): sorteia bot ativo de atendimento e retorna deeplink
+   * `t.me/<username>?start=<...>`. Usado pelo botão "Comprar no Telegram"
+   * do site. Distribui carga entre os N bots ativos (com peso opcional).
+   *
+   * Se nenhum bot ativo (cenário degenerado), retorna deeplink do bot do
+   * env var como fallback. Nunca devolve erro 500 — sempre alguma URL.
+   *
+   * Quando `startParam` é passado, anexa `?start=<encoded>`. Caso
+   * contrário, retorna só o base URL.
+   */
+  public async getStartDeeplink(startParam?: string): Promise<{ url: string; bot_username: string }> {
+    let chosen: { username: string } | null = null;
+    try {
+      const { data: bots } = await this.supabase
+        .from('telegram_bots')
+        .select('username, attendance_weight')
+        .contains('roles', ['attendance'])
+        .eq('status', 'active');
+      const pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
+      if (pool.length) {
+        // Sorteio ponderado: soma dos pesos → escolhe ponto aleatório.
+        const totalWeight = pool.reduce((acc, b) => acc + (b.attendance_weight || 1), 0);
+        let r = Math.random() * totalWeight;
+        for (const b of pool) {
+          r -= b.attendance_weight || 1;
+          if (r <= 0) {
+            chosen = { username: b.username };
+            break;
+          }
+        }
+        if (!chosen) chosen = { username: pool[pool.length - 1].username };
+      }
+    } catch (err: any) {
+      this.logger.warn(`getStartDeeplink lookup failed: ${err.message} — falling back to env username`);
+    }
+    const username =
+      chosen?.username ||
+      this.configService.get<string>('TELEGRAM_BOT_USERNAME') ||
+      'CineVisionApp_rbot';
+    const base = `https://t.me/${username}`;
+    const url = startParam
+      ? `${base}?start=${encodeURIComponent(startParam)}`
+      : base;
+    return { url, bot_username: username };
   }
 
   // ==================== NOVO FLUXO: VERIFICAÇÃO DE E-MAIL ====================
@@ -603,12 +702,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
     //   - `telegram_group_link`: link de convite t.me/+ regular (fallback)
     const { data: content } = await this.supabase
       .from('content')
-      .select('telegram_chat_id, telegram_group_link')
+      .select('telegram_chat_id, telegram_group_link, delivery_bot_id')
       .eq('id', contentId)
       .maybeSingle();
 
     const chatId = content?.telegram_chat_id?.trim() || null;
     const regularLink = content?.telegram_group_link?.trim() || null;
+    // Igor (07/06): bot admin do grupo (multi-bot).
+    const deliveryBotId = (content as any)?.delivery_bot_id || null;
 
     // Caso de compatibilidade: row antiga com Chat ID gravado em
     // `telegram_group_link` (antes da migration 20260507) — detecta e
@@ -621,13 +722,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     // 3. Se temos Chat ID, tenta gerar invite single-use 24h.
     if (chatIdToTry) {
-      const single = await this.createInviteLinkForUser(chatIdToTry, userId);
+      const single = await this.createInviteLinkForUser(chatIdToTry, userId, deliveryBotId);
       if (single) {
         // N6 (Igor 04/05): além do single-use, gerar tb um link fixo com
         // `creates_join_request: true`. Se o cliente compartilhar esse
         // link com terceiros, eles caem numa fila pra Igor aprovar
         // manualmente. Falha em gerar o fixo não bloqueia o single-use.
-        const fixed = await this.createFixedRequestJoinLink(chatIdToTry, userId).catch(() => null);
+        const fixed = await this.createFixedRequestJoinLink(chatIdToTry, userId, deliveryBotId).catch(() => null);
         return { link: single, fixedLink: fixed, expiresInHours: 24, mode: 'single_use' };
       }
       // Bot não é admin do grupo OU chat not found.
@@ -936,12 +1037,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * Diferente do single-use: não expira e pode ser usado múltiplas
    * vezes — mas cada uso vira pedido manual de admin.
    */
-  async createFixedRequestJoinLink(groupLink: string, userId: string): Promise<string | null> {
+  async createFixedRequestJoinLink(
+    groupLink: string,
+    userId: string,
+    botId?: string | null,
+  ): Promise<string | null> {
     try {
       const chatId = await this.getChatIdFromLink(groupLink);
       if (!chatId) return null;
 
-      const response = await axios.post(`${this.botApiUrl}/createChatInviteLink`, {
+      const botApiUrl = await this.apiUrlForBot(botId);
+      const response = await axios.post(`${botApiUrl}/createChatInviteLink`, {
         chat_id: chatId,
         creates_join_request: true,
         name: `Fixo - User ${userId.substring(0, 8)}`,
@@ -960,14 +1066,24 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
   }
 
-  async createInviteLinkForUser(groupLink: string, userId: string): Promise<string | null> {
+  /**
+   * Igor (07/06): aceita `botId` opcional — usa o bot admin do grupo
+   * daquele filme (via `content.delivery_bot_id`). Quando null, usa o
+   * bot default. Crítico pros 300+ grupos antigos onde o bot anterior
+   * banido continua sendo admin (API ainda autoriza com token válido).
+   */
+  async createInviteLinkForUser(
+    groupLink: string,
+    userId: string,
+    botId?: string | null,
+  ): Promise<string | null> {
     try {
       // Extract chat ID from the group link
       // Telegram group links format: https://t.me/+AbCdEfGhIjK or https://t.me/joinchat/AbCdEfGhIjK
       // We need the chat ID to create an invite link
       // For private groups, we'll use the link as-is since we can't get chat_id directly
 
-      this.logger.log(`Creating invite link for user ${userId} to group: ${groupLink}`);
+      this.logger.log(`Creating invite link for user ${userId} to group: ${groupLink} (botId=${botId || 'default'})`);
 
       // Try to get chat from the link
       // Note: This requires the bot to already be in the group
@@ -988,7 +1104,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
       // Create invite link with member limit = 1 and expire date = 24 hours
       const expireDate = Math.floor(Date.now() / 1000) + (24 * 60 * 60); // 24 hours from now
 
-      const response = await axios.post(`${this.botApiUrl}/createChatInviteLink`, {
+      const botApiUrl = await this.apiUrlForBot(botId);
+      const response = await axios.post(`${botApiUrl}/createChatInviteLink`, {
         chat_id: chatId,
         member_limit: 1, // Only one user can use this link
         expire_date: expireDate,
@@ -4100,7 +4217,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       let buttonUrl: string | null = null;
       if (chatIdToTry) {
         try {
-          buttonUrl = await this.createInviteLinkForUser(chatIdToTry, purchase.id);
+          // Igor (07/06): usa bot admin do grupo (content.delivery_bot_id).
+          buttonUrl = await this.createInviteLinkForUser(
+            chatIdToTry,
+            purchase.id,
+            content?.delivery_bot_id || null,
+          );
         } catch (err: any) {
           this.logger.warn(
             `[presale-release] invite link failed for purchase ${purchase.id}: ${err.message}`,
@@ -4340,8 +4462,13 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
           if (!userAddedAutomatically) {
             // STRATEGY 2: If automatic add fails, create invite link as fallback
+            // Igor (07/06): usa bot admin do grupo (delivery_bot_id).
             this.logger.log(`Auto-add failed, creating invite link for purchase ${purchase.id}...`);
-            telegramInviteLink = await this.createInviteLinkForUser(content.telegram_group_link, user.id);
+            telegramInviteLink = await this.createInviteLinkForUser(
+              content.telegram_group_link,
+              user.id,
+              (content as any).delivery_bot_id || null,
+            );
 
             if (telegramInviteLink) {
               this.logger.log(`Created invite link for purchase ${purchase.id}: ${telegramInviteLink}`);

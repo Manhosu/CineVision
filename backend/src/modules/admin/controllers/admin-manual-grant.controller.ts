@@ -170,13 +170,15 @@ export class AdminManualGrantController {
 
           if (chatIdToTry) {
             try {
+              // Igor (07/06): usa bot admin do grupo (delivery_bot_id).
               buttonUrl = await this.telegrams.createInviteLinkForUser(
                 chatIdToTry,
                 purchase.id,
+                (content as any).delivery_bot_id || null,
               );
             } catch (err: any) {
               this.logger.warn(
-                `Manual grant: createInviteLinkForUser failed for chat ${chatIdToTry}: ${err.message}`,
+                `Manual grant: createInviteLinkForUser failed for chat ${chatIdToTry} (bot ${(content as any).delivery_bot_id || 'default'}): ${err.message}`,
               );
             }
           }

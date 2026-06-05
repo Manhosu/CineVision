@@ -15,6 +15,7 @@ import { Movie } from '@/types/movie';
 import { toast } from 'react-hot-toast';
 import { contentHref } from '@/lib/contentHref';
 import { getPresaleInfo, formatBRL, formatPresaleCountdown } from '@/lib/presale';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 interface HeroBannerProps {
   movies: Movie[];
@@ -111,17 +112,15 @@ export function HeroBanner({
     pauseAutoPlay();
   }, [movies.length, pauseAutoPlay]);
 
-  const handleWatchClick = () => {
-    // Generate Telegram deep link for purchase
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-    const deepLink = `https://t.me/${botUsername}?start=buy_${currentMovie.id}`;
+  const handleWatchClick = async () => {
+    // Igor (07/06): deeplink rotativo via backend (sorteia bot ativo).
+    const deepLink = await getBotDeeplink(`buy_${currentMovie.id}`);
 
     toast.success('Abrindo Telegram...', {
       duration: 2000,
       icon: '📱'
     });
 
-    // Open Telegram
     window.open(deepLink, '_blank');
   };
 

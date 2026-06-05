@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon, FilmIcon } from '@heroicons/react/24/outline';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 interface RequestContentModalProps {
   isOpen: boolean;
@@ -17,18 +18,15 @@ export function RequestContentModal({
 }: RequestContentModalProps) {
   const [contentRequest, setContentRequest] = useState('');
 
-  const handleOpenTelegram = () => {
-    // Se o usuário digitou algo, enviar no payload
-    let telegramUrl = `https://t.me/${telegramBotUsername}`;
-
+  const handleOpenTelegram = async () => {
+    // Igor (07/06): deeplink rotativo via backend (sorteia bot ativo).
+    let startParam = 'request_content';
     if (contentRequest.trim()) {
       // Codificar o título em base64 para enviar ao bot
       const payload = btoa(encodeURIComponent(contentRequest.trim())).replace(/=/g, '');
-      telegramUrl += `?start=request_${payload}`;
-    } else {
-      // Se não digitou nada, usar o comando padrão
-      telegramUrl += `?start=request_content`;
+      startParam = `request_${payload}`;
     }
+    const telegramUrl = await getBotDeeplink(startParam);
 
     window.open(telegramUrl, '_blank');
     onClose();

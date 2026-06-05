@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Headers, Logger, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Headers, Logger, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TelegramsService } from './telegrams.service';
 import { TelegramsEnhancedService } from './telegrams-enhanced.service';
@@ -90,6 +90,22 @@ export class TelegramsController {
     @Headers('x-telegram-bot-api-secret-token') signature?: string
   ) {
     return this.telegramsEnhancedService.handleWebhook(webhookData, signature);
+  }
+
+  /**
+   * Igor (07/06): deeplink rotativo. Cliente clica "Comprar no Telegram"
+   * no site → backend sorteia entre os bots `attendance` ativos
+   * (peso `attendance_weight`) e retorna `t.me/<username>?start=...`.
+   * Distribui carga entre bots — quando um cai, o sorteio para de
+   * mandar pra ele e clientes novos vão pros outros automaticamente.
+   *
+   * Quando não tem `start` (cliente só clica "abrir bot"), retorna o
+   * link puro pro padrão. Quando tem `start=...`, propaga.
+   */
+  @Get('start-deeplink')
+  @ApiOperation({ summary: 'Sorteia bot ativo e retorna deeplink t.me' })
+  async startDeeplink(@Query('start') startParam?: string) {
+    return this.telegramsEnhancedService.getStartDeeplink(startParam);
   }
 
   @Post('send-notification')

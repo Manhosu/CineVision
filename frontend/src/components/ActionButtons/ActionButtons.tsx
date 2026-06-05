@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Movie } from '@/types/movie';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 import toast from 'react-hot-toast';
 
 interface ActionButtonsProps {
@@ -59,18 +60,15 @@ export default function ActionButtons({ movie }: ActionButtonsProps) {
     });
   };
 
-  const handleTelegramPurchase = () => {
-    // Gerar deep link do Telegram direto
-    // Formato: https://t.me/BOT_USERNAME?start=buy_CONTENT_ID
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-    const deepLink = `https://t.me/${botUsername}?start=buy_${movie.id}`;
+  const handleTelegramPurchase = async () => {
+    // Igor (07/06): deeplink rotativo via backend (sorteia bot ativo).
+    const deepLink = await getBotDeeplink(`buy_${movie.id}`);
 
     toast.success('Abrindo Telegram...', {
       duration: 2000,
       icon: '📱'
     });
 
-    // Abrir Telegram
     window.open(deepLink, '_blank');
   };
 

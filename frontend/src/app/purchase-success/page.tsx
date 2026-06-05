@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Header } from '@/components/Header/Header';
 import { Footer } from '@/components/Footer/Footer';
 import { openContentGroup } from '@/lib/telegramAccess';
+import { getBotDeeplink } from '@/lib/botDeeplink';
 
 interface PurchaseDetails {
   id: string;
@@ -220,9 +221,9 @@ function PurchaseSuccessContent() {
                     ? await openContentGroup(purchase.content.id, telegramLink)
                     : false;
                   if (!opened) {
-                    const botUsername =
-                      process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-                    window.open(`https://t.me/${botUsername}`, '_blank');
+                    // Igor (07/06): deeplink rotativo via backend.
+                    const url = await getBotDeeplink();
+                    window.open(url, '_blank');
                   }
                 }}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-4 bg-blue-600 text-white font-medium rounded-xl hover:bg-blue-700 transition-all duration-300 hover:scale-105"

@@ -976,7 +976,7 @@ export class OrdersService {
     // ("Pré-venda confirmada" em vez de "Pagamento confirmado").
     const { data: purchases } = await this.supabase.client
       .from('purchases')
-      .select('id, content_id, is_presale_purchase, content:content(id, title, telegram_group_link, telegram_chat_id, is_presale)')
+      .select('id, content_id, is_presale_purchase, content:content(id, title, telegram_group_link, telegram_chat_id, is_presale, delivery_bot_id)')
       .eq('order_id', orderId);
 
     if (!purchases?.length) {
@@ -1045,15 +1045,19 @@ export class OrdersService {
         let buttonUrl: string | null = null;
 
         // 1. Tenta gerar invite single-use se temos Chat ID.
+        // Igor (07/06): usa o bot admin do grupo (content.delivery_bot_id).
+        // Pros 300+ grupos antigos é o bot anterior; pros filmes novos é
+        // o que o admin escolheu no dropdown. Se NULL, cai no bot default.
         if (chatIdToTry) {
           try {
             buttonUrl = await this.telegramsService.createInviteLinkForUser(
               chatIdToTry,
               p.id,
+              content.delivery_bot_id || null,
             );
           } catch (err: any) {
             this.logger.warn(
-              `createInviteLinkForUser failed for purchase ${p.id} (chat ${chatIdToTry}): ${err.message}`,
+              `createInviteLinkForUser failed for purchase ${p.id} (chat ${chatIdToTry}, bot ${content.delivery_bot_id || 'default'}): ${err.message}`,
             );
           }
         }
