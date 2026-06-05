@@ -5,20 +5,24 @@
  * imagem nenhuma (o filme "Obsessão", que tem backdrop `.jpeg`, funcionava;
  * as séries, com backdrop `.webp`, não).
  *
- * `ogImageUrl` envolve a URL da imagem no proxy `images.weserv.nl` — um
- * serviço de imagem gratuito e amplamente usado — que força a saída em JPEG
- * (`output=jpg`) e redimensiona pro tamanho ideal de Open Graph (1200x630).
+ * Igor (05/06): substituído o proxy externo `images.weserv.nl` por endpoint
+ * próprio em `/api/og-image`. Twitter/Facebook ficavam com cache colado e
+ * algumas plataformas tratam proxies externos com desconfiança. Servindo
+ * via nosso próprio domínio (cinevisionapp.com.br) o crawler trata como
+ * imagem normal e re-puxa quando o cache TTL expira.
  *
- * Bônus: como a URL final muda, isso também fura o cache de preview que o
- * WhatsApp já tinha guardado (sem imagem) das séries compartilhadas antes.
+ * O endpoint /api/og-image converte WebP→JPEG via sharp e mantém JPEGs/PNGs
+ * em passthrough. Cache forte na resposta pro CDN não bater no Supabase a
+ * cada preview gerado.
  *
  * @param rawUrl  URL original do backdrop/thumbnail (pode ser webp)
  * @returns URL JPEG pronta pra og:image, ou undefined se não houver imagem.
  */
+
+const FRONTEND_ORIGIN = 'https://www.cinevisionapp.com.br';
+
 export function ogImageUrl(rawUrl?: string | null): string | undefined {
   const url = (rawUrl || '').trim();
   if (!url) return undefined;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(
-    url,
-  )}&w=1200&h=630&fit=cover&output=jpg`;
+  return `${FRONTEND_ORIGIN}/api/og-image?url=${encodeURIComponent(url)}`;
 }
