@@ -206,14 +206,10 @@ const Top10MovieCard = memo(function Top10MovieCard({
               sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 200px"
             />
 
-            {/* Igor (04/06): Pré-venda tem prioridade sobre Novidade/Nova Temporada */}
-            {presale.isPresale ? (
+            {/* Igor (04/06): badge de pré-venda fica dentro do pôster */}
+            {presale.isPresale && (
               <div className={`absolute left-0 z-40 px-1.5 py-0.5 bg-amber-500 text-black text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
                 🎟 Pré-venda
-              </div>
-            ) : (movie.is_release || (movie as any).is_new_season) && (
-              <div className={`absolute left-0 z-40 px-1.5 py-0.5 bg-[#E50914] text-white text-[9px] font-bold uppercase tracking-wide rounded-r shadow-lg shadow-black/40 ${isFlashPromo && promoTimeLeft ? 'top-9' : 'top-2'}`}>
-                {(movie as any).is_new_season ? 'Nova Temp.' : 'Novidade'}
               </div>
             )}
 
@@ -233,6 +229,15 @@ const Top10MovieCard = memo(function Top10MovieCard({
             </div>
           </div>
 
+
+          {/* N23: badge Netflix-style abaixo do pôster, full-width */}
+          {!presale.isPresale && (movie.is_release || (movie as any).is_new_season) && (
+            <div className="w-full bg-[#E50914] py-1 text-center">
+              <span className="text-white text-[9px] font-bold uppercase tracking-wide">
+                {(movie as any).is_new_season ? 'Nova Temporada' : 'Novidade'}
+              </span>
+            </div>
+          )}
 
           {/* Preço centralizado acima do botão + botão minimalista. */}
           <div className="pt-2 px-0.5 relative z-30">

@@ -47,7 +47,9 @@ export async function generateMetadata({ params }: MoviePageProps): Promise<Meta
   if (!movie) return { title: 'Filme não encontrado - Cine Vision' };
 
   // Igor (18/05): og:image via proxy que força JPEG — WhatsApp não renderiza WebP.
-  const ogImg = ogImageUrl(movie.backdrop_url || movie.thumbnail_url);
+  // N26 (Igor 07/06): filmes antigos podem ter backdrop_url null — usar poster_url
+  // como fallback para garantir que o preview aparece no Twitter/WhatsApp.
+  const ogImg = ogImageUrl(movie.backdrop_url || movie.poster_url || movie.thumbnail_url);
 
   return {
     title: `${movie.title} - Cine Vision`,

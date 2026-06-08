@@ -405,7 +405,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       // 30 min, pra não spammar quando Anthropic está fora do ar e
       // 50 clientes mandam msg em sequência.
       if (await this.shouldNotifyClaudeFailure(conversation.id)) {
-        await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+        await this.notifyAdminForTakeover(platform, externalChatId, messageText, pauseReason, conversation.id);
       }
       return {
         text: '',
@@ -433,7 +433,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
       const reasonMatch = rawText.match(/<<PAUSE:([^>]+)>>/i);
       const reason = reasonMatch?.[1] ?? 'unknown';
       await this.pauseConversation(conversation.id, reason);
-      await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+      await this.notifyAdminForTakeover(platform, externalChatId, messageText, reason, conversation.id);
     }
 
     // LIST_REDIRECT: cliente pediu lista completa — manda link da home
@@ -487,7 +487,7 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
         // Pausa pra Igor assumir — alta probabilidade de alucinação ou
         // título saiu do catálogo
         await this.pauseConversation(conversation.id, 'detail_ids_invalid');
-        await this.notifyAdminForTakeover(platform, externalChatId, messageText);
+        await this.notifyAdminForTakeover(platform, externalChatId, messageText, 'detail_ids_invalid', conversation.id);
         paused = true;
       } else if (missingIds.length && links.length < ids.length) {
         // Parcial — alguns links válidos, outros faltam. Reconhece sem
@@ -1152,6 +1152,8 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     platform: string,
     externalChatId: string,
     originalMessage: string,
+    reason?: string,
+    conversationId?: string,
   ) {
     // N28b (Igor 08/05): SEMPRE prefere o owner ativo da Business
     // connection, qualquer que seja a platform. Quem configurou Business
@@ -1191,24 +1193,44 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
 
     if (!targetChatId || !this.telegramsService) {
       this.logger.warn(
-        `notifyAdminForTakeover: chat=${externalChatId} platform=${platform} — targetChatId=${targetChatId} telegrams=${!!this.telegramsService} → DROPPED`,
+        `notifyAdminForTakeover: chat=${externalChatId} platform=${platform} reason=${reason} — targetChatId=${targetChatId} telegrams=${!!this.telegramsService} → DROPPED`,
       );
       return;
     }
 
+    // N20 (Igor 08/05): enriquecer DM com motivo da pausa e link direto
+    // pra conversa no painel. Antes só mostrava "IA pausada" sem contexto.
+    const reasonLabel: Record<string, string> = {
+      content_not_found: '🔍 Conteúdo não encontrado no catálogo',
+      needs_human: '🙋 Cliente solicitou atendimento humano',
+      media_received: '🖼️ Cliente enviou mídia (foto/documento)',
+      receipt_image_received: '🧾 Cliente enviou comprovante de pagamento',
+      detail_ids_invalid: '🤖 IA inventou IDs inválidos (alucinação)',
+      manual: '⏸️ Pausa manual pelo admin',
+      claude_auth: '❌ Erro de autenticação Claude',
+      claude_low_balance: '💸 Saldo Claude insuficiente',
+      unknown: '❓ Motivo desconhecido',
+    };
+    const reasonText = reason ? (reasonLabel[reason] || `⚠️ ${reason}`) : '⚠️ Não especificado';
+    const panelUrl = conversationId
+      ? `https://www.cinevisionapp.com.br/admin/ai-chat?conversation=${conversationId}`
+      : 'https://www.cinevisionapp.com.br/admin/ai-chat';
+    const safeMsg = (originalMessage || '').slice(0, 300).replace(/[_*[\]()~`>#+=|{}.!-]/g, '\\$&');
+
     const text =
       `🤖 *IA pausada — atenção necessária*\n\n` +
+      `*Motivo:* ${reasonText}\n` +
       `*Plataforma:* ${platform}\n` +
       `*Chat ID do cliente:* \`${externalChatId}\`\n\n` +
-      `*Última mensagem:*\n_${originalMessage}_\n\n` +
-      `👉 [Assumir no painel de IA](https://www.cinevisionapp.com.br/admin/ai-chat)`;
+      `*Última mensagem do cliente:*\n_${safeMsg}_\n\n` +
+      `👉 [Assumir atendimento no painel](${panelUrl})`;
 
     try {
       await this.telegramsService.sendMessage(parseInt(targetChatId, 10), text, {
-        parse_mode: 'Markdown',
+        parse_mode: 'MarkdownV2',
       });
       this.logger.log(
-        `notifyAdminForTakeover OK: client=${externalChatId} → target=${targetChatId} (source=${targetSource})`,
+        `notifyAdminForTakeover OK: client=${externalChatId} reason=${reason} conv=${conversationId} → target=${targetChatId} (source=${targetSource})`,
       );
     } catch (err: any) {
       this.logger.error(

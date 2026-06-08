@@ -40,6 +40,35 @@ export class AdminSettingsController {
     };
   }
 
+  // N25 (Igor 07/06): toggle on/off do popup de WhatsApp + link editável.
+  // Igor precisou desativar quando número saiu do ar — antes exigia intervenção
+  // do dev. Agora ele mesmo controla pelo painel.
+  @Get('whatsapp-popup')
+  @ApiOperation({ summary: 'Get WhatsApp popup settings (enabled + link)' })
+  async getWhatsappPopup() {
+    const settings = await this.settingsService.getAllSettings();
+    return {
+      whatsapp_popup_enabled: settings['whatsapp_popup_enabled'] === 'true',
+      whatsapp_popup_link: settings['whatsapp_popup_link'] || settings['whatsapp_group_link'] || '',
+    };
+  }
+
+  @Patch('whatsapp-popup')
+  @ApiOperation({ summary: 'Update WhatsApp popup settings' })
+  async updateWhatsappPopup(@Body() body: { whatsapp_popup_enabled?: boolean; whatsapp_popup_link?: string }) {
+    if (body.whatsapp_popup_enabled !== undefined) {
+      await this.settingsService.updateSettingByKey('whatsapp_popup_enabled', body.whatsapp_popup_enabled ? 'true' : 'false');
+    }
+    if (body.whatsapp_popup_link !== undefined) {
+      await this.settingsService.updateSettingByKey('whatsapp_popup_link', body.whatsapp_popup_link);
+    }
+    const settings = await this.settingsService.getAllSettings();
+    return {
+      whatsapp_popup_enabled: settings['whatsapp_popup_enabled'] === 'true',
+      whatsapp_popup_link: settings['whatsapp_popup_link'] || '',
+    };
+  }
+
   // Igor (21/05): banner editável que aparece no preview de link da HOME
   // ao compartilhar cinevisionapp.com.br no WhatsApp/Facebook (og:image).
   @Patch('homepage-banner')

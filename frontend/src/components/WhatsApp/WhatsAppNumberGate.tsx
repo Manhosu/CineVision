@@ -179,12 +179,10 @@ export function WhatsAppNumberGate({
                   </svg>
                 </div>
                 <h2 className="text-lg sm:text-2xl font-bold text-white mb-1 sm:mb-2 px-6 sm:px-0">
-                  🔒 Valide sua compra
+                  📱 Garanta a entrega do seu filme
                 </h2>
                 <p className="text-gray-300 text-xs sm:text-sm leading-relaxed max-w-sm">
-                  {mandatory
-                    ? 'Para confirmar e liberar o acesso ao seu conteúdo, informe o seu número de WhatsApp real. Cadastros com número inexistente podem ter o acesso bloqueado por segurança.'
-                    : 'Para validar sua conta e liberar o acesso, informe o seu número de WhatsApp real. Cadastros com número inexistente podem ter o acesso bloqueado por segurança.'}
+                  Caso aconteça algum problema na entrega pelo Telegram, a gente entra em contato pelo WhatsApp pra liberar o acesso manualmente.
                 </p>
               </div>
 
@@ -203,9 +201,10 @@ export function WhatsAppNumberGate({
                   disabled={saving}
                   className="w-full rounded-lg border border-white/10 bg-black px-3 py-2.5 sm:py-3 text-sm sm:text-base text-white placeholder-zinc-600 focus:border-[#25D366] focus:outline-none disabled:opacity-50"
                 />
-                <p className="mt-1.5 sm:mt-2 text-[11px] sm:text-xs text-zinc-400">
-                  Inclua o DDD. Use seu número real — ele garante a validação da sua compra.
-                </p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-[11px] sm:text-xs text-zinc-400">🔒 Seu número fica salvo só pra isso — <strong className="text-zinc-300">a gente não compartilha com ninguém</strong>.</p>
+                  <p className="text-[11px] sm:text-xs text-zinc-400">📵 Não usamos pra divulgação nem listas de transmissão. Promessa.</p>
+                </div>
               </div>
 
               <button

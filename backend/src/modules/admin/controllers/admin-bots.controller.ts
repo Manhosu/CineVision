@@ -83,4 +83,12 @@ export class AdminBotsController {
     const runs = await this.botMigrationService.listRuns(botId);
     return { runs };
   }
+
+  // N30 (Igor 07/06): Painel de usuários por bot — quantos iniciaram cada bot,
+  // total com duplicatas e total único (mesmo usuário em vários bots conta 1).
+  @Get('user-stats')
+  @ApiOperation({ summary: 'Estatísticas de usuários por bot (count individual + total único)' })
+  async getUserStats() {
+    return this.adminBotsService.getUserStats();
+  }
 }

@@ -4239,6 +4239,26 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     }
   }
 
+  // N31 (Igor 07/06): Métodos para broadcast de grupos — usam token explícito
+  // em vez do bot do contexto atual, pois o caller controla qual bot enviar.
+  async sendMessageToGroupWithBot(token: string, chatId: string, text: string) {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const res = await axios.post(url, { chat_id: chatId, text, parse_mode: 'Markdown' });
+    return res.data?.result;
+  }
+
+  async sendPhotoToGroupWithBot(token: string, chatId: string, photoUrl: string, caption: string) {
+    const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+    const res = await axios.post(url, { chat_id: chatId, photo: photoUrl, caption, parse_mode: 'Markdown' });
+    return res.data?.result;
+  }
+
+  async deleteMessageFromGroupWithBot(token: string, chatId: string, messageId: string) {
+    const url = `https://api.telegram.org/bot${token}/deleteMessage`;
+    const res = await axios.post(url, { chat_id: chatId, message_id: parseInt(messageId, 10) });
+    return res.data?.result;
+  }
+
   async setupWebhook(url: string, secretToken?: string) {
     try {
       const webhookUrl = `${this.botApiUrl}/setWebhook`;

@@ -17,6 +17,19 @@ export class PublicSettingsController {
     };
   }
 
+  // N25 (Igor 07/06): popup de WhatsApp — lido publicamente pelo frontend
+  // antes de exibir o popup. Se disabled, frontend não mostra o botão.
+  @Get('whatsapp-popup')
+  @ApiOperation({ summary: 'Get WhatsApp popup state (public, no auth)' })
+  @ApiResponse({ status: 200, description: 'WhatsApp popup settings' })
+  async getWhatsappPopup() {
+    const settings = await this.settingsService.getAllSettings();
+    return {
+      enabled: settings['whatsapp_popup_enabled'] === 'true',
+      link: settings['whatsapp_popup_link'] || settings['whatsapp_group_link'] || '',
+    };
+  }
+
   // Igor (21/05): banner OG da home — lido publicamente pelo generateMetadata
   // do layout (server-side, sem auth) pra montar a og:image do link principal.
   @Get('homepage-banner')

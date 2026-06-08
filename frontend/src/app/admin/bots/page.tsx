@@ -61,6 +61,42 @@ export default function AdminBotsPage() {
   const [newDisplayName, setNewDisplayName] = useState('');
   const [adding, setAdding] = useState(false);
 
+  // N25: popup WhatsApp config
+  const [popupEnabled, setPopupEnabled] = useState(false);
+  const [popupLink, setPopupLink] = useState('');
+  const [savingPopup, setSavingPopup] = useState(false);
+
+  // N30: estatísticas de usuários por bot
+  const [userStats, setUserStats] = useState<{ bots: any[]; total_all: number; total_unique: number } | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/admin/settings/whatsapp-popup`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setPopupEnabled(d.whatsapp_popup_enabled); setPopupLink(d.whatsapp_popup_link || ''); } })
+      .catch(() => {});
+    fetch(`${API_URL}/api/v1/admin/bots/user-stats`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setUserStats(d); })
+      .catch(() => {});
+  }, []);
+
+  const savePopupSettings = async () => {
+    setSavingPopup(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/settings/whatsapp-popup`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ whatsapp_popup_enabled: popupEnabled, whatsapp_popup_link: popupLink }),
+      });
+      if (!res.ok) throw new Error('Falha ao salvar');
+      toast.success('Configurações do popup salvas!');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingPopup(false);
+    }
+  };
+
   const loadBots = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/v1/admin/bots`, { headers: getHeaders() });
@@ -346,6 +382,72 @@ export default function AdminBotsPage() {
         <p>• <strong>Atendimento</strong>: bot pode receber novos /start. Peso define probabilidade no sorteio rotativo (0 = não participa).</p>
         <p>• <strong>Entrega</strong>: bot pode gerar invite link em grupos onde é admin. Funciona mesmo banido pra novos /start (via API).</p>
         <p>• <strong>Default</strong>: bot usado como fallback quando o sorteio não escolhe nenhum específico.</p>
+      </div>
+
+      {/* N30: Estatísticas de usuários por bot */}
+      {userStats && (
+        <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
+          <h2 className="text-base font-semibold text-white mb-4">Usuários por Bot</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {userStats.bots.map((b: any) => (
+              <div key={b.id} className="bg-dark-700 rounded-lg p-3 text-center">
+                <div className="text-xl font-bold text-white">{b.users_count.toLocaleString('pt-BR')}</div>
+                <div className="text-xs text-gray-400 mt-0.5 truncate">@{b.username}</div>
+                <div className={`text-[10px] mt-1 font-medium ${b.status === 'active' ? 'text-emerald-400' : b.status === 'banned_br' ? 'text-yellow-400' : 'text-gray-500'}`}>
+                  {b.status === 'active' ? 'ativo' : b.status === 'banned_br' ? 'banido' : 'inativo'}
+                </div>
+              </div>
+            ))}
+            <div className="bg-dark-700 rounded-lg p-3 text-center border border-white/10">
+              <div className="text-xl font-bold text-blue-400">{userStats.total_all.toLocaleString('pt-BR')}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Total (c/ duplicatas)</div>
+            </div>
+            <div className="bg-dark-700 rounded-lg p-3 text-center border border-emerald-500/20">
+              <div className="text-xl font-bold text-emerald-400">{userStats.total_unique.toLocaleString('pt-BR')}</div>
+              <div className="text-xs text-gray-400 mt-0.5">Usuários únicos</div>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            "Usuários únicos" = pessoas distintas em todos os bots (sem contar quem está em 2+ bots mais de uma vez).
+          </p>
+        </div>
+      )}
+
+      {/* N25: Configurações do popup WhatsApp */}
+      <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
+        <h2 className="text-base font-semibold text-white mb-4">Popup de WhatsApp</h2>
+        <div className="flex flex-col gap-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setPopupEnabled(!popupEnabled)}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${popupEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${popupEnabled ? 'translate-x-5' : ''}`} />
+            </div>
+            <span className="text-sm text-gray-300">
+              {popupEnabled ? 'Popup ativo — aparece para visitantes' : 'Popup desativado — não aparece no site'}
+            </span>
+          </label>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1">Link do grupo WhatsApp</label>
+              <input
+                type="url"
+                value={popupLink}
+                onChange={e => setPopupLink(e.target.value)}
+                placeholder="https://chat.whatsapp.com/..."
+                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              />
+            </div>
+            <button
+              onClick={savePopupSettings}
+              disabled={savingPopup}
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {savingPopup ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {showAddModal && (

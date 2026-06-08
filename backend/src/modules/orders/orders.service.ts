@@ -459,7 +459,14 @@ export class OrdersService {
       purchasesByOrder.set(p.order_id, list);
     }
 
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    // N28: usar rodízio de bots em vez de bot hardcoded
+    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    try {
+      if (this.telegramsService) {
+        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
+        if (rotated?.username) botUsername = rotated.username;
+      }
+    } catch { /* fallback to env bot */ }
 
     return data.map((o: any) => {
       const items = (purchasesByOrder.get(o.id) || [])
@@ -530,7 +537,13 @@ export class OrdersService {
       return list.some((p: any) => !p.delivery_sent);
     });
 
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    try {
+      if (this.telegramsService) {
+        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
+        if (rotated?.username) botUsername = rotated.username;
+      }
+    } catch { /* fallback to env bot */ }
 
     return undelivered.map((o: any) => {
       const list = byOrder.get(o.id) || [];
@@ -610,7 +623,14 @@ export class OrdersService {
       purchasesByOrder.set(p.order_id, list);
     }
 
-    const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    // N28: usar rodízio de bots em vez de bot hardcoded
+    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
+    try {
+      if (this.telegramsService) {
+        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
+        if (rotated?.username) botUsername = rotated.username;
+      }
+    } catch { /* fallback to env bot */ }
 
     return data.map((o: any) => {
       const items = (purchasesByOrder.get(o.id) || [])

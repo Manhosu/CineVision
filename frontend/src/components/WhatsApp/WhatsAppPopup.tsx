@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const WHATSAPP_LINK = 'https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.cinevisionapp.com.br';
 const DISMISS_KEY = 'whatsapp_popup_dismissed';
 // Splash (CineVisionIntro.tsx) marca essa key quando termina ou quando
 // pula a animação. Igor (06/05) reportou que o popup do WhatsApp não
@@ -18,6 +18,11 @@ const HARD_TIMEOUT_MS = 10000;
 
 export function WhatsAppPopup() {
   const [isVisible, setIsVisible] = useState(false);
+  // N25 (Igor 07/06): link e estado vêm da API para que Igor possa
+  // desativar/editar pelo painel ADM sem precisar de deploy.
+  const [whatsappLink, setWhatsappLink] = useState('');
+  const [popupEnabled, setPopupEnabled] = useState<boolean | null>(null);
+
   // Igor (07/05): "fecha um, abre outro" — encontrado race condition:
   // mainTimer mostra popup em t=7s, user fecha em t=8s, hardTimer
   // FALLBACK dispara em t=10s e mostra DE NOVO (já vai estar fechado
@@ -30,6 +35,21 @@ export function WhatsAppPopup() {
   const hardTimerRef = useRef<any>(null);
 
   useEffect(() => {
+    fetch(`${API_URL}/api/v1/settings/whatsapp-popup`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setPopupEnabled(data.enabled === true);
+          setWhatsappLink(data.link || '');
+        } else {
+          setPopupEnabled(false);
+        }
+      })
+      .catch(() => setPopupEnabled(false));
+  }, []);
+
+  useEffect(() => {
+    if (popupEnabled !== true) return;
     if (typeof window === 'undefined') return;
     if (sessionStorage.getItem(DISMISS_KEY)) return;
 
@@ -61,7 +81,7 @@ export function WhatsAppPopup() {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
       if (hardTimerRef.current) clearTimeout(hardTimerRef.current);
     };
-  }, []);
+  }, [popupEnabled]);
 
   const handleDismiss = () => {
     // Marca dismissed ANTES de limpar timers — qualquer callback
@@ -81,7 +101,7 @@ export function WhatsAppPopup() {
   };
 
   const handleJoinGroup = () => {
-    window.open(WHATSAPP_LINK, '_blank');
+    window.open(whatsappLink, '_blank');
     handleDismiss();
   };
 

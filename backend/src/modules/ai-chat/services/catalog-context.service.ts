@@ -69,17 +69,53 @@ export class CatalogContextService {
     if (!hits.length) return hits;
     try {
       const ids = hits.map((h) => h.id).filter(Boolean);
-      const { data } = await this.supabase.client
-        .from('content')
-        .select('id, audio_type, synopsis, description, title_en, title_secondary, quality_label')
-        .in('id', ids);
-      const byId = new Map((data || []).map((d: any) => [d.id, d]));
+
+      // N24 (Igor 07/06): busca content_languages em paralelo com content
+      // para derivar audio_type a partir das versões realmente cadastradas.
+      // content.audio_type pode estar desatualizado (ex: filme tem versão
+      // dublada adicionada depois mas o campo não foi sincronizado).
+      const [{ data: contentData }, { data: langData }] = await Promise.all([
+        this.supabase.client
+          .from('content')
+          .select('id, audio_type, synopsis, description, title_en, title_secondary, quality_label')
+          .in('id', ids),
+        this.supabase.client
+          .from('content_languages')
+          .select('content_id, language_type')
+          .in('content_id', ids)
+          .eq('is_active', true),
+      ]);
+
+      // Agrupa content_languages por content_id
+      const langsByContentId = new Map<string, Set<string>>();
+      for (const lang of langData || []) {
+        if (!langsByContentId.has(lang.content_id)) {
+          langsByContentId.set(lang.content_id, new Set());
+        }
+        langsByContentId.get(lang.content_id)!.add(lang.language_type);
+      }
+
+      const byId = new Map((contentData || []).map((d: any) => [d.id, d]));
+
       return hits.map((h) => {
         const d = byId.get(h.id);
         if (!d) return h;
+
+        // Deriva audio_type a partir de content_languages (fonte mais confiável)
+        let derivedAudioType: string | undefined;
+        const langs = langsByContentId.get(h.id);
+        if (langs && langs.size > 0) {
+          const hasDubbed = langs.has('dubbed');
+          const hasSubtitled = langs.has('subtitled');
+          if (hasDubbed && hasSubtitled) derivedAudioType = 'dubbed_subtitled';
+          else if (hasDubbed) derivedAudioType = 'dubbed';
+          else if (hasSubtitled) derivedAudioType = 'subtitled';
+        }
+
         return {
           ...h,
-          audio_type: d.audio_type || undefined,
+          // Prioridade: content_languages > content.audio_type > undefined
+          audio_type: derivedAudioType || d.audio_type || undefined,
           synopsis: (d.synopsis || d.description || '').trim() || undefined,
           title_en: h.title_en || d.title_en || d.title_secondary || undefined,
           quality_label: d.quality_label || undefined,

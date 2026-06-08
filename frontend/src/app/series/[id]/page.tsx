@@ -30,7 +30,8 @@ export async function generateMetadata({ params }: SeriesPageProps): Promise<Met
   if (!series) return { title: 'Série não encontrada - Cine Vision' };
 
   // Igor (18/05): og:image via proxy que força JPEG — WhatsApp não renderiza WebP.
-  const image = ogImageUrl(series.backdrop_url || series.thumbnail_url);
+  // N26: poster_url como fallback para séries sem backdrop.
+  const image = ogImageUrl(series.backdrop_url || (series as any).poster_url || series.thumbnail_url);
   const description = series.description || series.synopsis || undefined;
 
   return {

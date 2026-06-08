@@ -79,17 +79,25 @@ export default function OrphanOrdersPage() {
     }
   };
 
+  const buildWhatsappMessage = (o: OrderEntry) =>
+    `Olá! Para receber seu(s) filme(s) no Telegram, abra o nosso bot pelo link abaixo:\n\n` +
+    `${o.claim_url}\n\n` +
+    `Quando você abrir e iniciar a conversa, os links chegam automaticamente. ❤️`;
+
   const copyMessage = async (o: OrderEntry) => {
-    const message =
-      `Olá! Para receber seu(s) filme(s) no Telegram, abra o nosso bot pelo link abaixo:\n\n` +
-      `${o.claim_url}\n\n` +
-      `Quando você abrir e iniciar a conversa, os links chegam automaticamente. ❤️`;
     try {
-      await navigator.clipboard.writeText(message);
+      await navigator.clipboard.writeText(buildWhatsappMessage(o));
       toast.success('Mensagem copiada — cola no WhatsApp da cliente!');
     } catch {
       toast.error('Não foi possível copiar');
     }
+  };
+
+  // N15: abre WhatsApp sem número pré-definido (Igor seleciona o contato)
+  // quando a order não tem customer_whatsapp salvo.
+  const openWhatsappGeneric = (o: OrderEntry) => {
+    const text = encodeURIComponent(buildWhatsappMessage(o));
+    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   const undismissOrder = async (orderId: string) => {
@@ -275,7 +283,9 @@ export default function OrphanOrdersPage() {
                       🔄 Reenviar entrega
                     </button>
                   )}
-                  {o.whatsapp_url && (
+                  {/* N15: se tem WhatsApp salvo, abre direto; senão abre
+                      seletor de contato (wa.me sem número) com mensagem pronta */}
+                  {o.whatsapp_url ? (
                     <a
                       href={o.whatsapp_url}
                       target="_blank"
@@ -284,15 +294,21 @@ export default function OrphanOrdersPage() {
                     >
                       💬 Mandar no WhatsApp
                     </a>
-                  )}
-                  {tab === 'orphan' && (
+                  ) : (
                     <button
-                      onClick={() => copyMessage(o)}
-                      className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold hover:bg-red-700"
+                      onClick={() => openWhatsappGeneric(o)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-green-600/40 px-3 py-1.5 text-sm font-semibold text-green-400 hover:bg-green-600/10"
+                      title="Abre WhatsApp com a mensagem pronta — você seleciona o contato"
                     >
-                      📋 Copiar mensagem
+                      💬 Abrir no WhatsApp
                     </button>
                   )}
+                  <button
+                    onClick={() => copyMessage(o)}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold hover:bg-red-700"
+                  >
+                    📋 Copiar mensagem
+                  </button>
                   <button
                     onClick={() => copyLink(o.claim_url)}
                     className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/5"

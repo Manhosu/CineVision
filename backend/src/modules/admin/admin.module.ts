@@ -29,6 +29,8 @@ import { AdminManualGrantController } from './controllers/admin-manual-grant.con
 import { AdminBotsController } from './controllers/admin-bots.controller';
 import { AdminBotsService } from './services/admin-bots.service';
 import { BotMigrationService } from './services/bot-migration.service';
+import { BroadcastGroupsController } from './controllers/broadcast-groups.controller';
+import { BroadcastGroupsService } from './services/broadcast-groups.service';
 import { BotEphemeralController } from './controllers/bot-ephemeral.controller';
 import { AdminHomepageController } from './controllers/admin-homepage.controller';
 import { HomepageCarouselsService } from './services/homepage-carousels.service';
@@ -91,6 +93,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [
   AdminBotsController,
   BotEphemeralController,
   AdminHomepageController,
+  BroadcastGroupsController,
 ];
 
 console.log('TypeORM enabled:', isTypeOrmEnabled());
@@ -128,6 +131,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   AdminPeopleService,
   AdminBotsService,
   BotMigrationService,
+  BroadcastGroupsService,
   HomepageCarouselsService,
   { provide: ContentLanguageService, useClass: ContentLanguageSupabaseService },
   { provide: AdminSettingsService, useClass: AdminSettingsSupabaseService },
