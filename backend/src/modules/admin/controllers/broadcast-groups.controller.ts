@@ -58,6 +58,12 @@ export class BroadcastGroupsController {
     });
   }
 
+  @Post('broadcasts/:id/pin')
+  @ApiOperation({ summary: 'Fixa a mensagem do broadcast em todos os grupos' })
+  async pinBroadcast(@Param('id') id: string) {
+    return this.svc.pinBroadcast(id);
+  }
+
   @Delete('broadcasts/:id')
   @ApiOperation({ summary: 'Apaga mensagem do broadcast de todos os grupos' })
   async deleteBroadcast(@Param('id') id: string) {

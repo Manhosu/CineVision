@@ -152,6 +152,21 @@ export default function BroadcastGroupsPage() {
     } catch { toast.error('Erro ao apagar'); }
   };
 
+  const handlePinBroadcast = async (id: string) => {
+    if (!confirm('Fixar essa mensagem em todos os grupos?\n\nO bot vai fixar silenciosamente (sem notificar os membros).')) return;
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast-groups/broadcasts/${id}/pin`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.message || 'Erro');
+      toast.success(`Fixado em ${body.pinned} grupo(s).${body.failed > 0 ? ` ${body.failed} falhou (bot sem permissão de fixar?).` : ''}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   if (authLoading || loading) return <div className="p-6 text-gray-300">Carregando...</div>;
 
   const activeGroups = groups.filter(g => g.is_active);
@@ -302,12 +317,21 @@ export default function BroadcastGroupsPage() {
                     'bg-red-500/20 text-red-400'
                   }`}>{b.status}</span>
                   {b.status !== 'sending' && (
-                    <button
-                      onClick={() => handleDeleteBroadcast(b.id)}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      Apagar de todos
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePinBroadcast(b.id)}
+                        className="text-xs text-amber-400 hover:text-amber-300"
+                        title="Fixa essa mensagem em todos os grupos (silenciosamente)"
+                      >
+                        📌 Fixar em todos
+                      </button>
+                      <button
+                        onClick={() => handleDeleteBroadcast(b.id)}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        🗑 Apagar de todos
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

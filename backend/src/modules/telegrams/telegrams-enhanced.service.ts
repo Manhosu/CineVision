@@ -4259,6 +4259,16 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     return res.data?.result;
   }
 
+  async pinMessageInGroupWithBot(token: string, chatId: string, messageId: string) {
+    const url = `https://api.telegram.org/bot${token}/pinChatMessage`;
+    const res = await axios.post(url, {
+      chat_id: chatId,
+      message_id: parseInt(messageId, 10),
+      disable_notification: true, // não notifica os membros do grupo ao fixar
+    });
+    return res.data?.result;
+  }
+
   async setupWebhook(url: string, secretToken?: string) {
     try {
       const webhookUrl = `${this.botApiUrl}/setWebhook`;

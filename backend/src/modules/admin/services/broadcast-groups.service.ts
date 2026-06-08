@@ -169,6 +169,43 @@ export class BroadcastGroupsService {
     this.logger.log(`Broadcast ${broadcastId} concluído: ${success} OK / ${failed} falhas`);
   }
 
+  async pinBroadcast(broadcastId: string) {
+    const { data: entries, error } = await this.supabase.client
+      .from('group_broadcast_entries')
+      .select(`
+        id, telegram_message_id,
+        bot_group:telegram_bot_groups(chat_id, bot:telegram_bots(token))
+      `)
+      .eq('broadcast_id', broadcastId)
+      .not('telegram_message_id', 'is', null)
+      .is('deleted_at', null);
+
+    if (error) throw new Error(`pinBroadcast fetch failed: ${error.message}`);
+
+    let pinned = 0;
+    let failed = 0;
+    for (const entry of entries || []) {
+      const group = Array.isArray(entry.bot_group) ? entry.bot_group[0] : entry.bot_group;
+      const bot = group?.bot ? (Array.isArray(group.bot) ? group.bot[0] : group.bot) : null;
+      if (!bot?.token || !group?.chat_id || !entry.telegram_message_id) continue;
+
+      try {
+        await this.telegrams.pinMessageInGroupWithBot(
+          bot.token,
+          group.chat_id,
+          entry.telegram_message_id,
+        );
+        pinned++;
+      } catch (err: any) {
+        this.logger.warn(`pinMessage failed for entry ${entry.id}: ${err.message}`);
+        failed++;
+      }
+      await this.sleep(500);
+    }
+
+    return { pinned, failed };
+  }
+
   async deleteBroadcast(broadcastId: string) {
     const { data: entries, error } = await this.supabase.client
       .from('group_broadcast_entries')
