@@ -98,6 +98,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly BOT_CACHE_TTL_MS = 5 * 60 * 1000;
   // Cache username por botId para evitar query no DB a cada mensagem
   private botUsernameCache = new Map<string, string>();
+  // Cache do UUID do bot padrão (rota legada /webhook sem botId no path)
+  private defaultBotIdCache: string | null = null;
 
   // Igor (07/06): contexto de "qual bot estamos respondendo agora". Setado
   // por handleWebhook(botId) e lido por sendMessage/sendChatAction/etc.
@@ -106,6 +108,24 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly botContext = new AsyncLocalStorage<{ botId: string | null }>();
   private currentBotId(): string | null {
     return this.botContext.getStore()?.botId || null;
+  }
+
+  // Resolve o UUID do bot atual: usa explicitBotId se passado, cai no ALS,
+  // e por último busca o bot padrão pelo token do env (rota legada /webhook).
+  private async resolveCurrentBotId(explicitBotId?: string): Promise<string | null> {
+    if (explicitBotId) return explicitBotId;
+    const fromCtx = this.currentBotId();
+    if (fromCtx) return fromCtx;
+    if (this.defaultBotIdCache) return this.defaultBotIdCache;
+    const defaultToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
+    if (!defaultToken) return null;
+    try {
+      const { data } = await this.supabase.from('telegram_bots').select('id').eq('token', defaultToken).single();
+      if (data?.id) this.defaultBotIdCache = data.id;
+      return data?.id || null;
+    } catch {
+      return null;
+    }
   }
 
   // Retorna o username real do bot que está respondendo agora (contexto multi-bot).
@@ -1624,8 +1644,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
         webhookData.message?.chat ||
         webhookData.my_chat_member?.chat ||
         webhookData.chat_member?.chat;
-      if (chatFromUpdate && (chatFromUpdate.type === 'group' || chatFromUpdate.type === 'supergroup') && botId) {
-        this.autoRegisterGroup(botId, String(chatFromUpdate.id), chatFromUpdate.title).catch(() => {});
+      if (chatFromUpdate && (chatFromUpdate.type === 'group' || chatFromUpdate.type === 'supergroup')) {
+        this.resolveCurrentBotId(botId).then(resolvedBotId => {
+          if (resolvedBotId) {
+            this.autoRegisterGroup(resolvedBotId, String(chatFromUpdate.id), chatFromUpdate.title).catch(() => {});
+          }
+        }).catch(() => {});
       }
 
       // Process different types of updates

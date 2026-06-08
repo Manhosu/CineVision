@@ -39,6 +39,14 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, user, logout } = useAuth();
+  const [whatsappCommunityLink, setWhatsappCommunityLink] = useState('https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU');
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/settings/whatsapp-popup`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.link) setWhatsappCommunityLink(d.link); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -379,7 +387,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
                 {/* WhatsApp Community */}
                 <div className="border-t border-white/10 pt-4 mb-4">
                   <a
-                    href="https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU"
+                    href={whatsappCommunityLink}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setIsMobileMenuOpen(false)}

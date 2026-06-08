@@ -464,7 +464,7 @@ export class OrdersService {
     try {
       if (this.telegramsService) {
         const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.username) botUsername = rotated.username;
+        if (rotated?.bot_username) botUsername = rotated.bot_username;
       }
     } catch { /* fallback to env bot */ }
 
@@ -541,7 +541,7 @@ export class OrdersService {
     try {
       if (this.telegramsService) {
         const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.username) botUsername = rotated.username;
+        if (rotated?.bot_username) botUsername = rotated.bot_username;
       }
     } catch { /* fallback to env bot */ }
 
@@ -628,7 +628,7 @@ export class OrdersService {
     try {
       if (this.telegramsService) {
         const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.username) botUsername = rotated.username;
+        if (rotated?.bot_username) botUsername = rotated.bot_username;
       }
     } catch { /* fallback to env bot */ }
 

@@ -1,10 +1,21 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 export function Footer() {
   const currentYear = new Date().getFullYear();
+  const [whatsappCommunityLink, setWhatsappCommunityLink] = useState('https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU');
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/settings/whatsapp-popup`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.link) setWhatsappCommunityLink(d.link); })
+      .catch(() => {});
+  }, []);
 
   return (
     <footer className="relative mt-20 bg-dark-950 border-t border-white/10">
@@ -24,7 +35,7 @@ export function Footer() {
 
           {/* WhatsApp Community Button */}
           <a
-            href="https://chat.whatsapp.com/FYVJYSGogZiG2koEqOnHXU"
+            href={whatsappCommunityLink}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/20 hover:border-[#25D366]/30 text-[#25D366] rounded-full text-sm font-medium transition-all"
