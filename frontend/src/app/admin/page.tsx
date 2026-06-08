@@ -787,7 +787,7 @@ export default function AdminDashboard() {
                     bot.status === 'banned_br' ? 'text-red-200' :
                     bot.status === 'disabled' ? 'text-gray-400' : 'text-white'
                   }`}>
-                    {bot.user_count.toLocaleString('pt-BR')}
+                    {(bot.user_count ?? 0).toLocaleString('pt-BR')}
                   </span>
                   {bot.status === 'banned_br' && (
                     <span className="rounded bg-red-500/30 px-1 text-[9px] font-bold uppercase text-red-300">ban</span>
@@ -800,12 +800,12 @@ export default function AdminDashboard() {
             <div className="flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-gray-400">
               <span>
                 Total (c/ duplicatas):{' '}
-                <strong className="text-white">{botUserStats.total_all.toLocaleString('pt-BR')}</strong>
+                <strong className="text-white">{(botUserStats.total_all ?? 0).toLocaleString('pt-BR')}</strong>
               </span>
               <span className="text-gray-600">·</span>
               <span>
                 Únicos (por telegram_id):{' '}
-                <strong className="text-sky-300">{botUserStats.total_unique.toLocaleString('pt-BR')}</strong>
+                <strong className="text-sky-300">{(botUserStats.total_unique ?? 0).toLocaleString('pt-BR')}</strong>
               </span>
             </div>
           </div>
