@@ -25,6 +25,20 @@ interface BotMigrationStats {
   new_bot_username: string;
 }
 
+interface BotUserStat {
+  id: string;
+  username: string;
+  display_name: string | null;
+  status: string;
+  user_count: number;
+}
+
+interface BotUserStats {
+  bots: BotUserStat[];
+  total_all: number;
+  total_unique: number;
+}
+
 interface ContentItem {
   id: string;
   title: string;
@@ -63,6 +77,7 @@ export default function AdminDashboard() {
   const [pendingEditCount, setPendingEditCount] = useState(0);
   const [botMigration, setBotMigration] = useState<BotMigrationStats | null>(null);
   const [botMigrationFlash, setBotMigrationFlash] = useState(false);
+  const [botUserStats, setBotUserStats] = useState<BotUserStats | null>(null);
   // Igor (07/05): funcionários online em tempo real (last_active_at <10min).
   const [onlineEmployees, setOnlineEmployees] = useState<Array<{
     id: string;
@@ -180,6 +195,22 @@ export default function AdminDashboard() {
     fetchMigration();
     const interval = setInterval(fetchMigration, 3000);
     return () => clearInterval(interval);
+  }, [mounted, isEmployee]);
+
+  // Distribuição de usuários por bot — carrega uma vez no mount, sem polling agressivo
+  useEffect(() => {
+    if (!mounted || isEmployee) return;
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('access_token') || localStorage.getItem('auth_token'))
+      : null;
+    if (!token) return;
+    fetch(`${API_URL}/api/v1/admin/bots/user-stats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setBotUserStats(d); })
+      .catch(() => {});
   }, [mounted, isEmployee]);
 
   // Igor (07/05): poll funcionários online a cada 30s.
@@ -718,6 +749,64 @@ export default function AdminDashboard() {
                 <p className="text-2xl font-bold text-white">{botMigration.total.toLocaleString('pt-BR')}</p>
                 <p className="mt-0.5 text-xs text-gray-400">Total com Telegram</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Widget compacto: distribuição de usuários por bot */}
+        {!isEmployee && botUserStats && botUserStats.bots.length > 0 && (
+          <div className="mb-8 rounded-xl border border-sky-500/20 bg-gradient-to-br from-sky-900/10 to-blue-900/10 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="flex items-center gap-2 text-base font-bold text-white">
+                <span className="text-lg">🤖</span>
+                Usuários por Bot
+                <span className="ml-1 rounded-full bg-sky-500/20 px-2 py-0.5 text-xs font-semibold text-sky-300">
+                  {botUserStats.bots.filter(b => b.status !== 'disabled').length} ativos
+                </span>
+              </h2>
+              <a href="/admin/bots" className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
+                Ver detalhes →
+              </a>
+            </div>
+
+            {/* Grid de bots */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {botUserStats.bots.map(bot => (
+                <div
+                  key={bot.id}
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${
+                    bot.status === 'banned_br'
+                      ? 'border-red-500/20 bg-red-900/15 text-red-300'
+                      : bot.status === 'disabled'
+                      ? 'border-gray-600/20 bg-gray-800/30 text-gray-500'
+                      : 'border-emerald-500/20 bg-emerald-900/15 text-emerald-300'
+                  }`}
+                >
+                  <span className="font-mono font-semibold">@{bot.username}</span>
+                  <span className={`font-bold ${
+                    bot.status === 'banned_br' ? 'text-red-200' :
+                    bot.status === 'disabled' ? 'text-gray-400' : 'text-white'
+                  }`}>
+                    {bot.user_count.toLocaleString('pt-BR')}
+                  </span>
+                  {bot.status === 'banned_br' && (
+                    <span className="rounded bg-red-500/30 px-1 text-[9px] font-bold uppercase text-red-300">ban</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Totais */}
+            <div className="flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-gray-400">
+              <span>
+                Total (c/ duplicatas):{' '}
+                <strong className="text-white">{botUserStats.total_all.toLocaleString('pt-BR')}</strong>
+              </span>
+              <span className="text-gray-600">·</span>
+              <span>
+                Únicos (por telegram_id):{' '}
+                <strong className="text-sky-300">{botUserStats.total_unique.toLocaleString('pt-BR')}</strong>
+              </span>
             </div>
           </div>
         )}
