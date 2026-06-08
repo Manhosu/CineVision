@@ -12,6 +12,7 @@ interface OrderEntry {
   total_items: number;
   paid_at: string | null;
   created_at: string;
+  dismissed_at?: string | null;
   user_id: string | null;
   customer_whatsapp: string | null;
   telegram_chat_id?: string | null;
@@ -242,7 +243,10 @@ export default function OrphanOrdersPage() {
                   <div className="text-sm text-zinc-400">
                     Pedido <code className="text-zinc-300">{o.order_token.slice(0, 8)}</code>
                     {' · '}
-                    Pago em {fmtDate(o.paid_at)}
+                    {tab === 'dismissed' && o.dismissed_at
+                      ? <>Arquivado em <strong className="text-zinc-200">{fmtDate(o.dismissed_at)}</strong> · Pago em {fmtDate(o.paid_at)}</>
+                      : <>Pago em {fmtDate(o.paid_at)}</>
+                    }
                   </div>
                   <div className="mt-1 text-base">
                     {o.total_items} {o.total_items === 1 ? 'item' : 'itens'} · R${' '}
