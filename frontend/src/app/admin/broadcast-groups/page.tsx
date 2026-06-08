@@ -246,7 +246,7 @@ export default function BroadcastGroupsPage() {
           {addingGroup ? 'Cadastrando...' : '+ Cadastrar grupo'}
         </button>
         <p className="text-xs text-gray-500 mt-2">
-          O Chat ID numérico aparece nos logs do bot (ex: -1001234567890). O bot deve ser admin do grupo para enviar.
+          💡 <strong className="text-gray-400">Cadastro automático:</strong> qualquer grupo onde o bot receber uma mensagem ou for adicionado como admin será registrado automaticamente aqui. O cadastro manual é só para forçar grupos que ainda não tiveram atividade.
         </p>
       </div>
 

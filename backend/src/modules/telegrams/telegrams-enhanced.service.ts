@@ -96,6 +96,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
   // sem precisar reiniciar o serviço.
   private botCache = new Map<string, { token: string; apiUrl: string; fetchedAt: number }>();
   private readonly BOT_CACHE_TTL_MS = 5 * 60 * 1000;
+  // Cache username por botId para evitar query no DB a cada mensagem
+  private botUsernameCache = new Map<string, string>();
 
   // Igor (07/06): contexto de "qual bot estamos respondendo agora". Setado
   // por handleWebhook(botId) e lido por sendMessage/sendChatAction/etc.
@@ -104,6 +106,23 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly botContext = new AsyncLocalStorage<{ botId: string | null }>();
   private currentBotId(): string | null {
     return this.botContext.getStore()?.botId || null;
+  }
+
+  // Retorna o username real do bot que está respondendo agora (contexto multi-bot).
+  // Corrige bug onde bot_username era gravado com o env var em vez do bot real.
+  private async currentBotUsername(): Promise<string> {
+    const fallback = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
+    const botId = this.currentBotId();
+    if (!botId) return fallback;
+    if (this.botUsernameCache.has(botId)) return this.botUsernameCache.get(botId)!;
+    try {
+      const { data } = await this.supabase.from('telegram_bots').select('username').eq('id', botId).single();
+      const username = data?.username || fallback;
+      this.botUsernameCache.set(botId, username);
+      return username;
+    } catch {
+      return fallback;
+    }
   }
 
   constructor(
@@ -1597,8 +1616,24 @@ export class TelegramsEnhancedService implements OnModuleInit {
         return { status: 'duplicate' };
       }
 
+      // Auto-cadastro de grupos: quando o bot recebe my_chat_member
+      // (adicionado como admin) ou qualquer mensagem de grupo/supergrupo,
+      // registra automaticamente em telegram_bot_groups — sem precisar
+      // cadastrar Chat ID manualmente (N31 - Igor 07/06).
+      const chatFromUpdate =
+        webhookData.message?.chat ||
+        webhookData.my_chat_member?.chat ||
+        webhookData.chat_member?.chat;
+      if (chatFromUpdate && (chatFromUpdate.type === 'group' || chatFromUpdate.type === 'supergroup') && botId) {
+        this.autoRegisterGroup(botId, String(chatFromUpdate.id), chatFromUpdate.title).catch(() => {});
+      }
+
       // Process different types of updates
-      if (webhookData.message) {
+      if (webhookData.my_chat_member) {
+        // Bot adicionado/removido de grupo — só logar, o auto-registro já foi feito acima
+        const status = webhookData.my_chat_member.new_chat_member?.status;
+        this.logger.log(`my_chat_member: bot status=${status} in chat=${webhookData.my_chat_member.chat?.id}`);
+      } else if (webhookData.message) {
         this.logger.log('📩 Processing message update');
         await this.processMessage(webhookData.message);
       } else if (webhookData.callback_query) {
@@ -3405,8 +3440,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           this.logger.log(`Re-activating previously blocked user ${telegramUserId}`);
         }
 
-        // Stamp which bot this user is now on (migration tracking)
-        const currentBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
+        // Stamp which bot this user is now on (multi-bot aware — usa o bot real do contexto)
+        const currentBotUsername = await this.currentBotUsername();
         if (existingUser.bot_username !== currentBotUsername) {
           updates.bot_username = currentBotUsername;
         }
@@ -3467,7 +3502,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           password_hash: await bcrypt.hash(Math.random().toString(36), 12), // Senha aleatória
           role: 'user',
           status: 'active',
-          bot_username: process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot',
+          bot_username: await this.currentBotUsername(), // multi-bot aware
           // Igor (15/05): garante elegibilidade pro broadcast desde o /start.
           last_bot_token: this.botToken,
         })
@@ -4236,6 +4271,21 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
     } catch (error) {
       this.logger.error('Error answering callback query:', error);
       throw error;
+    }
+  }
+
+  // Auto-registra grupo em telegram_bot_groups quando bot recebe evento de um grupo.
+  // Evita que Igor precise cadastrar 500+ Chat IDs manualmente.
+  private async autoRegisterGroup(botId: string, chatId: string, title?: string) {
+    try {
+      await this.supabase
+        .from('telegram_bot_groups')
+        .upsert(
+          { bot_id: botId, chat_id: chatId, title: title || '', is_active: true, updated_at: new Date().toISOString() },
+          { onConflict: 'bot_id,chat_id', ignoreDuplicates: true },
+        );
+    } catch {
+      // silencia — não quebrar o fluxo principal por causa do auto-registro
     }
   }
 
