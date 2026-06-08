@@ -30,7 +30,7 @@ interface BotUserStat {
   username: string;
   display_name: string | null;
   status: string;
-  user_count: number;
+  users_count: number;
 }
 
 interface BotUserStats {
@@ -787,7 +787,7 @@ export default function AdminDashboard() {
                     bot.status === 'banned_br' ? 'text-red-200' :
                     bot.status === 'disabled' ? 'text-gray-400' : 'text-white'
                   }`}>
-                    {(bot.user_count ?? 0).toLocaleString('pt-BR')}
+                    {(bot.users_count ?? 0).toLocaleString('pt-BR')}
                   </span>
                   {bot.status === 'banned_br' && (
                     <span className="rounded bg-red-500/30 px-1 text-[9px] font-bold uppercase text-red-300">ban</span>
