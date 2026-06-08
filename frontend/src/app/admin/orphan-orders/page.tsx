@@ -147,8 +147,18 @@ export default function OrphanOrdersPage() {
     }
   };
 
-  const list =
+  const [dismissedDateFilter, setDismissedDateFilter] = useState('');
+
+  const rawList =
     tab === 'orphan' ? orphan : tab === 'undelivered' ? undelivered : dismissed;
+
+  const list = tab === 'dismissed' && dismissedDateFilter
+    ? rawList.filter(o => {
+        if (!o.dismissed_at) return false;
+        // Compara só a parte da data (YYYY-MM-DD) com o filtro
+        return o.dismissed_at.slice(0, 10) === dismissedDateFilter;
+      })
+    : rawList;
 
   return (
     <div className="mx-auto max-w-5xl p-6 text-white">
@@ -205,6 +215,32 @@ export default function OrphanOrdersPage() {
           🗂 Arquivados
         </button>
       </div>
+
+      {/* Filtro de data — só aparece na aba Arquivados */}
+      {tab === 'dismissed' && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <label className="text-sm text-zinc-400">Filtrar por data de arquivamento:</label>
+          <input
+            type="date"
+            value={dismissedDateFilter}
+            onChange={e => setDismissedDateFilter(e.target.value)}
+            className="rounded-lg border border-white/10 bg-zinc-800 px-3 py-1.5 text-sm text-white focus:border-zinc-400 focus:outline-none"
+          />
+          {dismissedDateFilter && (
+            <button
+              onClick={() => setDismissedDateFilter('')}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-zinc-400 hover:text-white"
+            >
+              ✕ Limpar filtro
+            </button>
+          )}
+          {dismissedDateFilter && (
+            <span className="text-xs text-zinc-500">
+              {list.length} resultado{list.length !== 1 ? 's' : ''} em {new Date(dismissedDateFilter + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="mb-4 flex items-center gap-3">
         <button
