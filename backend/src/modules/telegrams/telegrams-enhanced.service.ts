@@ -3789,13 +3789,15 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
 👇 Clique no botão abaixo para ver nosso catálogo:`;
 
-    // Buscar link da comunidade WhatsApp se configurado
-    const { data: settingsRows } = await this.supabase
+    // Buscar link da comunidade WhatsApp — prioridade em whatsapp_popup_link
+    // (chave usada pelo painel admin N25), fallback em whatsapp_group_link (legado).
+    const { data: wpSettings } = await this.supabase
       .from('admin_settings')
-      .select('value')
-      .eq('key', 'whatsapp_group_link')
-      .single();
-    const whatsappGroupLink: string | null = settingsRows?.value || null;
+      .select('key, value')
+      .in('key', ['whatsapp_popup_link', 'whatsapp_group_link']);
+    const wpMap = Object.fromEntries((wpSettings || []).map((r: any) => [r.key, r.value]));
+    const whatsappGroupLink: string | null =
+      wpMap['whatsapp_popup_link'] || wpMap['whatsapp_group_link'] || null;
 
     const welcomeKeyboard: any[][] = [
       [{ text: '🌐 Ver Catálogo Completo', url: catalogUrl }],
