@@ -19,8 +19,12 @@ const outfit = Outfit({
 // WhatsApp/Facebook) agora é editável pelo admin em /admin/homepage.
 // Buscamos o banner salvo no backend; sem banner, cai no logo padrão.
 // O `ogImageUrl` força JPEG (WhatsApp não renderiza WebP).
+const SITE_ORIGIN = 'https://www.cinevisionapp.com.br';
+// Fallback: logo passada pelo proxy para garantir JPEG (WhatsApp não renderiza PNG transparente)
+const OG_FALLBACK = `${SITE_ORIGIN}/api/og-image?url=${encodeURIComponent(`${SITE_ORIGIN}/CINEVT.png`)}`;
+
 export async function generateMetadata(): Promise<Metadata> {
-  let ogImage = '/cinevision-logo.png';
+  let ogImage = OG_FALLBACK;
   try {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     if (apiUrl) {
@@ -34,7 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
       }
     }
   } catch {
-    // mantém o fallback (logo)
+    // mantém o fallback
   }
 
   return {
