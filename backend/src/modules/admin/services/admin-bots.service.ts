@@ -190,25 +190,19 @@ export class AdminBotsService {
   }
 
   async getUserStats() {
-    // Busca bots e counts de usuários por bot_username em paralelo
-    const [{ data: bots }, { data: perBot }, { count: totalUnique }] = await Promise.all([
+    const [{ data: bots }, { data: perBot }, { data: uniqueRow }] = await Promise.all([
       this.supabaseService.client
         .from('telegram_bots')
         .select('id, username, display_name, status, users_count')
         .order('created_at', { ascending: true }),
-      // Agrupa usuários por bot_username (campo salvo quando usuário interage com o bot)
       this.supabaseService.client.rpc('count_users_per_bot').select(),
-      // Total único: usuários com telegram_chat_id preenchido, sem duplicar
-      this.supabaseService.client
-        .from('users')
-        .select('*', { count: 'exact', head: true })
-        .not('telegram_chat_id', 'is', null),
+      // Únicos reais: DISTINCT telegram_chat_id entre usuários com bot rastreado
+      this.supabaseService.client.rpc('count_unique_tracked_users').select().single(),
     ]);
 
-    // Mapa username → count do banco (mais preciso que users_count cacheado)
     const countByUsername = new Map<string, number>();
     for (const row of perBot || []) {
-      countByUsername.set(row.bot_username, row.user_count);
+      countByUsername.set(row.bot_username, Number(row.user_count));
     }
 
     const botsWithStats = (bots || []).map((b: any) => ({
@@ -219,12 +213,15 @@ export class AdminBotsService {
       users_count: countByUsername.get(b.username) ?? b.users_count ?? 0,
     }));
 
-    const totalAll = botsWithStats.reduce((s: number, b: any) => s + b.users_count, 0);
+    // Total apenas dos bots ativos (exclui banidos do somatório)
+    const totalAll = botsWithStats
+      .filter((b: any) => b.status !== 'banned_br' && b.status !== 'disabled')
+      .reduce((s: number, b: any) => s + b.users_count, 0);
 
     return {
       bots: botsWithStats,
       total_all: totalAll,
-      total_unique: totalUnique ?? 0,
+      total_unique: (uniqueRow as any)?.count ?? 0,
     };
   }
 

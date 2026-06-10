@@ -799,12 +799,12 @@ export default function AdminDashboard() {
             {/* Totais */}
             <div className="flex items-center gap-4 border-t border-white/5 pt-3 text-xs text-gray-400">
               <span>
-                Total (c/ duplicatas):{' '}
+                Ativos (soma bots ativos):{' '}
                 <strong className="text-white">{(botUserStats.total_all ?? 0).toLocaleString('pt-BR')}</strong>
               </span>
               <span className="text-gray-600">·</span>
               <span>
-                Únicos (por telegram_id):{' '}
+                Únicos rastreados:{' '}
                 <strong className="text-sky-300">{(botUserStats.total_unique ?? 0).toLocaleString('pt-BR')}</strong>
               </span>
             </div>

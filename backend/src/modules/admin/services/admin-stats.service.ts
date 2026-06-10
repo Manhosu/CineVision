@@ -159,29 +159,37 @@ export class AdminStatsService {
    */
   async getBotMigrationStats() {
     try {
-      const newBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
+      // Busca todos os bots cadastrados com seus status
+      const { data: bots } = await this.supabaseService.client
+        .from('telegram_bots')
+        .select('username, status, display_name');
 
-      const [{ count: newCount }, { count: totalTelegramCount }] = await Promise.all([
-        this.supabaseService.client
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .eq('bot_username', newBotUsername),
-        this.supabaseService.client
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .not('telegram_id', 'is', null),
-      ]);
+      // Conta usuários por bot_username usando o RPC existente
+      const { data: perBot } = await this.supabaseService.client.rpc('count_users_per_bot').select();
 
-      const newBot = newCount || 0;
-      const total = totalTelegramCount || 0;
-      const oldBot = total - newBot;
-      // Keep 2 decimal places so values < 1% don't round to 0
+      const countMap = new Map<string, number>();
+      for (const row of perBot || []) {
+        countMap.set(row.bot_username, Number(row.user_count));
+      }
+
+      const activeBots = (bots || []).filter(b => b.status === 'active' || b.status === 'default');
+      const bannedBots = (bots || []).filter(b => b.status === 'banned_br');
+
+      // Soma usuários dos bots ativos e dos banidos (via RPC — só rastreia quem fez /start)
+      const newBot = activeBots.reduce((sum, b) => sum + (countMap.get(b.username) || 0), 0);
+      const oldBot = bannedBots.reduce((sum, b) => sum + (countMap.get(b.username) || 0), 0);
+      const total = newBot + oldBot;
       const migrationRate = total > 0 ? Math.round((newBot / total) * 10000) / 100 : 0;
+
+      // Label do "novo bot": se só há 1 ativo usa o nome, senão "todos os bots ativos"
+      const newBotUsername = activeBots.length === 1
+        ? activeBots[0].username
+        : `${activeBots.length} bots ativos`;
 
       return { new_bot: newBot, old_bot: oldBot, total, migration_rate: migrationRate, new_bot_username: newBotUsername };
     } catch (error) {
       this.logger.error('Exception getting bot migration stats:', error);
-      return { new_bot: 0, old_bot: 0, total: 0, migration_rate: 0 };
+      return { new_bot: 0, old_bot: 0, total: 0, migration_rate: 0, new_bot_username: '' };
     }
   }
 
