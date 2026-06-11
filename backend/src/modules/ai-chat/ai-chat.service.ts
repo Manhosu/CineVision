@@ -267,9 +267,11 @@ export class AiChatService {
       const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1h
       const SOFT_TIMEOUT_MS = 30 * 60 * 1000; // 30min
 
+      // paused_at null = conversa antiga pausada antes do campo existir.
+      // Tratar como "pausa infinita" para garantir reativação imediata.
       const pausedFor = conversation.paused_at
         ? Date.now() - new Date(conversation.paused_at).getTime()
-        : 0;
+        : Infinity;
       const isTakeoverExpired =
         TAKEOVER_REASONS.has(conversation.paused_reason || '') &&
         pausedFor >= TAKEOVER_TIMEOUT_MS;
