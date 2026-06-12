@@ -200,13 +200,17 @@ export class ClaudeProvider {
           {
             model,
             max_tokens: options.maxTokens || 1024,
-            system: options.system,
+            // Prompt caching: marca o system prompt como cacheável.
+            // Anthropic cobra 10% do preço normal em cache hits → reduz
+            // custo em ~90% nas chamadas repetidas com mesmo system prompt.
+            system: [{ type: 'text', text: options.system, cache_control: { type: 'ephemeral' } }],
             messages: options.messages.filter((m) => m.role !== 'system'),
           },
           {
             headers: {
               'x-api-key': apiKey,
               'anthropic-version': '2023-06-01',
+              'anthropic-beta': 'prompt-caching-2024-07-31',
               'content-type': 'application/json',
             },
             // N3 — antes 30s. 12s é mais que suficiente pra Claude

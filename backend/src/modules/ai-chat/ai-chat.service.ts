@@ -174,7 +174,7 @@ export class AiChatService {
       .eq('id', conversationId);
   }
 
-  private async recentHistory(conversationId: string, limit = 12): Promise<AiMessage[]> {
+  private async recentHistory(conversationId: string, limit = 8): Promise<AiMessage[]> {
     const { data } = await this.supabase.client
       .from('ai_messages')
       .select('role, content')
@@ -308,10 +308,12 @@ export class AiChatService {
 
     // Build context: training + catalog hits + history
     const training = await this.getTraining();
-    const hits = await this.catalog.searchRelevant(messageText);
+    // Limite 5 itens (era 8) — cada item com sinopse custa ~150 tokens
+    const hits = await this.catalog.searchRelevant(messageText, 5);
     const catalogBlock = this.catalog.formatHitsForPrompt(hits);
 
-    const faqText = (training.faq_pairs || [])
+    // FAQ: máximo 15 pares — evita prompt crescer sem limite com FAQ grande
+    const faqText = (training.faq_pairs || []).slice(0, 15)
       .map((f: any) => `P: ${f.question}\nR: ${f.answer}`)
       .join('\n\n');
 

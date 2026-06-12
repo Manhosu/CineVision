@@ -249,7 +249,7 @@ export class CatalogContextService {
         : '';
       const quality = h.quality_label ? ` | Qualidade: ${h.quality_label}` : '';
       const synopsis = h.synopsis
-        ? `\n    Sinopse: ${h.synopsis.slice(0, 280)}${h.synopsis.length > 280 ? '…' : ''}`
+        ? `\n    Sinopse: ${h.synopsis.slice(0, 120)}${h.synopsis.length > 120 ? '…' : ''}`
         : '';
       return `- ID=${h.id} | ${h.title}${year}${enTitle} | tipo=${h.type || 'filme'} | R$${price}${audio}${quality}${synopsis}`;
     });
