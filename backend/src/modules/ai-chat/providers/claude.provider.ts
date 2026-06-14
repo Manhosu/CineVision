@@ -12,7 +12,16 @@ export interface AiCompletionResult {
   text: string;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  model: string;
   stopReason?: string;
+}
+
+/** Bloco do system prompt. `cached: true` marca como cacheável (5min TTL). */
+export interface SystemBlock {
+  text: string;
+  cached?: boolean;
 }
 
 // N9 (Igor 7:50 PM 04/05): "ainda tem saldo e não, possivelmente
@@ -152,7 +161,7 @@ export class ClaudeProvider {
   }
 
   async complete(options: {
-    system: string;
+    system: string | SystemBlock[];
     messages: AiMessage[];
     model?: string;
     maxTokens?: number;
@@ -192,6 +201,29 @@ export class ClaudeProvider {
       ? [primaryModel]
       : [primaryModel, fallbackModel];
 
+    // Igor (13/06): normaliza o `system` em blocos. Reordena pra blocos
+    // cacheáveis virem PRIMEIRO (cache_control marca o fim da região
+    // cacheável; tudo antes é cached). Bloco volátil (catálogo) fica
+    // depois — paga input full só ele a cada call, não os 3.4k tokens
+    // do prompt estável que ficam em cache hit (~10% do preço).
+    const rawBlocks: SystemBlock[] = Array.isArray(options.system)
+      ? options.system.filter((b) => b.text)
+      : [{ text: options.system, cached: true }];
+    const cachedBlocks = rawBlocks.filter((b) => b.cached !== false);
+    const uncachedBlocks = rawBlocks.filter((b) => b.cached === false);
+    const systemPayload: any[] = [];
+    cachedBlocks.forEach((b, i) => {
+      const block: any = { type: 'text', text: b.text };
+      // Só marca cache_control no ÚLTIMO bloco cached (define o breakpoint).
+      if (i === cachedBlocks.length - 1) {
+        block.cache_control = { type: 'ephemeral' };
+      }
+      systemPayload.push(block);
+    });
+    uncachedBlocks.forEach((b) => {
+      systemPayload.push({ type: 'text', text: b.text });
+    });
+
     let lastErr: ClaudeApiError | null = null;
     for (const model of modelsToTry) {
       try {
@@ -200,10 +232,7 @@ export class ClaudeProvider {
           {
             model,
             max_tokens: options.maxTokens || 1024,
-            // Prompt caching: marca o system prompt como cacheável.
-            // Anthropic cobra 10% do preço normal em cache hits → reduz
-            // custo em ~90% nas chamadas repetidas com mesmo system prompt.
-            system: [{ type: 'text', text: options.system, cache_control: { type: 'ephemeral' } }],
+            system: systemPayload,
             messages: options.messages.filter((m) => m.role !== 'system'),
           },
           {
@@ -225,10 +254,14 @@ export class ClaudeProvider {
           .map((b: any) => b.text)
           .join('\n');
 
+        const usage = response.data.usage || {};
         return {
           text,
-          inputTokens: response.data.usage?.input_tokens || 0,
-          outputTokens: response.data.usage?.output_tokens || 0,
+          inputTokens: usage.input_tokens || 0,
+          outputTokens: usage.output_tokens || 0,
+          cacheReadTokens: usage.cache_read_input_tokens || 0,
+          cacheCreationTokens: usage.cache_creation_input_tokens || 0,
+          model,
           stopReason: response.data.stop_reason,
         };
       } catch (err: any) {

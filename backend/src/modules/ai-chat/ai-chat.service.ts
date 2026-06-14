@@ -18,6 +18,61 @@ export interface AiReply {
 export class AiChatService {
   private readonly logger = new Logger(AiChatService.name);
 
+  // Igor (13/06): circuit breaker pra Claude. Quando a Anthropic está em
+  // outage (503/529 em sequência), o retry agressivo queimava tokens
+  // faturados sem entregar resposta. Se 3 falhas em 60s, pausa IA por 5min.
+  private claudeFailures: number[] = [];
+  private claudeOpenUntil = 0;
+  private readonly CB_WINDOW_MS = 60_000;
+  private readonly CB_THRESHOLD = 3;
+  private readonly CB_OPEN_DURATION_MS = 5 * 60_000;
+
+  // Igor (13/06): rate limit por user — 60 msgs/hora numa janela rolante.
+  // Bot legítimo no fluxo de compra manda 5-15 msgs; cap em 60 só corta
+  // abuso/scraper/loop entre bots externos.
+  private userMsgWindow: Map<string, number[]> = new Map();
+  private readonly RL_WINDOW_MS = 60 * 60_000;
+  private readonly RL_MAX_PER_HOUR = 60;
+
+  private isCircuitOpen(): boolean {
+    return Date.now() < this.claudeOpenUntil;
+  }
+
+  private recordClaudeFailure() {
+    const now = Date.now();
+    this.claudeFailures = this.claudeFailures.filter((t) => now - t < this.CB_WINDOW_MS);
+    this.claudeFailures.push(now);
+    if (this.claudeFailures.length >= this.CB_THRESHOLD) {
+      this.claudeOpenUntil = now + this.CB_OPEN_DURATION_MS;
+      this.claudeFailures = [];
+      this.logger.error(
+        `[circuit-breaker] ${this.CB_THRESHOLD} falhas Claude em ${this.CB_WINDOW_MS / 1000}s — pausando IA por ${this.CB_OPEN_DURATION_MS / 60000}min`,
+      );
+    }
+  }
+
+  private isOverRateLimit(userId: string): boolean {
+    const now = Date.now();
+    const hits = (this.userMsgWindow.get(userId) || []).filter(
+      (t) => now - t < this.RL_WINDOW_MS,
+    );
+    if (hits.length >= this.RL_MAX_PER_HOUR) {
+      this.userMsgWindow.set(userId, hits);
+      return true;
+    }
+    hits.push(now);
+    this.userMsgWindow.set(userId, hits);
+    // GC ocasional pra Map não crescer indefinido.
+    if (this.userMsgWindow.size > 5000) {
+      for (const [k, v] of this.userMsgWindow.entries()) {
+        const live = v.filter((t) => now - t < this.RL_WINDOW_MS);
+        if (live.length === 0) this.userMsgWindow.delete(k);
+        else this.userMsgWindow.set(k, live);
+      }
+    }
+    return false;
+  }
+
   constructor(
     private readonly supabase: SupabaseService,
     private readonly claude: ClaudeProvider,
@@ -227,6 +282,22 @@ export class AiChatService {
     // estava em takeover e Igor não enxergava as novas mensagens.
     await this.appendMessage(conversation.id, 'user', messageText);
 
+    // Igor (13/06): guards de custo — circuit breaker (Anthropic em outage)
+    // e rate limit (60 msgs/h por cliente, evita scraper/loop). Respostas
+    // fixas, sem chamar Claude.
+    if (this.isCircuitOpen()) {
+      const reply = 'Estamos com instabilidade momentânea, em alguns minutos voltamos a responder. Obrigado pela paciência! 🍿';
+      await this.appendMessage(conversation.id, 'assistant', reply);
+      return { text: reply, paused: false };
+    }
+    const rlKey = conversation.user_id || externalChatId;
+    if (rlKey && this.isOverRateLimit(rlKey)) {
+      const reply = 'Você atingiu o limite de mensagens da hora. Aguarde um pouco e a gente continua! 😊';
+      await this.appendMessage(conversation.id, 'assistant', reply);
+      this.logger.warn(`[rate-limit] user ${rlKey} hit cap of ${this.RL_MAX_PER_HOUR}/h on conv ${conversation.id}`);
+      return { text: reply, paused: false };
+    }
+
     // Igor (08/05): cliente mandando gratidao apos compra ("obrigado",
     // "muitissimo obrigada", "valeu", "amei") deve receber resposta
     // gentil, MESMO em conversa pausada (admin/owner takeover ja
@@ -325,13 +396,19 @@ export class AiChatService {
 - Se perguntarem a qualidade, responda pelo campo "Qualidade" do catálogo (ex: 1080p Full HD). Sem esse campo, diga que é em alta qualidade.
 - O acesso ao filme/série é PRA SEMPRE (vitalício): compra uma vez e assiste quando e quantas vezes quiser. Reforce isso quando fizer sentido.`;
 
-    const systemPrompt = `${training.system_prompt}
-
-${salesGuide}
-
-${catalogBlock}
-
-${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
+    // Igor (13/06): cache split. Antes era 1 string só, e como o
+    // catalogBlock muda a cada query, o cache_control invalidava em
+    // toda chamada — pagávamos $0.80/1M nos 5k tokens inteiros. Agora
+    // 2 blocos:
+    //  - Bloco estável (~3.4k tokens): prompt + sales guide + FAQ — cache hit
+    //    em qualquer 2ª chamada nos próximos 5min ($0.08/1M).
+    //  - Bloco volátil (~1k tokens): catálogo, paga input full.
+    // Economia esperada: ~50% no input cost em horário de pico.
+    const stableBlock = `${training.system_prompt}\n\n${salesGuide}${faqText ? `\n\nFAQ DE SUPORTE:\n${faqText}` : ''}`;
+    const systemBlocks = [
+      { text: stableBlock, cached: true },
+      { text: catalogBlock, cached: false },
+    ];
 
     const history = await this.recentHistory(conversation.id);
 
@@ -340,38 +417,20 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     const t0 = Date.now();
     let completion: Awaited<ReturnType<typeof this.claude.complete>>;
     try {
-      // N3 — Igor reportou IA não respondendo recorrentemente
-      // (claude_failure se repetindo). Maioria das falhas Anthropic é
-      // transitória (timeout, 529 overload, rate limit momentâneo).
-      // Tenta até 3x com backoff curto antes de cair no fallback.
-      let attempt = 0;
-      let lastErr: any;
-      while (attempt < 3) {
-        try {
-          completion = await this.claude.complete({
-            system: systemPrompt,
-            messages: history,
-            maxTokens: 512,
-          });
-          if (attempt > 0) {
-            this.logger.log(
-              `Claude succeeded on attempt ${attempt + 1} for conversation ${conversation.id}`,
-            );
-          }
-          break;
-        } catch (err: any) {
-          lastErr = err;
-          attempt++;
-          if (attempt < 3) {
-            const backoffMs = 500 * attempt; // 500ms, 1000ms
-            this.logger.warn(
-              `Claude attempt ${attempt} failed (${err?.response?.status || err.message}), retrying in ${backoffMs}ms…`,
-            );
-            await new Promise((r) => setTimeout(r, backoffMs));
-          }
-        }
+      // Igor (13/06): retry agressivo (3x) triplicava tokens faturados
+      // quando Anthropic está em outage. Agora 1 tentativa só + circuit
+      // breaker (3 falhas em 60s → pausa IA por 5min). Outage tem que
+      // ser tratada como outage, não como mais 3 chamadas pagas.
+      try {
+        completion = await this.claude.complete({
+          system: systemBlocks,
+          messages: history,
+          maxTokens: 512,
+        });
+      } catch (err: any) {
+        this.recordClaudeFailure();
+        throw err;
       }
-      if (!completion!) throw lastErr;
     } catch (err: any) {
       const t1 = Date.now();
       // N9 — agora classificamos o erro Claude (auth/rate_limit/
@@ -419,8 +478,39 @@ ${faqText ? `FAQ DE SUPORTE:\n${faqText}` : ''}`;
     }
     const claudeMs = Date.now() - t0;
     this.logger.log(
-      `Claude completion ok in ${claudeMs}ms (in=${completion.inputTokens}, out=${completion.outputTokens}) conv=${conversation.id}`,
+      `Claude completion ok in ${claudeMs}ms (in=${completion.inputTokens}, out=${completion.outputTokens}, cache_read=${completion.cacheReadTokens}, cache_create=${completion.cacheCreationTokens}) conv=${conversation.id}`,
     );
+
+    // Igor (13/06): persiste breakdown de custo pra dashboard /admin/ai-usage.
+    // Pricing Haiku 4.5: input $0.80, cache_creation $1.00, cache_read $0.08,
+    // output $4.00 (USD por 1M tokens). Falha aqui é silenciosa — não pode
+    // derrubar a resposta do cliente.
+    try {
+      const PRICE_IN = 0.8 / 1_000_000;
+      const PRICE_OUT = 4.0 / 1_000_000;
+      const PRICE_CACHE_CREATE = 1.0 / 1_000_000;
+      const PRICE_CACHE_READ = 0.08 / 1_000_000;
+      const costUsd =
+        completion.inputTokens * PRICE_IN +
+        completion.cacheCreationTokens * PRICE_CACHE_CREATE +
+        completion.cacheReadTokens * PRICE_CACHE_READ +
+        completion.outputTokens * PRICE_OUT;
+      await this.supabase.client.from('ai_usage_log').insert({
+        conversation_id: conversation.id,
+        user_id: conversation.user_id || null,
+        external_chat_id: externalChatId,
+        platform,
+        model: completion.model,
+        input_tokens: completion.inputTokens,
+        output_tokens: completion.outputTokens,
+        cache_read_tokens: completion.cacheReadTokens,
+        cache_creation_tokens: completion.cacheCreationTokens,
+        cost_usd: costUsd,
+        latency_ms: claudeMs,
+      });
+    } catch (logErr: any) {
+      this.logger.warn(`ai_usage_log insert failed: ${logErr.message}`);
+    }
 
     const rawText = completion.text.trim();
 
