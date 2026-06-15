@@ -95,6 +95,22 @@ export class OrdersController {
     return this.ordersService.redeliverOrder(id);
   }
 
+  // Igor (14/06): transfere entrega pra outro chat. Usado quando admin
+  // clicou no deeplink de outro cliente por engano e o telegram_chat_id
+  // da order ficou cruzado. Reseta o vínculo, opcionalmente atribui o
+  // chat correto e dispara entrega.
+  @Post(':id/transfer-delivery')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Transfer order delivery to another telegram chat (admin)' })
+  async transferDelivery(
+    @Param('id') id: string,
+    @Body() body: { telegram_chat_id?: string; clear_only?: boolean },
+  ) {
+    return this.ordersService.transferDelivery(id, body.telegram_chat_id, body.clear_only);
+  }
+
   // Endpoint chamado pelo bot quando alguém clica
   // t.me/CineVisionApp_rbot?start=order_TOKEN. Linka uma order paga
   // mas órfã (sem telegram_chat_id) ao chat de quem chegou via deep

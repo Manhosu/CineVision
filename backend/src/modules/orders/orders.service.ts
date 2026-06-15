@@ -694,6 +694,79 @@ export class OrdersService {
     return { redelivered: true };
   }
 
+  /**
+   * Igor (14/06): transfere entrega pra outro chat. Quando admin clicou
+   * no deeplink de outro cliente por engano e o chat cruzou, esse método
+   * reseta o vínculo. Se `clearOnly=true`, só libera (pra cliente real
+   * clicar de novo no link). Se vier `telegramChatId`, troca pra esse chat
+   * e dispara entrega.
+   */
+  async transferDelivery(
+    orderId: string,
+    telegramChatId?: string,
+    clearOnly?: boolean,
+  ): Promise<{ ok: boolean; delivered?: boolean; reason?: string }> {
+    const { data: order } = await this.supabase.client
+      .from('orders')
+      .select('id, status, telegram_chat_id, user_id')
+      .eq('id', orderId)
+      .maybeSingle();
+
+    if (!order) throw new NotFoundException('Order não encontrada');
+    if (order.status !== OrderStatus.PAID) return { ok: false, reason: 'order_not_paid' };
+
+    if (clearOnly || !telegramChatId) {
+      await this.supabase.client
+        .from('orders')
+        .update({
+          telegram_chat_id: null,
+          user_id: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', orderId);
+      await this.supabase.client
+        .from('purchases')
+        .update({ delivery_sent: false })
+        .eq('order_id', orderId);
+      this.logger.log(`[transfer] order ${orderId} cleared (cliente pode resgatar via link novamente)`);
+      return { ok: true, delivered: false };
+    }
+
+    const newChatId = String(telegramChatId).trim();
+    if (!/^-?\d{6,}$/.test(newChatId)) {
+      return { ok: false, reason: 'invalid_chat_id' };
+    }
+
+    // Busca user com esse telegram_chat_id (se existir).
+    const { data: targetUser } = await this.supabase.client
+      .from('users')
+      .select('id, role')
+      .eq('telegram_chat_id', newChatId)
+      .maybeSingle();
+
+    // Bloqueia transferência pra admin (não vamos repetir o erro).
+    if (targetUser?.role && ['admin', 'employee', 'master'].includes(targetUser.role)) {
+      return { ok: false, reason: 'target_is_admin' };
+    }
+
+    await this.supabase.client
+      .from('orders')
+      .update({
+        telegram_chat_id: newChatId,
+        user_id: targetUser?.id || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId);
+    await this.supabase.client
+      .from('purchases')
+      .update({ delivery_sent: false, user_id: targetUser?.id || null })
+      .eq('order_id', orderId);
+
+    this.logger.log(`[transfer] order ${orderId} → chat ${newChatId}`);
+    await this.notifyBotForDelivery(orderId, newChatId);
+    return { ok: true, delivered: true };
+  }
+
   async findByUser(userId: string) {
     const { data, error } = await this.supabase.client
       .from('orders')
@@ -754,6 +827,45 @@ export class OrdersService {
 
     if (order.status !== OrderStatus.PAID) {
       return { claimed: false, reason: 'order_not_paid' };
+    }
+
+    // Igor (14/06): bloqueio anti-cross-claim. Sem isso, o chat que clicar
+    // PRIMEIRO no `?start=order_TOKEN` ficava como dono da entrega — admin
+    // testando o link de outro cliente vinculava o pedido ao Telegram dele
+    // sem querer. Aconteceu 15+ vezes: chats 1134910998 e 8003506238 (do
+    // Igor) ficaram com pedidos cruzados de 3 clientes distintos.
+    //
+    // Regra 1: se quem está clamando é admin/employee/master → bloqueia.
+    //          Admin tem que usar painel pra entregar manual.
+    // Regra 2: se o chat já resgatou 3+ pedidos nas últimas 24h → bloqueia.
+    //          Cliente legítimo raramente compra 3 pedidos separados num
+    //          dia; isso é sinal de admin testando ou abuso.
+    if (!order.telegram_chat_id) {
+      const { data: claimerUser } = await this.supabase.client
+        .from('users')
+        .select('id, role')
+        .eq('telegram_chat_id', telegramChatId)
+        .maybeSingle();
+
+      if (claimerUser?.role && ['admin', 'employee', 'master'].includes(claimerUser.role)) {
+        this.logger.warn(
+          `[claim-block] role=${claimerUser.role} chat=${telegramChatId} tentou resgatar order ${order.id} (token=${orderToken}). Bloqueado.`,
+        );
+        return { claimed: false, reason: 'admin_chat_blocked' };
+      }
+
+      const { count: recentClaims } = await this.supabase.client
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('telegram_chat_id', telegramChatId)
+        .gte('updated_at', new Date(Date.now() - 24 * 3600_000).toISOString());
+
+      if ((recentClaims || 0) >= 3) {
+        this.logger.warn(
+          `[claim-block] chat=${telegramChatId} já resgatou ${recentClaims} pedidos nas últimas 24h. Bloqueado em order ${order.id}.`,
+        );
+        return { claimed: false, reason: 'too_many_recent_claims' };
+      }
     }
 
     // Resgate único: se a order já tem telegram_chat_id, só

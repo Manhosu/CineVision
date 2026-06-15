@@ -147,6 +147,36 @@ export default function OrphanOrdersPage() {
     }
   };
 
+  // Igor (14/06): transfere entrega. Sem chat_id = libera (cliente real
+  // pode resgatar pelo link de novo). Com chat_id = manda direto pra
+  // esse chat. Caso de uso: admin clicou no link de outro cliente por
+  // engano e o pedido ficou cruzado no Telegram dele.
+  const transferDelivery = async (orderId: string) => {
+    const input = window.prompt(
+      'Cole o NOVO chat_id do Telegram do cliente correto.\n\n' +
+      'Deixe em branco pra apenas LIBERAR o pedido (cliente vai poder resgatar pelo link novamente).',
+      '',
+    );
+    if (input === null) return;
+    const chatId = input.trim();
+    const action = chatId ? `Enviar para chat ${chatId}` : 'Liberar pedido (limpar vínculo)';
+    if (!confirm(`Confirmar: ${action}?`)) return;
+    try {
+      const r = await api.post<{ ok: boolean; delivered?: boolean; reason?: string }>(
+        `/api/v1/orders/${orderId}/transfer-delivery`,
+        chatId ? { telegram_chat_id: chatId } : { clear_only: true },
+      );
+      if (r.ok && r.delivered) toast.success('Entrega transferida e enviada pro chat novo');
+      else if (r.ok) toast.success('Pedido liberado — cliente já pode resgatar pelo link');
+      else if (r.reason === 'target_is_admin') toast.error('Esse chat também é admin. Use outro.');
+      else if (r.reason === 'invalid_chat_id') toast.error('Chat ID inválido. Use só números.');
+      else toast.error('Falha: ' + (r.reason || 'erro desconhecido'));
+      load(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Falha ao transferir');
+    }
+  };
+
   const [dismissedDateFilter, setDismissedDateFilter] = useState('');
 
   const rawList =
@@ -321,6 +351,15 @@ export default function OrphanOrdersPage() {
                       title="Re-disparar entrega via Telegram (cliente já vinculado)"
                     >
                       🔄 Reenviar entrega
+                    </button>
+                  )}
+                  {tab === 'undelivered' && (
+                    <button
+                      onClick={() => transferDelivery(o.id)}
+                      className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm font-semibold text-red-300 hover:bg-red-500/20"
+                      title="Transferir pra outro chat ou liberar pedido (chat cruzado)"
+                    >
+                      🔀 Transferir / Liberar
                     </button>
                   )}
                   {/* N15: se tem WhatsApp salvo, abre direto; senão abre

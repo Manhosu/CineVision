@@ -2521,6 +2521,22 @@ export class TelegramsEnhancedService implements OnModuleInit {
             // o "Pagamento confirmado!" + botões dos filmes.
             return;
           }
+          // Igor (14/06): novos motivos de bloqueio anti-cross-claim.
+          // Admin tentando claim "pra verificar" recebe mensagem clara.
+          if (claimResp.data?.reason === 'admin_chat_blocked') {
+            await this.sendMessage(
+              chatId,
+              `⚠️ Esta conta administrativa não pode resgatar pedidos.\n\nUse o painel admin → Pedidos órfãos → "Transferir entrega" pra enviar pro cliente.`,
+            );
+            return;
+          }
+          if (claimResp.data?.reason === 'too_many_recent_claims') {
+            await this.sendMessage(
+              chatId,
+              `⚠️ Esta conta já resgatou vários pedidos recentemente.\n\nSe vc é o cliente, fale com o suporte. Se vc é admin, use o painel pra liberar manualmente.`,
+            );
+            return;
+          }
           if (claimResp.data?.alreadyLinked) {
             // Caso especial: o link foi resgatado por OUTRA conta.
             // Mensagem distinta pra orientar suporte — Igor recupera
