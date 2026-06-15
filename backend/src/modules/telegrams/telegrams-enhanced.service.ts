@@ -2487,6 +2487,154 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
   // ==================== END TELEGRAM BUSINESS ====================
 
+  /**
+   * Igor (14/06 noite): handler do deeplink rotativo de ENTREGA.
+   * `/start watch_<purchaseId>` — chamado quando cliente clica no botão
+   * "🎬 título do filme" que veio na confirmação de pagamento.
+   *
+   * Roda no contexto do BOT que recebeu o /start (currentBotId via
+   * AsyncLocalStorage). Valida posse da purchase, gera invite link do
+   * grupo do filme via Bot API daquele bot, e manda no chat dela.
+   *
+   * Anti-cross-claim: se a purchase já foi resgatada por outro chat
+   * e o atual é DIFERENTE, bloqueia (igual a flow de orphan order).
+   * Se o chat atual é admin, também bloqueia.
+   */
+  private async handleWatchDeepLink(
+    chatId: number,
+    purchaseId: string,
+    userId?: string,
+    telegramUserId?: number,
+  ) {
+    try {
+      // Busca a purchase + content + order.
+      const { data: purchaseRaw } = await this.supabase
+        .from('purchases')
+        .select(
+          'id, order_id, user_id, content_id, delivery_sent, is_presale_purchase, ' +
+          'content:content(id, title, telegram_group_link, telegram_chat_id, delivery_bot_id, is_presale)',
+        )
+        .eq('id', purchaseId)
+        .maybeSingle();
+      const purchase: any = purchaseRaw;
+
+      if (!purchase) {
+        await this.sendMessage(chatId, '❌ Acesso não encontrado. Use /start pra começar.');
+        return;
+      }
+
+      const content: any = Array.isArray(purchase.content) ? purchase.content[0] : purchase.content;
+      if (!content) {
+        await this.sendMessage(chatId, '❌ Conteúdo não encontrado. Avise o suporte.');
+        return;
+      }
+
+      // Confirma que a order da purchase está paga.
+      const { data: order } = await this.supabase
+        .from('orders')
+        .select('id, status, telegram_chat_id')
+        .eq('id', purchase.order_id)
+        .maybeSingle();
+      if (!order || order.status !== 'paid') {
+        await this.sendMessage(chatId, '❌ Pedido ainda não foi pago. Aguarde a confirmação.');
+        return;
+      }
+
+      // Anti-cross-claim: se o chat atual é admin/employee/master, bloqueia.
+      const { data: claimerUser } = await this.supabase
+        .from('users')
+        .select('id, role')
+        .eq('telegram_chat_id', String(chatId))
+        .maybeSingle();
+      if (claimerUser?.role && ['admin', 'employee', 'master'].includes(claimerUser.role)) {
+        this.logger.warn(
+          `[watch-block] role=${claimerUser.role} chat=${chatId} tentou abrir purchase ${purchaseId}`,
+        );
+        await this.sendMessage(
+          chatId,
+          '⚠️ Esta conta administrativa não pode resgatar acessos.\n\nUse o painel admin pra enviar manualmente pro cliente.',
+        );
+        return;
+      }
+
+      // Se purchase já tem user_id e é DIFERENTE do user atual → outra conta tentando resgatar.
+      if (purchase.user_id && userId && purchase.user_id !== userId) {
+        await this.sendMessage(
+          chatId,
+          '⚠️ Este acesso já foi vinculado a outra conta do Telegram.\n\nSe foi você que pagou, fale com o suporte pra liberar manualmente.',
+        );
+        return;
+      }
+
+      // Vincula user_id + atualiza chat da order se ainda estava vazia.
+      const updates: Record<string, any> = {};
+      if (!purchase.user_id && userId) updates.user_id = userId;
+      if (Object.keys(updates).length) {
+        await this.supabase.from('purchases').update(updates).eq('id', purchase.id);
+      }
+      if (!order.telegram_chat_id) {
+        await this.supabase
+          .from('orders')
+          .update({ telegram_chat_id: String(chatId), updated_at: new Date().toISOString() })
+          .eq('id', order.id);
+      }
+
+      // Gera invite link do grupo. Usa o bot admin do grupo (delivery_bot_id)
+      // pra criar o invite — bots novos não são admin dos 661 grupos antigos.
+      // O envio da MENSAGEM, porém, sai pelo bot do contexto atual (cliente
+      // fica registrada nesse bot adicional).
+      const rawChatId: string | null = content.telegram_chat_id?.trim() || null;
+      const rawLink: string | null = content.telegram_group_link?.trim() || null;
+      let chatIdToTry = rawChatId;
+      if (!chatIdToTry && rawLink && /^-?\d{6,}$/.test(rawLink)) chatIdToTry = rawLink;
+
+      let buttonUrl: string | null = null;
+      if (chatIdToTry) {
+        try {
+          buttonUrl = await this.createInviteLinkForUser(
+            chatIdToTry,
+            purchase.id,
+            content.delivery_bot_id || null,
+          );
+        } catch (err: any) {
+          this.logger.warn(
+            `[watch] createInviteLinkForUser failed (chat=${chatIdToTry}, bot=${content.delivery_bot_id || 'default'}): ${err.message}`,
+          );
+        }
+      }
+      if (!buttonUrl && rawLink && rawLink !== chatIdToTry) buttonUrl = rawLink;
+
+      if (!buttonUrl) {
+        await this.sendMessage(
+          chatId,
+          `⚠️ *${content.title}*: link pendente. Avise o suporte, vamos enviar manualmente.`,
+          { parse_mode: 'Markdown' },
+        );
+        return;
+      }
+
+      await this.sendMessage(
+        chatId,
+        `🎬 *${content.title}*\n\nClique no botão abaixo pra entrar no grupo e assistir:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '▶️ Acessar grupo', url: buttonUrl }]] },
+        },
+      );
+
+      // Marca delivery_sent na purchase pra contadores ficarem consistentes.
+      if (!purchase.delivery_sent) {
+        await this.supabase.from('purchases').update({ delivery_sent: true }).eq('id', purchase.id);
+      }
+    } catch (err: any) {
+      this.logger.error(`handleWatchDeepLink failed for purchase ${purchaseId}: ${err.message}`);
+      await this.sendMessage(
+        chatId,
+        '❌ Tivemos um problema momentâneo. Tenta de novo em alguns segundos ou fale com o suporte.',
+      );
+    }
+  }
+
   private async handleOrderDeepLink(chatId: number, orderToken: string, userId?: string) {
     try {
       const axios = (await import('axios')).default;
@@ -3663,6 +3811,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
         const orderToken = param.replace('order_', '');
         this.logger.log(`🛒 Order deep link: ${orderToken}`);
         await this.handleOrderDeepLink(chatId, orderToken, user?.id);
+        return;
+      }
+      // Igor (14/06 noite): watch deep-link rotativo. Cliente compra → bot
+      // que recebeu o pagamento manda botão com URL `/r/watch?p=<purchaseId>`
+      // → servidor sorteia bot ativo e redireciona pra `t.me/<bot>?start=watch_<id>`.
+      // Aqui valida posse e gera o invite do grupo no bot ATUAL — cliente
+      // entra no grupo do filme e fica conectada nesse bot adicional.
+      else if (param.startsWith('watch_')) {
+        const purchaseId = param.replace('watch_', '');
+        this.logger.log(`🎬 Watch deep link: purchase=${purchaseId}`);
+        await this.handleWatchDeepLink(chatId, purchaseId, user?.id, telegramUserId);
         return;
       }
       // Se o parâmetro começa com "request_", é uma solicitação de conteúdo

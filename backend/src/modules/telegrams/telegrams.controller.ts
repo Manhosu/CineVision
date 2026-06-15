@@ -150,6 +150,33 @@ export class TelegramsController {
     return res.redirect(302, target);
   }
 
+  /**
+   * Igor (14/06 noite): redirect 302 round-robin pra ENTREGA de filme.
+   * Cliente compra → bot manda "Aqui está seu filme" com botão apontando
+   * pra essa URL → clica → sorteia bot ativo → bot recebe `/start
+   * watch_<purchaseId>`, valida posse e manda o invite link do grupo no
+   * chat DAQUELE bot. Cliente fica registrado num bot adicional — se
+   * algum cair, ainda alcançamos ela via outro.
+   */
+  @Get('r/watch')
+  @ApiOperation({ summary: 'Redirect 302 round-robin pra entrega de purchase' })
+  async watchRedirect(
+    @Res() res: Response,
+    @Query('p') purchaseId?: string,
+  ) {
+    const pid = (purchaseId || '').trim();
+    if (!pid) {
+      return res.status(400).send('purchase_id ausente');
+    }
+    const { url, bot_username } = await this.telegramsEnhancedService.getNextRoundRobinBot();
+    const target = `${url}?start=watch_${encodeURIComponent(pid)}`;
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    this.logger.log(`[watch-redirect] purchase=${pid} → @${bot_username}`);
+    return res.redirect(302, target);
+  }
+
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })
   @ApiResponse({ status: 200, description: 'Notification sent successfully' })

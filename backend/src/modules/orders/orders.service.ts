@@ -1176,27 +1176,20 @@ export class OrdersService {
 
         let buttonUrl: string | null = null;
 
-        // 1. Tenta gerar invite single-use se temos Chat ID.
-        // Igor (07/06): usa o bot admin do grupo (content.delivery_bot_id).
-        // Pros 300+ grupos antigos é o bot anterior; pros filmes novos é
-        // o que o admin escolheu no dropdown. Se NULL, cai no bot default.
-        if (chatIdToTry) {
-          try {
-            buttonUrl = await this.telegramsService.createInviteLinkForUser(
-              chatIdToTry,
-              p.id,
-              content.delivery_bot_id || null,
-            );
-          } catch (err: any) {
-            this.logger.warn(
-              `createInviteLinkForUser failed for purchase ${p.id} (chat ${chatIdToTry}, bot ${content.delivery_bot_id || 'default'}): ${err.message}`,
-            );
-          }
-        }
-
-        // 2. Fallback: link de convite regular (t.me/+...) se cadastrado.
-        if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
-          buttonUrl = rawLink;
+        // Igor (14/06 noite): em vez de mandar o invite direto, mando uma
+        // URL do nosso backend que faz round-robin entre os 5 bots. Cliente
+        // clica → cai num bot sorteado → bot valida posse e gera o invite
+        // do grupo nele. Resultado: cliente fica conectada num bot a mais
+        // (espalha base). Pré-condição: precisa ter chatIdToTry OU rawLink
+        // pra entrega funcionar — só geramos a URL rotativa se houver
+        // grupo configurado.
+        const hasGroupConfigured = !!(chatIdToTry || rawLink);
+        if (hasGroupConfigured) {
+          const backendUrl =
+            this.configService.get<string>('BACKEND_URL') ||
+            this.configService.get<string>('API_URL') ||
+            'https://cinevisionn.onrender.com';
+          buttonUrl = `${backendUrl}/api/v1/telegrams/r/watch?p=${encodeURIComponent(p.id)}`;
         }
 
         if (buttonUrl) {
