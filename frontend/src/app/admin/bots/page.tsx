@@ -66,6 +66,13 @@ export default function AdminBotsPage() {
   const [popupLink, setPopupLink] = useState('');
   const [savingPopup, setSavingPopup] = useState(false);
 
+  // Igor (14/06 noite): PIX manual fallback
+  const [pixEnabled, setPixEnabled] = useState(true);
+  const [pixKey, setPixKey] = useState('');
+  const [pixKeyLabel, setPixKeyLabel] = useState('E-mail');
+  const [pixWhatsapp, setPixWhatsapp] = useState('');
+  const [savingPix, setSavingPix] = useState(false);
+
   // N30: estatísticas de usuários por bot
   const [userStats, setUserStats] = useState<{ bots: any[]; total_all: number; total_unique: number } | null>(null);
 
@@ -73,6 +80,10 @@ export default function AdminBotsPage() {
     fetch(`${API_URL}/api/v1/admin/settings/whatsapp-popup`, { headers: getHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setPopupEnabled(d.whatsapp_popup_enabled); setPopupLink(d.whatsapp_popup_link || ''); } })
+      .catch(() => {});
+    fetch(`${API_URL}/api/v1/admin/settings/manual-pix`, { headers: getHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) { setPixEnabled(d.enabled); setPixKey(d.pix_key || ''); setPixKeyLabel(d.pix_key_label || 'E-mail'); setPixWhatsapp(d.whatsapp || ''); } })
       .catch(() => {});
     fetch(`${API_URL}/api/v1/admin/bots/user-stats`, { headers: getHeaders() })
       .then(r => r.ok ? r.json() : null)
@@ -94,6 +105,23 @@ export default function AdminBotsPage() {
       toast.error(e.message);
     } finally {
       setSavingPopup(false);
+    }
+  };
+
+  const saveManualPix = async () => {
+    setSavingPix(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/settings/manual-pix`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ enabled: pixEnabled, pix_key: pixKey, pix_key_label: pixKeyLabel, whatsapp: pixWhatsapp }),
+      });
+      if (!res.ok) throw new Error('Falha ao salvar');
+      toast.success('PIX manual salvo!');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setSavingPix(false);
     }
   };
 
@@ -412,6 +440,76 @@ export default function AdminBotsPage() {
           </p>
         </div>
       )}
+
+      {/* Igor (14/06 noite): PIX manual fallback */}
+      <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
+        <h2 className="text-base font-semibold text-white mb-1">PIX manual (fallback)</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          Botão "Não consegui pagar" no checkout. Cliente vê chave PIX direta + manda comprovante no WhatsApp.
+          Use pra clientes em bancos que rejeitam o PIX automático (Santander, Inter, etc).
+        </p>
+        <div className="flex flex-col gap-4">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setPixEnabled(!pixEnabled)}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${pixEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${pixEnabled ? 'translate-x-5' : ''}`} />
+            </div>
+            <span className="text-sm text-gray-300">
+              {pixEnabled ? 'Botão ativo — aparece no checkout' : 'Botão desativado — escondido'}
+            </span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs text-gray-400 mb-1">Chave PIX</label>
+              <input
+                type="text"
+                value={pixKey}
+                onChange={e => setPixKey(e.target.value)}
+                placeholder="cinevision.app@hotmail.com"
+                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Tipo da chave</label>
+              <select
+                value={pixKeyLabel}
+                onChange={e => setPixKeyLabel(e.target.value)}
+                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              >
+                <option value="E-mail">E-mail</option>
+                <option value="CPF">CPF</option>
+                <option value="CNPJ">CNPJ</option>
+                <option value="Telefone">Telefone</option>
+                <option value="Aleatória">Aleatória</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="block text-xs text-gray-400 mb-1">WhatsApp pra receber comprovante (com DDI+DDD)</label>
+              <input
+                type="text"
+                value={pixWhatsapp}
+                onChange={e => setPixWhatsapp(e.target.value.replace(/\D/g, ''))}
+                placeholder="556712345678"
+                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Deixe vazio pra abrir seletor de contato do cliente. Ex: 5567812345678 (BR sem +).
+              </p>
+            </div>
+            <button
+              onClick={saveManualPix}
+              disabled={savingPix}
+              className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              {savingPix ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* N25: Configurações do popup WhatsApp */}
       <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">

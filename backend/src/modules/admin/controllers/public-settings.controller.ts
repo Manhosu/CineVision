@@ -39,4 +39,20 @@ export class PublicSettingsController {
     const settings = await this.settingsService.getAllSettings();
     return { url: settings['homepage_og_image_url'] || '' };
   }
+
+  // Igor (14/06 noite): PIX manual — alguns bancos (Santander, Inter)
+  // não aceitam o PIX gerado pelo provedor Azosfy. Cliente clica
+  // "Não consegui pagar" no checkout, vê chave PIX direta + valor +
+  // botão pra mandar comprovante no WhatsApp do Igor liberar manual.
+  @Get('manual-pix')
+  @ApiOperation({ summary: 'Get manual PIX fallback config (public, no auth)' })
+  async getManualPix() {
+    const settings = await this.settingsService.getAllSettings();
+    return {
+      enabled: (settings['manual_pix_enabled'] ?? 'true') === 'true',
+      pix_key: settings['manual_pix_key'] || '',
+      pix_key_label: settings['manual_pix_key_label'] || 'E-mail',
+      whatsapp: (settings['manual_pix_whatsapp'] || '').replace(/\D/g, ''),
+    };
+  }
 }

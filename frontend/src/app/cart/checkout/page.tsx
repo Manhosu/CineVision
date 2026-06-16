@@ -40,6 +40,16 @@ function CheckoutContent() {
   const [whatsappValue, setWhatsappValue] = useState('');
   const [whatsappSaving, setWhatsappSaving] = useState(false);
   const [whatsappSaved, setWhatsappSaved] = useState(false);
+  // Igor (14/06 noite): PIX manual — alguns bancos (Santander, Inter) não
+  // aceitam o PIX do provedor Azosfy. Cliente abre modal com chave direta
+  // + valor + botão WhatsApp pra Igor liberar manual.
+  const [manualPixOpen, setManualPixOpen] = useState(false);
+  const [manualPix, setManualPix] = useState<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string } | null>(null);
+  useEffect(() => {
+    api.get<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string }>('/api/v1/settings/manual-pix')
+      .then(setManualPix)
+      .catch(() => { /* silent — modal só não abre */ });
+  }, []);
   // Igor (07/06): deeplink rotativo resolvido async — sorteia bot ativo.
   const [claimDeepLinkAsync, setClaimDeepLinkAsync] = useState<string | null>(null);
   useEffect(() => {
@@ -316,6 +326,15 @@ function CheckoutContent() {
                   </button>
                 </div>
               </div>
+
+              {manualPix?.enabled && manualPix.pix_key && (
+                <button
+                  onClick={() => setManualPixOpen(true)}
+                  className="mt-2 w-full rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-300 hover:bg-amber-500/20"
+                >
+                  Não consegui pagar com este PIX
+                </button>
+              )}
             </div>
 
             <div className="rounded-xl border border-white/10 bg-zinc-950 p-4">
@@ -342,6 +361,95 @@ function CheckoutContent() {
             )}
           </>
         )}
+      </div>
+
+      {manualPixOpen && manualPix && order && (
+        <ManualPixModal
+          orderTotal={order.total_cents}
+          orderToken={order.order_token}
+          config={manualPix}
+          onClose={() => setManualPixOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ManualPixModal({
+  orderTotal,
+  orderToken,
+  config,
+  onClose,
+}: {
+  orderTotal: number;
+  orderToken: string;
+  config: { pix_key: string; pix_key_label: string; whatsapp: string };
+  onClose: () => void;
+}) {
+  const totalFmt = `R$ ${fmt(orderTotal)}`;
+  const copyKey = () => {
+    navigator.clipboard.writeText(config.pix_key);
+    toast.success('Chave PIX copiada!');
+  };
+  const waMessage = encodeURIComponent(
+    `Olá! Acabei de pagar o pedido ${orderToken.slice(0, 8)} no valor de ${totalFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
+  );
+  const waHref = config.whatsapp
+    ? `https://wa.me/${config.whatsapp}?text=${waMessage}`
+    : `https://wa.me/?text=${waMessage}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-lg font-bold text-white">PIX manual</h2>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white">✕</button>
+        </div>
+        <p className="mb-4 text-sm text-zinc-400">
+          Alguns bancos não aceitam o PIX automático. Você pode pagar pela chave abaixo direto no seu app bancário.
+        </p>
+
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+          <div className="text-xs uppercase tracking-wide text-amber-400">Valor a pagar</div>
+          <div className="mt-1 text-3xl font-bold text-amber-200">{totalFmt}</div>
+        </div>
+
+        <div className="mb-4">
+          <div className="mb-1 text-xs text-zinc-500">Chave PIX ({config.pix_key_label})</div>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={config.pix_key}
+              className="flex-1 rounded-lg border border-white/10 bg-black px-3 py-2 text-sm text-zinc-200"
+            />
+            <button
+              onClick={copyKey}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+
+        <p className="mb-4 text-sm text-zinc-300">
+          Após efetuar o pagamento, envie o comprovante no nosso WhatsApp pra liberarmos seu acesso:
+        </p>
+
+        <a
+          href={waHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full rounded-lg bg-green-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-green-700"
+        >
+          Enviar comprovante no WhatsApp
+        </a>
+
+        <p className="mt-4 text-center text-xs text-zinc-500">
+          A liberação manual leva alguns minutos. Em caso de dúvidas, responda no próprio WhatsApp.
+        </p>
       </div>
     </div>
   );

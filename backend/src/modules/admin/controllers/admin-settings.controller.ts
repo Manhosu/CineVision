@@ -78,4 +78,39 @@ export class AdminSettingsController {
     await this.settingsService.updateSettingByKey('homepage_og_image_url', body.url || '');
     return { url: body.url || '' };
   }
+
+  // Igor (14/06 noite): PIX manual — fallback pra clientes em bancos que
+  // não aceitam o PIX da Azosfy (Santander, Inter). Igor configura aqui
+  // chave + label + WhatsApp; checkout mostra o botão "Não consegui pagar".
+  @Get('manual-pix')
+  @ApiOperation({ summary: 'Get manual PIX fallback config' })
+  async getManualPix() {
+    const settings = await this.settingsService.getAllSettings();
+    return {
+      enabled: (settings['manual_pix_enabled'] ?? 'true') === 'true',
+      pix_key: settings['manual_pix_key'] || '',
+      pix_key_label: settings['manual_pix_key_label'] || 'E-mail',
+      whatsapp: settings['manual_pix_whatsapp'] || '',
+    };
+  }
+
+  @Patch('manual-pix')
+  @ApiOperation({ summary: 'Update manual PIX fallback config' })
+  async updateManualPix(
+    @Body() body: { enabled?: boolean; pix_key?: string; pix_key_label?: string; whatsapp?: string },
+  ) {
+    if (body.enabled !== undefined) {
+      await this.settingsService.updateSettingByKey('manual_pix_enabled', body.enabled ? 'true' : 'false');
+    }
+    if (body.pix_key !== undefined) {
+      await this.settingsService.updateSettingByKey('manual_pix_key', body.pix_key);
+    }
+    if (body.pix_key_label !== undefined) {
+      await this.settingsService.updateSettingByKey('manual_pix_key_label', body.pix_key_label);
+    }
+    if (body.whatsapp !== undefined) {
+      await this.settingsService.updateSettingByKey('manual_pix_whatsapp', body.whatsapp.replace(/\D/g, ''));
+    }
+    return this.getManualPix();
+  }
 }
