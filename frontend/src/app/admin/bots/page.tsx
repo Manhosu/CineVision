@@ -71,6 +71,7 @@ export default function AdminBotsPage() {
   const [pixKey, setPixKey] = useState('');
   const [pixKeyLabel, setPixKeyLabel] = useState('E-mail');
   const [pixWhatsapp, setPixWhatsapp] = useState('');
+  const [pixTelegramUsername, setPixTelegramUsername] = useState('');
   const [savingPix, setSavingPix] = useState(false);
 
   // N30: estatísticas de usuários por bot
@@ -83,7 +84,15 @@ export default function AdminBotsPage() {
       .catch(() => {});
     fetch(`${API_URL}/api/v1/admin/settings/manual-pix`, { headers: getHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) { setPixEnabled(d.enabled); setPixKey(d.pix_key || ''); setPixKeyLabel(d.pix_key_label || 'E-mail'); setPixWhatsapp(d.whatsapp || ''); } })
+      .then(d => {
+        if (d) {
+          setPixEnabled(d.enabled);
+          setPixKey(d.pix_key || '');
+          setPixKeyLabel(d.pix_key_label || 'E-mail');
+          setPixWhatsapp(d.whatsapp || '');
+          setPixTelegramUsername(d.telegram_username || '');
+        }
+      })
       .catch(() => {});
     fetch(`${API_URL}/api/v1/admin/bots/user-stats`, { headers: getHeaders() })
       .then(r => r.ok ? r.json() : null)
@@ -114,7 +123,7 @@ export default function AdminBotsPage() {
       const res = await fetch(`${API_URL}/api/v1/admin/settings/manual-pix`, {
         method: 'PATCH',
         headers: getHeaders(),
-        body: JSON.stringify({ enabled: pixEnabled, pix_key: pixKey, pix_key_label: pixKeyLabel, whatsapp: pixWhatsapp }),
+        body: JSON.stringify({ enabled: pixEnabled, pix_key: pixKey, pix_key_label: pixKeyLabel, whatsapp: pixWhatsapp, telegram_username: pixTelegramUsername }),
       });
       if (!res.ok) throw new Error('Falha ao salvar');
       toast.success('PIX manual salvo!');
@@ -486,18 +495,31 @@ export default function AdminBotsPage() {
               </select>
             </div>
           </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">WhatsApp pra receber comprovante (com DDI+DDD)</label>
+            <input
+              type="text"
+              value={pixWhatsapp}
+              onChange={e => setPixWhatsapp(e.target.value.replace(/\D/g, ''))}
+              placeholder="556712345678"
+              className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Deixe vazio pra abrir seletor de contato do cliente. Ex: 5567812345678 (BR sem +).
+            </p>
+          </div>
           <div className="flex gap-3 items-end">
             <div className="flex-1">
-              <label className="block text-xs text-gray-400 mb-1">WhatsApp pra receber comprovante (com DDI+DDD)</label>
+              <label className="block text-xs text-gray-400 mb-1">Username Telegram pra receber comprovante (sem @)</label>
               <input
                 type="text"
-                value={pixWhatsapp}
-                onChange={e => setPixWhatsapp(e.target.value.replace(/\D/g, ''))}
-                placeholder="556712345678"
+                value={pixTelegramUsername}
+                onChange={e => setPixTelegramUsername(e.target.value.replace(/^@/, '').trim())}
+                placeholder="igorcinevision"
                 className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary-500"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Deixe vazio pra abrir seletor de contato do cliente. Ex: 5567812345678 (BR sem +).
+                Cliente vai poder mandar comprovante direto pelo Telegram do bot. Vazio = só WhatsApp.
               </p>
             </div>
             <button

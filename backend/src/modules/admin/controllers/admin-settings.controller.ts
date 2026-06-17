@@ -91,13 +91,14 @@ export class AdminSettingsController {
       pix_key: settings['manual_pix_key'] || '',
       pix_key_label: settings['manual_pix_key_label'] || 'E-mail',
       whatsapp: settings['manual_pix_whatsapp'] || '',
+      telegram_username: settings['manual_pix_telegram_username'] || '',
     };
   }
 
   @Patch('manual-pix')
   @ApiOperation({ summary: 'Update manual PIX fallback config' })
   async updateManualPix(
-    @Body() body: { enabled?: boolean; pix_key?: string; pix_key_label?: string; whatsapp?: string },
+    @Body() body: { enabled?: boolean; pix_key?: string; pix_key_label?: string; whatsapp?: string; telegram_username?: string },
   ) {
     if (body.enabled !== undefined) {
       await this.settingsService.updateSettingByKey('manual_pix_enabled', body.enabled ? 'true' : 'false');
@@ -110,6 +111,9 @@ export class AdminSettingsController {
     }
     if (body.whatsapp !== undefined) {
       await this.settingsService.updateSettingByKey('manual_pix_whatsapp', body.whatsapp.replace(/\D/g, ''));
+    }
+    if (body.telegram_username !== undefined) {
+      await this.settingsService.updateSettingByKey('manual_pix_telegram_username', body.telegram_username.replace(/^@/, '').trim());
     }
     return this.getManualPix();
   }

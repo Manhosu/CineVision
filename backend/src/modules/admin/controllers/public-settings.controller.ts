@@ -53,6 +53,7 @@ export class PublicSettingsController {
       pix_key: settings['manual_pix_key'] || '',
       pix_key_label: settings['manual_pix_key_label'] || 'E-mail',
       whatsapp: (settings['manual_pix_whatsapp'] || '').replace(/\D/g, ''),
+      telegram_username: (settings['manual_pix_telegram_username'] || '').replace(/^@/, ''),
     };
   }
 }

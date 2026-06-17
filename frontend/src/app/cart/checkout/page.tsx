@@ -44,9 +44,9 @@ function CheckoutContent() {
   // aceitam o PIX do provedor Azosfy. Cliente abre modal com chave direta
   // + valor + botão WhatsApp pra Igor liberar manual.
   const [manualPixOpen, setManualPixOpen] = useState(false);
-  const [manualPix, setManualPix] = useState<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string } | null>(null);
+  const [manualPix, setManualPix] = useState<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string; telegram_username: string } | null>(null);
   useEffect(() => {
-    api.get<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string }>('/api/v1/settings/manual-pix')
+    api.get<{ enabled: boolean; pix_key: string; pix_key_label: string; whatsapp: string; telegram_username: string }>('/api/v1/settings/manual-pix')
       .then(setManualPix)
       .catch(() => { /* silent — modal só não abre */ });
   }, []);
@@ -383,7 +383,7 @@ function ManualPixModal({
 }: {
   orderTotal: number;
   orderToken: string;
-  config: { pix_key: string; pix_key_label: string; whatsapp: string };
+  config: { pix_key: string; pix_key_label: string; whatsapp: string; telegram_username: string };
   onClose: () => void;
 }) {
   const totalFmt = `R$ ${fmt(orderTotal)}`;
@@ -391,12 +391,14 @@ function ManualPixModal({
     navigator.clipboard.writeText(config.pix_key);
     toast.success('Chave PIX copiada!');
   };
-  const waMessage = encodeURIComponent(
-    `Olá! Acabei de pagar o pedido ${orderToken.slice(0, 8)} no valor de ${totalFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
-  );
+  const msg = `Olá! Acabei de pagar o pedido ${orderToken.slice(0, 8)} no valor de ${totalFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`;
+  const waMessage = encodeURIComponent(msg);
   const waHref = config.whatsapp
     ? `https://wa.me/${config.whatsapp}?text=${waMessage}`
     : `https://wa.me/?text=${waMessage}`;
+  const tgHref = config.telegram_username
+    ? `https://t.me/${config.telegram_username.replace(/^@/, '')}?text=${waMessage}`
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
@@ -438,14 +440,26 @@ function ManualPixModal({
           Após efetuar o pagamento, envie o comprovante no nosso WhatsApp pra liberarmos seu acesso:
         </p>
 
-        <a
-          href={waHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-full rounded-lg bg-green-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-green-700"
-        >
-          Enviar comprovante no WhatsApp
-        </a>
+        <div className="flex flex-col gap-2">
+          <a
+            href={waHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full rounded-lg bg-green-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-green-700"
+          >
+            Enviar comprovante no WhatsApp
+          </a>
+          {tgHref && (
+            <a
+              href={tgHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full rounded-lg bg-sky-600 px-4 py-3 text-center text-sm font-semibold text-white hover:bg-sky-700"
+            >
+              Enviar comprovante no Telegram
+            </a>
+          )}
+        </div>
 
         <p className="mt-4 text-center text-xs text-zinc-500">
           A liberação manual leva alguns minutos. Em caso de dúvidas, responda no próprio WhatsApp.

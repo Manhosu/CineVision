@@ -2761,6 +2761,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           reply_markup: {
             inline_keyboard: [
               [{ text: '✅ Já paguei', callback_data: `order_check_${orderToken}` }],
+              [{ text: '⚠️ Não consegui pagar', callback_data: `manual_pix_o_${orderToken}` }],
               [{ text: '❌ Cancelar', callback_data: `order_cancel_${orderToken}` }],
             ],
           },
@@ -2831,6 +2832,110 @@ export class TelegramsEnhancedService implements OnModuleInit {
     } catch (err: any) {
       this.logger.error(`Order cancel callback error: ${err.message}`);
       await this.sendMessage(chatId, '❌ Erro ao cancelar pedido.');
+    }
+  }
+
+  /**
+   * Igor (14/06 noite, segunda iteração): "Não consegui pagar" no bot.
+   * Mesmo fluxo do site mas via Telegram. Cliente clica → bot mostra
+   * chave PIX + valor + 2 botões (Enviar comprovante no Telegram direto
+   * pro Igor + Voltar ao menu inicial).
+   */
+  private async handleManualPixCallback(
+    chatId: number,
+    kind: 'order' | 'purchase',
+    id: string,
+  ) {
+    try {
+      let amountCents = 0;
+      let refLabel = id.slice(0, 8);
+
+      if (kind === 'order') {
+        const { data: order } = await this.supabase
+          .from('orders')
+          .select('id, order_token, total_cents')
+          .eq('order_token', id)
+          .maybeSingle();
+        if (!order) {
+          await this.sendMessage(chatId, '❌ Pedido não encontrado.');
+          return;
+        }
+        amountCents = order.total_cents || 0;
+        refLabel = order.order_token.slice(0, 8);
+      } else {
+        const { data: purchase } = await this.supabase
+          .from('purchases')
+          .select('id, amount_cents')
+          .eq('id', id)
+          .maybeSingle();
+        if (!purchase) {
+          await this.sendMessage(chatId, '❌ Compra não encontrada.');
+          return;
+        }
+        amountCents = purchase.amount_cents || 0;
+        refLabel = purchase.id.slice(0, 8);
+      }
+
+      const { data: settingsRows } = await this.supabase
+        .from('admin_settings')
+        .select('key, value')
+        .in('key', [
+          'manual_pix_enabled',
+          'manual_pix_key',
+          'manual_pix_key_label',
+          'manual_pix_telegram_username',
+          'manual_pix_whatsapp',
+        ]);
+      const settings: Record<string, string> = {};
+      for (const r of settingsRows || []) settings[(r as any).key] = (r as any).value || '';
+
+      if ((settings['manual_pix_enabled'] ?? 'true') !== 'true' || !settings['manual_pix_key']) {
+        await this.sendMessage(
+          chatId,
+          '⚠️ PIX manual não está disponível no momento. Aguarde o atendimento.',
+        );
+        return;
+      }
+
+      const pixKey = settings['manual_pix_key'];
+      const pixLabel = settings['manual_pix_key_label'] || 'E-mail';
+      const amountFmt = (amountCents / 100).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+      });
+      const tgUsername = (settings['manual_pix_telegram_username'] || '').replace(/^@/, '');
+      const waNumber = (settings['manual_pix_whatsapp'] || '').replace(/\D/g, '');
+
+      // Monta linha-a-linha — mais robusto contra problemas de markdown.
+      const text =
+        `💳 *PIX manual*\n\n` +
+        `Alguns bancos não aceitam o PIX automático. Pague pela chave abaixo no seu app bancário:\n\n` +
+        `🔑 *Chave (${pixLabel}):*\n\`${pixKey}\`\n\n` +
+        `💰 *Valor:* R$ ${amountFmt}\n` +
+        `🧾 *Pedido:* ${refLabel}\n\n` +
+        `📨 Após pagar, envie o comprovante pra liberarmos manual.`;
+
+      const buttons: Array<Array<{ text: string; url?: string; callback_data?: string }>> = [];
+      if (tgUsername) {
+        const tgText = encodeURIComponent(
+          `Olá! Acabei de pagar o pedido ${refLabel} no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
+        );
+        buttons.push([{ text: '📨 Enviar comprovante (Telegram)', url: `https://t.me/${tgUsername}?text=${tgText}` }]);
+      }
+      if (waNumber) {
+        const waText = encodeURIComponent(
+          `Olá! Acabei de pagar o pedido ${refLabel} no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
+        );
+        buttons.push([{ text: '📱 Enviar pelo WhatsApp', url: `https://wa.me/${waNumber}?text=${waText}` }]);
+      }
+      buttons.push([{ text: '🔙 Voltar ao menu', callback_data: 'start' }]);
+
+      await this.sendMessage(chatId, text, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: buttons },
+      });
+    } catch (err: any) {
+      this.logger.error(`handleManualPixCallback (${kind}=${id}) failed: ${err.message}`);
+      await this.sendMessage(chatId, '❌ Erro ao gerar PIX manual. Tente novamente.');
     }
   }
 
@@ -3072,6 +3177,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
     } else if (data?.startsWith('order_cancel_')) {
       const token = data.replace('order_cancel_', '');
       await this.handleOrderCancelCallback(chatId, token);
+    } else if (data?.startsWith('manual_pix_o_')) {
+      const token = data.replace('manual_pix_o_', '');
+      await this.handleManualPixCallback(chatId, 'order', token);
+    } else if (data?.startsWith('manual_pix_p_')) {
+      const id = data.replace('manual_pix_p_', '');
+      await this.handleManualPixCallback(chatId, 'purchase', id);
     } else if (data === 'my_purchases') {
       await this.handleMyPurchasesCommand(chatId, telegramUserId);
     } else if (data === 'help') {
@@ -3265,6 +3376,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         reply_markup: {
           inline_keyboard: [
             [{ text: '✅ Já paguei!', callback_data: `check_pix_${purchaseId}` }],
+            [{ text: '⚠️ Não consegui pagar', callback_data: `manual_pix_p_${purchaseId}` }],
             [{ text: '❌ Cancelar', callback_data: 'catalog' }],
           ],
         },
