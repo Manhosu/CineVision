@@ -396,15 +396,29 @@ export class AiChatService {
 - Se perguntarem a qualidade, responda pelo campo "Qualidade" do catálogo (ex: 1080p Full HD). Sem esse campo, diga que é em alta qualidade.
 - O acesso ao filme/série é PRA SEMPRE (vitalício): compra uma vez e assiste quando e quantas vezes quiser. Reforce isso quando fizer sentido.`;
 
-    // Igor (13/06): cache split. Antes era 1 string só, e como o
-    // catalogBlock muda a cada query, o cache_control invalidava em
-    // toda chamada — pagávamos $0.80/1M nos 5k tokens inteiros. Agora
-    // 2 blocos:
-    //  - Bloco estável (~3.4k tokens): prompt + sales guide + FAQ — cache hit
-    //    em qualquer 2ª chamada nos próximos 5min ($0.08/1M).
-    //  - Bloco volátil (~1k tokens): catálogo, paga input full.
-    // Economia esperada: ~50% no input cost em horário de pico.
-    const stableBlock = `${training.system_prompt}\n\n${salesGuide}${faqText ? `\n\nFAQ DE SUPORTE:\n${faqText}` : ''}`;
+    // Igor (13/06 + 17/06): cache split. Bloco estável + catálogo volátil.
+    // Haiku 4.5 só cacheia blocos com >= 1024 tokens. O prompt+sales+FAQ
+    // somam ~900 tokens — abaixo do limite. Adicionamos um bloco de
+    // contexto fixo da Cine Vision pra empurrar pra >1024 tokens e ATIVAR
+    // o cache (que estava marcado mas Anthropic ignorava silenciosamente).
+    // Cache_read custa 10% do input full — economia esperada de ~80% nas
+    // chamadas dentro da janela de 5min.
+    const cinevisionContext = `CONTEXTO DA CINE VISION (para sua referência ao atender):
+A Cine Vision é uma plataforma brasileira de venda avulsa de filmes e séries via Telegram, com mais de 600 títulos catalogados (filmes, séries clássicas, lançamentos, dublados/legendados, novelinhas, sessão da tarde). O cliente compra por título e recebe acesso vitalício — uma compra, assistir quantas vezes quiser. O catálogo é atualizado constantemente; títulos recém-adicionados ficam na home como "lançamentos". Pagamento é via PIX (instantâneo) ou cartão. Após pagar, o cliente recebe um link de acesso direto ao grupo do filme no Telegram, gerado automaticamente pelo bot — não precisa cadastro adicional.
+
+Fluxo padrão de atendimento:
+1. Cliente pergunta sobre um título → você confirma se está no catálogo (use o bloco CATÁLOGO RELEVANTE) e responde brevemente.
+2. Se está disponível: indique o título com <<DETAIL:ID>> usando o ID exato — isso já mostra o botão de compra automaticamente, sem precisar pedir.
+3. Se não está disponível: peça pro cliente solicitar via /solicitar pra adicionarmos. Não invente que está "em breve" se não estiver explicitamente no catálogo.
+4. Dúvidas comuns: qualidade (1080p Full HD), áudio (dublado/legendado), preço (varia por título), tempo de entrega (instantâneo após pagamento).
+5. Reclamações de pagamento: oriente a clicar em "Não consegui pagar" no checkout pra usar a chave PIX manual.
+6. Cliente pedindo lista ampla ("o que tem?") → use <<LIST_REDIRECT>> que envia o link da home.
+
+Limites de escopo:
+- Não responda sobre vida pessoal, política, religião, conselhos ou qualquer assunto fora do catálogo Cine Vision.
+- Se cliente insistir em assuntos pessoais, traga de volta pra catálogo educadamente.
+- Se a pergunta é ambígua e curta (1-3 palavras), assuma que é título e busque no catálogo antes de pedir esclarecimento.`;
+    const stableBlock = `${training.system_prompt}\n\n${salesGuide}\n\n${cinevisionContext}${faqText ? `\n\nFAQ DE SUPORTE:\n${faqText}` : ''}`;
     const systemBlocks = [
       { text: stableBlock, cached: true },
       { text: catalogBlock, cached: false },
