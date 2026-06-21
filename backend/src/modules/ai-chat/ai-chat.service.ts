@@ -1045,6 +1045,17 @@ Limites de escopo:
    */
   async testClaudeRaw() {
     const t0 = Date.now();
+    // Igor (19/06): diagnóstico de qual chave o backend está usando.
+    // Não expõe a chave; só length + 5 primeiros e 4 últimos chars.
+    const envKey = process.env.ANTHROPIC_API_KEY || '';
+    const keySource = envKey ? 'env' : 'db_fallback';
+    const debug = {
+      env_present: !!envKey,
+      env_length: envKey.length,
+      env_preview: envKey ? `${envKey.slice(0, 15)}...${envKey.slice(-4)}` : null,
+      env_has_invisible: envKey ? /[\s]/.test(envKey) : false,
+      key_source: keySource,
+    };
     try {
       const result = await this.claude.complete({
         system: 'Diga apenas "ok".',
@@ -1057,6 +1068,7 @@ Limites de escopo:
         text: result.text,
         input_tokens: result.inputTokens,
         output_tokens: result.outputTokens,
+        debug,
       };
     } catch (err: any) {
       return {
@@ -1067,6 +1079,7 @@ Limites de escopo:
         model: err?.model ?? null,
         message: err?.message ?? String(err),
         anthropic_error: err?.anthropicError ?? null,
+        debug,
         is_classified: err?.constructor?.name === 'ClaudeApiError',
         error_class: err?.constructor?.name ?? typeof err,
       };
