@@ -2743,7 +2743,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
             headers: form.getHeaders(),
           });
         } catch (imgErr: any) {
-          this.logger.warn(`QR send failed: ${imgErr.message}`);
+          const status = imgErr?.response?.status;
+          const body = imgErr?.response?.data;
+          this.logger.warn(
+            `[PIX QR carrinho] sendPhoto falhou (status=${status}, body=${JSON.stringify(body)?.slice(0, 200)}): ${imgErr.message}`,
+          );
           await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
         }
       } else {
@@ -3337,7 +3341,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
         this.logger.warn(`Could not fetch content title for PIX caption: ${err?.message || err}`);
       }
 
-      // Enviar QR Code como foto (se disponível)
+      // Enviar QR Code como foto (se disponível). Caption tem nome do
+      // filme + valor + instruções — peça crítica da UX. Igor (19/06):
+      // se sendPhoto falhar (Telegram rate, FormData, bot sem permissão
+      // de foto, etc), CAI no fallback de sendMessage com o mesmo texto
+      // pra cliente não ficar com só copia-e-cola sem contexto.
+      const pixCaption = `📱 *Pagamento PIX*\n\n${contentLine}💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima (ou use o código abaixo)\n3. Confirme o pagamento`;
+      let qrSent = false;
       if (pixData.qr_code_image) {
         try {
           // Converter base64 para Buffer
@@ -3351,18 +3361,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
             filename: 'qrcode.png',
             contentType: 'image/png',
           });
-          form.append('caption', `📱 *Pagamento PIX*\n\n${contentLine}💰 Valor: R$ ${pixData.amount_brl}\n⏱️ Válido por: 1 hora\n\n*Como pagar:*\n1. Abra seu app bancário\n2. Escaneie o QR Code acima\n3. Confirme o pagamento\n\nOu use o código Pix Copia e Cola abaixo:`);
+          form.append('caption', pixCaption);
           form.append('parse_mode', 'Markdown');
 
           const qr2ApiUrl = await this.apiUrlForCurrent();
           await axios.post(`${qr2ApiUrl}/sendPhoto`, form, {
             headers: form.getHeaders(),
           });
-
+          qrSent = true;
           this.logger.log('QR Code image sent successfully');
-        } catch (photoError) {
-          this.logger.warn('Could not send QR Code as photo:', photoError.message);
+        } catch (photoError: any) {
+          const status = photoError?.response?.status;
+          const body = photoError?.response?.data;
+          this.logger.warn(
+            `[PIX QR] sendPhoto falhou (status=${status}, body=${JSON.stringify(body)?.slice(0, 200)}): ${photoError.message}`,
+          );
         }
+      }
+      // Fallback: se QR não foi enviado (sem imagem OU sendPhoto falhou),
+      // manda o cabeçalho como texto pra cliente ver título + valor.
+      if (!qrSent) {
+        await this.sendMessage(chatId, pixCaption, { parse_mode: 'Markdown' });
       }
 
       // Enviar código copia e cola
