@@ -114,12 +114,33 @@ export class OasyfyService implements PixProvider {
         qrBase64 = qrBase64.split(',')[1];
       }
 
-      this.logger.log(`Oasyfy PIX response: transactionId=${data.transactionId}, status=${data.status}, pixCode=${data.pix?.code?.length || 0} chars, base64=${qrBase64?.length || 0} chars`);
+      // Igor (22/06): Oasyfy às vezes retorna só o brCode (texto), sem
+      // imagem base64. Resultado: tela do checkout web mostra "QR Code não
+      // disponível" e bot envia só copia-e-cola. Fallback: geramos a imagem
+      // localmente a partir do brCode usando a lib qrcode (mesmo padrão do
+      // Woovi). Cliente passa a ter QR sempre, mesmo se Oasyfy mudar.
+      const brCode = data.pix?.code || '';
+      if (!qrBase64 && brCode) {
+        try {
+          const QRCode = await import('qrcode');
+          const dataUrl = await QRCode.toDataURL(brCode, {
+            width: 300,
+            margin: 2,
+            color: { dark: '#000000', light: '#FFFFFF' },
+          });
+          qrBase64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+          this.logger.log('Oasyfy: QR base64 gerado localmente a partir do brCode');
+        } catch (qrErr: any) {
+          this.logger.warn(`Falha gerando QR local pro Oasyfy: ${qrErr.message}`);
+        }
+      }
+
+      this.logger.log(`Oasyfy PIX response: transactionId=${data.transactionId}, status=${data.status}, pixCode=${brCode.length} chars, base64=${qrBase64?.length || 0} chars`);
 
       return {
         paymentId: data.transactionId,
         status: data.status === 'OK' || data.status === 'PENDING' ? 'pending' : data.status,
-        qrCode: data.pix?.code || '',
+        qrCode: brCode,
         qrCodeBase64: qrBase64,
         amount: options.amount,
       };
