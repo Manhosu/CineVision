@@ -254,16 +254,18 @@ export class AdminManualGrantController {
 
     // 1. Cria order paga manualmente (telegram_chat_id NULL — cliente vai
     // preencher quando clicar no link rotativo e o bot reconhecer ele).
+    // Igor (25/06): orders não tem provider_meta (só purchases tem) — flag
+    // de manual_grant fica só na purchase.
     const { data: order, error: orderErr } = await this.supabase.client
       .from('orders')
       .insert({
         order_token: orderToken,
+        subtotal_cents: content.price_cents || 0,
         total_cents: content.price_cents || 0,
         total_items: 1,
         status: 'paid',
         paid_at: now,
         is_recovery_order: false,
-        provider_meta: { manual_grant: true, manual_pix: true, granted_at: now },
       })
       .select()
       .single();
