@@ -348,11 +348,28 @@ export class OrdersService {
     }
 
     // Cancel any recovery order for this same original order (if someone paid original first)
+    // Igor (25/06): também marca pix_recovery_history como convertida nesse
+    // caso — cliente ignorou o desconto da oferta mas pagou a original DEPOIS
+    // de receber o lembrete. Isso conta como conversão pelo lembrete também.
+    // Antes só convertia se pagasse a recovery (com desconto), o que dava 0
+    // conversões em 276 ofertas porque 99% paga a original mesmo.
+    const { data: recoveryOrdersForOriginal } = await this.supabase.client
+      .from('orders')
+      .select('id')
+      .eq('original_order_id', orderId);
     await this.supabase.client
       .from('orders')
       .update({ status: OrderStatus.CANCELLED })
       .eq('original_order_id', orderId)
       .eq('status', OrderStatus.PENDING);
+    const recoveryOrderIds = (recoveryOrdersForOriginal || []).map((r: any) => r.id);
+    if (recoveryOrderIds.length > 0) {
+      await this.supabase.client
+        .from('pix_recovery_history')
+        .update({ converted: true, converted_at: new Date().toISOString() })
+        .in('recovery_order_id', recoveryOrderIds)
+        .or('converted.is.null,converted.eq.false');
+    }
 
     // Empty the cart for this user/session so returning to /cart
     // doesn't show items they just paid for. Best-effort: a failure
@@ -459,14 +476,13 @@ export class OrdersService {
       purchasesByOrder.set(p.order_id, list);
     }
 
-    // N28: usar rodízio de bots em vez de bot hardcoded
-    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
-    try {
-      if (this.telegramsService) {
-        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.bot_username) botUsername = rotated.bot_username;
-      }
-    } catch { /* fallback to env bot */ }
+    // Igor (25/06): URL rotativa via backend /r/order. Cada clique sorteia
+    // bot ativo (round-robin no telegram_bots). Bot novo entra na fila
+    // automaticamente sem mudança de código.
+    const backendUrl =
+      this.configService.get<string>('BACKEND_URL') ||
+      this.configService.get<string>('API_URL') ||
+      'https://cinevisionn.onrender.com';
 
     return data.map((o: any) => {
       const items = (purchasesByOrder.get(o.id) || [])
@@ -475,7 +491,10 @@ export class OrdersService {
           return c?.title;
         })
         .filter(Boolean);
-      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
+      // Igor (25/06): URL rotativa do backend. Cada CLIQUE redireciona pra
+      // um bot diferente (round-robin via /r/order). Antes apontava direto
+      // pra t.me/<bot fixo> e todos os links da lista iam pro mesmo bot.
+      const claimUrl = `${backendUrl}/api/v1/telegrams/r/order?token=${o.order_token}`;
       return {
         ...o,
         items,
@@ -537,13 +556,10 @@ export class OrdersService {
       return list.some((p: any) => !p.delivery_sent);
     });
 
-    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
-    try {
-      if (this.telegramsService) {
-        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.bot_username) botUsername = rotated.bot_username;
-      }
-    } catch { /* fallback to env bot */ }
+    const backendUrl =
+      this.configService.get<string>('BACKEND_URL') ||
+      this.configService.get<string>('API_URL') ||
+      'https://cinevisionn.onrender.com';
 
     return undelivered.map((o: any) => {
       const list = byOrder.get(o.id) || [];
@@ -554,7 +570,10 @@ export class OrdersService {
         })
         .filter(Boolean);
       const undeliveredCount = list.filter((p: any) => !p.delivery_sent).length;
-      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
+      // Igor (25/06): URL rotativa do backend. Cada CLIQUE redireciona pra
+      // um bot diferente (round-robin via /r/order). Antes apontava direto
+      // pra t.me/<bot fixo> e todos os links da lista iam pro mesmo bot.
+      const claimUrl = `${backendUrl}/api/v1/telegrams/r/order?token=${o.order_token}`;
       return {
         ...o,
         items,
@@ -623,14 +642,13 @@ export class OrdersService {
       purchasesByOrder.set(p.order_id, list);
     }
 
-    // N28: usar rodízio de bots em vez de bot hardcoded
-    let botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
-    try {
-      if (this.telegramsService) {
-        const rotated = await (this.telegramsService as any).getNextRoundRobinBot?.();
-        if (rotated?.bot_username) botUsername = rotated.bot_username;
-      }
-    } catch { /* fallback to env bot */ }
+    // Igor (25/06): URL rotativa via backend /r/order. Cada clique sorteia
+    // bot ativo (round-robin no telegram_bots). Bot novo entra na fila
+    // automaticamente sem mudança de código.
+    const backendUrl =
+      this.configService.get<string>('BACKEND_URL') ||
+      this.configService.get<string>('API_URL') ||
+      'https://cinevisionn.onrender.com';
 
     return data.map((o: any) => {
       const items = (purchasesByOrder.get(o.id) || [])
@@ -639,7 +657,10 @@ export class OrdersService {
           return c?.title;
         })
         .filter(Boolean);
-      const claimUrl = `https://t.me/${botUsername}?start=order_${o.order_token}`;
+      // Igor (25/06): URL rotativa do backend. Cada CLIQUE redireciona pra
+      // um bot diferente (round-robin via /r/order). Antes apontava direto
+      // pra t.me/<bot fixo> e todos os links da lista iam pro mesmo bot.
+      const claimUrl = `${backendUrl}/api/v1/telegrams/r/order?token=${o.order_token}`;
       return {
         ...o,
         items,

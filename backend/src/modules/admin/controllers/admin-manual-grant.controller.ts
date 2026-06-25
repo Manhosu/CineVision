@@ -15,6 +15,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { UserRole } from '../../users/entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../../../config/supabase.service';
 import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
 import { v4 as uuidv4 } from 'uuid';
@@ -34,6 +35,7 @@ export class AdminManualGrantController {
 
   constructor(
     private readonly supabase: SupabaseService,
+    private readonly configService: ConfigService,
     @Optional() private readonly telegrams?: TelegramsEnhancedService,
   ) {}
 
@@ -218,6 +220,101 @@ export class AdminManualGrantController {
       delivered,
       user: { id: user.id, name: user.name, email: user.email },
       content: { id: content.id, title: content.title },
+    };
+  }
+
+  /**
+   * Igor (25/06): liberação manual sem usuário cadastrado. Cliente pagou
+   * PIX manual (chave direta) e mandou comprovante pelo WhatsApp, mas não
+   * tem cadastro nem Telegram. Admin escolhe o conteúdo, sistema cria
+   * order+purchase pago manual e retorna URL ROTATIVA pra mandar pro
+   * cliente. Cada clique do cliente sorteia bot ativo (round-robin).
+   *
+   * URL retornada: https://<backend>/api/v1/telegrams/r/watch?p=<purchaseId>
+   * Cliente abre → cai num bot sorteado → bot reconhece purchase paga →
+   * gera invite single-use do grupo → manda no chat dele.
+   */
+  @Post('manual-pix-link')
+  @ApiOperation({ summary: 'Cria purchase manual e retorna link rotativo single-use' })
+  async manualPixLink(@Body() body: { content_id: string }) {
+    if (!body?.content_id) {
+      throw new BadRequestException('content_id é obrigatório');
+    }
+
+    const { data: content } = await this.supabase.client
+      .from('content')
+      .select('id, title, price_cents, telegram_chat_id, telegram_group_link, delivery_bot_id')
+      .eq('id', body.content_id)
+      .single();
+    if (!content) throw new NotFoundException(`Content ${body.content_id} not found`);
+
+    const orderToken = uuidv4();
+    const purchaseToken = uuidv4();
+    const now = new Date().toISOString();
+
+    // 1. Cria order paga manualmente (telegram_chat_id NULL — cliente vai
+    // preencher quando clicar no link rotativo e o bot reconhecer ele).
+    const { data: order, error: orderErr } = await this.supabase.client
+      .from('orders')
+      .insert({
+        order_token: orderToken,
+        total_cents: content.price_cents || 0,
+        total_items: 1,
+        status: 'paid',
+        paid_at: now,
+        is_recovery_order: false,
+        provider_meta: { manual_grant: true, manual_pix: true, granted_at: now },
+      })
+      .select()
+      .single();
+    if (orderErr || !order) {
+      throw new BadRequestException(`Failed to create order: ${orderErr?.message}`);
+    }
+
+    // 2. Cria purchase linkada à order.
+    const { data: purchase, error: purchaseErr } = await this.supabase.client
+      .from('purchases')
+      .insert({
+        order_id: order.id,
+        content_id: content.id,
+        amount_cents: content.price_cents || 0,
+        currency: 'BRL',
+        status: 'paid',
+        preferred_delivery: 'telegram',
+        purchase_token: purchaseToken,
+        payment_confirmed_at: now,
+        delivery_sent: false,
+        provider_meta: { manual_grant: true, manual_pix: true, granted_at: now },
+      })
+      .select()
+      .single();
+    if (purchaseErr || !purchase) {
+      // Limpa order órfã pra não poluir
+      await this.supabase.client.from('orders').delete().eq('id', order.id);
+      throw new BadRequestException(`Failed to create purchase: ${purchaseErr?.message}`);
+    }
+
+    const backendUrl =
+      this.configService.get<string>('BACKEND_URL') ||
+      this.configService.get<string>('API_URL') ||
+      'https://cinevisionn.onrender.com';
+    const accessUrl = `${backendUrl}/api/v1/telegrams/r/watch?p=${purchase.id}`;
+
+    this.logger.log(
+      `[manual-pix-link] criado: content=${content.title}, purchase=${purchase.id}, url=${accessUrl}`,
+    );
+
+    return {
+      ok: true,
+      content: { id: content.id, title: content.title, price_cents: content.price_cents },
+      order_id: order.id,
+      purchase_id: purchase.id,
+      access_url: accessUrl,
+      // Mensagem pronta pra colar no WhatsApp do cliente
+      whatsapp_message:
+        `Olá! Aqui está o link de acesso pro filme/série *${content.title}* que você comprou.\n\n` +
+        `${accessUrl}\n\n` +
+        `É só clicar e seguir as instruções. Qualquer coisa estamos por aqui 🍿`,
     };
   }
 }

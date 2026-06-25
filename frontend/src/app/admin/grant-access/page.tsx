@@ -21,6 +21,8 @@ interface ContentHit {
 }
 
 export default function GrantAccessPage() {
+  const [tab, setTab] = useState<'user' | 'pix_manual'>('user');
+
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<UserHit[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserHit | null>(null);
@@ -30,6 +32,15 @@ export default function GrantAccessPage() {
   const [selectedContent, setSelectedContent] = useState<ContentHit | null>(null);
 
   const [granting, setGranting] = useState(false);
+
+  // Igor (25/06): aba "PIX manual" — gera link rotativo single-use sem
+  // precisar de usuário cadastrado. Cliente paga PIX manual, manda
+  // comprovante por WhatsApp, admin escolhe conteúdo e copia URL.
+  const [pixManualResult, setPixManualResult] = useState<{
+    access_url: string;
+    whatsapp_message: string;
+    purchase_id: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!userQuery) {
@@ -106,11 +117,68 @@ export default function GrantAccessPage() {
     }
   };
 
+  const generatePixManualLink = async () => {
+    if (!selectedContent) {
+      toast.error('Selecione um conteúdo');
+      return;
+    }
+    try {
+      setGranting(true);
+      setPixManualResult(null);
+      const result = await api.post<any>('/api/v1/admin/grant-access/manual-pix-link', {
+        content_id: selectedContent.id,
+      });
+      setPixManualResult({
+        access_url: result.access_url,
+        whatsapp_message: result.whatsapp_message,
+        purchase_id: result.purchase_id,
+      });
+      toast.success('Link gerado!');
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setGranting(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label} copiado!`);
+  };
+
   return (
     <div className="mx-auto max-w-3xl p-6 text-white">
       <AdminBackButton />
-      <h1 className="mb-6 text-3xl font-bold">Liberar conteúdo manualmente</h1>
+      <h1 className="mb-2 text-3xl font-bold">Liberar conteúdo manualmente</h1>
 
+      <div className="mb-6 inline-flex rounded-xl border border-white/10 bg-zinc-900 p-1">
+        <button
+          onClick={() => { setTab('user'); setPixManualResult(null); }}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            tab === 'user' ? 'bg-red-600 text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          Liberar pra usuário cadastrado
+        </button>
+        <button
+          onClick={() => { setTab('pix_manual'); setSelectedUser(null); setUserQuery(''); }}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+            tab === 'pix_manual' ? 'bg-red-600 text-white' : 'text-zinc-400 hover:text-white'
+          }`}
+        >
+          PIX manual (link rotativo)
+        </button>
+      </div>
+
+      {tab === 'pix_manual' && (
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-200">
+          Use quando cliente pagou PIX manual (chave direta) e mandou comprovante no WhatsApp.
+          Selecione o conteúdo, gere o link, e cole pra ele. Ele clica → cai num dos bots
+          ativos sorteado → bot reconhece a compra e entrega o filme.
+        </div>
+      )}
+
+      {tab === 'user' && (
       <section className="mb-4 rounded-xl border border-white/10 bg-zinc-900 p-5">
         <label className="mb-1 block text-sm font-semibold">Usuário</label>
         <input
@@ -148,6 +216,7 @@ export default function GrantAccessPage() {
           </div>
         )}
       </section>
+      )}
 
       <section className="mb-4 rounded-xl border border-white/10 bg-zinc-900 p-5">
         <label className="mb-1 block text-sm font-semibold">Conteúdo</label>
@@ -187,13 +256,66 @@ export default function GrantAccessPage() {
         )}
       </section>
 
-      <button
-        onClick={grant}
-        disabled={granting || !selectedUser || !selectedContent}
-        className="w-full rounded-xl bg-red-600 py-3 font-bold text-white disabled:opacity-60"
-      >
-        {granting ? 'Liberando...' : 'Liberar acesso'}
-      </button>
+      {tab === 'user' ? (
+        <button
+          onClick={grant}
+          disabled={granting || !selectedUser || !selectedContent}
+          className="w-full rounded-xl bg-red-600 py-3 font-bold text-white disabled:opacity-60"
+        >
+          {granting ? 'Liberando...' : 'Liberar acesso'}
+        </button>
+      ) : (
+        <button
+          onClick={generatePixManualLink}
+          disabled={granting || !selectedContent}
+          className="w-full rounded-xl bg-amber-600 py-3 font-bold text-white disabled:opacity-60"
+        >
+          {granting ? 'Gerando...' : 'Gerar link rotativo'}
+        </button>
+      )}
+
+      {pixManualResult && (
+        <section className="mt-6 rounded-xl border border-green-500/30 bg-green-500/5 p-5">
+          <h2 className="mb-3 text-lg font-bold text-green-300">Link gerado</h2>
+          <div className="mb-4">
+            <label className="mb-1 block text-xs uppercase text-zinc-400">Link de acesso (single-use, rotativo)</label>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={pixManualResult.access_url}
+                className="flex-1 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2 text-xs"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                onClick={() => copyToClipboard(pixManualResult.access_url, 'Link')}
+                className="rounded-lg bg-green-600 px-4 text-sm font-semibold hover:bg-green-700"
+              >
+                Copiar link
+              </button>
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="mb-1 block text-xs uppercase text-zinc-400">Mensagem pronta pro WhatsApp</label>
+            <textarea
+              readOnly
+              value={pixManualResult.whatsapp_message}
+              rows={5}
+              className="w-full rounded-lg border border-white/10 bg-zinc-950 p-3 text-sm"
+              onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+            />
+            <button
+              onClick={() => copyToClipboard(pixManualResult.whatsapp_message, 'Mensagem')}
+              className="mt-2 w-full rounded-lg bg-green-600 py-2 text-sm font-semibold hover:bg-green-700"
+            >
+              Copiar mensagem
+            </button>
+          </div>
+          <p className="text-xs text-zinc-400">
+            Purchase ID: <code>{pixManualResult.purchase_id}</code>. Cliente clica no link → cai num bot ativo
+            sorteado → bot reconhece a compra → entrega o filme. Link single-use por chat (anti-cross-claim).
+          </p>
+        </section>
+      )}
     </div>
   );
 }

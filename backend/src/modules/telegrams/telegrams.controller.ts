@@ -177,6 +177,38 @@ export class TelegramsController {
     return res.redirect(302, target);
   }
 
+  /**
+   * Igor (25/06): redirect 302 round-robin pra resgate de ORDER órfã.
+   * Mesmo padrão de /r/watch mas pra fluxo de "compra órfã sem Telegram"
+   * (cliente pagou no site sem login, depois acessa o bot pra resgatar).
+   *
+   * Antes a URL era `t.me/<bot fixo>?start=order_<token>` — admin copiava
+   * 5 links e todos iam pro MESMO bot (o que getNextRoundRobinBot sorteou
+   * no momento da abertura do painel). Agora a URL fica `/r/order?token=X`
+   * fixa, e cada CLIQUE rotaciona pra bot diferente.
+   *
+   * Bonus: bot novo cadastrado em `telegram_bots` entra na rotação
+   * automaticamente (getNextRoundRobinBot lê os ativos).
+   */
+  @Get('r/order')
+  @ApiOperation({ summary: 'Redirect 302 round-robin pra resgate de order órfã' })
+  async orderRedirect(
+    @Res() res: Response,
+    @Query('token') orderToken?: string,
+  ) {
+    const token = (orderToken || '').trim();
+    if (!token) {
+      return res.status(400).send('token ausente');
+    }
+    const { url, bot_username } = await this.telegramsEnhancedService.getNextRoundRobinBot();
+    const target = `${url}?start=order_${encodeURIComponent(token)}`;
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    this.logger.log(`[order-redirect] token=${token.slice(0, 8)} → @${bot_username}`);
+    return res.redirect(302, target);
+  }
+
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })
   @ApiResponse({ status: 200, description: 'Notification sent successfully' })

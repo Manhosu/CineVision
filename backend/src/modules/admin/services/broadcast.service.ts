@@ -12,6 +12,11 @@ export class BroadcastService {
   private botToken: string;
   private botUsername: string;
   private telegramApiUrl: string;
+  // Igor (25/06): cache token por bot. Multi-bot: cada user precisa receber
+  // broadcast pelo bot que ele deu /start (Telegram bloqueia DM de bot que
+  // o user não conhece). Cache evita 1 query por message.
+  private botTokenCache: Map<string, { token: string; fetchedAt: number }> = new Map();
+  private readonly BOT_TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
 
   constructor(
     private configService: ConfigService,
@@ -28,6 +33,31 @@ export class BroadcastService {
     this.botUsername =
       this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
     this.telegramApiUrl = `https://api.telegram.org/bot${this.botToken}`;
+  }
+
+  /**
+   * Igor (25/06): resolve a apiUrl Telegram do bot do user. Se username não
+   * está cadastrado em `telegram_bots` (legados ou desativados), cai pro
+   * bot do env. Cache de 5min pra performance.
+   */
+  private async apiUrlForBotUsername(botUsername?: string | null): Promise<string> {
+    if (!botUsername) return this.telegramApiUrl;
+    const cached = this.botTokenCache.get(botUsername);
+    if (cached && Date.now() - cached.fetchedAt < this.BOT_TOKEN_CACHE_TTL_MS) {
+      return `https://api.telegram.org/bot${cached.token}`;
+    }
+    try {
+      const { data } = await this.supabase
+        .from('telegram_bots')
+        .select('token')
+        .eq('username', botUsername)
+        .maybeSingle();
+      const token = (data as any)?.token?.trim() || this.botToken;
+      this.botTokenCache.set(botUsername, { token, fetchedAt: Date.now() });
+      return `https://api.telegram.org/bot${token}`;
+    } catch {
+      return this.telegramApiUrl;
+    }
   }
 
   /**
@@ -67,29 +97,49 @@ export class BroadcastService {
   }
 
   /**
+   * Igor (25/06): retorna a lista de usernames dos bots ATIVOS cadastrados
+   * em `telegram_bots`. Antes o broadcast filtrava só pelo bot do .env
+   * (CineVisionApp_rbot), perdendo os 5 bots novos do sistema multi-bot.
+   * Agora soma users de TODOS os bots ativos.
+   * Fail-safe: se telegram_bots vazia ou erro, cai no env legado.
+   */
+  private async getActiveBotUsernames(): Promise<string[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('telegram_bots')
+        .select('username')
+        .eq('status', 'active');
+      if (error || !data?.length) {
+        this.logger.warn(`getActiveBotUsernames fallback (${error?.message || 'sem bots ativos'})`);
+        return [this.botUsername];
+      }
+      return data.map((b: any) => b.username);
+    } catch (e: any) {
+      this.logger.warn(`getActiveBotUsernames threw: ${e.message}`);
+      return [this.botUsername];
+    }
+  }
+
+  /**
    * Conta os usuários que REALMENTE podem receber broadcast no Telegram.
    *
-   * Igor (17/05): a migração pro bot novo está em andamento (~3% da base).
-   * O Telegram só entrega DM pra quem deu /start no bot ATUAL — mandar pros
-   * ~104k que ainda estão no bot antigo só gera erro 403 (Bot Blocked).
-   *
-   * O critério correto é `bot_username = <bot novo>`: essa coluna só recebe
-   * o username do bot atual quando o cliente interage com ele. NÃO usar
-   * `telegram_chat_id` nem `last_bot_token` — ambos estão preenchidos pra
-   * TODA a base legada (107k), então não distinguem nada (era esse o bug:
-   * o card "Telegram broadcast" e o botão "Todos" mostravam 107k).
+   * Igor (17/05 + 25/06): originalmente filtrava por 1 bot (CineVisionApp_rbot).
+   * Com multi-bot (5 bots ativos), agora soma users de TODOS os bots ativos
+   * em `telegram_bots`. Cada user só recebe broadcast pelo bot que ele deu
+   * /start — Telegram bloqueia mensagem de bot que ele não conhece.
    *
    * Fail-safe: se a query der erro, retorna 0 — nunca "cai" pra contagem
    * sem filtro, pra não arriscar disparar pra base inteira.
    */
   async getBotUsersCount(): Promise<number> {
     try {
+      const usernames = await this.getActiveBotUsernames();
       const { count, error } = await this.supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
         .not('telegram_chat_id', 'is', null)
         .eq('blocked', false)
-        .eq('bot_username', this.botUsername);
+        .in('bot_username', usernames);
 
       if (error) {
         this.logger.error('Error counting bot users:', error);
@@ -104,16 +154,16 @@ export class BroadcastService {
   }
 
   /**
-   * Busca todos os usuários ativos no bot NOVO (destinatários do "Todos").
+   * Busca todos os usuários ativos nos bots ATIVOS (destinatários do "Todos").
    * Paginado (Supabase devolve no máx. 1000 por request).
    *
-   * Igor (17/05): MESMO critério do getBotUsersCount — `bot_username` do
-   * bot atual. Antes filtrava por `last_bot_token`, que está preenchido
-   * pra toda a base legada → o "Todos" buscava os 107k e ~104k falhavam
-   * com 403 (Bot Blocked). Sem fallback sem-filtro: erro propaga.
+   * Igor (17/05 + 25/06): mesmo critério do getBotUsersCount — soma users
+   * de TODOS os bots ativos em `telegram_bots`. Antes era filtro fixo pelo
+   * bot do .env, perdendo os 5 bots novos.
    */
   async getAllBotUsers(): Promise<any[]> {
     try {
+      const usernames = await this.getActiveBotUsernames();
       const allUsers: any[] = [];
       const pageSize = 1000;
       let page = 0;
@@ -123,14 +173,14 @@ export class BroadcastService {
         const from = page * pageSize;
         const to = from + pageSize - 1;
 
-        this.logger.log(`Fetching users page ${page + 1} (${from}-${to})...`);
+        this.logger.log(`Fetching users page ${page + 1} (${from}-${to}) bots=[${usernames.join(',')}]...`);
 
         const { data, error } = await this.supabase
           .from('users')
-          .select('id, telegram_id, telegram_chat_id, telegram_username, name', { count: 'exact' })
+          .select('id, telegram_id, telegram_chat_id, telegram_username, name, bot_username', { count: 'exact' })
           .not('telegram_chat_id', 'is', null)
           .eq('blocked', false)
-          .eq('bot_username', this.botUsername)
+          .in('bot_username', usernames)
           .range(from, to);
 
         if (error) {
@@ -175,9 +225,11 @@ export class BroadcastService {
       buttonText?: string;
       buttonUrl?: string;
       inlineButtons?: Array<{ text: string; url: string }>;
+      botUsername?: string;
     },
   ): Promise<{ success: boolean; blocked?: boolean }> {
-    const endpoint = `${this.telegramApiUrl}/sendMessage`;
+    const apiUrl = await this.apiUrlForBotUsername(options?.botUsername);
+    const endpoint = `${apiUrl}/sendMessage`;
 
     try {
       const htmlText = messageText
@@ -225,9 +277,11 @@ export class BroadcastService {
       buttonText?: string;
       buttonUrl?: string;
       inlineButtons?: Array<{ text: string; url: string }>;
+      botUsername?: string;
     },
   ): Promise<{ success: boolean; blocked?: boolean }> {
-    const endpoint = `${this.telegramApiUrl}/sendPhoto`;
+    const apiUrl = await this.apiUrlForBotUsername(options?.botUsername);
+    const endpoint = `${apiUrl}/sendPhoto`;
 
     try {
       const htmlCaption = caption
@@ -638,18 +692,22 @@ export class BroadcastService {
             }
 
             let result: { success: boolean; blocked?: boolean };
+            // Igor (25/06): passa o bot do user pra usar o TOKEN correto.
+            // Sem isso, multi-bot quebra: tenta mandar pelo bot do .env e
+            // Telegram rejeita com 403 pros users que /start em outro bot.
+            const opts = { ...buttonOptions, botUsername: user.bot_username };
             if (hasImage) {
               result = await this.sendPhotoToUser(
                 user.telegram_chat_id,
                 broadcastData.image_url!,
                 broadcastData.message_text,
-                buttonOptions,
+                opts,
               );
             } else {
               result = await this.sendMessageToUser(
                 user.telegram_chat_id,
                 broadcastData.message_text,
-                buttonOptions,
+                opts,
               );
             }
 
