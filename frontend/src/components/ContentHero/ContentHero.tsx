@@ -195,7 +195,18 @@ export default function ContentHero({
     return () => clearInterval(id);
   }, [isFlashPromo, idHash]);
 
-  const backdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
+  const rawBackdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
+  // Igor (26/06): otimiza imagem via Supabase Storage transform.
+  // Pôsteres WEBP grandes (1-2MB) davam tela preta enquanto baixavam.
+  // 1200px é o suficiente pra desktop ultrawide e cabe em <500KB JPEG.
+  const backdropUrl = (() => {
+    if (!rawBackdropUrl) return '';
+    if (!rawBackdropUrl.includes('supabase.co/storage/v1/object/public/')) return rawBackdropUrl;
+    return rawBackdropUrl.replace(
+      '/storage/v1/object/public/',
+      '/storage/v1/render/image/public/',
+    ) + '?width=1200&quality=80&resize=cover';
+  })();
   const desktopPos = content.backdrop_position || '50% 50%';
   const mobilePos = content.backdrop_position_mobile || desktopPos;
 

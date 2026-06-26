@@ -24,11 +24,15 @@ export class AdminContentSimpleService {
 
     // Igor (07/05): soft-delete grava status=ARCHIVED. Esconde da lista
     // de gerenciamento — admin não quer ver itens deletados misturados.
+    // Igor (26/06): Supabase tem default cap de 1000 rows quando não
+    // tem range/limit explícito. Igor reportou painel travado em 1000
+    // quando banco tem 1062 contents. Range alto pra cobrir crescimento.
     const { data, error } = await this.supabaseService.client
       .from('content')
       .select('*')
       .neq('status', 'ARCHIVED')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .range(0, 49999);
 
     if (error) {
       this.logger.error('Error fetching content:', error);
@@ -73,7 +77,8 @@ export class AdminContentSimpleService {
       .from('content')
       .select('*')
       .eq('status', 'ARCHIVED')
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .range(0, 49999);
 
     if (error) {
       this.logger.error('Error fetching archived content:', error);
