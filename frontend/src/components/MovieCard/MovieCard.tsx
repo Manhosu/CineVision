@@ -158,13 +158,15 @@ const MovieCard = memo(function MovieCard({
           <LazyImage
             src={(() => {
               // Igor (26/06): otimiza pôster via Supabase Storage transform.
-              // Cards do catálogo cabem em 400px com qualidade 75 (~225KB).
+              // Só passa width — mantém proporção original do pôster, sem
+              // crop. O object-cover do CSS abaixo cuida do enquadramento
+              // no aspect ratio do card (3:4).
               const u = movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg';
               if (!u.includes('supabase.co/storage/v1/object/public/')) return u;
               return u.replace(
                 '/storage/v1/object/public/',
                 '/storage/v1/render/image/public/',
-              ) + '?width=400&quality=75&resize=cover';
+              ) + '?width=400&quality=75';
             })()}
             alt={movie.title}
             fill

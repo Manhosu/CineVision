@@ -11,18 +11,19 @@
  */
 export function optimizeStorageUrl(
   url: string | null | undefined,
-  opts?: { width?: number; quality?: number; resize?: 'cover' | 'contain' | 'fill' },
+  opts?: { width?: number; quality?: number },
 ): string {
   if (!url) return '';
   if (!url.includes('supabase.co/storage/v1/object/public/')) return url;
   const width = opts?.width ?? 600;
   const quality = opts?.quality ?? 75;
-  const resize = opts?.resize ?? 'cover';
   const transformed = url.replace(
     '/storage/v1/object/public/',
     '/storage/v1/render/image/public/',
   );
-  return `${transformed}?width=${width}&quality=${quality}&resize=${resize}`;
+  // Sem resize=cover — mantém proporção original do upload pra não distorcer
+  // nem cortar a imagem. O CSS do consumidor cuida do enquadramento.
+  return `${transformed}?width=${width}&quality=${quality}`;
 }
 
 /** Preset pra pôsteres do catálogo (cards menores). */
