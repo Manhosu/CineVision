@@ -106,6 +106,14 @@ const nextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
       {
+        // Igor (26/06): endpoint de transform/resize do Supabase Storage
+        // (gera versões otimizadas sob demanda). Sem esse pattern, Next.js
+        // bloqueia as URLs com /render/image/ e cards mostram placeholder.
+        protocol: 'https',
+        hostname: 'szghyvnbmjlquznxhqum.supabase.co',
+        pathname: '/storage/v1/render/image/public/**',
+      },
+      {
         protocol: 'http',
         hostname: 'localhost',
         port: '3000',
