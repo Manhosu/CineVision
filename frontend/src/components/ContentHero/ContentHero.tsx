@@ -195,18 +195,11 @@ export default function ContentHero({
     return () => clearInterval(id);
   }, [isFlashPromo, idHash]);
 
-  const rawBackdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
-  // Igor (26/06): otimiza imagem via Supabase Storage transform. Só passa
-  // width — mantém proporção original do upload (sem crop). O object-cover
-  // + objectPosition (desktopPos/mobilePos) cuidam do enquadramento.
-  const backdropUrl = (() => {
-    if (!rawBackdropUrl) return '';
-    if (!rawBackdropUrl.includes('supabase.co/storage/v1/object/public/')) return rawBackdropUrl;
-    return rawBackdropUrl.replace(
-      '/storage/v1/object/public/',
-      '/storage/v1/render/image/public/',
-    ) + '?width=1200&quality=80';
-  })();
+  // Igor (26/06): backdrop fica SEM transform pra não bagunçar o
+  // backdrop_position que ele ajustou no painel admin. Backdrops têm
+  // proporção variável (4K, 16:9, vertical pra mobile) e qualquer
+  // resize=cover distorceria o enquadramento já configurado.
+  const backdropUrl = content.backdrop_url || content.poster_url || content.thumbnail_url;
   const desktopPos = content.backdrop_position || '50% 50%';
   const mobilePos = content.backdrop_position_mobile || desktopPos;
 
