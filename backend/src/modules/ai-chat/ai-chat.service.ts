@@ -526,7 +526,52 @@ Limites de escopo:
       this.logger.warn(`ai_usage_log insert failed: ${logErr.message}`);
     }
 
-    const rawText = completion.text.trim();
+    let rawText = completion.text.trim();
+
+    // Igor (27/06): blindagem contra alucinação de URL. A IA Haiku às
+    // vezes IGNORA o marker `<<DETAIL:uuid>>` e escreve a URL direto
+    // (ex: https://cinevisionapp.com.br/movies/<uuid-inventado>). Como
+    // inventa UUID, gera 404 pro cliente. Aqui detectamos qualquer URL
+    // `cinevisionapp.com.br/(movies|series|novelinhas)/<uuid>` no texto
+    // bruto, validamos se o UUID existe E está PUBLISHED, e:
+    //   - válido → mantém URL
+    //   - inválido → REMOVE a URL e força PAUSE pra Igor responder.
+    const urlMatches = [
+      ...rawText.matchAll(
+        /https?:\/\/(?:www\.)?cinevisionapp\.com\.br\/(movies|series|novelinhas)\/([0-9a-f-]{36})(\?[^\s]*)?/gi,
+      ),
+    ];
+    if (urlMatches.length) {
+      const uuids = Array.from(new Set(urlMatches.map((m) => m[2])));
+      const { data: foundContents } = await this.supabase.client
+        .from('content')
+        .select('id, status')
+        .in('id', uuids);
+      const validIds = new Set(
+        (foundContents || [])
+          .filter((c: any) => c.status === 'PUBLISHED' || c.status === 'published')
+          .map((c: any) => c.id),
+      );
+      const invalidUrls: string[] = [];
+      for (const m of urlMatches) {
+        if (!validIds.has(m[2])) {
+          invalidUrls.push(m[0]);
+        }
+      }
+      if (invalidUrls.length) {
+        this.logger.warn(
+          `[hallucinated-url] removendo ${invalidUrls.length} URL(s) com UUID inválido: ${invalidUrls.join(', ')}`,
+        );
+        for (const badUrl of invalidUrls) {
+          rawText = rawText.split(badUrl).join('');
+        }
+        // Força PAUSE se TODAS as URLs eram inválidas (cliente recebeu
+        // texto "Achei!" + sumiu o link). Pausa pra Igor responder manual.
+        if (validIds.size === 0) {
+          rawText += '\n\n<<PAUSE:film_not_found>>';
+        }
+      }
+    }
 
     // Parse directives. Os markers são strippados da resposta final.
     let paused = false;
