@@ -105,6 +105,9 @@ export default function AdminContentEditPage() {
   } | null>(null);
   const [isRelease, setIsRelease] = useState(false);
   const [isNewSeason, setIsNewSeason] = useState(false);
+  // Igor (29/06): contagem de temporadas/episódios das séries.
+  const [totalSeasons, setTotalSeasons] = useState<number | null>(null);
+  const [totalEpisodes, setTotalEpisodes] = useState<number | null>(null);
   // Igor (04/06): pré-venda
   const [isPresale, setIsPresale] = useState(false);
   const [presalePriceCents, setPresalePriceCents] = useState<number | null>(null);
@@ -208,6 +211,8 @@ export default function AdminContentEditPage() {
         setDeliveryBotId((data as any).delivery_bot_id || null);
         setIsRelease(data.is_release || false);
         setIsNewSeason((data as any).is_new_season || false);
+        setTotalSeasons((data as any).total_seasons ?? null);
+        setTotalEpisodes((data as any).total_episodes ?? null);
         // Igor (04/06): pré-venda
         setIsPresale((data as any).is_presale || false);
         setPresalePriceCents((data as any).presale_price_cents ?? null);
@@ -371,6 +376,8 @@ export default function AdminContentEditPage() {
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
+        total_seasons: totalSeasons,
+        total_episodes: totalEpisodes,
         // Igor (04/06): pré-venda
         is_presale: isPresale,
         presale_price_cents: isPresale && presalePriceCents != null ? presalePriceCents : null,
@@ -462,6 +469,8 @@ export default function AdminContentEditPage() {
       backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
+      totalSeasons !== ((originalContent as any).total_seasons ?? null) ||
+      totalEpisodes !== ((originalContent as any).total_episodes ?? null) ||
       // Igor (04/06): pré-venda
       isPresale !== ((originalContent as any).is_presale || false) ||
       (presalePriceCents ?? null) !== ((originalContent as any).presale_price_cents ?? null) ||
@@ -1026,6 +1035,54 @@ export default function AdminContentEditPage() {
                   📺 Marcar como Nova Temporada (badge sobreposto no card)
                 </label>
               </div>
+
+              {/* Igor (29/06): contagem de temporadas/episódios. Só aparece
+                  se content_type=series (e novelinha). Pra séries com mais
+                  de uma temporada (ex: Casa do Dragão T3 chegando), Igor
+                  precisa editar o número aqui em vez de criar série nova. */}
+              {(content?.content_type === 'series' || content?.content_type === 'novelinha') && (
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-white/10 bg-dark-700/30 p-4">
+                  <div>
+                    <label htmlFor="total_seasons" className="mb-1 block text-sm font-medium">
+                      Quantidade de temporadas
+                    </label>
+                    <input
+                      type="number"
+                      id="total_seasons"
+                      min={1}
+                      max={50}
+                      value={totalSeasons ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        setTotalSeasons(v === '' ? null : Math.max(1, parseInt(v) || 1));
+                      }}
+                      placeholder="Ex: 3"
+                      className="w-full rounded-lg border border-white/10 bg-dark-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="total_episodes" className="mb-1 block text-sm font-medium">
+                      Total de episódios (opcional)
+                    </label>
+                    <input
+                      type="number"
+                      id="total_episodes"
+                      min={1}
+                      max={9999}
+                      value={totalEpisodes ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value.trim();
+                        setTotalEpisodes(v === '' ? null : Math.max(1, parseInt(v) || 1));
+                      }}
+                      placeholder="Deixe vazio se não quiser mostrar"
+                      className="w-full rounded-lg border border-white/10 bg-dark-800 px-3 py-2 text-white focus:border-primary-500 focus:outline-none"
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-gray-400">
+                    Aparece no site como "3 temporadas · 30 episódios". Atualize quando uma temporada nova for liberada.
+                  </p>
+                </div>
+              )}
 
               {/* Igor (04/06): Pré-venda */}
               <div className="flex items-center space-x-3">
