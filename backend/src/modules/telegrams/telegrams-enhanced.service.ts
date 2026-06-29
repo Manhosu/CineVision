@@ -2853,6 +2853,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
     try {
       let amountCents = 0;
       let refLabel = id.slice(0, 8);
+      // Igor (28/06): inclui nome do filme/série na mensagem pra ele
+      // identificar a compra rapidamente quando chegar comprovante.
+      let itemsLabel: string | null = null;
 
       if (kind === 'order') {
         const { data: order } = await this.supabase
@@ -2866,10 +2869,18 @@ export class TelegramsEnhancedService implements OnModuleInit {
         }
         amountCents = order.total_cents || 0;
         refLabel = order.order_token.slice(0, 8);
+        const { data: pus } = await this.supabase
+          .from('purchases')
+          .select('content(title)')
+          .eq('order_id', order.id);
+        const titles = (pus || [])
+          .map((p: any) => (Array.isArray(p.content) ? p.content[0]?.title : p.content?.title))
+          .filter(Boolean);
+        if (titles.length) itemsLabel = titles.join(', ');
       } else {
         const { data: purchase } = await this.supabase
           .from('purchases')
-          .select('id, amount_cents')
+          .select('id, amount_cents, content(title)')
           .eq('id', id)
           .maybeSingle();
         if (!purchase) {
@@ -2878,6 +2889,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
         }
         amountCents = purchase.amount_cents || 0;
         refLabel = purchase.id.slice(0, 8);
+        const content: any = Array.isArray((purchase as any).content)
+          ? (purchase as any).content[0]
+          : (purchase as any).content;
+        if (content?.title) itemsLabel = content.title;
       }
 
       const { data: settingsRows } = await this.supabase
@@ -2915,20 +2930,22 @@ export class TelegramsEnhancedService implements OnModuleInit {
         `Alguns bancos não aceitam o PIX automático. Pague pela chave abaixo no seu app bancário:\n\n` +
         `🔑 *Chave (${pixLabel}):*\n\`${pixKey}\`\n\n` +
         `💰 *Valor:* R$ ${amountFmt}\n` +
+        (itemsLabel ? `🎬 *Conteúdo:* ${itemsLabel}\n` : '') +
         `🧾 *Pedido:* ${refLabel}\n\n` +
         `📨 Após pagar, envie o comprovante pra liberarmos manual.`;
 
+      // Mensagem pronta pro admin reconhecer (vem com nome do filme).
+      const refMsg = itemsLabel
+        ? `Olá! Acabei de pagar *${itemsLabel}* no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir. (pedido ${refLabel})`
+        : `Olá! Acabei de pagar o pedido ${refLabel} no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`;
+
       const buttons: Array<Array<{ text: string; url?: string; callback_data?: string }>> = [];
       if (tgUsername) {
-        const tgText = encodeURIComponent(
-          `Olá! Acabei de pagar o pedido ${refLabel} no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
-        );
+        const tgText = encodeURIComponent(refMsg);
         buttons.push([{ text: '📨 Enviar comprovante (Telegram)', url: `https://t.me/${tgUsername}?text=${tgText}` }]);
       }
       if (waNumber) {
-        const waText = encodeURIComponent(
-          `Olá! Acabei de pagar o pedido ${refLabel} no valor de R$ ${amountFmt} pelo PIX manual. Vou enviar o comprovante a seguir.`,
-        );
+        const waText = encodeURIComponent(refMsg);
         buttons.push([{ text: '📱 Enviar pelo WhatsApp', url: `https://wa.me/${waNumber}?text=${waText}` }]);
       }
       buttons.push([{ text: '🔙 Voltar ao menu', callback_data: 'start' }]);

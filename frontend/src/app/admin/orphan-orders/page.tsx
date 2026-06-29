@@ -404,8 +404,9 @@ export default function OrphanOrdersPage() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => dismissOrder(o.id)}
-                      className="rounded-lg border border-zinc-500/30 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-500/10"
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); dismissOrder(o.id); }}
+                      className="relative z-10 w-full rounded-lg border border-zinc-500/30 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-500/10 sm:w-auto"
                       title="Arquiva no painel — link continua valendo, cliente ainda recebe pelo Telegram"
                     >
                       🗂 Arquivar
@@ -415,7 +416,7 @@ export default function OrphanOrdersPage() {
               </div>
 
               {tab === 'orphan' && (
-                <div className="overflow-x-auto rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-xs">
+                <div className="mt-3 overflow-x-auto rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-xs">
                   <code className="text-zinc-400 break-all">{o.claim_url}</code>
                 </div>
               )}
