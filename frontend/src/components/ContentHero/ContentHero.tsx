@@ -8,7 +8,7 @@ import { BookmarkIcon as BookmarkOutline, FireIcon } from '@heroicons/react/24/o
 import { toast } from 'react-hot-toast';
 import { Movie } from '@/types/movie';
 import AddToCartButton from '@/components/Cart/AddToCartButton';
-import { getPresaleInfo, formatPresaleCountdown } from '@/lib/presale';
+import { getPresaleInfo, formatPresaleCountdown, formatPresaleReleaseAbsolute } from '@/lib/presale';
 import DiscountHint from '@/components/Cart/DiscountHint';
 import { useCartStore } from '@/stores/cartStore';
 import { openContentGroup } from '@/lib/telegramAccess';
@@ -170,9 +170,15 @@ export default function ContentHero({
     return () => clearInterval(id);
   }, [isFlashPromo, idHash]);
 
+  // Igor (02/07): social proof + escassez também na pré-venda, não só no
+  // flash promo. Ele viu que a página da pré-venda ficou "chapada" sem
+  // sensação de urgência ("legal se tivesse tipo tanto de gente olhando
+  // a publicação, estoque escasso pra pessoa achar que tá acabando").
+  const showSocialProof = isFlashPromo || presaleInfo.isPresale;
+
   // Fake viewers — seeded by content ID for variation between content
   useEffect(() => {
-    if (!isFlashPromo) return;
+    if (!showSocialProof) return;
     const base = 60 + (idHash % 50); // 60-109 base, different per content
     setFakeViewers(base);
     const id = setInterval(() => {
@@ -182,18 +188,18 @@ export default function ContentHero({
       });
     }, 4000 + (idHash % 3000));
     return () => clearInterval(id);
-  }, [isFlashPromo, idHash]);
+  }, [showSocialProof, idHash]);
 
   // Fake units — seeded by content ID
   useEffect(() => {
-    if (!isFlashPromo) return;
+    if (!showSocialProof) return;
     const base = 3 + (idHash % 5); // 3-7, different per content
     setFakeUnits(base);
     const id = setInterval(() => {
       setFakeUnits(prev => Math.max(1, prev - (Math.random() > 0.65 ? 1 : 0)));
     }, 18000 + (idHash % 12000));
     return () => clearInterval(id);
-  }, [isFlashPromo, idHash]);
+  }, [showSocialProof, idHash]);
 
   // Igor (26/06): backdrop fica SEM transform pra não bagunçar o
   // backdrop_position que ele ajustou no painel admin. Backdrops têm
@@ -297,6 +303,7 @@ export default function ContentHero({
   // Igor (04/06): alias da pré-venda já declarada em cima + countdown formatado.
   const presale = presaleInfo;
   const presaleCountdown = formatPresaleCountdown(presale.releaseAt);
+  const presaleReleaseAbs = formatPresaleReleaseAbsolute(presale.releaseAt);
 
   return (
     <section className="relative w-full min-h-[100svh] flex flex-col">
@@ -446,21 +453,40 @@ export default function ContentHero({
                   </span>
                 )}
               </div>
-              {presaleCountdown && (
-                <span className="text-amber-300 text-xs sm:text-sm font-medium">⏱ {presaleCountdown}</span>
-              )}
+              {/* Igor (02/07): trocou countdown relativo ("Em 1 dia") por
+                  data absoluta em destaque — deixa claro que é PREVISÃO
+                  (pode antecipar/atrasar) e fixa uma data que o cliente
+                  marca na agenda. Fallback pro countdown se admin não
+                  cadastrou data. */}
+              {presaleReleaseAbs ? (
+                <div className="inline-flex flex-col items-center gap-0.5 px-4 py-2 bg-amber-500/10 border border-amber-400/30 rounded-lg">
+                  <span className="text-amber-300/80 text-[10px] sm:text-xs uppercase tracking-wider font-semibold">
+                    📅 Previsão de lançamento
+                  </span>
+                  <span className="text-amber-200 text-sm sm:text-base font-bold">
+                    {presaleReleaseAbs}
+                  </span>
+                </div>
+              ) : presaleCountdown ? (
+                <span className="text-amber-300 text-xs sm:text-sm font-medium">⏱ Previsão: {presaleCountdown.toLowerCase()}</span>
+              ) : null}
             </div>
           )}
 
           {!isOwned && !checkingOwnership && (
             <div className="mb-3 sm:mb-4 flex flex-col items-center text-center">
               {presale.isPresale && presale.originalPriceCents ? (
-                <>
-                  <span className="text-white/40 line-through text-sm">{formatPrice(presale.originalPriceCents)}</span>
+                // Igor (áudio 02/07): pediu preço antigo riscado AO LADO
+                // do preço promo, não empilhado acima. Fica mais claro
+                // visualmente que é uma promoção.
+                <div className="flex items-baseline justify-center gap-2">
                   <span className="text-amber-400 font-bold text-2xl sm:text-3xl">
                     {formatPrice(presale.effectivePriceCents)}
                   </span>
-                </>
+                  <span className="text-white/40 line-through text-sm sm:text-base">
+                    {formatPrice(presale.originalPriceCents)}
+                  </span>
+                </div>
               ) : hasDiscount ? (
                 <>
                   <div className="flex items-center justify-center gap-2">
@@ -485,6 +511,21 @@ export default function ContentHero({
           {!isOwned && !checkingOwnership && presale.isPresale && (
             <div className="mb-3 sm:mb-4 px-3 py-2 bg-amber-500/10 border border-amber-400/30 rounded-lg text-xs sm:text-sm text-amber-200 max-w-lg mx-auto sm:mx-0">
               <strong className="text-amber-300">Garante seu acesso AGORA com desconto exclusivo.</strong> Você já entra no grupo do filme pra acompanhar — assim que liberar, recebe notificação automática no Telegram. Sem stress.
+            </div>
+          )}
+
+          {/* Igor (vídeo 02/07): social proof + escassez também na pré-venda
+              pra gerar desejo/urgência. Usa os mesmos fakeViewers/fakeUnits
+              que já rodam pro flash promo — só é gated com showSocialProof. */}
+          {!isOwned && !checkingOwnership && presale.isPresale && (
+            <div className="mb-3 sm:mb-4 flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-1.5 text-xs sm:text-sm max-w-lg mx-auto sm:mx-0">
+              <span className="inline-flex items-center gap-1.5 text-amber-300/90">
+                <EyeIcon className="w-4 h-4" />
+                <span><strong>{fakeViewers}</strong> pessoas olhando essa publicação agora</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-red-300 font-semibold">
+                🔥 Só faltam <strong>{fakeUnits}</strong> unidades!
+              </span>
             </div>
           )}
 
@@ -528,7 +569,10 @@ export default function ContentHero({
                   : buyingNow
                     ? 'Processando...'
                     : presale.isPresale
-                      ? '🎟 Garantir Pré-Venda'
+                      // Igor (02/07): pediu que apareça o preço embutido no
+                      // botão pra reforçar o valor promocional ("Garantir
+                      // Pré-Venda · R$ 6,90").
+                      ? `🎟 Garantir Pré-Venda · ${formatPrice(presale.effectivePriceCents)}`
                       : isFlashPromo
                         ? 'Comprar Agora'
                         : 'Comprar'}

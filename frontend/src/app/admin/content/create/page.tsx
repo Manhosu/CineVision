@@ -7,6 +7,7 @@ import { authenticatedFetch } from '@/lib/authTokens';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
 import PeopleTagInput from '@/components/Admin/PeopleTagInput';
+import { toLocalDatetimeInputValue, fromLocalDatetimeInput } from '@/lib/datetime';
 
 interface ContentFormData {
   title: string;
@@ -33,6 +34,9 @@ interface ContentFormData {
   price_cents: number;
   quality_label: string;
   audio_type: string;
+  is_presale: boolean;
+  presale_price_cents: number;
+  presale_release_at: string;
 }
 
 const AVAILABLE_GENRES = [
@@ -111,7 +115,14 @@ export default function AdminContentCreatePage() {
     price_cents: 1990, // R$ 19.90 default
     quality_label: '',
     audio_type: '',
+    is_presale: false,
+    presale_price_cents: 0,
+    presale_release_at: '',
   });
+
+  // Igor (02/07): input de preço da pré-venda em string separada pra permitir
+  // digitação livre (igual priceInput), evitando reset ao apagar tudo.
+  const [presalePriceInput, setPresalePriceInput] = useState<string>('');
 
   const [showBackdropEditor, setShowBackdropEditor] = useState(false);
 
@@ -268,6 +279,11 @@ export default function AdminContentCreatePage() {
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: formData.is_release,
         is_new_season: formData.is_new_season,
+        // Igor (02/07): pré-venda direto na criação — antes só dava pra
+        // marcar depois de criar, no botão de editar.
+        is_presale: formData.is_presale,
+        presale_price_cents: formData.is_presale ? formData.presale_price_cents : undefined,
+        presale_release_at: formData.is_presale && formData.presale_release_at ? formData.presale_release_at : undefined,
         genres: formData.genres.length > 0 ? formData.genres : undefined,
         director: selectedDirectors.length > 0 ? selectedDirectors.map(d => d.name).join(', ') : (formData.director || undefined),
         cast: selectedActors.length > 0 ? selectedActors.map(a => a.name) : (formData.cast || undefined),
@@ -1241,6 +1257,61 @@ export default function AdminContentCreatePage() {
                     />
                     <span className="text-sm font-medium text-gray-300">📺 Marcar como Nova Temporada (badge sobreposto no card)</span>
                   </label>
+
+                  {/* Igor (02/07): pré-venda já na criação. Antes o admin tinha
+                      que criar o filme e depois abrir a edição pra marcar. */}
+                  <label className="flex items-center gap-3 cursor-pointer py-2 touch-manipulation">
+                    <input
+                      type="checkbox"
+                      name="is_presale"
+                      checked={formData.is_presale}
+                      onChange={(e) => setFormData({ ...formData, is_presale: e.target.checked })}
+                      className="w-5 h-5 rounded bg-gray-700 border-gray-600 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-gray-300">🎟 Marcar como Pré-Venda (badge laranja + preço promocional)</span>
+                  </label>
+
+                  {formData.is_presale && (
+                    <div className="ml-8 grid grid-cols-1 gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                      <p className="text-xs text-amber-200/80">
+                        Cliente compra agora com desconto. Recebe o link do grupo assim que o filme for liberado.
+                      </p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Preço da pré-venda (R$)</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={presalePriceInput}
+                          onChange={(e) => {
+                            const raw = e.target.value.replace(/[^0-9,.]/g, '').replace(',', '.');
+                            setPresalePriceInput(e.target.value);
+                            const parsed = parseFloat(raw);
+                            setFormData({
+                              ...formData,
+                              presale_price_cents: isNaN(parsed) ? 0 : Math.round(parsed * 100),
+                            });
+                          }}
+                          placeholder="Ex: 6,90"
+                          className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:ring-amber-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Deve ser MENOR que o preço normal — é o desconto exclusivo da pré-venda.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-1">Data prevista de liberação (opcional)</label>
+                        <input
+                          type="datetime-local"
+                          value={toLocalDatetimeInputValue(formData.presale_release_at)}
+                          onChange={(e) => setFormData({ ...formData, presale_release_at: fromLocalDatetimeInput(e.target.value) })}
+                          className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:ring-amber-500"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Aparece pro cliente como "Previsão de lançamento: [data]". Pode deixar em branco.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Igor (12/05): seletor de carrosséis manuais. Substitui o
                       antigo "Destacar na página inicial" — agora dá pra escolher

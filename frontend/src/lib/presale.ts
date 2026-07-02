@@ -51,6 +51,28 @@ export function formatBRL(cents: number): string {
   });
 }
 
+/**
+ * Igor (02/07): pediu formato absoluto ("Previsão de lançamento: 03/07/2026
+ * às 20h") em destaque na página de detalhes, no lugar do relativo "Em 1 dia".
+ * Deixa claro pro cliente que é PREVISÃO, não certeza, e fixa a data que ele
+ * pode marcar na agenda.
+ *
+ * Retorna null se não tem data cadastrada ou já passou.
+ */
+export function formatPresaleReleaseAbsolute(releaseAt: string | null | undefined): string | null {
+  if (!releaseAt) return null;
+  const d = new Date(releaseAt);
+  if (isNaN(d.getTime())) return null;
+  if (d.getTime() <= Date.now()) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const dateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const hours = d.getHours();
+  const mins = d.getMinutes();
+  if (hours === 0 && mins === 0) return dateStr;
+  const timeStr = mins === 0 ? `${hours}h` : `${pad(hours)}h${pad(mins)}`;
+  return `${dateStr} às ${timeStr}`;
+}
+
 /** Formata countdown "Em X dias", "Em Xh Ymin", "Em Xmin" ou null se passou */
 export function formatPresaleCountdown(releaseAt: string | null | undefined): string | null {
   if (!releaseAt) return null;

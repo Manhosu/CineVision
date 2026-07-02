@@ -19,27 +19,44 @@ export class AdminContentSimpleService {
     console.log('AdminContentSimpleService instantiated successfully');
   }
 
+  // Igor (02/07): PostgREST hospedado do Supabase tem cap hard-coded
+  // `db-max-rows=1000` que ignora Range header — `.range(0, 49999)` volta
+  // capado em 1000 rows. Fix: buscar em batches de 1000 e concatenar até
+  // esgotar. Igor viu 1000 no painel quando banco tinha 1170; série
+  // "From: Origem" tava entre os 170 cortados.
+  private async fetchContentInBatches(filter: (q: any) => any, orderCol: string) {
+    const BATCH = 1000;
+    const all: any[] = [];
+    let from = 0;
+    while (true) {
+      const query = this.supabaseService.client
+        .from('content')
+        .select('*')
+        .order(orderCol, { ascending: false })
+        .range(from, from + BATCH - 1);
+      const { data, error } = await filter(query);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < BATCH) break;
+      from += BATCH;
+    }
+    return all;
+  }
+
   async getAllContent() {
     console.log('AdminContentSimpleService.getAllContent called');
 
-    // Igor (07/05): soft-delete grava status=ARCHIVED. Esconde da lista
-    // de gerenciamento — admin não quer ver itens deletados misturados.
-    // Igor (26/06): Supabase tem default cap de 1000 rows quando não
-    // tem range/limit explícito. Igor reportou painel travado em 1000
-    // quando banco tem 1062 contents. Range alto pra cobrir crescimento.
-    const { data, error } = await this.supabaseService.client
-      .from('content')
-      .select('*')
-      .neq('status', 'ARCHIVED')
-      .order('created_at', { ascending: false })
-      .range(0, 49999);
-
-    if (error) {
+    let contents: any[];
+    try {
+      contents = await this.fetchContentInBatches(
+        (q) => q.neq('status', 'ARCHIVED'),
+        'created_at',
+      );
+    } catch (error: any) {
       this.logger.error('Error fetching content:', error);
       throw new Error(`Failed to fetch content: ${error.message}`);
     }
-
-    const contents = data || [];
 
     // N14 (Igor 8:27 PM 04/05): incluir nome do criador (admin ou
     // funcionário) na lista pra Igor supervisionar sem clicar em editar.
@@ -73,19 +90,16 @@ export class AdminContentSimpleService {
   // pra ele poder restaurar se deletou errado. Espelha `getAllContent` mas
   // filtra status='ARCHIVED'.
   async getArchivedContent() {
-    const { data, error } = await this.supabaseService.client
-      .from('content')
-      .select('*')
-      .eq('status', 'ARCHIVED')
-      .order('updated_at', { ascending: false })
-      .range(0, 49999);
-
-    if (error) {
+    let contents: any[];
+    try {
+      contents = await this.fetchContentInBatches(
+        (q) => q.eq('status', 'ARCHIVED'),
+        'updated_at',
+      );
+    } catch (error: any) {
       this.logger.error('Error fetching archived content:', error);
       throw new Error(`Failed to fetch archived content: ${error.message}`);
     }
-
-    const contents = data || [];
     const creatorIds = Array.from(
       new Set(contents.map((c: any) => c.createdById).filter(Boolean)),
     );
@@ -349,6 +363,11 @@ export class AdminContentSimpleService {
       is_featured: data.is_featured || false,
       is_release: data.is_release || false,
       is_new_season: data.is_new_season || false,
+      // Igor (02/07): pré-venda agora criável direto no formulário de novo
+      // conteúdo (antes só dava pra marcar depois de criar, no edit).
+      is_presale: data.is_presale || false,
+      presale_price_cents: data.presale_price_cents ?? null,
+      presale_release_at: data.presale_release_at || null,
       genres: data.genres ? (Array.isArray(data.genres) ? data.genres : [data.genres]) : null, // Coluna genres (plural), tipo array
       director: data.director || null,
       cast: data.cast ? (Array.isArray(data.cast) ? data.cast : data.cast.split(',').map((c: string) => c.trim())) : null, // Tipo array

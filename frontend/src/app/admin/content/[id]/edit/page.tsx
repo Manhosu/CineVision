@@ -8,6 +8,7 @@ import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
 import PeopleTagInput from '@/components/Admin/PeopleTagInput';
+import { toLocalDatetimeInputValue, fromLocalDatetimeInput } from '@/lib/datetime';
 
 interface Content {
   id: string;
@@ -1133,12 +1134,12 @@ export default function AdminContentEditPage() {
                     <input
                       type="datetime-local"
                       id="presale_release_at"
-                      value={presaleReleaseAt ? presaleReleaseAt.slice(0, 16) : ''}
-                      onChange={(e) => setPresaleReleaseAt(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                      value={toLocalDatetimeInputValue(presaleReleaseAt)}
+                      onChange={(e) => setPresaleReleaseAt(fromLocalDatetimeInput(e.target.value))}
                       className="w-full bg-dark-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-amber-500 focus:ring-amber-500"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Aparece pro cliente como "Disponível em [data]". Pode deixar em branco.
+                      Aparece pro cliente como "Previsão de lançamento: [data]". Pode deixar em branco.
                     </p>
                   </div>
                 </div>
