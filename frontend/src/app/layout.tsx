@@ -77,16 +77,17 @@ export async function generateMetadata(): Promise<Metadata> {
       images: [ogImage],
     },
     manifest: '/manifest.json',
-    // Igor (02/07): favicon com a logo do Cine Vision (botão play em círculo
-    // vermelho). SVG como principal — escala perfeita em qualquer tamanho e
-    // renderiza limpo em 16x16 (browsers modernos). Fallback pro .ico
-    // antigo pra IE/edge cases. Apple touch usa o PNG 192x192 do PWA.
+    // Igor (02/07): favicon com o play oficial da marca Cine Vision —
+    // extraído do CINEVT.png com fundo removido (transparente). PNG multi-
+    // tamanho: 32 pra abas modernas, 16 pra retro, apple touch 192.
+    // favicon.ico foi regenerado com 16+32+48 embutidos pra IE/edge cases.
     icons: {
       icon: [
-        { url: '/icons/favicon.svg', type: 'image/svg+xml' },
+        { url: '/icons/play-32.png', sizes: '32x32', type: 'image/png' },
+        { url: '/icons/play-16.png', sizes: '16x16', type: 'image/png' },
         { url: '/favicon.ico', sizes: 'any' },
       ],
-      shortcut: '/icons/favicon.svg',
+      shortcut: '/icons/play-32.png',
       apple: '/icons/icon-192x192.png',
     },
   };
