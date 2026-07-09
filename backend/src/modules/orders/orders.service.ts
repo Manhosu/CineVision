@@ -1178,6 +1178,15 @@ export class OrdersService {
       await this.telegramsService.sendMessage(chatId, header, sendOpts({ parse_mode: 'Markdown' }));
 
       const inlineButtons: Array<Array<{ text: string; url: string }>> = [];
+      // Igor (03/07): tracking pra marcar delivery_sent=true nas purchases
+      // que tiveram o botão de acesso enviado com sucesso. Antes, o flag
+      // só era setado quando o cliente re-clicava individualmente em cada
+      // /r/watch e passava por todas as validações — o que quase nunca
+      // acontece (cliente entra no grupo pelo 1º clique e não volta).
+      // Resultado: aba "Pagas não entregues" mostrava clientes que já
+      // tinham resgatado e assistido, e Igor queimava mensagens de
+      // WhatsApp cobrando quem já tinha o filme.
+      const deliveredPurchaseIds: string[] = [];
       for (const p of purchases) {
         const content: any = Array.isArray(p.content) ? p.content[0] : p.content;
         if (!content) continue;
@@ -1215,6 +1224,7 @@ export class OrdersService {
 
         if (buttonUrl) {
           inlineButtons.push([{ text: `🎬 ${title}`, url: buttonUrl }]);
+          deliveredPurchaseIds.push(p.id);
         } else {
           // Sem nenhum link válido — avisa o cliente.
           await this.telegramsService.sendMessage(
@@ -1235,6 +1245,23 @@ export class OrdersService {
             : 'Clique nos botões abaixo:',
           sendOpts({ reply_markup: { inline_keyboard: inlineButtons } }),
         );
+      }
+
+      // Igor (03/07): marca delivery_sent nas purchases despachadas.
+      // Só depois que a mensagem com os botões saiu com sucesso pro
+      // Telegram — se der erro antes, cai no catch e o flag não é setado
+      // (aí Igor pode reenviar via "Reenviar entrega"). Uso .in() em batch
+      // pra economizar RTT e ignoro erro (best-effort — não queremos
+      // impedir a entrega em si por causa de update em painel).
+      if (deliveredPurchaseIds.length > 0) {
+        try {
+          await this.supabase.client
+            .from('purchases')
+            .update({ delivery_sent: true })
+            .in('id', deliveredPurchaseIds);
+        } catch (err: any) {
+          this.logger.warn(`Failed to mark delivery_sent for order ${orderId}: ${err.message}`);
+        }
       }
 
       // Mensagem final só no fluxo bot direto. No Business a IA
