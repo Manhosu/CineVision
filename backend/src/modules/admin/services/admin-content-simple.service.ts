@@ -783,6 +783,8 @@ export class AdminContentSimpleService {
       'status', 'availability', 'quality_label', 'audio_type',
       // Igor (04/06): pré-venda
       'is_presale', 'presale_price_cents', 'presale_release_at',
+      // Igor (04/07): Cenário 3 — bot promocional vinculado (só é aplicado se is_release=true)
+      'promotional_bot_id',
     ];
 
     for (const field of allowedFields) {

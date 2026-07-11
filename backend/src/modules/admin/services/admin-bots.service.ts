@@ -35,17 +35,36 @@ export class AdminBotsService {
     );
   }
 
-  async listBots() {
-    const { data, error } = await this.supabaseService.client
+  async listBots(type?: 'official' | 'promotional' | 'all') {
+    // Igor (04/07): filtro por tipo pro painel novo separar aba
+    // "Oficiais" x "Promocionais". Default = official (compat com UI antiga).
+    const effectiveType = type ?? 'official';
+    let query = this.supabaseService.client
       .from('telegram_bots')
-      .select('id, username, display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, created_at')
+      .select('id, username, display_name, custom_display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, created_at, is_promotional, promotional_content_id, promotional_target_url, promotional_start_count, notes')
       .order('created_at', { ascending: true });
+
+    if (effectiveType === 'official') query = query.eq('is_promotional', false);
+    else if (effectiveType === 'promotional') query = query.eq('is_promotional', true);
+    // 'all' → sem filtro
+
+    const { data, error } = await query;
     if (error) throw new Error(`Failed to list bots: ${error.message}`);
     return data || [];
   }
 
   /** Valida token via getMe antes de salvar — falha se token inválido. */
-  async createBot(input: { token: string; display_name?: string; roles?: string[] }) {
+  async createBot(input: {
+    token: string;
+    display_name?: string;
+    roles?: string[];
+    // Igor (04/07): flags de bot promocional
+    is_promotional?: boolean;
+    promotional_content_id?: string;
+    promotional_target_url?: string;
+    custom_display_name?: string;
+    notes?: string;
+  }) {
     const token = (input.token || '').trim();
     if (!token || !/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
       throw new BadRequestException('Token inválido. Formato esperado: <id>:<secret>.');
@@ -66,7 +85,13 @@ export class AdminBotsService {
 
     const username = me.username;
     const display_name = input.display_name || me.first_name || username;
-    const roles = input.roles && input.roles.length ? input.roles : ['attendance', 'delivery'];
+    const isPromotional = !!input.is_promotional;
+    // Bot promocional NÃO tem role attendance (constraint SQL blinda também).
+    const defaultRoles = isPromotional ? ['delivery'] : ['attendance', 'delivery'];
+    const roles = input.roles && input.roles.length ? input.roles : defaultRoles;
+    if (isPromotional && roles.includes('attendance')) {
+      throw new BadRequestException('Bot promocional não pode ter role "attendance".');
+    }
 
     const { data, error } = await this.supabaseService.client
       .from('telegram_bots')
@@ -74,11 +99,16 @@ export class AdminBotsService {
         username,
         token,
         display_name,
+        custom_display_name: input.custom_display_name || null,
         roles,
         status: 'active',
         is_default_attendance: false,
         attendance_weight: 0,
         last_seen_ok_at: new Date().toISOString(),
+        is_promotional: isPromotional,
+        promotional_content_id: input.promotional_content_id || null,
+        promotional_target_url: input.promotional_target_url || null,
+        notes: input.notes || null,
       })
       .select()
       .single();
@@ -104,10 +134,15 @@ export class AdminBotsService {
 
   async updateBot(id: string, patch: Partial<{
     display_name: string;
+    custom_display_name: string;
     roles: string[];
     status: string;
     attendance_weight: number;
     is_default_attendance: boolean;
+    // Igor (04/07): campos de bot promocional
+    promotional_content_id: string | null;
+    promotional_target_url: string | null;
+    notes: string | null;
   }>) {
     // Atomicidade do default: se está marcando este como default, desmarca os outros antes.
     if (patch.is_default_attendance === true) {
@@ -223,6 +258,74 @@ export class AdminBotsService {
       total_all: totalAll,
       total_unique: (uniqueRow as any)?.count ?? 0,
     };
+  }
+
+  /**
+   * Igor (04/07): renomeação de bot promocional.
+   *
+   * Cenário: Igor cria bot @SupermanFilme_bot, aluga por 3 meses. Público
+   * cai. Igor renomeia no BotFather pra @TodoMundoPanico6_bot (mantém o
+   * mesmo token e user_id do Telegram). Aqui atualizamos o display_name
+   * pra bater com o novo, mantendo continuidade dos analytics e do
+   * rastreamento na tabela.
+   *
+   * Refetcha o `getMe` pra pegar o novo username/display do Telegram.
+   */
+  async renameFromTelegram(id: string) {
+    const { data: bot } = await this.supabaseService.client
+      .from('telegram_bots')
+      .select('id, token, username')
+      .eq('id', id)
+      .single();
+    if (!bot) throw new NotFoundException(`Bot ${id} not found`);
+    if (!bot.token) throw new BadRequestException('Bot sem token cadastrado.');
+
+    let me: any;
+    try {
+      const resp = await axios.get(`https://api.telegram.org/bot${bot.token}/getMe`, { timeout: 10000 });
+      if (!resp.data?.ok) {
+        throw new BadRequestException(`getMe erro: ${resp.data?.description}`);
+      }
+      me = resp.data.result;
+    } catch (err: any) {
+      throw new BadRequestException(`getMe falhou: ${err?.response?.data?.description || err.message}`);
+    }
+
+    const patch: any = {
+      display_name: me.first_name || me.username,
+      last_seen_ok_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    // Só troca username se realmente mudou (evita conflito unique)
+    if (me.username && me.username !== bot.username) {
+      patch.username = me.username;
+    }
+
+    const { data, error } = await this.supabaseService.client
+      .from('telegram_bots')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(`Failed to rename bot: ${error.message}`);
+    this.telegrams?.invalidateBotCache(id);
+    return {
+      ok: true,
+      old_username: bot.username,
+      new_username: data.username,
+      display_name: data.display_name,
+    };
+  }
+
+  /**
+   * Analytics agregado por bot promocional — starts / orders / revenue nos
+   * últimos N dias. Feed do dashboard `/admin/bots/promotional/[id]/analytics`.
+   */
+  async getPromotionalAnalytics(days = 30) {
+    const { data, error } = await this.supabaseService.client
+      .rpc('promotional_bots_analytics', { days });
+    if (error) throw new Error(`Failed to fetch promo analytics: ${error.message}`);
+    return data || [];
   }
 
   async deleteBot(id: string) {

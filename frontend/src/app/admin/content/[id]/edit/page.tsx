@@ -96,6 +96,10 @@ export default function AdminContentEditPage() {
   // Igor (07/06): bot responsável por gerar invite no grupo desse content.
   const [deliveryBotId, setDeliveryBotId] = useState<string | null>(null);
   const [availableBots, setAvailableBots] = useState<Array<{ id: string; username: string; status: string; roles: string[] }>>([]);
+  // Igor (04/07): Cenário 3 — bot promocional vinculado ao lançamento.
+  // Só é aplicado se is_release=true (backend valida também).
+  const [promotionalBotId, setPromotionalBotId] = useState<string | null>(null);
+  const [availablePromoBots, setAvailablePromoBots] = useState<Array<{ id: string; username: string; custom_display_name: string | null; status: string }>>([]);
   // Igor (07/05): valida Chat ID na hora pra Igor saber se bot é admin
   // sem precisar comprar pra testar. Botão "Testar" no form.
   const [chatIdValidating, setChatIdValidating] = useState(false);
@@ -170,6 +174,19 @@ export default function AdminContentEditPage() {
     })();
   }, []);
 
+  // Igor (04/07): carrega bots promocionais pro dropdown "Bot Promocional" (Cenário 3).
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await authenticatedFetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/admin/bots?type=promotional`);
+        if (res.ok) {
+          const data = await res.json();
+          setAvailablePromoBots(data.bots || []);
+        }
+      } catch { /* silencioso */ }
+    })();
+  }, []);
+
   const loadContent = async () => {
     try {
       setIsLoading(true);
@@ -210,6 +227,7 @@ export default function AdminContentEditPage() {
         setTelegramGroupLink(data.telegram_group_link || '');
         setTelegramChatId((data as any).telegram_chat_id || '');
         setDeliveryBotId((data as any).delivery_bot_id || null);
+        setPromotionalBotId((data as any).promotional_bot_id || null);
         setIsRelease(data.is_release || false);
         setIsNewSeason((data as any).is_new_season || false);
         setTotalSeasons((data as any).total_seasons ?? null);
@@ -370,6 +388,7 @@ export default function AdminContentEditPage() {
         telegram_group_link: telegramGroupLink.trim(),
         telegram_chat_id: telegramChatId.trim() || null,
         delivery_bot_id: deliveryBotId,
+        promotional_bot_id: promotionalBotId,
         poster_url: posterUrl,
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
@@ -464,6 +483,7 @@ export default function AdminContentEditPage() {
       telegramGroupLink !== (originalContent.telegram_group_link || '') ||
       telegramChatId !== ((originalContent as any).telegram_chat_id || '') ||
       deliveryBotId !== ((originalContent as any).delivery_bot_id || null) ||
+      promotionalBotId !== ((originalContent as any).promotional_bot_id || null) ||
       posterUrl !== (originalContent.poster_url || '') ||
       backdropUrl !== (originalContent.backdrop_url || '') ||
       backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
@@ -842,6 +862,38 @@ export default function AdminContentEditPage() {
                     Qual bot vai gerar o invite quando o cliente comprar. Filmes antigos: bot que já é admin do grupo. Filmes novos: deixe no padrão.
                   </p>
                 </div>
+
+                {/* Igor (04/07): Cenário 3 — bot promocional vinculado.
+                    Só aparece se conteúdo é Lançamento (badge NOVIDADE).
+                    Quando cliente clica Comprar num bot oficial, sistema
+                    desvia pro promo → PIX é gerado lá → mensagem de
+                    pagamento confirmado sai pelo promo → botão pra outro
+                    oficial (rotação). Aumenta interações reais no promo. */}
+                {isRelease && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">
+                      🎟 Bot Promocional vinculado (Lançamento)
+                    </label>
+                    <select
+                      value={promotionalBotId || ''}
+                      onChange={(e) => setPromotionalBotId(e.target.value || null)}
+                      className="w-full px-4 py-2 bg-dark-700 border border-amber-500/30 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="">— Sem bot promocional —</option>
+                      {availablePromoBots
+                        .filter(b => b.status === 'active')
+                        .map(b => (
+                          <option key={b.id} value={b.id}>
+                            @{b.username}
+                            {b.custom_display_name ? ` — ${b.custom_display_name}` : ''}
+                          </option>
+                        ))}
+                    </select>
+                    <p className="mt-1 text-xs text-amber-200/70">
+                      Quando cliente clicar "Comprar" num bot oficial, será desviado pra esse bot promocional pra gerar o PIX. Aumenta interações reais no promo → melhor ranking na busca do Telegram.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Genres */}

@@ -250,6 +250,24 @@ export default function ContentHero({
       return;
     }
 
+    // Igor (04/07): Cenário 1 — cliente veio de um bot promocional (via
+    // PromoLinkCapture) → SITE NÃO GERA PIX. Redireciona pro bot oficial
+    // via rotação (getBotDeeplink já filtra promos). Objetivo do fluxo:
+    // manter cliente dentro do Telegram, aumentando interações reais
+    // no ecossistema (rank de busca) e concentrando vendas no bot oficial.
+    if (typeof window !== 'undefined') {
+      let promoBot: string | null = null;
+      try {
+        promoBot = sessionStorage.getItem('cv_promo_bot');
+      } catch { /* incógnito bloqueado */ }
+      if (promoBot && !isOwned) {
+        const url = await getBotDeeplink(`buy_${content.id}`);
+        window.open(url, '_blank');
+        toast.success('Abrindo Telegram...', { duration: 2000 });
+        return;
+      }
+    }
+
     // Comprar: bifurca por estado de login.
     // Quem está logado com telegram_id segue pro fluxo histórico do
     // bot (deep link buy_<id>) — Igor opera vendas pelo bot e

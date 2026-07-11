@@ -11,6 +11,7 @@ interface Bot {
   id: string;
   username: string;
   display_name: string | null;
+  custom_display_name?: string | null;
   roles: string[];
   status: 'active' | 'banned_br' | 'disabled';
   is_default_attendance: boolean;
@@ -18,6 +19,11 @@ interface Bot {
   users_count: number;
   last_seen_ok_at: string | null;
   created_at: string;
+  is_promotional?: boolean;
+  promotional_content_id?: string | null;
+  promotional_target_url?: string | null;
+  promotional_start_count?: number;
+  notes?: string | null;
 }
 
 function getHeaders() {
@@ -60,6 +66,14 @@ export default function AdminBotsPage() {
   const [newToken, setNewToken] = useState('');
   const [newDisplayName, setNewDisplayName] = useState('');
   const [adding, setAdding] = useState(false);
+  // Igor (04/07): tab "Oficiais" x "Promocionais"
+  const [activeTab, setActiveTab] = useState<'official' | 'promotional'>('official');
+  // Igor (04/07): campos extras pro cadastro de bot promocional
+  const [newIsPromotional, setNewIsPromotional] = useState(false);
+  const [newPromoContentId, setNewPromoContentId] = useState('');
+  const [newPromoTargetUrl, setNewPromoTargetUrl] = useState('');
+  const [newCustomDisplayName, setNewCustomDisplayName] = useState('');
+  const [newNotes, setNewNotes] = useState('');
 
   // N25: popup WhatsApp config
   const [popupEnabled, setPopupEnabled] = useState(false);
@@ -136,7 +150,7 @@ export default function AdminBotsPage() {
 
   const loadBots = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/bots`, { headers: getHeaders() });
+      const res = await fetch(`${API_URL}/api/v1/admin/bots?type=${activeTab}`, { headers: getHeaders() });
       if (!res.ok) throw new Error('Falha ao carregar bots');
       const data = await res.json();
       setBots(data.bots || []);
@@ -145,7 +159,7 @@ export default function AdminBotsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => { if (!authLoading) loadBots(); }, [authLoading, loadBots]);
 
@@ -153,10 +167,22 @@ export default function AdminBotsPage() {
     if (!newToken.trim()) { toast.error('Cole o token do bot.'); return; }
     setAdding(true);
     try {
+      const payload: any = {
+        token: newToken.trim(),
+        display_name: newDisplayName.trim() || undefined,
+      };
+      // Igor (04/07): campos extras se for bot promocional
+      if (newIsPromotional || activeTab === 'promotional') {
+        payload.is_promotional = true;
+        payload.promotional_content_id = newPromoContentId.trim() || undefined;
+        payload.promotional_target_url = newPromoTargetUrl.trim() || undefined;
+        payload.custom_display_name = newCustomDisplayName.trim() || undefined;
+        payload.notes = newNotes.trim() || undefined;
+      }
       const res = await fetch(`${API_URL}/api/v1/admin/bots`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ token: newToken.trim(), display_name: newDisplayName.trim() || undefined }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body?.message || 'Falha ao adicionar bot');
@@ -164,6 +190,11 @@ export default function AdminBotsPage() {
       setShowAddModal(false);
       setNewToken('');
       setNewDisplayName('');
+      setNewIsPromotional(false);
+      setNewPromoContentId('');
+      setNewPromoTargetUrl('');
+      setNewCustomDisplayName('');
+      setNewNotes('');
       await loadBots();
       if (confirm(`Configurar webhook agora pro @${body.username}?`)) {
         await handleSetupWebhook(body.id);
@@ -287,14 +318,40 @@ export default function AdminBotsPage() {
         <div>
           <h1 className="text-2xl font-bold text-white">Bots Telegram</h1>
           <p className="text-sm text-gray-400 mt-1">
-            Sistema multi-bot: atendimento rotativo + bots de entrega por grupo.
+            {activeTab === 'official'
+              ? 'Sistema multi-bot: atendimento rotativo + bots de entrega por grupo.'
+              : 'Bots de captação/divulgação — nome de filme em alta, aproveita busca orgânica do Telegram.'}
           </p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
           className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium"
         >
-          + Adicionar bot
+          + Adicionar bot {activeTab === 'promotional' ? 'promocional' : ''}
+        </button>
+      </div>
+
+      {/* Igor (04/07): tabs Oficiais x Promocionais */}
+      <div className="mb-6 border-b border-white/10 flex gap-1">
+        <button
+          onClick={() => setActiveTab('official')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'official'
+              ? 'border-primary-500 text-white'
+              : 'border-transparent text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          🤖 Oficiais
+        </button>
+        <button
+          onClick={() => setActiveTab('promotional')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'promotional'
+              ? 'border-amber-500 text-white'
+              : 'border-transparent text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          🎟 Promocionais
         </button>
       </div>
 
@@ -572,8 +629,10 @@ export default function AdminBotsPage() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-dark-900 border border-white/10 rounded-xl p-6 max-w-md w-full">
-            <h2 className="text-lg font-bold text-white mb-4">Adicionar bot Telegram</h2>
+          <div className="bg-dark-900 border border-white/10 rounded-xl p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-white mb-4">
+              Adicionar bot {activeTab === 'promotional' ? 'promocional' : 'Telegram'}
+            </h2>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm text-gray-300 mb-1">Token do @BotFather</label>
@@ -592,10 +651,68 @@ export default function AdminBotsPage() {
                   type="text"
                   value={newDisplayName}
                   onChange={(e) => setNewDisplayName(e.target.value)}
-                  placeholder="Ex: Cine Vision Brasil"
+                  placeholder={activeTab === 'promotional' ? 'Ex: Todo Mundo em Pânico 6' : 'Ex: Cine Vision Brasil'}
                   className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
                 />
               </div>
+
+              {/* Igor (04/07): campos extras SÓ pra promocional */}
+              {activeTab === 'promotional' && (
+                <>
+                  <div className="p-3 bg-amber-500/5 border border-amber-500/30 rounded-lg space-y-3">
+                    <p className="text-xs text-amber-300 font-medium">📌 Configuração de bot promocional</p>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Nome customizado no painel (opcional)</label>
+                      <input
+                        type="text"
+                        value={newCustomDisplayName}
+                        onChange={(e) => setNewCustomDisplayName(e.target.value)}
+                        placeholder="Como você quer identificar esse bot no painel"
+                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Útil quando você renomeia o bot no BotFather (ex: Superman → Panico 6) mas quer manter rastreamento.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Content ID vinculado (UUID)</label>
+                      <input
+                        type="text"
+                        value={newPromoContentId}
+                        onChange={(e) => setNewPromoContentId(e.target.value)}
+                        placeholder="UUID do filme/série (opcional)"
+                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm font-mono"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Quando cliente dá /start, bot mostra CTA com esse filme. Pegue o UUID em Gerenciar Conteúdos.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">URL de destino customizada (opcional)</label>
+                      <input
+                        type="text"
+                        value={newPromoTargetUrl}
+                        onChange={(e) => setNewPromoTargetUrl(e.target.value)}
+                        placeholder="https://cinevisionapp.com.br/..."
+                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Se preenchido, sobrepõe o link padrão. Deixe vazio pra usar o filme vinculado.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-1">Notas internas</label>
+                      <textarea
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        rows={2}
+                        placeholder="Ex: bot alugado até 31/12, sub-conta X..."
+                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex gap-2 justify-end mt-6">
               <button

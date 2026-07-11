@@ -23,19 +23,42 @@ export class AdminBotsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Lista todos os bots cadastrados' })
+  @ApiOperation({ summary: 'Lista bots cadastrados (query ?type=official|promotional|all, default=official)' })
   @ApiResponse({ status: 200, description: 'Lista de bots' })
-  async list() {
-    const bots = await this.adminBotsService.listBots();
+  async list(@Query('type') type?: 'official' | 'promotional' | 'all') {
+    const bots = await this.adminBotsService.listBots(type);
     return { bots };
   }
 
   @Post()
-  @ApiOperation({ summary: 'Cadastra novo bot (valida token via getMe)' })
+  @ApiOperation({ summary: 'Cadastra novo bot (valida token via getMe). Aceita is_promotional + campos promo.' })
   @ApiResponse({ status: 201, description: 'Bot cadastrado' })
   @ApiResponse({ status: 400, description: 'Token inválido' })
-  async create(@Body() body: { token: string; display_name?: string; roles?: string[] }) {
+  async create(@Body() body: {
+    token: string;
+    display_name?: string;
+    roles?: string[];
+    is_promotional?: boolean;
+    promotional_content_id?: string;
+    promotional_target_url?: string;
+    custom_display_name?: string;
+    notes?: string;
+  }) {
     return this.adminBotsService.createBot(body);
+  }
+
+  @Post(':id/rename-from-telegram')
+  @ApiOperation({ summary: 'Refaz getMe e atualiza display_name/username. Usado quando Igor renomeia o bot no BotFather.' })
+  async renameFromTelegram(@Param('id') id: string) {
+    return this.adminBotsService.renameFromTelegram(id);
+  }
+
+  @Get('promotional/analytics')
+  @ApiOperation({ summary: 'Analytics agregado dos bots promocionais (starts, orders, revenue).' })
+  async promotionalAnalytics(@Query('days') days?: string) {
+    const d = days ? parseInt(days, 10) : 30;
+    const rows = await this.adminBotsService.getPromotionalAnalytics(isNaN(d) ? 30 : d);
+    return { rows, days: d };
   }
 
   @Patch(':id')

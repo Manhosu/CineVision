@@ -8,6 +8,7 @@ import ContentHero from '@/components/ContentHero/ContentHero';
 import CastSection from '@/components/CastSection/CastSection';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
+import PromoLinkCapture from '@/components/PromoLinkCapture';
 import { openContentGroup } from '@/lib/telegramAccess';
 import { Movie } from '@/types/movie';
 
@@ -104,6 +105,9 @@ export default function SeriesDetailClient() {
     <main className="bg-dark-950">
       {/* Captura ?via=business&bid=...&chat=... pro fluxo de IA Business DM. */}
       <BusinessLinkCapture />
+
+      {/* Igor (04/07): captura ?promo_bot=&promo_content= (Cenário 1). */}
+      <PromoLinkCapture />
 
       <ContentHero
         content={series}

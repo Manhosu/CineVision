@@ -1098,17 +1098,47 @@ export class OrdersService {
     // no link da página de detalhes). Quando sim, despacha as mensagens
     // pelo canal Business (Igor → cliente) em vez do bot direto, com
     // humanização (delay + typing).
+    //
+    // Igor (04/07): também carrega origin_promotional_bot_id — Cenário 3.
+    // Quando a order veio de fluxo promo, a mensagem de "Pagamento
+    // confirmado!" precisa sair pelo bot promo (onde cliente está), e o
+    // botão "Assistir agora" leva pra um bot OFICIAL diferente (rotação
+    // já filtra promos). Assim seguramos o cliente em 2 bots ao mesmo tempo.
     const { data: orderFull } = await this.supabase.client
       .from('orders')
-      .select('business_connection_id')
+      .select('business_connection_id, origin_promotional_bot_id')
       .eq('id', orderId)
       .maybeSingle();
     const businessConnectionId: string | undefined =
       orderFull?.business_connection_id || undefined;
+    const originPromoBotId: string | null =
+      orderFull?.origin_promotional_bot_id || null;
     const sendOpts = (extra: Record<string, any> = {}) => ({
       ...extra,
       ...(businessConnectionId ? { business_connection_id: businessConnectionId } : {}),
+      // Cenário 3: força mensagens a sairem pelo bot promo (onde cliente
+      // está esperando). Passar bot_id na opção é respeitado pelo
+      // TelegramsEnhancedService.sendMessage (linha ~5011).
+      ...(originPromoBotId ? { bot_id: originPromoBotId } : {}),
     });
+
+    // Cenário 3: pra Igor ver no dashboard qual bot oficial entregou
+    // essa order (delivery_bot_id). Grava logo pra permitir analytics
+    // mesmo se a mensagem final falhar.
+    if (originPromoBotId) {
+      try {
+        const excludeBotIds = [originPromoBotId];
+        const rotation = await this.telegramsService.getNextRoundRobinBot(excludeBotIds);
+        if (rotation?.bot_id) {
+          await this.supabase.client
+            .from('orders')
+            .update({ delivery_bot_id: rotation.bot_id })
+            .eq('id', orderId);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to pick/save delivery_bot_id for promo order ${orderId}: ${err.message}`);
+      }
+    }
 
     // Wipe the QR/copia-e-cola/payment-method messages we tracked for
     // this chat so the user's history is clean once the PIX confirms.
@@ -1280,6 +1310,149 @@ export class OrdersService {
       }
     } catch (err: any) {
       this.logger.error(`Delivery for order ${orderId} failed: ${err.message}`);
+    }
+  }
+
+  /**
+   * Igor (04/07): Cenário 3 — cria order+purchase a partir de um
+   * purchase_intent (originado no bot oficial, consumido no bot promo).
+   *
+   * Semelhante ao createOrderFromCart mas:
+   * - sem cart (item único direto do intent)
+   * - grava origin_promotional_bot_id + origin_official_bot_id + purchase_intent_id
+   * - preço snapshot vem do intent.amount_cents (imutável — se admin
+   *   mudar preço no meio, cliente paga o que viu quando clicou)
+   *
+   * Não gera PIX aqui — chamador (handlePurchaseIntent) chama
+   * generateAndSendPixForOrder depois de UPDATE do intent (guard
+   * de concorrência entre criar order e consumir intent).
+   */
+  async createOrderFromIntent(intent: any, user: any, chatId: number) {
+    const orderToken = uuidv4();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // 1 item = subtotal == total (sem desconto de cart, sem cupom).
+    const amountCents = intent.amount_cents;
+
+    const { data: order, error: orderError } = await this.supabase.client
+      .from('orders')
+      .insert({
+        user_id: user.id,
+        order_token: orderToken,
+        subtotal_cents: amountCents,
+        discount_percent: 0,
+        discount_cents: 0,
+        total_cents: amountCents,
+        total_items: 1,
+        status: OrderStatus.PENDING,
+        is_recovery_order: false,
+        telegram_chat_id: chatId.toString(),
+        expires_at: expiresAt.toISOString(),
+        // Igor (04/07): rastreamento cross-bot
+        origin_promotional_bot_id: intent.promo_bot_id,
+        origin_official_bot_id: intent.origin_bot_id,
+        purchase_intent_id: intent.id,
+      })
+      .select()
+      .single();
+
+    if (orderError || !order) {
+      throw new BadRequestException(`Failed to create order from intent: ${orderError?.message}`);
+    }
+
+    // Verifica pré-venda pra flag na purchase
+    const { data: contentRow } = await this.supabase.client
+      .from('content')
+      .select('id, is_presale')
+      .eq('id', intent.content_id)
+      .maybeSingle();
+
+    const { error: purchaseError } = await this.supabase.client
+      .from('purchases')
+      .insert({
+        user_id: user.id,
+        content_id: intent.content_id,
+        amount_cents: amountCents,
+        currency: 'BRL',
+        status: PurchaseStatus.PENDING,
+        preferred_delivery: PurchaseDeliveryType.TELEGRAM,
+        purchase_token: uuidv4(),
+        order_id: order.id,
+        is_presale_purchase: contentRow?.is_presale === true,
+        provider_meta: {
+          telegram_chat_id: chatId.toString(),
+          from_promo_intent: true,
+          intent_id: intent.id,
+        },
+      });
+
+    if (purchaseError) {
+      // Rollback best-effort da order (evita orphan)
+      await this.supabase.client.from('orders').delete().eq('id', order.id);
+      throw new BadRequestException(`Failed to create purchase from intent: ${purchaseError.message}`);
+    }
+
+    return order;
+  }
+
+  /**
+   * Igor (04/07): gera PIX pra uma order e envia QR pelo Telegram.
+   *
+   * Usado no fluxo Cenário 3 — depois que handlePurchaseIntent criou a
+   * order via createOrderFromIntent, precisa gerar PIX e mandar o QR
+   * no chat do bot promo (via ALS, quem chamou está no contexto).
+   *
+   * Também usado pra reenviar QR de order já criada (idempotência —
+   * cliente clicou 2x no link do intent).
+   */
+  async generateAndSendPixForOrder(orderId: string, chatId: number, telegramUserId?: number) {
+    const { data: order, error } = await this.supabase.client
+      .from('orders')
+      .select('*')
+      .eq('id', orderId)
+      .single();
+    if (error || !order) throw new Error(`Order ${orderId} not found`);
+
+    if (order.status === OrderStatus.PAID) {
+      // Já foi pago — só avisa cliente (não gera novo PIX)
+      if (this.telegramsService) {
+        await this.telegramsService.sendMessage(
+          chatId,
+          '✅ Sua compra já foi confirmada! Você deve ter recebido a mensagem com o link do filme. Se não recebeu, avise o suporte.',
+        );
+      }
+      return;
+    }
+
+    const pixResult = await this.generatePixForOrder(order, order.user_id, chatId.toString());
+
+    // Envia QR pelo Telegram — sai pelo bot atual (ALS já resolveu qual)
+    if (this.telegramsService && pixResult) {
+      const amountBRL = (order.total_cents / 100)
+        .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const header =
+        `💳 *PIX gerado!*\n\n` +
+        `Valor: *${amountBRL}*\n` +
+        `Copie o código abaixo no app do seu banco.\n\n` +
+        `_O PIX expira em 30 minutos. Após o pagamento, você recebe o filme aqui mesmo._`;
+
+      try {
+        await this.telegramsService.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+        if (pixResult.qrCode) {
+          // Copia-cola em bloco de código (formato monospace do Telegram)
+          await this.telegramsService.sendMessage(
+            chatId,
+            '📋 *Copia e Cola:*\n\n```\n' + pixResult.qrCode + '\n```',
+            { parse_mode: 'Markdown' },
+          );
+        }
+      } catch (err: any) {
+        this.logger.error(`Failed to send PIX message for order ${orderId}: ${err.message}`);
+        await this.telegramsService.sendMessage(
+          chatId,
+          `💳 PIX gerado! Valor: ${amountBRL}. Copia-cola:\n\n${pixResult.qrCode || 'erro ao gerar código'}`,
+        );
+      }
     }
   }
 }

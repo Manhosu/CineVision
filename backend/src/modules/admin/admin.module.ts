@@ -15,6 +15,7 @@ import { ImageUploadService } from './services/image-upload.service';
 import { AdminPurchasesController } from './controllers/admin-purchases.controller';
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
 import { PurchasesCleanupService } from './services/purchases-cleanup.service';
+import { PromotionalIntentsCleanupService } from './services/promotional-intents-cleanup.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
@@ -116,6 +117,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   BroadcastService,
   RequestsSupabaseService,
   PurchasesCleanupService,
+  PromotionalIntentsCleanupService,
   HomepageCarouselsService,
 ] : [
   AdminContentSimpleService,
@@ -124,6 +126,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   ImageUploadService,
   AdminPurchasesSimpleService,
   PurchasesCleanupService,
+  PromotionalIntentsCleanupService,
   StripeService,
   WooviService,
   ContentLanguageSupabaseService,

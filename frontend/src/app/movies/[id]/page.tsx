@@ -6,6 +6,7 @@ import CastSection from '@/components/CastSection/CastSection';
 import TrailerSection from '@/components/TrailerSection/TrailerSection';
 import RelatedMovies from '@/components/RelatedMovies/RelatedMovies';
 import BusinessLinkCapture from '@/components/BusinessLinkCapture/BusinessLinkCapture';
+import PromoLinkCapture from '@/components/PromoLinkCapture';
 import { Movie } from '@/types/movie';
 import { ogImageUrl } from '@/lib/ogImage';
 
@@ -101,6 +102,12 @@ export default async function MoviePage({ params }: MoviePageProps) {
         {/* Captura ?via=business&bid=...&chat=... pro fluxo de IA Business DM. */}
         <Suspense fallback={null}>
           <BusinessLinkCapture />
+        </Suspense>
+
+        {/* Igor (04/07): captura ?promo_bot=&promo_content= pra Cenário 1
+            (cliente veio de bot promocional → Comprar desvia pra bot oficial). */}
+        <Suspense fallback={null}>
+          <PromoLinkCapture />
         </Suspense>
 
         {/* Hero - fullscreen backdrop */}

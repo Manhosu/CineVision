@@ -60,6 +60,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
   private readonly apiUrl: string;
   private readonly s3Client: any; // AWS SDK removed
   private catalogSyncService: any; // Will be injected by setter to avoid circular dependency
+  // Igor (04/07): OrdersService injetado via setter pro handlePurchaseIntent
+  // (Cenário 3) delegar criação de order + PIX. Evita dependência circular
+  // entre OrdersModule e TelegramsModule que se importam mutuamente.
+  private ordersService: any;
 
   // Cache temporário de compras pendentes (em produção, usar Redis)
   private pendingPurchases = new Map<string, PendingPurchase>();
@@ -183,6 +187,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
     this.catalogSyncService = service;
   }
 
+  /** Igor (04/07): setter pro OrdersService (Cenário 3 depende dele). */
+  setOrdersService(service: any) {
+    this.ordersService = service;
+  }
+
   /**
    * Igor reportou (04/05): bot estava enviando link com `cine-vision-murex.vercel.app`
    * em vez do domínio oficial. Causa: env var `FRONTEND_URL` no Render
@@ -248,6 +257,36 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (04/07): metadata do bot pro branch de bot promocional.
+   * Retorna colunas relevantes pro handler de /start decidir se é
+   * promo (mensagem CTA) ou oficial (fluxo padrão), e pro handleBuyCallback
+   * decidir se desvia pro promo (Cenário 3).
+   */
+  public async getBotMeta(botId: string): Promise<{
+    id: string;
+    username: string;
+    display_name: string | null;
+    custom_display_name: string | null;
+    status: string;
+    is_promotional: boolean;
+    promotional_content_id: string | null;
+    promotional_target_url: string | null;
+    last_seen_ok_at: string | null;
+  } | null> {
+    try {
+      const { data } = await this.supabase
+        .from('telegram_bots')
+        .select('id, username, display_name, custom_display_name, status, is_promotional, promotional_content_id, promotional_target_url, last_seen_ok_at')
+        .eq('id', botId)
+        .maybeSingle();
+      return (data as any) || null;
+    } catch (err: any) {
+      this.logger.warn(`getBotMeta(${botId}) failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Igor (07/06): atalho — resolve a apiUrl do bot do contexto atual
    * (AsyncLocalStorage do webhook). Se não há contexto, cai no bot default.
    * Use em TODA chamada `axios.post('${this.botApiUrl}/...')` que faz parte
@@ -277,7 +316,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .from('telegram_bots')
         .select('username, attendance_weight')
         .contains('roles', ['attendance'])
-        .eq('status', 'active');
+        .eq('status', 'active')
+        // Igor (04/07): defesa em profundidade — bots promocionais nunca
+        // entram na rotação de atendimento. Constraint SQL já garante isso
+        // (bot promo não pode ter role attendance), mas filtro explícito
+        // aqui torna a intenção do código evidente.
+        .eq('is_promotional', false);
       const pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
       if (pool.length) {
         // Sorteio ponderado: soma dos pesos → escolhe ponto aleatório.
@@ -316,31 +360,38 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * Atomicidade garantida pela função SQL increment_bot_rotation()
    * (UPDATE em single row, transação serializável do Postgres).
    */
-  async getNextRoundRobinBot(): Promise<{ url: string; bot_username: string }> {
-    let username: string | null = null;
+  async getNextRoundRobinBot(excludeBotIds: string[] = []): Promise<{ url: string; bot_username: string; bot_id?: string }> {
+    let chosen: { id: string; username: string } | null = null;
     try {
       const { data: bots } = await this.supabase
         .from('telegram_bots')
-        .select('username, attendance_weight')
+        .select('id, username, attendance_weight')
         .contains('roles', ['attendance'])
         .eq('status', 'active')
+        // Igor (04/07): promos fora da rotação (defesa em profundidade).
+        .eq('is_promotional', false)
         .order('id', { ascending: true });
-      const pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
+      let pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
+      // Cenário 3: excluir bots específicos (ex: bot promo que já
+      // entregou a mensagem — cliente precisa cair em outro oficial).
+      if (excludeBotIds.length) {
+        pool = pool.filter((b) => !excludeBotIds.includes(b.id));
+      }
 
       if (pool.length) {
         const { data: counter, error } = await this.supabase.rpc('increment_bot_rotation');
         if (error) throw error;
         const idx = Number(counter ?? 0) % pool.length;
-        username = pool[idx].username;
+        chosen = { id: pool[idx].id, username: pool[idx].username };
       }
     } catch (err: any) {
       this.logger.warn(`getNextRoundRobinBot failed: ${err.message} — falling back to env username`);
     }
     const finalUsername =
-      username ||
+      chosen?.username ||
       this.configService.get<string>('TELEGRAM_BOT_USERNAME') ||
       'CineVisionApp_rbot';
-    return { url: `https://t.me/${finalUsername}`, bot_username: finalUsername };
+    return { url: `https://t.me/${finalUsername}`, bot_username: finalUsername, bot_id: chosen?.id };
   }
 
   // ==================== NOVO FLUXO: VERIFICAÇÃO DE E-MAIL ====================
@@ -3671,6 +3722,122 @@ export class TelegramsEnhancedService implements OnModuleInit {
     });
   }
 
+  /**
+   * Igor (04/07): Cenário 3 — cria intent + envia botão pro bot promo.
+   *
+   * Cliente está no bot oficial A, clicou Comprar num lançamento com
+   * bot promo vinculado. Aqui:
+   * 1. mint token curto (nanoid 16 chars) pra caber no deep-link do /start
+   * 2. INSERT purchase_intent (status=pending, expires_at=+15min)
+   * 3. sendMessage no bot oficial A com botão `t.me/<promo>?start=pi_<token>`
+   * 4. cliente clica → cai em @promo → handlePurchaseIntent lá consome
+   *
+   * Retorna true se conseguiu desviar (chamador NÃO segue fluxo normal).
+   * Retorna false em qualquer erro (chamador cai no fluxo normal).
+   */
+  private async detourPurchaseToPromoBot(args: {
+    chatId: number;
+    telegramUserId: number;
+    content: any;
+    currentBotId: string | null;
+    promo: {
+      id: string;
+      username: string;
+      custom_display_name: string | null;
+      display_name: string | null;
+    };
+  }): Promise<boolean> {
+    const { chatId, telegramUserId, content, currentBotId, promo } = args;
+
+    // Anti-cross-claim: só cliente comum pode ir pra fluxo promo. Admin/
+    // employee testando não devem virar customer no bot promo.
+    // (Verificação leve — se user não existe, ok; se existe e é role
+    // administrativo, aborta pro fluxo normal).
+    try {
+      const { data: existingUser } = await this.supabase
+        .from('users')
+        .select('role')
+        .eq('telegram_id', telegramUserId.toString())
+        .maybeSingle();
+      const adminRoles = ['admin', 'master', 'employee', 'moderator'];
+      if (existingUser?.role && adminRoles.includes(existingUser.role.toLowerCase())) {
+        this.logger.log(
+          `[promo-detour] skipping — user role=${existingUser.role} (anti-cross-claim)`,
+        );
+        return false;
+      }
+    } catch { /* melhor errar pra fluxo normal do que travar */ }
+
+    // Preço snapshot (pode ter presale ativo)
+    const priceCents = (content.is_presale && content.presale_price_cents)
+      ? content.presale_price_cents
+      : (content.price_cents || 0);
+
+    if (!priceCents || priceCents <= 0) {
+      this.logger.warn(`[promo-detour] content ${content.id} has no valid price`);
+      return false;
+    }
+
+    // Gerar token curto (16 chars base62). Não uso lib externa —
+    // Math.random é suficiente pra token efêmero de 15min (colisão
+    // estatisticamente ~0 em 15 min de tráfego real).
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < 16; i++) {
+      token += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+
+    // INSERT intent
+    const { data: intent, error: intentErr } = await this.supabase
+      .from('purchase_intents')
+      .insert({
+        token,
+        content_id: content.id,
+        promo_bot_id: promo.id,
+        origin_bot_id: currentBotId,
+        origin_chat_id: chatId,
+        origin_telegram_user_id: telegramUserId,
+        amount_cents: priceCents,
+        status: 'pending',
+        // expires_at usa default do banco (+15min)
+      })
+      .select()
+      .single();
+
+    if (intentErr || !intent) {
+      this.logger.error(`[promo-detour] failed to insert intent: ${intentErr?.message}`);
+      return false;
+    }
+
+    // Envia mensagem no chat atual (bot oficial A) com botão pro bot promo
+    const promoDisplay = promo.custom_display_name || promo.display_name || `@${promo.username}`;
+    const deeplink = `https://t.me/${promo.username}?start=pi_${token}`;
+    try {
+      await this.sendMessage(
+        chatId,
+        `🎬 *${content.title}* é lançamento exclusivo!\n\n` +
+        `Pra garantir sua cópia, continue no nosso bot parceiro *${promoDisplay}* — ` +
+        `é só clicar no botão abaixo, ele te leva direto pra pagamento.\n\n` +
+        `_Link válido por 15 minutos._`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: `▶️ Ir para o bot`, url: deeplink }]],
+          },
+        },
+      );
+      return true;
+    } catch (err: any) {
+      this.logger.error(`[promo-detour] failed to send detour message: ${err.message}`);
+      // Marca intent como expirado imediatamente (cleanup rápido)
+      await this.supabase
+        .from('purchase_intents')
+        .update({ status: 'expired' })
+        .eq('id', intent.id);
+      return false;
+    }
+  }
+
   private async handleBuyCallback(chatId: number, telegramUserId: number, data: string) {
     const parts = data.split('_');
     const contentId = parts[parts.length - 1];
@@ -3685,6 +3852,48 @@ export class TelegramsEnhancedService implements OnModuleInit {
     if (!content) {
       await this.sendMessage(chatId, '❌ Filme não encontrado.');
       return;
+    }
+
+    // Igor (04/07): Cenário 3 — se conteúdo é LANÇAMENTO E tem bot
+    // promocional vinculado E o bot atual NÃO é o promo, desviamos o
+    // fluxo pro bot promo (aumenta interação real nele → melhor ranking
+    // na busca do Telegram).
+    //
+    // Guards de segurança:
+    // - só se promo.status='active' (senão bot pode estar suspenso)
+    // - só se healthcheck recente (last_seen_ok_at < 5min) — evita
+    //   redirect pra bot que talvez esteja fora
+    // - se qualquer guard falha, degrada silenciosamente pro fluxo padrão
+    //
+    // Se der ruim aqui, fluxo continua normal (fail-safe).
+    try {
+      const currentBotId = await this.resolveCurrentBotId();
+      if (
+        content.is_release &&
+        content.promotional_bot_id &&
+        content.promotional_bot_id !== currentBotId
+      ) {
+        const promo = await this.getBotMeta(content.promotional_bot_id);
+        const staleThresholdMs = 5 * 60 * 1000;
+        const healthy = !!promo?.last_seen_ok_at &&
+          Date.now() - new Date(promo.last_seen_ok_at).getTime() < staleThresholdMs;
+        if (promo && promo.status === 'active' && healthy) {
+          const detoured = await this.detourPurchaseToPromoBot({
+            chatId,
+            telegramUserId,
+            content,
+            currentBotId,
+            promo,
+          });
+          if (detoured) return;
+        } else {
+          this.logger.log(
+            `[promo-detour] skipping (bot=${promo?.username} status=${promo?.status} healthy=${healthy})`,
+          );
+        }
+      }
+    } catch (err: any) {
+      this.logger.warn(`[promo-detour] guard failed, falling back to normal flow: ${err.message}`);
     }
 
     // NOVO FLUXO: Autenticação automática via Telegram ID
@@ -3925,8 +4134,228 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
   }
 
+  /**
+   * Igor (04/07): mensagem de boas-vindas de bot promocional.
+   *
+   * Cliente encontrou o bot na busca do Telegram (nome de filme em alta)
+   * → deu /start → queremos ele no site rápido. Mensagem curta, CTA
+   * forte, imagem do filme quando possível (aumenta conversão).
+   *
+   * Se o bot tem `promotional_content_id` configurado, busca poster e
+   * título do content e usa como base da mensagem. Senão, mensagem
+   * genérica com link do catálogo.
+   */
+  private async handlePromoWelcome(chatId: number, bot: {
+    id: string;
+    username: string;
+    promotional_content_id: string | null;
+    promotional_target_url: string | null;
+  }) {
+    const frontendUrl = this.getFrontendUrl();
+    let content: any = null;
+    if (bot.promotional_content_id) {
+      const { data } = await this.supabase
+        .from('content')
+        .select('id, title, poster_url, content_type')
+        .eq('id', bot.promotional_content_id)
+        .maybeSingle();
+      content = data || null;
+    }
+
+    // Landing carrega `?promo_bot=<username>&promo_content=<id>` — o
+    // <PromoLinkCapture /> do site grava sessionStorage, e o botão
+    // Comprar sabe desviar pra bot oficial (Cenário 1).
+    const buildLandingUrl = () => {
+      if (bot.promotional_target_url && bot.promotional_target_url.trim()) {
+        const raw = bot.promotional_target_url.trim();
+        const sep = raw.includes('?') ? '&' : '?';
+        return `${raw}${sep}promo_bot=${encodeURIComponent(bot.username)}${content ? `&promo_content=${encodeURIComponent(content.id)}` : ''}`;
+      }
+      if (content) {
+        const path = content.content_type === 'series' ? 'series' : 'movies';
+        return `${frontendUrl}/${path}/${content.id}?promo_bot=${encodeURIComponent(bot.username)}&promo_content=${encodeURIComponent(content.id)}`;
+      }
+      return `${frontendUrl}/?promo_bot=${encodeURIComponent(bot.username)}`;
+    };
+
+    const landingUrl = buildLandingUrl();
+    const title = content?.title || 'Cine Vision';
+    const caption = content
+      ? `🎬 *${title}*\n\n✅ Você encontrou o conteúdo que procura!\n\n🍿 Assista agora com qualidade Full HD e acesso vitalício.`
+      : `🎬 *Cine Vision*\n\n✅ Bem-vindo! Aqui você encontra milhares de filmes e séries.\n\n🍿 Toque no botão pra ver o catálogo completo.`;
+
+    const replyMarkup = {
+      inline_keyboard: [[{ text: '▶️ ASSISTIR AGORA', url: landingUrl }]],
+    };
+
+    try {
+      // Telegram renderiza preview do poster automaticamente se URL vem
+      // no texto com Markdown. Simples e sem depender de sendPhoto.
+      const textWithPoster = content?.poster_url
+        ? `[​](${content.poster_url})${caption}` // zero-width space + link invisível no início
+        : caption;
+      await this.sendMessage(chatId, textWithPoster, {
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup,
+      });
+    } catch (err: any) {
+      this.logger.warn(`handlePromoWelcome failed, falling back to plain text: ${err.message}`);
+      await this.sendMessage(chatId, caption, {
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup,
+      });
+    }
+  }
+
+  /**
+   * Igor (04/07): consumo de purchase intent (Cenário 3).
+   *
+   * Cliente estava no bot oficial A, clicou "Comprar Superman" (filme com
+   * promotional_bot_id vinculado), sistema criou intent + botão pro bot
+   * promo. Cliente clicou → chegou aqui via /start pi_<token>.
+   *
+   * Aqui: valida intent, cria order (com origin_promotional_bot_id +
+   * origin_official_bot_id), gera PIX (Oasyfy), manda QR — TUDO isso
+   * pelo bot promo (via ALS). Cliente paga aqui mesmo.
+   *
+   * Idempotência: se intent já foi consumido, reenvia o QR da mesma
+   * order (não cria duplicata).
+   *
+   * Guard de concorrência: UPDATE condicional WHERE status='pending' —
+   * apenas 1 request cria a order, outros recuperam.
+   */
+  private async handlePurchaseIntent(chatId: number, telegramUserId: number, token: string) {
+    // 1. Buscar intent
+    const { data: intent, error: intentErr } = await this.supabase
+      .from('purchase_intents')
+      .select('*, content:content(id, title, poster_url, price_cents, content_type)')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (intentErr || !intent) {
+      await this.sendMessage(chatId,
+        '⚠️ Link inválido ou já usado. Volte ao bot original e clique em Comprar novamente.');
+      return;
+    }
+
+    const expired = new Date(intent.expires_at).getTime() < Date.now();
+    if (intent.status === 'expired' || expired) {
+      await this.sendMessage(chatId,
+        '⏰ Este link expirou. Volte ao bot original e clique em Comprar novamente pra gerar um novo link.');
+      return;
+    }
+
+    // 2. Idempotência: se já consumido, reenvia PIX da order existente
+    if (intent.status === 'consumed' && intent.order_id) {
+      try {
+        await this.resendPixForOrder(intent.order_id, chatId);
+      } catch (err: any) {
+        this.logger.warn(`resendPixForOrder failed for order ${intent.order_id}: ${err.message}`);
+        await this.sendMessage(chatId,
+          '⚠️ Sua compra já foi iniciada mas não conseguimos reenviar o PIX agora. Fale com o suporte.');
+      }
+      return;
+    }
+
+    // 3. Cria/vincula usuário
+    const user = await this.findOrCreateUserByTelegramId(telegramUserId, chatId);
+    if (!user) {
+      await this.sendMessage(chatId, '❌ Erro ao processar usuário. Tente /start novamente.');
+      return;
+    }
+
+    // 4. Delega criação da order + PIX pro OrdersService (novo método)
+    let order: any;
+    try {
+      if (!this.ordersService) {
+        throw new Error('OrdersService not injected');
+      }
+      order = await this.ordersService.createOrderFromIntent(intent, user, chatId);
+    } catch (err: any) {
+      this.logger.error(`createOrderFromIntent failed for token=${token}: ${err.message}`);
+      await this.sendMessage(chatId,
+        '❌ Erro ao criar seu pedido. Volte ao bot original e tente novamente.');
+      return;
+    }
+
+    // 5. Guard de concorrência: marca intent consumido só se ainda pending
+    const { data: consumed } = await this.supabase
+      .from('purchase_intents')
+      .update({
+        status: 'consumed',
+        order_id: order.id,
+        consumed_at: new Date().toISOString(),
+      })
+      .eq('id', intent.id)
+      .eq('status', 'pending')
+      .select('id')
+      .maybeSingle();
+
+    if (!consumed) {
+      // Outro request ganhou. Refetcha o order_id atualizado e reenvia PIX.
+      const { data: fresh } = await this.supabase
+        .from('purchase_intents').select('order_id').eq('id', intent.id).maybeSingle();
+      if (fresh?.order_id) {
+        await this.resendPixForOrder(fresh.order_id, chatId);
+      }
+      return;
+    }
+
+    // 6. Gera PIX + envia QR (sai pelo bot promo via ALS)
+    try {
+      if (!this.ordersService) throw new Error('OrdersService not injected');
+      await this.ordersService.generateAndSendPixForOrder(order.id, chatId, telegramUserId);
+    } catch (err: any) {
+      this.logger.error(`generateAndSendPixForOrder failed: ${err.message}`);
+      await this.sendMessage(chatId,
+        '⚠️ Sua compra foi criada mas não conseguimos gerar o PIX agora. Fale com o suporte.');
+    }
+  }
+
+  /**
+   * Reenvia o PIX/QR de uma order já criada. Usado quando cliente clica no
+   * mesmo link do intent 2x (idempotência).
+   */
+  private async resendPixForOrder(orderId: string, chatId: number) {
+    if (!this.ordersService) throw new Error('OrdersService not injected');
+    // Delegado pro OrdersService que já tem toda a lógica de PIX.
+    await this.ordersService.generateAndSendPixForOrder(orderId, chatId);
+  }
+
   private async handleStartCommand(chatId: number, text: string, telegramUserId?: number) {
     this.logger.log(`handleStartCommand called - chatId: ${chatId}, text: "${text}", telegramUserId: ${telegramUserId}`);
+
+    // Igor (04/07): branch pra BOT PROMOCIONAL. Detecta pelo bot atual
+    // (via ALS/resolveCurrentBotId). Se for promo, comportamento é 100%
+    // diferente do bot oficial — nada de menu de compra, catálogo etc.
+    // Só CTA pro site OU consumo de purchase intent (Cenário 3).
+    const currentBotId = await this.resolveCurrentBotId();
+    const currentBot = currentBotId ? await this.getBotMeta(currentBotId) : null;
+
+    if (currentBot?.is_promotional) {
+      // Fire-and-forget: contador de /start + healthcheck (não bloqueia
+      // o handler). PromiseLike do Supabase não tem .catch; usa 2 args do .then.
+      const noop = () => {};
+      const warn = (label: string) => (err: any) =>
+        this.logger.warn(`[promo] ${label} failed: ${err?.message || err}`);
+      this.supabase.rpc('increment_promotional_start_count', { bot_id: currentBotId })
+        .then(noop, warn('increment_promotional_start_count'));
+      this.supabase.from('telegram_bots')
+        .update({ last_seen_ok_at: new Date().toISOString() })
+        .eq('id', currentBotId!)
+        .then(noop, warn('last_seen_ok_at'));
+
+      const parts = text.split(' ');
+      // Cenário 3 — consumo de intent enviado por bot oficial.
+      if (parts.length > 1 && parts[1].startsWith('pi_')) {
+        const token = parts[1].slice(3);
+        await this.handlePurchaseIntent(chatId, telegramUserId || chatId, token);
+        return;
+      }
+      // /start puro ou com qualquer outro payload → mensagem CTA
+      await this.handlePromoWelcome(chatId, currentBot);
+      return;
+    }
 
     // Buscar ou criar usuário automaticamente
     const user = await this.findOrCreateUserByTelegramId(telegramUserId || chatId, chatId);

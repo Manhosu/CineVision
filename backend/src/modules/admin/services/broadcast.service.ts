@@ -103,12 +103,16 @@ export class BroadcastService {
    * Agora soma users de TODOS os bots ativos.
    * Fail-safe: se telegram_bots vazia ou erro, cai no env legado.
    */
-  private async getActiveBotUsernames(): Promise<string[]> {
+  private async getActiveBotUsernames(includePromotional = false): Promise<string[]> {
     try {
-      const { data, error } = await this.supabase
+      let q = this.supabase
         .from('telegram_bots')
         .select('username')
         .eq('status', 'active');
+      // Igor (04/07): bots promocionais fora do broadcast default.
+      // Igor tem que optar explicitamente pra atingir esses users.
+      if (!includePromotional) q = q.eq('is_promotional', false);
+      const { data, error } = await q;
       if (error || !data?.length) {
         this.logger.warn(`getActiveBotUsernames fallback (${error?.message || 'sem bots ativos'})`);
         return [this.botUsername];
@@ -131,9 +135,9 @@ export class BroadcastService {
    * Fail-safe: se a query der erro, retorna 0 — nunca "cai" pra contagem
    * sem filtro, pra não arriscar disparar pra base inteira.
    */
-  async getBotUsersCount(): Promise<number> {
+  async getBotUsersCount(includePromotional = false): Promise<number> {
     try {
-      const usernames = await this.getActiveBotUsernames();
+      const usernames = await this.getActiveBotUsernames(includePromotional);
       const { count, error } = await this.supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
@@ -161,9 +165,9 @@ export class BroadcastService {
    * de TODOS os bots ativos em `telegram_bots`. Antes era filtro fixo pelo
    * bot do .env, perdendo os 5 bots novos.
    */
-  async getAllBotUsers(): Promise<any[]> {
+  async getAllBotUsers(includePromotional = false): Promise<any[]> {
     try {
-      const usernames = await this.getActiveBotUsernames();
+      const usernames = await this.getActiveBotUsernames(includePromotional);
       const allUsers: any[] = [];
       const pageSize = 1000;
       let page = 0;
