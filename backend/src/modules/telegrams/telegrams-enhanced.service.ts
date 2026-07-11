@@ -262,6 +262,47 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * promo (mensagem CTA) ou oficial (fluxo padrão), e pro handleBuyCallback
    * decidir se desvia pro promo (Cenário 3).
    */
+  /**
+   * Igor (09/07): resolve bot promocional vinculado a um content pro
+   * frontend público. Retorna { available, username } se:
+   * - content tem promotional_bot_id
+   * - bot promo existe, is_promotional=true, status=active
+   * - last_seen_ok_at recente (<5min) OU nunca fez healthcheck ainda
+   *   (aceita bot recém-cadastrado)
+   *
+   * Não expõe token — só username pra montar t.me/<user>?start=...
+   */
+  public async getPromoBotForContent(contentId: string): Promise<{
+    available: boolean;
+    username?: string;
+    is_release?: boolean;
+  }> {
+    try {
+      const { data: content } = await this.supabase
+        .from('content')
+        .select('id, promotional_bot_id, is_release')
+        .eq('id', contentId)
+        .maybeSingle();
+      if (!content?.promotional_bot_id) return { available: false };
+      const { data: bot } = await this.supabase
+        .from('telegram_bots')
+        .select('username, status, is_promotional, last_seen_ok_at')
+        .eq('id', content.promotional_bot_id)
+        .maybeSingle();
+      if (!bot || !bot.is_promotional || bot.status !== 'active') return { available: false };
+      // last_seen_ok_at pode estar null (bot recém-cadastrado) — aceita.
+      // Se preenchido, tem que ser recente.
+      if (bot.last_seen_ok_at) {
+        const ageMs = Date.now() - new Date(bot.last_seen_ok_at).getTime();
+        if (ageMs > 5 * 60 * 1000) return { available: false };
+      }
+      return { available: true, username: bot.username, is_release: !!content.is_release };
+    } catch (err: any) {
+      this.logger.warn(`getPromoBotForContent failed: ${err.message}`);
+      return { available: false };
+    }
+  }
+
   public async getBotMeta(botId: string): Promise<{
     id: string;
     username: string;
@@ -4344,6 +4385,28 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .update({ last_seen_ok_at: new Date().toISOString() })
         .eq('id', currentBotId!)
         .then(noop, warn('last_seen_ok_at'));
+      // Igor (09/07): log de start pra analytics 24h/diário. Detecta se
+      // é primeiro start desse user nesse bot (is_first_start=true) pra
+      // contador de "novos usuários" separado.
+      (async () => {
+        try {
+          const uid = telegramUserId || chatId;
+          const { data: prev } = await this.supabase
+            .from('promotional_bot_starts')
+            .select('id')
+            .eq('bot_id', currentBotId!)
+            .eq('telegram_user_id', uid)
+            .limit(1);
+          await this.supabase.from('promotional_bot_starts').insert({
+            bot_id: currentBotId,
+            telegram_user_id: uid,
+            telegram_chat_id: chatId,
+            is_first_start: !prev?.length,
+          });
+        } catch (err: any) {
+          this.logger.warn(`[promo] log start failed: ${err.message}`);
+        }
+      })();
 
       const parts = text.split(' ');
       // Cenário 3 — consumo de intent enviado por bot oficial.

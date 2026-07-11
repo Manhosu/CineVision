@@ -22,6 +22,10 @@ export interface Movie {
   genres?: string[];
   featured?: boolean;
   is_release?: boolean; // Badge "Novidade" no card (overlay CSS)
+  // Igor (09/07): bot promocional vinculado (Cenário 3+). Só aparece na
+  // resposta se is_release=true E o bot promo está ativo (backend valida).
+  promotional_bot_id?: string | null;
+  promotional_bot_username?: string | null;
   is_new_season?: boolean; // Badge "Nova Temporada" no card (overlay CSS)
   // Igor (04/06): pré-venda
   is_presale?: boolean;

@@ -209,6 +209,20 @@ export class TelegramsController {
     return res.redirect(302, target);
   }
 
+  /**
+   * Igor (09/07): endpoint público que retorna se um filme tem bot promocional
+   * vinculado + ATIVO + saudável. ContentHero no site chama pra decidir se
+   * o botão "Comprar" desvia pro bot promo (concentra interações lá).
+   *
+   * Não expõe token (só username pra montar t.me/<username>).
+   */
+  @Get('promo-bot-for-content')
+  async promoBotForContent(@Query('content') contentId?: string) {
+    const id = (contentId || '').trim();
+    if (!id) return { available: false };
+    return this.telegramsEnhancedService.getPromoBotForContent(id);
+  }
+
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })
   @ApiResponse({ status: 200, description: 'Notification sent successfully' })

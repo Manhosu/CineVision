@@ -114,6 +114,23 @@ export class BroadcastController {
   }
 
   /**
+   * Igor (09/07): breakdown de destinatários de broadcast — oficiais,
+   * promocionais e total. Painel de Marketing mostra separado assim
+   * ele sabe quantos vão receber de cada tipo antes de disparar.
+   */
+  @Get('users-breakdown')
+  async getUsersBreakdown() {
+    try {
+      const breakdown = await this.broadcastService.getBotUsersBreakdown();
+      const whatsapp = await this.broadcastService.getWhatsappUsersCount().catch(() => 0);
+      return { success: true, ...breakdown, whatsapp };
+    } catch (error) {
+      this.logger.error('Error in getUsersBreakdown:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Igor (12/05): retorna o detalhamento dos contadores para o painel.
    * - total_registered: usuários com telegram_id (todos os cadastrados)
    * - broadcast_eligible: usuários com telegram_chat_id (iniciaram /start)

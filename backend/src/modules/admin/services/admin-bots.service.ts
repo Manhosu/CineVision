@@ -328,6 +328,17 @@ export class AdminBotsService {
     return data || [];
   }
 
+  /**
+   * Igor (09/07): métricas detalhadas de UM bot promocional (total, 24h,
+   * 7d, breakdown diário 14 dias). Alimenta o dashboard individual.
+   */
+  async getPromotionalBotMetrics(botId: string) {
+    const { data, error } = await this.supabaseService.client
+      .rpc('promotional_bot_metrics', { p_bot_id: botId });
+    if (error) throw new Error(`Failed to fetch metrics: ${error.message}`);
+    return data || {};
+  }
+
   async deleteBot(id: string) {
     const { data: bot } = await this.supabaseService.client
       .from('telegram_bots')

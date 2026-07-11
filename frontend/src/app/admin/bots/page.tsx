@@ -71,7 +71,19 @@ export default function AdminBotsPage() {
   // Igor (04/07): campos extras pro cadastro de bot promocional
   const [newIsPromotional, setNewIsPromotional] = useState(false);
   const [newPromoContentId, setNewPromoContentId] = useState('');
-  const [newPromoTargetUrl, setNewPromoTargetUrl] = useState('');
+  // Igor (09/07): trocou o campo UUID por busca por nome de filme.
+  // Cliente digita "Superman" → autocomplete mostra os matches → seleciona.
+  const [newPromoContentSearch, setNewPromoContentSearch] = useState('');
+  const [newPromoContentTitle, setNewPromoContentTitle] = useState('');
+  const [contentSearchResults, setContentSearchResults] = useState<Array<{ id: string; title: string; poster_url?: string; content_type?: string }>>([]);
+  // Igor (09/07): cache de conteúdos vinculados aos bots promocionais
+  // (id → { title, poster_url }) pra renderizar poster no card.
+  const [contentCache, setContentCache] = useState<Record<string, { title: string; poster_url?: string; content_type?: string }>>({});
+  // Igor (09/07): edit inline do custom_display_name na tabela promocional.
+  const [editingNameBotId, setEditingNameBotId] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState('');
+  // Igor (09/07): métricas 24h dos bots promo (starts, unique users, first starts)
+  const [promoMetrics, setPromoMetrics] = useState<Record<string, any>>({});
   const [newCustomDisplayName, setNewCustomDisplayName] = useState('');
   const [newNotes, setNewNotes] = useState('');
 
@@ -163,6 +175,123 @@ export default function AdminBotsPage() {
 
   useEffect(() => { if (!authLoading) loadBots(); }, [authLoading, loadBots]);
 
+  // Igor (09/07): pra cada bot promocional com promotional_content_id
+  // preenchido, carrega o content (title + poster) e cacheia. Assim
+  // conseguimos renderizar o poster do filme no card do bot.
+  useEffect(() => {
+    if (activeTab !== 'promotional') return;
+    const idsToLoad = Array.from(new Set(
+      bots
+        .filter((b) => b.promotional_content_id && !contentCache[b.promotional_content_id])
+        .map((b) => b.promotional_content_id as string)
+    ));
+    if (!idsToLoad.length) return;
+    (async () => {
+      const entries: Array<[string, { title: string; poster_url?: string; content_type?: string }]> = [];
+      // Batch em paralelo — 1 fetch por id (endpoint público de content)
+      await Promise.all(idsToLoad.map(async (id) => {
+        try {
+          const r = await fetch(`${API_URL}/api/v1/content/${id}`);
+          if (r.ok) {
+            const d = await r.json();
+            entries.push([id, { title: d.title || 'Filme', poster_url: d.poster_url, content_type: d.content_type }]);
+          }
+        } catch { /* silent */ }
+      }));
+      if (entries.length) {
+        setContentCache((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+      }
+    })();
+  }, [bots, activeTab, contentCache]);
+
+  // Igor (09/07): carrega métricas 24h de cada bot promocional no card
+  useEffect(() => {
+    if (activeTab !== 'promotional' || !bots.length) return;
+    const idsToFetch = bots.filter((b) => !promoMetrics[b.id]).map((b) => b.id);
+    if (!idsToFetch.length) return;
+    (async () => {
+      const results = await Promise.all(idsToFetch.map(async (id) => {
+        try {
+          const r = await fetch(`${API_URL}/api/v1/admin/bots/${id}/promotional-metrics`, { headers: getHeaders() });
+          if (r.ok) return [id, await r.json()] as const;
+        } catch { /* silent */ }
+        return null;
+      }));
+      const next = { ...promoMetrics };
+      results.forEach((r) => {
+        if (r) next[r[0]] = r[1];
+      });
+      setPromoMetrics(next);
+    })();
+  }, [bots, activeTab, promoMetrics]);
+
+  // Igor (09/07): salva nome customizado editado inline na tabela.
+  const handleSaveName = async (botId: string) => {
+    const val = editingNameValue.trim();
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/${botId}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ custom_display_name: val || null }),
+      });
+      if (!res.ok) throw new Error('Falha ao renomear');
+      setEditingNameBotId(null);
+      setEditingNameValue('');
+      toast.success('Nome atualizado');
+      await loadBots();
+    } catch (e: any) {
+      toast.error(e.message || 'Erro ao renomear');
+    }
+  };
+
+  // Igor (09/07): refetch getMe pra atualizar display_name/username quando
+  // Igor renomear o bot no BotFather.
+  const handleRenameFromTelegram = async (botId: string) => {
+    const t = toast.loading('Puxando dados atualizados do Telegram...');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/${botId}/rename-from-telegram`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const body = await res.json();
+      toast.dismiss(t);
+      if (!res.ok) throw new Error(body?.message || 'Falha ao atualizar');
+      const changed = body.old_username !== body.new_username;
+      toast.success(changed
+        ? `Atualizado: @${body.old_username} → @${body.new_username}`
+        : `Bot @${body.new_username} atualizado.`);
+      await loadBots();
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e.message || 'Erro');
+    }
+  };
+
+  // Igor (09/07): busca autocomplete de filme quando cadastrando bot
+  // promocional. Debounce 400ms + só busca >= 2 chars.
+  useEffect(() => {
+    const q = newPromoContentSearch.trim();
+    if (q.length < 2) { setContentSearchResults([]); return; }
+    // Se o campo bate exatamente com o filme já selecionado, não busca de novo
+    if (q === newPromoContentTitle) return;
+    const h = setTimeout(async () => {
+      try {
+        const [rMovies, rSeries] = await Promise.all([
+          fetch(`${API_URL}/api/v1/content/movies?search=${encodeURIComponent(q)}&limit=8`),
+          fetch(`${API_URL}/api/v1/content/series?search=${encodeURIComponent(q)}&limit=5`),
+        ]);
+        const dMovies = rMovies.ok ? await rMovies.json() : {};
+        const dSeries = rSeries.ok ? await rSeries.json() : {};
+        const listMovies = (Array.isArray(dMovies) ? dMovies : dMovies.movies || dMovies.data || [])
+          .map((m: any) => ({ id: m.id, title: m.title, poster_url: m.poster_url, content_type: 'movie' }));
+        const listSeries = (Array.isArray(dSeries) ? dSeries : dSeries.series || dSeries.data || [])
+          .map((s: any) => ({ id: s.id, title: s.title, poster_url: s.poster_url, content_type: 'series' }));
+        setContentSearchResults([...listMovies, ...listSeries].slice(0, 10));
+      } catch { setContentSearchResults([]); }
+    }, 400);
+    return () => clearTimeout(h);
+  }, [newPromoContentSearch, newPromoContentTitle]);
+
   const handleAdd = async () => {
     if (!newToken.trim()) { toast.error('Cole o token do bot.'); return; }
     setAdding(true);
@@ -175,7 +304,6 @@ export default function AdminBotsPage() {
       if (newIsPromotional || activeTab === 'promotional') {
         payload.is_promotional = true;
         payload.promotional_content_id = newPromoContentId.trim() || undefined;
-        payload.promotional_target_url = newPromoTargetUrl.trim() || undefined;
         payload.custom_display_name = newCustomDisplayName.trim() || undefined;
         payload.notes = newNotes.trim() || undefined;
       }
@@ -192,7 +320,9 @@ export default function AdminBotsPage() {
       setNewDisplayName('');
       setNewIsPromotional(false);
       setNewPromoContentId('');
-      setNewPromoTargetUrl('');
+      setNewPromoContentSearch('');
+      setNewPromoContentTitle('');
+      setContentSearchResults([]);
       setNewCustomDisplayName('');
       setNewNotes('');
       await loadBots();
@@ -355,6 +485,134 @@ export default function AdminBotsPage() {
         </button>
       </div>
 
+      {/* Igor (09/07): grid de cards pra aba Promocionais — layout dedicado
+          com poster do filme vinculado, edit inline do nome, e contador de
+          /start com breakdown 24h vs total. Aba Oficiais mantém tabela clássica. */}
+      {activeTab === 'promotional' && (
+        <div>
+          {bots.length === 0 && (
+            <div className="bg-dark-800 border border-white/10 rounded-lg p-8 text-center text-gray-500">
+              Nenhum bot promocional cadastrado ainda.
+              <div className="mt-3 text-xs text-gray-600">
+                Clique em <span className="text-white">+ Adicionar bot promocional</span> pra começar.
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {bots.map((bot) => {
+              const content = bot.promotional_content_id ? contentCache[bot.promotional_content_id] : null;
+              const isEditingName = editingNameBotId === bot.id;
+              const displayLabel = bot.custom_display_name || bot.display_name || bot.username;
+              return (
+                <div key={bot.id} className="bg-dark-800 border border-amber-500/20 rounded-xl overflow-hidden hover:border-amber-500/40 transition-colors">
+                  <div className="relative">
+                    {content?.poster_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={content.poster_url} alt={content.title} className="w-full h-48 object-cover" />
+                    ) : (
+                      <div className="w-full h-48 bg-gradient-to-br from-amber-500/10 to-dark-900 flex items-center justify-center text-5xl">🎬</div>
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-1 rounded-full backdrop-blur-sm ${
+                        bot.status === 'active' ? 'bg-emerald-500/90 text-black' :
+                        bot.status === 'banned_br' ? 'bg-yellow-500/90 text-black' : 'bg-gray-500/90 text-white'
+                      }`}>
+                        {bot.status === 'active' ? '● ativo' : bot.status === 'banned_br' ? 'banido' : 'inativo'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    {isEditingName ? (
+                      <div className="mb-2 flex gap-2">
+                        <input
+                          type="text"
+                          value={editingNameValue}
+                          onChange={(e) => setEditingNameValue(e.target.value)}
+                          className="flex-1 px-2 py-1 bg-dark-700 border border-amber-500/50 rounded text-white text-sm"
+                          autoFocus
+                        />
+                        <button onClick={() => handleSaveName(bot.id)} className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs">✓</button>
+                        <button onClick={() => { setEditingNameBotId(null); setEditingNameValue(''); }} className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">✕</button>
+                      </div>
+                    ) : (
+                      <div className="mb-2 flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-semibold text-sm truncate">{displayLabel}</h3>
+                          <p className="text-xs text-gray-500 truncate">@{bot.username}</p>
+                        </div>
+                        <button
+                          onClick={() => { setEditingNameBotId(bot.id); setEditingNameValue(bot.custom_display_name || ''); }}
+                          className="text-gray-500 hover:text-amber-400 text-xs px-1"
+                          title="Editar nome"
+                        >
+                          ✏️
+                        </button>
+                      </div>
+                    )}
+                    {content && (
+                      <p className="text-xs text-amber-300/70 mb-3 truncate">
+                        🔗 Vinculado a: <strong>{content.title}</strong>
+                      </p>
+                    )}
+                    <div className="grid grid-cols-3 gap-1.5 mb-2">
+                      <div className="bg-dark-700 rounded p-2 text-center">
+                        <div className="text-base font-bold text-amber-400">
+                          {(promoMetrics[bot.id]?.total_starts ?? bot.promotional_start_count ?? 0).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[10px] text-gray-500 uppercase">total /start</div>
+                      </div>
+                      <div className="bg-dark-700 rounded p-2 text-center">
+                        <div className="text-base font-bold text-blue-400">
+                          {(promoMetrics[bot.id]?.starts_24h ?? 0).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[10px] text-gray-500 uppercase">últimas 24h</div>
+                      </div>
+                      <div className="bg-dark-700 rounded p-2 text-center">
+                        <div className="text-base font-bold text-emerald-400">
+                          {(promoMetrics[bot.id]?.first_starts_24h ?? 0).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[10px] text-gray-500 uppercase">novos 24h</div>
+                      </div>
+                    </div>
+                    {/* Mini timeline dos últimos 7 dias */}
+                    {promoMetrics[bot.id]?.daily?.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-[10px] text-gray-500 mb-1 uppercase">Últimos 7 dias</div>
+                        <div className="flex items-end gap-0.5 h-8">
+                          {(promoMetrics[bot.id].daily.slice(0, 7).reverse() as any[]).map((d, i) => {
+                            const max = Math.max(...(promoMetrics[bot.id].daily as any[]).map((x: any) => x.starts));
+                            const h = max > 0 ? (d.starts / max) * 100 : 0;
+                            return (
+                              <div key={i} className="flex-1 bg-amber-500/40 rounded-t" style={{ height: `${Math.max(h, 5)}%` }} title={`${d.day}: ${d.starts} starts`} />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div className="text-[10px] text-gray-500 mb-3">
+                      Último OK: <span className="text-gray-400">{formatRelativeBr(bot.last_seen_ok_at)}</span>
+                    </div>
+                    <div className="flex gap-1 flex-wrap">
+                      <button onClick={() => handleHealthcheck(bot.id)} className="flex-1 px-2 py-1.5 bg-dark-700 hover:bg-dark-600 text-white text-xs rounded">🔍 Testar</button>
+                      <button onClick={() => handleSetupWebhook(bot.id)} className="flex-1 px-2 py-1.5 bg-dark-700 hover:bg-dark-600 text-white text-xs rounded">🔗 Webhook</button>
+                      <button onClick={() => handleRenameFromTelegram(bot.id)} className="flex-1 px-2 py-1.5 bg-dark-700 hover:bg-dark-600 text-white text-xs rounded" title="Repuxa nome do BotFather">🔄 Sync</button>
+                      <button
+                        onClick={() => { if (confirm(`Remover @${bot.username}?`)) handleDelete(bot.id, bot.username); }}
+                        className="px-2 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-400 text-xs rounded"
+                        title="Remover"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'official' && (
       <div className="bg-dark-800 border border-white/10 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-dark-900 text-gray-400 text-xs uppercase">
@@ -471,15 +729,22 @@ export default function AdminBotsPage() {
           </tbody>
         </table>
       </div>
+      )}
 
+      {activeTab === 'official' && (
       <div className="mt-6 text-xs text-gray-500 space-y-1">
         <p>• <strong>Atendimento</strong>: bot pode receber novos /start. Peso define probabilidade no sorteio rotativo (0 = não participa).</p>
         <p>• <strong>Entrega</strong>: bot pode gerar invite link em grupos onde é admin. Funciona mesmo banido pra novos /start (via API).</p>
         <p>• <strong>Default</strong>: bot usado como fallback quando o sorteio não escolhe nenhum específico.</p>
       </div>
+      )}
 
-      {/* N30: Estatísticas de usuários por bot */}
-      {userStats && (
+      {/* N30: Estatísticas de usuários por bot — SÓ na aba Oficiais.
+          Igor (09/07): reportou que os oficiais estavam aparecendo na aba
+          Promocionais. Feedback também: essas seções (PIX manual, popup
+          WhatsApp, stats de users) são configs globais dos bots oficiais
+          e não fazem sentido na aba Promocionais. */}
+      {userStats && activeTab === 'official' && (
         <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
           <h2 className="text-base font-semibold text-white mb-4">Usuários por Bot</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -507,7 +772,8 @@ export default function AdminBotsPage() {
         </div>
       )}
 
-      {/* Igor (14/06 noite): PIX manual fallback */}
+      {/* Igor (14/06 noite): PIX manual fallback — SÓ aba Oficiais */}
+      {activeTab === 'official' && (
       <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
         <h2 className="text-base font-semibold text-white mb-1">PIX manual (fallback)</h2>
         <p className="text-xs text-gray-500 mb-4">
@@ -589,8 +855,10 @@ export default function AdminBotsPage() {
           </div>
         </div>
       </div>
+      )}
 
-      {/* N25: Configurações do popup WhatsApp */}
+      {/* N25: Configurações do popup WhatsApp — SÓ aba Oficiais */}
+      {activeTab === 'official' && (
       <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
         <h2 className="text-base font-semibold text-white mb-4">Popup de WhatsApp</h2>
         <div className="flex flex-col gap-4">
@@ -626,6 +894,7 @@ export default function AdminBotsPage() {
           </div>
         </div>
       </div>
+      )}
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -674,31 +943,66 @@ export default function AdminBotsPage() {
                         Útil quando você renomeia o bot no BotFather (ex: Superman → Panico 6) mas quer manter rastreamento.
                       </p>
                     </div>
+                    {/* Igor (09/07): busca por nome do filme (não UUID).
+                        Removeu URL customizada que confundiu. */}
                     <div>
-                      <label className="block text-sm text-gray-300 mb-1">Content ID vinculado (UUID)</label>
-                      <input
-                        type="text"
-                        value={newPromoContentId}
-                        onChange={(e) => setNewPromoContentId(e.target.value)}
-                        placeholder="UUID do filme/série (opcional)"
-                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm font-mono"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Quando cliente dá /start, bot mostra CTA com esse filme. Pegue o UUID em Gerenciar Conteúdos.
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-300 mb-1">URL de destino customizada (opcional)</label>
-                      <input
-                        type="text"
-                        value={newPromoTargetUrl}
-                        onChange={(e) => setNewPromoTargetUrl(e.target.value)}
-                        placeholder="https://cinevisionapp.com.br/..."
-                        className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Se preenchido, sobrepõe o link padrão. Deixe vazio pra usar o filme vinculado.
-                      </p>
+                      <label className="block text-sm text-gray-300 mb-1">
+                        🎬 Filme vinculado <span className="text-gray-500">(digita o nome pra buscar)</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={newPromoContentSearch}
+                          onChange={(e) => {
+                            setNewPromoContentSearch(e.target.value);
+                            // Se editou depois de selecionar, limpa a seleção
+                            if (e.target.value !== newPromoContentTitle) {
+                              setNewPromoContentId('');
+                              setNewPromoContentTitle('');
+                            }
+                          }}
+                          placeholder='Ex: "Todo Mundo em Pânico"'
+                          className="w-full px-3 py-2 bg-dark-800 border border-white/10 rounded text-white text-sm"
+                          autoComplete="off"
+                        />
+                        {contentSearchResults.length > 0 && !newPromoContentId && (
+                          <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-dark-900 border border-white/20 rounded-lg shadow-xl">
+                            {contentSearchResults.map((c) => (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => {
+                                  setNewPromoContentId(c.id);
+                                  setNewPromoContentTitle(c.title);
+                                  setNewPromoContentSearch(c.title);
+                                  setContentSearchResults([]);
+                                }}
+                                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-dark-700 text-left border-b border-white/5 last:border-b-0"
+                              >
+                                {c.poster_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={c.poster_url} alt="" className="w-8 h-12 object-cover rounded" />
+                                ) : (
+                                  <div className="w-8 h-12 bg-dark-700 rounded flex items-center justify-center text-xs">🎬</div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-white truncate">{c.title}</div>
+                                  <div className="text-[10px] text-gray-500 uppercase">{c.content_type === 'series' ? 'Série' : 'Filme'}</div>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {newPromoContentId ? (
+                        <p className="text-xs text-emerald-400 mt-1">
+                          ✅ Selecionado: <strong>{newPromoContentTitle}</strong> — quando cliente der /start, verá esse filme.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Quando cliente dá /start no bot, ele recebe uma mensagem com o poster desse filme e um botão pro site.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm text-gray-300 mb-1">Notas internas</label>

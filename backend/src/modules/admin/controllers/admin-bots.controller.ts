@@ -61,6 +61,12 @@ export class AdminBotsController {
     return { rows, days: d };
   }
 
+  @Get(':id/promotional-metrics')
+  @ApiOperation({ summary: 'Métricas detalhadas de UM bot promocional (24h, 7d, daily breakdown).' })
+  async promotionalMetrics(@Param('id') id: string) {
+    return this.adminBotsService.getPromotionalBotMetrics(id);
+  }
+
   @Patch(':id')
   @ApiOperation({ summary: 'Atualiza bot (papéis, peso, status, default)' })
   async update(

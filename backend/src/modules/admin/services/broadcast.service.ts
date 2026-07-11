@@ -103,7 +103,7 @@ export class BroadcastService {
    * Agora soma users de TODOS os bots ativos.
    * Fail-safe: se telegram_bots vazia ou erro, cai no env legado.
    */
-  private async getActiveBotUsernames(includePromotional = false): Promise<string[]> {
+  private async getActiveBotUsernames(includePromotional = true): Promise<string[]> {
     try {
       let q = this.supabase
         .from('telegram_bots')
@@ -135,7 +135,7 @@ export class BroadcastService {
    * Fail-safe: se a query der erro, retorna 0 — nunca "cai" pra contagem
    * sem filtro, pra não arriscar disparar pra base inteira.
    */
-  async getBotUsersCount(includePromotional = false): Promise<number> {
+  async getBotUsersCount(includePromotional = true): Promise<number> {
     try {
       const usernames = await this.getActiveBotUsernames(includePromotional);
       const { count, error } = await this.supabase
@@ -158,6 +158,39 @@ export class BroadcastService {
   }
 
   /**
+   * Igor (09/07): breakdown de destinatários por tipo de bot — pro painel
+   * de Marketing mostrar oficiais vs promocionais vs total. Igor quer
+   * saber "quantos vão receber SE eu clicar broadcast agora".
+   */
+  async getBotUsersBreakdown(): Promise<{ official: number; promotional: number; total: number }> {
+    try {
+      const officialUsernames = await this.getActiveBotUsernames(false);
+      const allUsernames = await this.getActiveBotUsernames(true);
+      const promoUsernames = allUsernames.filter((u) => !officialUsernames.includes(u));
+
+      const countFor = async (list: string[]) => {
+        if (!list.length) return 0;
+        const { count } = await this.supabase
+          .from('users')
+          .select('*', { count: 'exact', head: true })
+          .not('telegram_chat_id', 'is', null)
+          .eq('blocked', false)
+          .in('bot_username', list);
+        return count || 0;
+      };
+
+      const [official, promotional] = await Promise.all([
+        countFor(officialUsernames),
+        countFor(promoUsernames),
+      ]);
+      return { official, promotional, total: official + promotional };
+    } catch (error) {
+      this.logger.error('Error in getBotUsersBreakdown:', error);
+      return { official: 0, promotional: 0, total: 0 };
+    }
+  }
+
+  /**
    * Busca todos os usuários ativos nos bots ATIVOS (destinatários do "Todos").
    * Paginado (Supabase devolve no máx. 1000 por request).
    *
@@ -165,7 +198,7 @@ export class BroadcastService {
    * de TODOS os bots ativos em `telegram_bots`. Antes era filtro fixo pelo
    * bot do .env, perdendo os 5 bots novos.
    */
-  async getAllBotUsers(includePromotional = false): Promise<any[]> {
+  async getAllBotUsers(includePromotional = true): Promise<any[]> {
     try {
       const usernames = await this.getActiveBotUsernames(includePromotional);
       const allUsers: any[] = [];

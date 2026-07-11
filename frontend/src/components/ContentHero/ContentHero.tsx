@@ -250,17 +250,42 @@ export default function ContentHero({
       return;
     }
 
-    // Igor (04/07): Cenário 1 — cliente veio de um bot promocional (via
-    // PromoLinkCapture) → SITE NÃO GERA PIX. Redireciona pro bot oficial
-    // via rotação (getBotDeeplink já filtra promos). Objetivo do fluxo:
-    // manter cliente dentro do Telegram, aumentando interações reais
-    // no ecossistema (rank de busca) e concentrando vendas no bot oficial.
-    if (typeof window !== 'undefined') {
-      let promoBot: string | null = null;
+    // Igor (09/07): Cenário 3 mais amplo — se o filme tem bot promocional
+    // vinculado (setado em /admin/content/[id]/edit) E o bot está ativo,
+    // o botão Comprar leva DIRETO pro bot promo, independente da origem
+    // do cliente. Assim toda venda desse filme aumenta interações reais
+    // no bot promo → melhor ranking na busca do Telegram.
+    //
+    // Prioridade:
+    //   1) Content tem promotional_bot vinculado + ativo → bot promo
+    //   2) Cliente veio de bot promo (Cenário 1) → bot oficial via rotação
+    //   3) Fluxo padrão (logado → bot oficial, anônimo → cart/checkout)
+    if (typeof window !== 'undefined' && !isOwned) {
       try {
-        promoBot = sessionStorage.getItem('cv_promo_bot');
-      } catch { /* incógnito bloqueado */ }
-      if (promoBot && !isOwned) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const r = await fetch(
+          `${apiUrl}/api/v1/telegrams/promo-bot-for-content?content=${encodeURIComponent(content.id)}`,
+          { cache: 'no-store' }
+        );
+        if (r.ok) {
+          const data = await r.json();
+          if (data.available && data.username) {
+            // Deep-link direto pro bot promo com o mesmo start=buy_ que ele
+            // já sabe processar (handleBuyCallback intercepta lá dentro).
+            const url = `https://t.me/${data.username}?start=buy_${content.id}`;
+            window.open(url, '_blank');
+            toast.success('Abrindo Telegram...', { duration: 2000 });
+            return;
+          }
+        }
+      } catch { /* fallback pros próximos branches */ }
+
+      // Cenário 1 legado — cliente veio de bot promo (promo_link_capture).
+      let promoBotSession: string | null = null;
+      try {
+        promoBotSession = sessionStorage.getItem('cv_promo_bot');
+      } catch { /* incógnito */ }
+      if (promoBotSession) {
         const url = await getBotDeeplink(`buy_${content.id}`);
         window.open(url, '_blank');
         toast.success('Abrindo Telegram...', { duration: 2000 });
