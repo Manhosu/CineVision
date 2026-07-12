@@ -15,9 +15,10 @@ export class AdminTop10Service {
   async getCurrentTop10(type: 'movie' | 'series' | 'novelinha') {
     const { data, error } = await this.supabaseService.client
       .from('content')
-      .select('id, title, thumbnail_url, poster_url, content_type, weekly_sales, views_count, price_cents, status')
+      .select('id, title, thumbnail_url, poster_url, content_type, weekly_sales, views_count, price_cents, status, previous_rank')
       .eq('content_type', type)
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('previous_rank', { ascending: true, nullsFirst: false }) // Igor (11/07): desempate sticky
       .order('views_count', { ascending: false })
       .limit(10);
 

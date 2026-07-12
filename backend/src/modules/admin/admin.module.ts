@@ -16,6 +16,7 @@ import { AdminPurchasesController } from './controllers/admin-purchases.controll
 import { AdminPurchasesSimpleService } from './services/admin-purchases-simple.service';
 import { PurchasesCleanupService } from './services/purchases-cleanup.service';
 import { PromotionalIntentsCleanupService } from './services/promotional-intents-cleanup.service';
+import { PromotionalBotsPingService } from './services/promotional-bots-ping.service';
 import { AdminRequestsController } from './controllers/admin-requests.controller';
 import { AdminRequestsPublicController } from './controllers/admin-requests-public.controller';
 import { AdminUsersController } from './controllers/admin-users.controller';
@@ -64,6 +65,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PaymentsModule } from '../payments/payments.module';
 import { EmployeesModule } from '../employees/employees.module';
 import { ContentEditRequestsModule } from '../content-edit-requests/content-edit-requests.module';
+import { ContentModule } from '../content/content.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { optionalTypeOrmFeature, isTypeOrmEnabled } from '../../config/typeorm-optional.helper';
 
@@ -118,6 +120,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   RequestsSupabaseService,
   PurchasesCleanupService,
   PromotionalIntentsCleanupService,
+  PromotionalBotsPingService,
   HomepageCarouselsService,
 ] : [
   AdminContentSimpleService,
@@ -127,6 +130,7 @@ const conditionalProviders = isTypeOrmEnabled() ? [
   AdminPurchasesSimpleService,
   PurchasesCleanupService,
   PromotionalIntentsCleanupService,
+  PromotionalBotsPingService,
   StripeService,
   WooviService,
   ContentLanguageSupabaseService,
@@ -174,6 +178,7 @@ const conditionalExports = isTypeOrmEnabled() ? [
     forwardRef(() => PaymentsModule),
     forwardRef(() => EmployeesModule),
     forwardRef(() => ContentEditRequestsModule),
+    forwardRef(() => ContentModule), // Igor (11/07): AdminTop10Controller usa WeeklyResetService (backfill previous_ranks)
     WhatsappModule,
   ],
   controllers: conditionalControllers,

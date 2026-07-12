@@ -86,6 +86,13 @@ export default function BroadcastPage() {
     whatsapp_eligible: number;
     gap: number;
   } | null>(null);
+  // Igor (11/07): breakdown oficial/promocional/whatsapp/total (endpoint /users-breakdown)
+  const [breakdown, setBreakdown] = useState<{
+    official: number;
+    promotional: number;
+    whatsapp: number;
+    total: number;
+  } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [activeBroadcast, setActiveBroadcast] = useState<BroadcastProgress | null>(null);
   const [sendStartTime, setSendStartTime] = useState<number | null>(null);
@@ -104,6 +111,7 @@ export default function BroadcastPage() {
     if (token) {
       fetchUsersCount();
       fetchBroadcastStats();
+      fetchBreakdown();
       fetchHistory();
     }
   }, [mounted]);
@@ -198,6 +206,24 @@ export default function BroadcastPage() {
       }
     } catch (err) {
       console.error('Error fetching users count:', err);
+    }
+  };
+
+  // Igor (11/07): breakdown oficial/promocional/whatsapp/total.
+  const fetchBreakdown = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/admin/broadcast/users-breakdown`, { headers: getHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setBreakdown({
+          official: data.official || 0,
+          promotional: data.promotional || 0,
+          whatsapp: data.whatsapp || 0,
+          total: data.total || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching breakdown:', err);
     }
   };
 
@@ -457,6 +483,47 @@ export default function BroadcastPage() {
                 <p className="text-xs text-gray-500 mt-1">com número cadastrado</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Igor (11/07): breakdown de alcance por tipo de bot + card
+            explicativo de anti-spam. Antes ele achava que broadcast ia
+            duplicar msg pra quem tem chat em vários bots (não vai —
+            users.telegram_id é UNIQUE, 1 pessoa = 1 mensagem). */}
+        {breakdown && (
+          <div className="mb-6 bg-[#111] rounded-xl border border-gray-800 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-white">📊 Alcance por tipo</h3>
+              <span className="text-xs text-gray-500">Cada cliente recebe UMA mensagem, mesmo estando em vários bots</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Bots Oficiais</p>
+                <p className="text-xl font-bold text-blue-400 mt-1">{breakdown.official.toLocaleString('pt-BR')}</p>
+              </div>
+              <div className="bg-amber-500/5 rounded-lg p-3 border border-amber-500/20">
+                <p className="text-[10px] text-amber-400 uppercase tracking-wide">🎟 Promocionais</p>
+                <p className="text-xl font-bold text-amber-400 mt-1">{breakdown.promotional.toLocaleString('pt-BR')}</p>
+              </div>
+              <div className="bg-green-500/5 rounded-lg p-3 border border-green-500/20">
+                <p className="text-[10px] text-green-400 uppercase tracking-wide">WhatsApp</p>
+                <p className="text-xl font-bold text-green-400 mt-1">{breakdown.whatsapp.toLocaleString('pt-BR')}</p>
+              </div>
+              <div className="bg-primary-500/10 rounded-lg p-3 border border-primary-500/30">
+                <p className="text-[10px] text-primary-400 uppercase tracking-wide">Total único</p>
+                <p className="text-xl font-bold text-white mt-1">{breakdown.total.toLocaleString('pt-BR')}</p>
+              </div>
+            </div>
+            <details className="mt-3">
+              <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">
+                💡 Como funciona o anti-spam?
+              </summary>
+              <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                Cada cliente aparece <strong>uma única vez</strong> na base — o campo <code className="bg-white/5 px-1 rounded">telegram_id</code> é único.
+                Mesmo que ele tenha dado /start em 10 bots diferentes, ele recebe UMA mensagem, enviada pelo último bot em que ele deu /start.
+                Sistema não duplica mensagens.
+              </p>
+            </details>
           </div>
         )}
 

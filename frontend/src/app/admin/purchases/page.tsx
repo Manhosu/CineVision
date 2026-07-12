@@ -49,6 +49,19 @@ export default function AdminPurchasesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Igor (11/07): chips de filtro rápido de data (24h / 7d / 30d).
+  const [dateRange, setDateRange] = useState<'all' | '24h' | '7d' | '30d' | 'custom'>('all');
+  const applyDateRange = (r: 'all' | '24h' | '7d' | '30d' | 'custom') => {
+    setDateRange(r);
+    setCurrentPage(1);
+    if (r === 'all') { setDateFrom(''); setDateTo(''); return; }
+    if (r === 'custom') return;
+    const now = new Date();
+    const days = ({ '24h': 1, '7d': 7, '30d': 30 } as const)[r];
+    const from = new Date(now); from.setDate(now.getDate() - days);
+    setDateFrom(from.toISOString().slice(0, 10));
+    setDateTo(now.toISOString().slice(0, 10));
+  };
   const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
   const [groupByOrder, setGroupByOrder] = useState(true);
   const router = useRouter();
@@ -402,20 +415,42 @@ export default function AdminPurchasesPage() {
                 <option value="refunded">Reembolsado</option>
               </select>
             </div>
+            {/* Igor (11/07): chips de filtro rápido de data */}
+            <div className="flex flex-wrap items-center gap-2">
+              {([
+                { v: 'all', l: 'Todos' },
+                { v: '24h', l: '24h' },
+                { v: '7d', l: '7 dias' },
+                { v: '30d', l: '30 dias' },
+              ] as const).map((chip) => (
+                <button
+                  key={chip.v}
+                  onClick={() => applyDateRange(chip.v)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                    dateRange === chip.v
+                      ? 'bg-primary-500/20 border-primary-500 text-primary-200'
+                      : 'bg-dark-700 border-white/10 text-gray-300 hover:bg-dark-600'
+                  }`}
+                >
+                  {chip.l}
+                </button>
+              ))}
+            </div>
+
             {/* Date Range Filter */}
             <div className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-400">De:</label>
-                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setDateRange('custom'); setCurrentPage(1); }}
                   className="px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-400">Até:</label>
-                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setDateRange('custom'); setCurrentPage(1); }}
                   className="px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
               {(dateFrom || dateTo) && (
-                <button onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+                <button onClick={() => applyDateRange('all')}
                   className="px-3 py-2 bg-red-600/20 text-red-400 rounded-lg text-sm hover:bg-red-600/30 transition-colors">
                   Limpar datas
                 </button>

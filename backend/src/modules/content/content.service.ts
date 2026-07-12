@@ -387,6 +387,7 @@ export class ContentService {
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere("content.content_type = :type", { type: 'movie' })
       .orderBy('content.weekly_sales', 'DESC') // Prioriza vendas semanais
+      .addOrderBy('content.previous_rank', 'ASC', 'NULLS LAST') // Igor (11/07): desempate sticky
       .addOrderBy('content.views_count', 'DESC') // Depois visualizações
       .addOrderBy('content.created_at', 'DESC') // Por último, mais recentes
       .take(10)
@@ -401,6 +402,7 @@ export class ContentService {
       .where('content.status = :status', { status: ContentStatus.PUBLISHED })
       .andWhere("content.content_type = :type", { type: 'series' })
       .orderBy('content.weekly_sales', 'DESC') // Prioriza vendas semanais
+      .addOrderBy('content.previous_rank', 'ASC', 'NULLS LAST') // Igor (11/07): desempate sticky
       .addOrderBy('content.views_count', 'DESC') // Depois visualizações
       .addOrderBy('content.created_at', 'DESC') // Por último, mais recentes
       .take(10)

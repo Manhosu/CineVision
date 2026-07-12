@@ -35,6 +35,23 @@ export class ContentController {
     return this.contentService.findMovieById(id);
   }
 
+  /**
+   * Igor (11/07): rota agnóstica de tipo pra painel admin buscar
+   * content por UUID quando não sabe se é movie/series/novelinha
+   * (usado pra renderizar poster do filme vinculado nos cards de
+   * bot promocional em /admin/bots).
+   */
+  @Get('by-id/:id')
+  @ApiOperation({ summary: 'Get content by ID (agnostic of type)' })
+  async getContentById(@Param('id') id: string) {
+    // Tenta movie, series e novelinha em cascata — retorna o que achar
+    const movie = await this.contentService.findMovieById(id).catch(() => null);
+    if (movie) return movie;
+    const series = await this.contentService.findSeriesById(id).catch(() => null);
+    if (series) return series;
+    return this.contentService.findNovelinhaById(id).catch(() => null);
+  }
+
   @Get('series/:id')
   @ApiOperation({ summary: 'Get series by ID' })
   @ApiResponse({ status: 200, description: 'Series retrieved successfully' })

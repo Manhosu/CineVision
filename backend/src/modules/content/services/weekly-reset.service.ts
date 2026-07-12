@@ -23,7 +23,13 @@ export class WeeklyResetService {
       // 1. Save snapshot of current top 10 movies and series to weekly_rankings
       await this.saveWeeklySnapshot();
 
-      // 2. Reset all weekly_sales to 0
+      // 2. Igor (11/07): grava previous_rank ANTES de zerar weekly_sales.
+      //    Assim as queries de leitura têm um desempate primário (rank
+      //    da semana anterior) e o top 10 não randomiza pra views_count
+      //    quando todo mundo fica com weekly_sales=0.
+      await this.snapshotPreviousRanks();
+
+      // 3. Reset all weekly_sales to 0
       const { error } = await this.supabaseService.client
         .from('content')
         .update({ weekly_sales: 0 })
@@ -38,6 +44,51 @@ export class WeeklyResetService {
     } catch (error) {
       this.logger.error('Error resetting weekly sales:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Igor (11/07): grava previous_rank=1..10 pro top 10 atual de cada
+   * content_type. NULL o rank de quem não está no top. Rodado ANTES do
+   * reset de weekly_sales — assim o snapshot reflete a semana que
+   * acabou de terminar.
+   *
+   * Também usado como backfill manual (endpoint one-shot) quando o
+   * deploy acontece no meio da semana e não dá pra esperar domingo.
+   */
+  async snapshotPreviousRanks() {
+    const c = this.supabaseService.client;
+
+    // Zera todos os ranks anteriores primeiro (bot pode ter saído do top 10)
+    await c.from('content')
+      .update({ previous_rank: null })
+      .not('previous_rank', 'is', null);
+
+    const types = ['movie', 'series', 'novelinha'];
+    for (const type of types) {
+      const { data, error } = await c
+        .from('content')
+        .select('id')
+        .eq('content_type', type)
+        .eq('status', 'PUBLISHED')
+        .order('weekly_sales', { ascending: false, nullsFirst: false })
+        .order('views_count', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) {
+        this.logger.warn(`snapshotPreviousRanks(${type}) failed: ${error.message}`);
+        continue;
+      }
+      if (!data?.length) continue;
+
+      // UPDATE 1 por 1 (10 rows max por type = 30 rows total, sem overhead)
+      await Promise.all(
+        data.map((r, i) =>
+          c.from('content').update({ previous_rank: i + 1 }).eq('id', r.id),
+        ),
+      );
+      this.logger.log(`snapshotPreviousRanks(${type}): ${data.length} rows`);
     }
   }
 

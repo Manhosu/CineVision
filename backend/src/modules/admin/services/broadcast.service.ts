@@ -244,8 +244,25 @@ export class BroadcastService {
         }
       }
 
-      this.logger.log(`Total users fetched: ${allUsers.length}`);
-      return allUsers;
+      // Igor (11/07): dedup defensivo por telegram_id. Schema já tem
+      // telegram_id UNIQUE, mas belt-and-suspenders — se alguma vez
+      // aparecerem 2 rows com mesmo telegram_id (bug de import antigo),
+      // broadcast não duplica mensagem pro mesmo cliente.
+      const seen = new Set<string>();
+      const dedupedUsers: any[] = [];
+      for (const u of allUsers) {
+        if (!u.telegram_id) continue;
+        const key = String(u.telegram_id);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        dedupedUsers.push(u);
+      }
+      const dupCount = allUsers.length - dedupedUsers.length;
+      if (dupCount > 0) {
+        this.logger.warn(`Broadcast dedup removed ${dupCount} duplicate telegram_ids`);
+      }
+      this.logger.log(`Total users fetched: ${allUsers.length} (deduped: ${dedupedUsers.length})`);
+      return dedupedUsers;
     } catch (error) {
       this.logger.error('Error in getAllBotUsers:', error);
       throw error;

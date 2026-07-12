@@ -191,7 +191,7 @@ export default function AdminBotsPage() {
       // Batch em paralelo — 1 fetch por id (endpoint público de content)
       await Promise.all(idsToLoad.map(async (id) => {
         try {
-          const r = await fetch(`${API_URL}/api/v1/content/${id}`);
+          const r = await fetch(`${API_URL}/api/v1/content/by-id/${id}`);
           if (r.ok) {
             const d = await r.json();
             entries.push([id, { title: d.title || 'Filme', poster_url: d.poster_url, content_type: d.content_type }]);
@@ -746,7 +746,7 @@ export default function AdminBotsPage() {
           e não fazem sentido na aba Promocionais. */}
       {userStats && activeTab === 'official' && (
         <div className="mt-8 bg-dark-800 border border-white/10 rounded-lg p-5">
-          <h2 className="text-base font-semibold text-white mb-4">Usuários por Bot</h2>
+          <h2 className="text-base font-semibold text-white mb-4">Usuários por Bot Oficial</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             {userStats.bots.map((b: any) => (
               <div key={b.id} className="bg-dark-700 rounded-lg p-3 text-center">

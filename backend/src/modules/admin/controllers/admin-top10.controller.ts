@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Query,
   HttpCode,
   HttpStatus,
@@ -11,13 +12,31 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../../auth/guards/permission.guard';
 import { RequirePermission } from '../../auth/decorators/require-permission.decorator';
 import { AdminTop10Service } from '../services/admin-top10.service';
+import { WeeklyResetService } from '../../content/services/weekly-reset.service';
 
 @ApiTags('Admin - Top 10')
 @Controller('admin/top10')
 @UseGuards(JwtAuthGuard, PermissionGuard)
 @ApiBearerAuth()
 export class AdminTop10Controller {
-  constructor(private readonly top10Service: AdminTop10Service) {}
+  constructor(
+    private readonly top10Service: AdminTop10Service,
+    private readonly weeklyResetService: WeeklyResetService,
+  ) {}
+
+  /**
+   * Igor (11/07): backfill one-shot do previous_rank pro fix do Top 10
+   * sticky não precisar esperar o cron de domingo. Chamar imediato após
+   * deploy da migration 20260712000000_top10_previous_rank.
+   */
+  @Post('backfill-previous-ranks')
+  @RequirePermission('can_view_top10')
+  @ApiOperation({ summary: 'Backfill previous_rank do Top 10 sem esperar cron semanal' })
+  @HttpCode(HttpStatus.OK)
+  async backfillPreviousRanks() {
+    await this.weeklyResetService.snapshotPreviousRanks();
+    return { ok: true, message: 'Snapshot dos ranks anteriores gravado' };
+  }
 
   @Get('current')
   @RequirePermission('can_view_top10')

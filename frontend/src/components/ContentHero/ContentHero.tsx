@@ -250,35 +250,44 @@ export default function ContentHero({
       return;
     }
 
-    // Igor (09/07): Cenário 3 mais amplo — se o filme tem bot promocional
-    // vinculado (setado em /admin/content/[id]/edit) E o bot está ativo,
-    // o botão Comprar leva DIRETO pro bot promo, independente da origem
-    // do cliente. Assim toda venda desse filme aumenta interações reais
-    // no bot promo → melhor ranking na busca do Telegram.
+    // Igor (09/07 + 11/07): Cenário 3 mais amplo — se o filme tem bot
+    // promocional vinculado E o bot está ativo, o botão Comprar leva
+    // DIRETO pro bot promo, independente da origem do cliente. Assim
+    // toda venda desse filme aumenta interações reais no bot promo →
+    // melhor ranking na busca do Telegram.
     //
     // Prioridade:
     //   1) Content tem promotional_bot vinculado + ativo → bot promo
     //   2) Cliente veio de bot promo (Cenário 1) → bot oficial via rotação
     //   3) Fluxo padrão (logado → bot oficial, anônimo → cart/checkout)
+    //
+    // Igor (11/07): timeout de 3s + log de reason quando cair no fallback
+    // pra debug (bot criado < 24h grace, ou > 30min stale, etc).
     if (typeof window !== 'undefined' && !isOwned) {
+      const ctrl = new AbortController();
+      const timeoutId = setTimeout(() => ctrl.abort(), 3000);
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
         const r = await fetch(
           `${apiUrl}/api/v1/telegrams/promo-bot-for-content?content=${encodeURIComponent(content.id)}`,
-          { cache: 'no-store' }
+          { cache: 'no-store', signal: ctrl.signal }
         );
         if (r.ok) {
           const data = await r.json();
           if (data.available && data.username) {
-            // Deep-link direto pro bot promo com o mesmo start=buy_ que ele
-            // já sabe processar (handleBuyCallback intercepta lá dentro).
             const url = `https://t.me/${data.username}?start=buy_${content.id}`;
             window.open(url, '_blank');
             toast.success('Abrindo Telegram...', { duration: 2000 });
             return;
           }
+          // Debug: cai no fallback (bot oficial). reason indica por quê.
+          console.warn('[promo-bot] unavailable — falling back to official:', data.reason);
         }
-      } catch { /* fallback pros próximos branches */ }
+      } catch (err: any) {
+        console.warn('[promo-bot] fetch failed:', err?.name || err?.message);
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       // Cenário 1 legado — cliente veio de bot promo (promo_link_capture).
       let promoBotSession: string | null = null;

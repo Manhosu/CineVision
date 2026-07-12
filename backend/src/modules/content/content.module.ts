@@ -41,7 +41,7 @@ const conditionalProviders = isTypeOrmEnabled()
 
 const conditionalExports = isTypeOrmEnabled()
   ? [ContentService, TranscodeService, ContentLanguageService]
-  : [ContentService, ContentLanguageService, ContentLanguageSupabaseService];
+  : [ContentService, ContentLanguageService, ContentLanguageSupabaseService, WeeklyResetService];
 
 console.log('Content controllers:', conditionalControllers);
 console.log('Content providers:', conditionalProviders);

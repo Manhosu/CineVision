@@ -994,6 +994,7 @@ export class ContentSupabaseService {
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.MOVIE)
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('previous_rank', { ascending: true, nullsFirst: false }) // Igor (11/07): desempate sticky
       .order('views_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(10);
@@ -1024,6 +1025,7 @@ export class ContentSupabaseService {
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.SERIES)
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('previous_rank', { ascending: true, nullsFirst: false }) // Igor (11/07): desempate sticky
       .order('views_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(10);
@@ -1055,6 +1057,7 @@ export class ContentSupabaseService {
       .eq('status', ContentStatus.PUBLISHED)
       .eq('content_type', ContentType.NOVELINHA)
       .order('weekly_sales', { ascending: false, nullsFirst: false })
+      .order('previous_rank', { ascending: true, nullsFirst: false }) // Igor (11/07): desempate sticky
       .order('views_count', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(10);

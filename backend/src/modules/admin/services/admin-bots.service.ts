@@ -143,6 +143,7 @@ export class AdminBotsService {
     promotional_content_id: string | null;
     promotional_target_url: string | null;
     notes: string | null;
+    is_promotional: boolean;
   }>) {
     // Atomicidade do default: se está marcando este como default, desmarca os outros antes.
     if (patch.is_default_attendance === true) {
@@ -150,6 +151,23 @@ export class AdminBotsService {
         .from('telegram_bots')
         .update({ is_default_attendance: false })
         .neq('id', id);
+    }
+
+    // Igor (11/07): guard — bot com status banido/desativado NÃO pode
+    // virar promocional. Corrige o bug do bot @CineVisionApp_rbot que
+    // ficou marcado como promocional por acidente (SQL de fix já rodado,
+    // guard aqui previne recorrência via UI).
+    if (patch.is_promotional === true) {
+      const { data: current } = await this.supabaseService.client
+        .from('telegram_bots')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
+      if (current && ['banned_br', 'disabled'].includes(current.status)) {
+        throw new BadRequestException(
+          `Bot com status '${current.status}' não pode ser promocional. Reative-o primeiro.`,
+        );
+      }
     }
     const { data, error } = await this.supabaseService.client
       .from('telegram_bots')
@@ -225,10 +243,14 @@ export class AdminBotsService {
   }
 
   async getUserStats() {
+    // Igor (11/07): "Usuários por Bot Oficial" — só oficiais na seção
+    // global. Bots promocionais têm métrica própria em /admin/bots
+    // aba Promocionais (cards com starts/24h/daily breakdown).
     const [{ data: bots }, { data: perBot }, { data: uniqueRow }] = await Promise.all([
       this.supabaseService.client
         .from('telegram_bots')
         .select('id, username, display_name, status, users_count')
+        .eq('is_promotional', false)
         .order('created_at', { ascending: true }),
       this.supabaseService.client.rpc('count_users_per_bot').select(),
       // Únicos reais: DISTINCT telegram_chat_id entre usuários com bot rastreado

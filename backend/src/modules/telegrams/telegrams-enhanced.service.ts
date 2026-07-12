@@ -263,19 +263,27 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * decidir se desvia pro promo (Cenário 3).
    */
   /**
-   * Igor (09/07): resolve bot promocional vinculado a um content pro
-   * frontend público. Retorna { available, username } se:
+   * Igor (09/07 + 11/07): resolve bot promocional vinculado a um content pro
+   * frontend público. Retorna { available, username, reason }.
+   *
+   * Guards:
    * - content tem promotional_bot_id
    * - bot promo existe, is_promotional=true, status=active
-   * - last_seen_ok_at recente (<5min) OU nunca fez healthcheck ainda
-   *   (aceita bot recém-cadastrado)
+   * - grace period: bot criado há < PROMO_BOT_GRACE_MS (default 24h) NUNCA
+   *   é considerado stale (evita bug do Igor 11/07 — bot recém-cadastrado
+   *   caía em stale 5min depois sem tráfego orgânico)
+   * - depois do grace: se last_seen_ok_at > PROMO_BOT_STALE_MS (default 30min),
+   *   considera stale. Cron @Cron('*_/2 * * * *') no admin-bots.service
+   *   refresha via getMe pra bot real ficar sempre fresco.
    *
+   * `reason` ajuda no debug no frontend (log console).
    * Não expõe token — só username pra montar t.me/<user>?start=...
    */
   public async getPromoBotForContent(contentId: string): Promise<{
     available: boolean;
     username?: string;
     is_release?: boolean;
+    reason?: string;
   }> {
     try {
       const { data: content } = await this.supabase
@@ -283,23 +291,36 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .select('id, promotional_bot_id, is_release')
         .eq('id', contentId)
         .maybeSingle();
-      if (!content?.promotional_bot_id) return { available: false };
+      if (!content?.promotional_bot_id) return { available: false, reason: 'no_promo_bot_id' };
       const { data: bot } = await this.supabase
         .from('telegram_bots')
-        .select('username, status, is_promotional, last_seen_ok_at')
+        .select('username, status, is_promotional, last_seen_ok_at, created_at')
         .eq('id', content.promotional_bot_id)
         .maybeSingle();
-      if (!bot || !bot.is_promotional || bot.status !== 'active') return { available: false };
-      // last_seen_ok_at pode estar null (bot recém-cadastrado) — aceita.
-      // Se preenchido, tem que ser recente.
-      if (bot.last_seen_ok_at) {
+      if (!bot) return { available: false, reason: 'bot_not_found' };
+      if (!bot.is_promotional) return { available: false, reason: 'not_promotional' };
+      if (bot.status !== 'active') return { available: false, reason: `status_${bot.status}` };
+
+      // Igor (11/07): grace period. Bot criado nas últimas 24h nunca é stale.
+      const GRACE_MS = parseInt(process.env.PROMO_BOT_GRACE_MS || '86400000', 10); // 24h
+      const STALE_MS = parseInt(process.env.PROMO_BOT_STALE_MS || '1800000', 10);  // 30min
+      const createdMs = bot.created_at
+        ? Date.now() - new Date(bot.created_at).getTime()
+        : Number.MAX_SAFE_INTEGER;
+
+      if (bot.last_seen_ok_at && createdMs > GRACE_MS) {
         const ageMs = Date.now() - new Date(bot.last_seen_ok_at).getTime();
-        if (ageMs > 5 * 60 * 1000) return { available: false };
+        if (ageMs > STALE_MS) return { available: false, reason: 'stale' };
       }
-      return { available: true, username: bot.username, is_release: !!content.is_release };
+      return {
+        available: true,
+        username: bot.username,
+        is_release: !!content.is_release,
+        reason: 'ok',
+      };
     } catch (err: any) {
       this.logger.warn(`getPromoBotForContent failed: ${err.message}`);
-      return { available: false };
+      return { available: false, reason: 'error' };
     }
   }
 
