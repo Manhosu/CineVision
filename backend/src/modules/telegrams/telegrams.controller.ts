@@ -223,6 +223,28 @@ export class TelegramsController {
     return this.telegramsEnhancedService.getPromoBotForContent(id);
   }
 
+  /**
+   * Igor (12/07): fix do LOOP INFINITO no bot promo.
+   *
+   * Cliente logado clica Comprar no site num filme com promo vinculado.
+   * Frontend chama esse endpoint (POST em vez de montar URL na mão).
+   * Backend cria purchase_intent + retorna deeplink `t.me/<promo>?start=pi_<token>`.
+   * Bot promo recebe /start pi_<token>, processa via handlePurchaseIntent
+   * (mesmo fluxo do Cenário 3 do bot oficial) → gera PIX imediato.
+   *
+   * Não gera loop: bot promo NUNCA manda cliente de volta pro site
+   * pra intent com pi_. Só handlePromoWelcome (fallback quando /start
+   * puro) que redireciona — e aí o cliente veio pelo QR code manual.
+   */
+  @Post('create-site-intent')
+  async createSiteIntent(@Body() body: { content_id?: string }) {
+    const contentId = (body?.content_id || '').trim();
+    if (!contentId) {
+      return { error: 'content_id ausente' };
+    }
+    return this.telegramsEnhancedService.createIntentForSiteVisitor(contentId);
+  }
+
   @Post('send-notification')
   @ApiOperation({ summary: 'Send notification via Telegram' })
   @ApiResponse({ status: 200, description: 'Notification sent successfully' })

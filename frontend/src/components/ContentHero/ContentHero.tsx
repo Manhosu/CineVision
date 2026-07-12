@@ -250,46 +250,74 @@ export default function ContentHero({
       return;
     }
 
-    // Igor (09/07 + 11/07): Cenário 3 mais amplo — se o filme tem bot
-    // promocional vinculado E o bot está ativo, o botão Comprar leva
-    // DIRETO pro bot promo, independente da origem do cliente. Assim
-    // toda venda desse filme aumenta interações reais no bot promo →
-    // melhor ranking na busca do Telegram.
+    // Igor (12/07): FLUXO REVISADO com prioridades explícitas.
     //
-    // Prioridade:
-    //   1) Content tem promotional_bot vinculado + ativo → bot promo
-    //   2) Cliente veio de bot promo (Cenário 1) → bot oficial via rotação
-    //   3) Fluxo padrão (logado → bot oficial, anônimo → cart/checkout)
-    //
-    // Igor (11/07): timeout de 3s + log de reason quando cair no fallback
-    // pra debug (bot criado < 24h grace, ou > 30min stale, etc).
-    if (typeof window !== 'undefined' && !isOwned) {
+    // Fluxo correto (do áudio do Igor):
+    //   1. ANÔNIMO (navegador sem Telegram) → SEMPRE PIX na tela.
+    //      Compra órfã pura, cliente paga → coloca WhatsApp → resgata
+    //      no Telegram depois. INDEPENDENTE de o filme ter bot promo.
+    //   2. LOGADO + filme tem bot promo ativo → cria intent no backend
+    //      via POST /create-site-intent, recebe deeplink pi_<token>,
+    //      abre bot promo → bot promo gera PIX imediato via
+    //      handlePurchaseIntent. Fim do LOOP INFINITO anterior.
+    //   3. LOGADO + veio de bot promo (sessionStorage) → bot oficial
+    //      via rotação (Cenário 1 preservado).
+    //   4. LOGADO sem nenhum promo → bot oficial padrão (rotação).
+
+    // ═══ Prioridade 1: ANÔNIMO — PIX na tela SEMPRE ═══
+    if (isAnonymousUser()) {
+      if (buyingNow) return;
+      setBuyingNow(true);
+      try {
+        try { await cartClear(); } catch { /* cart já vazio é ok */ }
+        await cartAdd(content.id, {
+          id: content.id,
+          title: content.title,
+          poster_url: content.poster_url || undefined,
+          price_cents: effectivePriceCents,
+          type: contentType,
+        });
+        const result = await cartCheckout('site');
+        router.push(`/cart/checkout?token=${result.order.order_token}`);
+      } catch (err: any) {
+        toast.error(err?.message || 'Não foi possível iniciar a compra. Tente novamente.');
+        setBuyingNow(false);
+      }
+      return;
+    }
+
+    // ═══ Prioridade 2: LOGADO + filme tem bot promo → cria intent ═══
+    if (typeof window !== 'undefined') {
       const ctrl = new AbortController();
       const timeoutId = setTimeout(() => ctrl.abort(), 3000);
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const r = await fetch(
-          `${apiUrl}/api/v1/telegrams/promo-bot-for-content?content=${encodeURIComponent(content.id)}`,
-          { cache: 'no-store', signal: ctrl.signal }
-        );
+        const r = await fetch(`${apiUrl}/api/v1/telegrams/create-site-intent`, {
+          method: 'POST',
+          cache: 'no-store',
+          signal: ctrl.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content_id: content.id }),
+        });
         if (r.ok) {
           const data = await r.json();
-          if (data.available && data.username) {
-            const url = `https://t.me/${data.username}?start=buy_${content.id}`;
-            window.open(url, '_blank');
+          if (data.deeplink) {
+            window.open(data.deeplink, '_blank');
             toast.success('Abrindo Telegram...', { duration: 2000 });
             return;
           }
-          // Debug: cai no fallback (bot oficial). reason indica por quê.
-          console.warn('[promo-bot] unavailable — falling back to official:', data.reason);
+        } else if (r.status !== 404) {
+          // 404 é esperado quando filme não tem promo — silencioso.
+          // Outros erros logamos pra debug.
+          console.warn('[promo-intent] failed, falling back to official rotation:', r.status);
         }
       } catch (err: any) {
-        console.warn('[promo-bot] fetch failed:', err?.name || err?.message);
+        console.warn('[promo-intent] fetch failed:', err?.name || err?.message);
       } finally {
         clearTimeout(timeoutId);
       }
 
-      // Cenário 1 legado — cliente veio de bot promo (promo_link_capture).
+      // ═══ Prioridade 3: LOGADO veio de bot promo (Cenário 1) ═══
       let promoBotSession: string | null = null;
       try {
         promoBotSession = sessionStorage.getItem('cv_promo_bot');
@@ -302,42 +330,10 @@ export default function ContentHero({
       }
     }
 
-    // Comprar: bifurca por estado de login.
-    // Quem está logado com telegram_id segue pro fluxo histórico do
-    // bot (deep link buy_<id>) — Igor opera vendas pelo bot e
-    // mantém esse caminho intacto.
-    // Quem é anônimo (sem telegram_id no localStorage) precisa de
-    // um caminho que feche a venda na web: criamos uma order de 1
-    // item via cart e mandamos pra /cart/checkout (que já gera Pix
-    // e captura WhatsApp).
-    if (!isAnonymousUser()) {
-      // Igor (07/06): deeplink rotativo entre bots ativos.
-      const url = await getBotDeeplink(`buy_${content.id}`);
-      window.open(url, '_blank');
-      toast.success('Abrindo Telegram...', { duration: 2000 });
-      return;
-    }
-
-    if (buyingNow) return;
-    setBuyingNow(true);
-    try {
-      // Pix direto na web: limpa o cart pra evitar arrastar itens
-      // antigos do anônimo, adiciona só este filme e finaliza.
-      // `clear` falha silenciosamente se o cart já estava vazio.
-      try { await cartClear(); } catch { /* cart já vazio é ok */ }
-      await cartAdd(content.id, {
-        id: content.id,
-        title: content.title,
-        poster_url: content.poster_url || undefined,
-        price_cents: effectivePriceCents,
-        type: contentType,
-      });
-      const result = await cartCheckout('site');
-      router.push(`/cart/checkout?token=${result.order.order_token}`);
-    } catch (err: any) {
-      toast.error(err?.message || 'Não foi possível iniciar a compra. Tente novamente.');
-      setBuyingNow(false);
-    }
+    // ═══ Prioridade 4: LOGADO fallback — bot oficial via rotação ═══
+    const url = await getBotDeeplink(`buy_${content.id}`);
+    window.open(url, '_blank');
+    toast.success('Abrindo Telegram...', { duration: 2000 });
   };
 
   // Parse genres

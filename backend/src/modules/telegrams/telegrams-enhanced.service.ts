@@ -3861,6 +3861,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
         origin_telegram_user_id: telegramUserId,
         amount_cents: priceCents,
         status: 'pending',
+        source: 'bot', // Igor (12/07): marca de procedência pra analytics
         // expires_at usa default do banco (+15min)
       })
       .select()
@@ -3898,6 +3899,91 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .eq('id', intent.id);
       return false;
     }
+  }
+
+  /**
+   * Igor (12/07): fix do LOOP INFINITO no bot promo.
+   *
+   * Antes: site montava t.me/<promo>?start=buy_<id>. Bot promo não sabia
+   * processar `buy_` (só `pi_`), caía em handlePromoWelcome que mandava
+   * cliente pro site — loop infinito.
+   *
+   * Agora: site chama esse endpoint POST, backend cria intent e retorna
+   * deeplink pi_<token>. Bot promo processa via handlePurchaseIntent
+   * (mesmo fluxo do Cenário 3 do bot oficial) → gera PIX imediato.
+   *
+   * Se o filme não tem promo vinculado OU o bot promo está indisponível,
+   * lança NotFoundException e o frontend cai no fallback (bot oficial
+   * via rotação).
+   */
+  public async createIntentForSiteVisitor(contentId: string): Promise<{
+    deeplink: string;
+    token: string;
+    expires_at: string;
+  }> {
+    // 1. Valida via getPromoBotForContent (já reúne todos os guards:
+    //    is_release, promotional_bot_id, is_promotional, status=active,
+    //    last_seen_ok_at + grace period 24h)
+    const check = await this.getPromoBotForContent(contentId);
+    if (!check.available || !check.username) {
+      throw new NotFoundException(`Promo bot not available: ${check.reason || 'unknown'}`);
+    }
+
+    // 2. Busca content pra preço snapshot
+    const { data: content } = await this.supabase
+      .from('content')
+      .select('id, price_cents, is_presale, presale_price_cents, promotional_bot_id')
+      .eq('id', contentId)
+      .maybeSingle();
+
+    if (!content || !content.promotional_bot_id) {
+      throw new NotFoundException('Content or promo bot link not found');
+    }
+
+    const priceCents = (content.is_presale && content.presale_price_cents)
+      ? content.presale_price_cents
+      : (content.price_cents || 0);
+
+    if (!priceCents || priceCents <= 0) {
+      throw new BadRequestException('Content has no valid price');
+    }
+
+    // 3. Gera token curto (16 chars base62)
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let token = '';
+    for (let i = 0; i < 16; i++) {
+      token += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+
+    // 4. INSERT intent com marca de procedência 'site'
+    //    origin_bot_id=NULL (não veio de bot), origin_chat_id=0,
+    //    origin_telegram_user_id=0 (site não sabe o user antes do /start)
+    const { data: intent, error: intentErr } = await this.supabase
+      .from('purchase_intents')
+      .insert({
+        token,
+        content_id: content.id,
+        promo_bot_id: content.promotional_bot_id,
+        origin_bot_id: null,
+        origin_chat_id: 0,
+        origin_telegram_user_id: 0,
+        amount_cents: priceCents,
+        status: 'pending',
+        source: 'site',
+      })
+      .select('id, token, expires_at')
+      .single();
+
+    if (intentErr || !intent) {
+      this.logger.error(`[site-intent] insert failed: ${intentErr?.message}`);
+      throw new BadRequestException('Failed to create purchase intent');
+    }
+
+    return {
+      deeplink: `https://t.me/${check.username}?start=pi_${token}`,
+      token: intent.token,
+      expires_at: intent.expires_at,
+    };
   }
 
   private async handleBuyCallback(chatId: number, telegramUserId: number, data: string) {
@@ -4218,7 +4304,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     if (bot.promotional_content_id) {
       const { data } = await this.supabase
         .from('content')
-        .select('id, title, poster_url, content_type')
+        .select('id, title, poster_url, content_type, quality_label')
         .eq('id', bot.promotional_content_id)
         .maybeSingle();
       content = data || null;
@@ -4242,8 +4328,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     const landingUrl = buildLandingUrl();
     const title = content?.title || 'Cine Vision';
+    // Igor (12/07): puxar qualidade REAL do content, não hardcoded "Full HD".
+    // Fallback pra "alta" quando quality_label não está preenchido.
+    const quality = content?.quality_label || 'alta';
     const caption = content
-      ? `🎬 *${title}*\n\n✅ Você encontrou o conteúdo que procura!\n\n🍿 Assista agora com qualidade Full HD e acesso vitalício.`
+      ? `🎬 *${title}*\n\n✅ Você encontrou o conteúdo que procura!\n\n🍿 Assista agora com qualidade ${quality} e acesso vitalício.`
       : `🎬 *Cine Vision*\n\n✅ Bem-vindo! Aqui você encontra milhares de filmes e séries.\n\n🍿 Toque no botão pra ver o catálogo completo.`;
 
     const replyMarkup = {
