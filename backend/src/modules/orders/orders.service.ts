@@ -1406,18 +1406,20 @@ export class OrdersService {
    * cliente clicou 2x no link do intent).
    */
   async generateAndSendPixForOrder(orderId: string, chatId: number, telegramUserId?: number) {
-    // Igor (12/07): UX unificada. Carrega order com purchases + payment
-    // (mesmo shape que handleOrderDeepLink usa), gera PIX se ainda não
-    // existe, e delega envio pro helper sendOrderPixDeepLinkUX do
-    // TelegramsEnhancedService — mesma UX polida dos bots oficiais
-    // (título do filme, QR imagem, copia-cola, 3 botões de ação).
+    // Igor (12/07): UX unificada. Delega envio pro helper
+    // sendOrderPixDeepLinkUX do TelegramsEnhancedService — mesma UX
+    // polida dos bots oficiais (título do filme, QR imagem, copia-cola,
+    // 3 botões de ação).
+    //
+    // Hotfix (12/07 noite): o SELECT anterior fazia JOIN via FK
+    // `payments_order_id_fkey` que NÃO EXISTE — tabela `payments` só
+    // tem `purchase_id`, não `order_id`. Order aponta pra payment via
+    // `orders.payment_id` (FK inversa). Agora carrega em 2 queries.
     const { data: order, error } = await this.supabase.client
       .from('orders')
       .select(`
         *,
-        order_token,
-        purchases:purchases(id, amount_cents, content:content_id(title, content_type, is_release)),
-        payment:payments!payments_order_id_fkey(provider_meta, status, amount_cents)
+        purchases:purchases(id, amount_cents, content:content_id(title, content_type, is_release))
       `)
       .eq('id', orderId)
       .maybeSingle();
@@ -1434,27 +1436,39 @@ export class OrdersService {
       return;
     }
 
-    // Guard idempotente: se PIX já existe no payment, reusa (cliente
-    // pode ter clicado no link 2x rápido). Só gera novo se ainda não tem.
-    const existingPayment = Array.isArray(order.payment) ? order.payment[0] : order.payment;
-    if (!existingPayment?.provider_meta?.qr_code_base64) {
-      await this.generatePixForOrder(order, order.user_id, chatId.toString());
-      // Refetch pra pegar o payment recém-criado
-      const { data: refreshed } = await this.supabase.client
-        .from('orders')
-        .select(`
-          *,
-          order_token,
-          purchases:purchases(id, amount_cents, content:content_id(title, content_type, is_release)),
-          payment:payments!payments_order_id_fkey(provider_meta, status, amount_cents)
-        `)
-        .eq('id', orderId)
-        .single();
-      if (refreshed) Object.assign(order, refreshed);
+    // Busca payment atual via orders.payment_id (FK direta)
+    let existingPayment: any = null;
+    if (order.payment_id) {
+      const { data: pay } = await this.supabase.client
+        .from('payments')
+        .select('id, provider_meta, status, amount_cents')
+        .eq('id', order.payment_id)
+        .maybeSingle();
+      existingPayment = pay || null;
     }
 
-    // Normaliza payment (Supabase pode devolver array ou objeto)
-    (order as any).payment = Array.isArray(order.payment) ? order.payment[0] : order.payment;
+    // Guard idempotente: se PIX já existe, reusa (cliente pode ter
+    // clicado no link 2x rápido). Só gera novo se ainda não tem.
+    if (!existingPayment?.provider_meta?.qr_code_base64) {
+      await this.generatePixForOrder(order, order.user_id, chatId.toString());
+      // Refetch orders + payment recém-criado
+      const { data: refreshedOrder } = await this.supabase.client
+        .from('orders')
+        .select('payment_id')
+        .eq('id', orderId)
+        .single();
+      if (refreshedOrder?.payment_id) {
+        const { data: newPay } = await this.supabase.client
+          .from('payments')
+          .select('id, provider_meta, status, amount_cents')
+          .eq('id', refreshedOrder.payment_id)
+          .maybeSingle();
+        existingPayment = newPay || null;
+      }
+    }
+
+    // sendOrderPixDeepLinkUX espera order.payment com provider_meta
+    (order as any).payment = existingPayment;
 
     if (this.telegramsService) {
       await (this.telegramsService as any).sendOrderPixDeepLinkUX(chatId, order);

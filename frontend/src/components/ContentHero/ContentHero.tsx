@@ -250,18 +250,17 @@ export default function ContentHero({
       return;
     }
 
-    // Igor (12/07): FLUXO REVISADO com prioridades explícitas.
+    // Igor (12/07 noite): FLUXO REVISADO — bot promo é PROMOÇÃO/CAPTURA,
+    // não venda direta. Só cliente que já veio de BOT OFICIAL pode gerar
+    // PIX no promo (Cenário 3). Se cliente veio DIRETO no promo (via busca
+    // do Telegram → CTA → site), o Comprar TEM que ir pra bot OFICIAL.
     //
-    // Fluxo correto (do áudio do Igor):
+    // Prioridades:
     //   1. ANÔNIMO (navegador sem Telegram) → SEMPRE PIX na tela.
-    //      Compra órfã pura, cliente paga → coloca WhatsApp → resgata
-    //      no Telegram depois. INDEPENDENTE de o filme ter bot promo.
-    //   2. LOGADO + filme tem bot promo ativo → cria intent no backend
-    //      via POST /create-site-intent, recebe deeplink pi_<token>,
-    //      abre bot promo → bot promo gera PIX imediato via
-    //      handlePurchaseIntent. Fim do LOOP INFINITO anterior.
-    //   3. LOGADO + veio de bot promo (sessionStorage) → bot oficial
-    //      via rotação (Cenário 1 preservado).
+    //   2. LOGADO + veio de bot promo (sessionStorage cv_promo_bot) →
+    //      bot OFICIAL via rotação. NÃO gera intent pro promo.
+    //   3. LOGADO + filme tem bot promo ativo (sem sessionStorage) →
+    //      cria intent no backend → bot promo gera PIX (Cenário 3 puro).
     //   4. LOGADO sem nenhum promo → bot oficial padrão (rotação).
 
     // ═══ Prioridade 1: ANÔNIMO — PIX na tela SEMPRE ═══
@@ -286,7 +285,26 @@ export default function ContentHero({
       return;
     }
 
-    // ═══ Prioridade 2: LOGADO + filme tem bot promo → cria intent ═══
+    // ═══ Prioridade 2: LOGADO veio de bot promo → bot OFICIAL ═══
+    // Igor (12/07 noite): cliente que veio via CTA de bot promocional
+    // (PromoLinkCapture gravou sessionStorage.cv_promo_bot) tem que
+    // ir pra bot oficial pra gerar PIX — bot promo NÃO deve fazer venda
+    // direta pra tráfego orgânico. Só pra tráfego que veio de bot oficial
+    // (Cenário 3 na Prioridade 3 abaixo).
+    if (typeof window !== 'undefined') {
+      let promoBotSession: string | null = null;
+      try {
+        promoBotSession = sessionStorage.getItem('cv_promo_bot');
+      } catch { /* incógnito */ }
+      if (promoBotSession) {
+        const url = await getBotDeeplink(`buy_${content.id}`);
+        window.open(url, '_blank');
+        toast.success('Abrindo Telegram...', { duration: 2000 });
+        return;
+      }
+    }
+
+    // ═══ Prioridade 3: LOGADO + filme tem bot promo → cria intent ═══
     if (typeof window !== 'undefined') {
       const ctrl = new AbortController();
       const timeoutId = setTimeout(() => ctrl.abort(), 3000);
@@ -308,25 +326,12 @@ export default function ContentHero({
           }
         } else if (r.status !== 404) {
           // 404 é esperado quando filme não tem promo — silencioso.
-          // Outros erros logamos pra debug.
           console.warn('[promo-intent] failed, falling back to official rotation:', r.status);
         }
       } catch (err: any) {
         console.warn('[promo-intent] fetch failed:', err?.name || err?.message);
       } finally {
         clearTimeout(timeoutId);
-      }
-
-      // ═══ Prioridade 3: LOGADO veio de bot promo (Cenário 1) ═══
-      let promoBotSession: string | null = null;
-      try {
-        promoBotSession = sessionStorage.getItem('cv_promo_bot');
-      } catch { /* incógnito */ }
-      if (promoBotSession) {
-        const url = await getBotDeeplink(`buy_${content.id}`);
-        window.open(url, '_blank');
-        toast.success('Abrindo Telegram...', { duration: 2000 });
-        return;
       }
     }
 
