@@ -2890,7 +2890,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
 
     if (qr) {
-      await this.sendMessage(chatId, `*Código copia-e-cola:*\n\`${qr}\``, { parse_mode: 'Markdown' });
+      // Igor (13/07): separa label do código em 2 mensagens. Antes ficavam
+      // juntas (`*Código copia-e-cola:*\n\`${qr}\``) e quando cliente
+      // segurava pro copiar o bloco monospace, o Telegram pegava o texto
+      // "Código copia-e-cola:" junto — o PIX ia pro banco com lixo no
+      // início. Agora label em msg própria + código PIX puro em bloco
+      // dedicado, cliente segura só no código e copia limpo.
+      await this.sendMessage(chatId, '📋 *Código copia-e-cola:*', { parse_mode: 'Markdown' });
+      await this.sendMessage(chatId, `\`${qr}\``, { parse_mode: 'Markdown' });
     }
 
     await this.sendMessage(
