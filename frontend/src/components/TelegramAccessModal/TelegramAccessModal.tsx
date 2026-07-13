@@ -21,6 +21,29 @@ import {
  * O clique no botão acontece dentro de um gesto do usuário (não é popup
  * pós-`await`), então abre de forma confiável, sem tela branca.
  */
+/**
+ * Igor (14/07): normaliza o link do grupo pra sempre ter https://.
+ *
+ * Bug reportado: Igor cadastrou `telegram_group_link = "t.me/+QzRJMwb9tZM..."`
+ * no admin sem o `https://`. O <a href="t.me/+xxx"> do modal era tratado
+ * pelo Chrome como URL relativa E — em alguns casos — tentava resolver
+ * "t.me/+xxx" como hostname → DNS_PROBE_FINISHED_NXDOMAIN. Cliente que
+ * comprou não conseguia entrar no grupo.
+ *
+ * Sanitização defensiva: se falta protocolo, prefixa https://. Trim
+ * remove whitespace/newline que podem ter vindo colados no admin.
+ */
+function normalizeTelegramLink(raw: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  // Já tem protocolo válido
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // tg:// (protocolo do app Telegram Desktop) — mantém
+  if (/^tg:\/\//i.test(trimmed)) return trimmed;
+  // Prefixa https:// pra qualquer outra coisa (t.me/+xxx, telegram.me/xxx, etc.)
+  return `https://${trimmed}`;
+}
+
 export function TelegramAccessModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [link, setLink] = useState('');
@@ -30,7 +53,7 @@ export function TelegramAccessModal() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<TelegramAccessDetail>).detail;
       if (!detail?.link) return;
-      setLink(detail.link);
+      setLink(normalizeTelegramLink(detail.link));
       setSentToTelegram(!!detail.sentToTelegram);
       setIsOpen(true);
     };

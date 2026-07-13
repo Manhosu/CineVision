@@ -972,9 +972,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // qualquer string que abra no Telegram (link privado, username
     // público, deep link). O frontend `openContentGroup` lida com isso.
     if (regularLink && regularLink !== chatIdToTry) {
-      // regularLink existe E é diferente do chat_id (não é Chat ID puro
-      // — é link real). Devolve direto.
-      return { link: regularLink, fixedLink: null, mode: 'fallback_regular' };
+      // Igor (14/07): normaliza link — se admin cadastrou "t.me/+xxx"
+      // sem https://, o browser trata como URL relativa e cliente que
+      // clicou "Assistir" caía em DNS_PROBE_FINISHED_NXDOMAIN.
+      // Sanitização em 2 camadas (aqui e no TelegramAccessModal).
+      const normalized = /^(https?:\/\/|tg:\/\/)/i.test(regularLink)
+        ? regularLink
+        : `https://${regularLink}`;
+      return { link: normalized, fixedLink: null, mode: 'fallback_regular' };
     }
 
     // 5. Sem Chat ID válido (bot não admin) E sem link regular → erro

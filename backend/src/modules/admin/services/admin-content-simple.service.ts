@@ -4,6 +4,25 @@ import { ConfigService } from '@nestjs/config';
 import { AdminPeopleService } from './admin-people.service';
 import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.service';
 
+/**
+ * Igor (14/07): normaliza link de convite do Telegram. Se o admin cadastrou
+ * "t.me/+xxx" sem https://, o browser tratava como URL relativa (ou tentava
+ * resolver "t.me/+xxx" como hostname → DNS_PROBE_FINISHED_NXDOMAIN). Cliente
+ * que comprou o filme "Todo Mundo em Pânico" não conseguia entrar no grupo.
+ * Aqui garantimos que qualquer coisa que Igor colar no campo vai pro banco
+ * já com protocolo. Vazio/null continua vazio/null (opcional).
+ */
+function normalizeTelegramLink(raw: any): string | null {
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  if (!trimmed) return null;
+  // Já tem protocolo válido
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // tg:// (protocolo do app Telegram Desktop) — mantém
+  if (/^tg:\/\//i.test(trimmed)) return trimmed;
+  // Prefixa https:// pra qualquer outra coisa (t.me/+xxx, telegram.me/xxx, etc.)
+  return `https://${trimmed}`;
+}
+
 @Injectable()
 export class AdminContentSimpleService {
   private readonly logger = new Logger(AdminContentSimpleService.name);
@@ -384,7 +403,7 @@ export class AdminContentSimpleService {
       imdb_rating: data.imdb_rating && !isNaN(Number(data.imdb_rating)) ? Number(data.imdb_rating) : null,
       quality_label: data.quality_label || null,
       audio_type: data.audio_type || null,
-      telegram_group_link: data.telegram_group_link || null,
+      telegram_group_link: normalizeTelegramLink(data.telegram_group_link),
       // Igor (07/05): Chat ID separado — opcional, pra invite auto via bot.
       telegram_chat_id: data.telegram_chat_id || null,
       // Igor (07/06): bot responsável pelo grupo (multi-bot).
@@ -803,6 +822,13 @@ export class AdminContentSimpleService {
       if (updateData[field] !== undefined) {
         updatePayload[field] = updateData[field];
       }
+    }
+
+    // Igor (14/07): normaliza telegram_group_link se veio no update — fix
+    // do bug do "Todo Mundo em Pânico" onde Igor cadastrou "t.me/+xxx" sem
+    // https:// e o browser tentava resolver como URL relativa/hostname.
+    if (updatePayload.telegram_group_link !== undefined) {
+      updatePayload.telegram_group_link = normalizeTelegramLink(updatePayload.telegram_group_link);
     }
 
     // Atualizar no banco
