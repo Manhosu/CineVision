@@ -43,6 +43,14 @@ export async function compressImage(
 
           ctx.drawImage(img, 0, 0, width, height);
 
+          // Igor (13/07): preserva PNG. Antes convertia sempre pra JPEG
+          // (destrói alpha do logo). Se input é image/png, mantém .png +
+          // toBlob sem quality (PNG é lossless). Outros formatos vão pro
+          // caminho antigo (JPEG 0.85 → 0.6 se ainda grande).
+          const isPng = file.type === 'image/png';
+          const outMime = isPng ? 'image/png' : 'image/jpeg';
+          const outExt = isPng ? '.png' : '.jpg';
+
           // Convert to blob with compression
           canvas.toBlob(
             (blob) => {
@@ -54,8 +62,8 @@ export async function compressImage(
               // Check if compressed size is acceptable
               const compressedSizeMB = blob.size / 1024 / 1024;
 
-              if (compressedSizeMB > maxSizeMB) {
-                // Try again with lower quality
+              if (compressedSizeMB > maxSizeMB && !isPng) {
+                // Try again with lower quality (JPEG only — PNG não tem quality)
                 canvas.toBlob(
                   (blob2) => {
                     if (!blob2) {
@@ -63,9 +71,9 @@ export async function compressImage(
                       return;
                     }
 
-                    const fileName = file.name.replace(/\.[^/.]+$/, '.jpg');
+                    const fileName = file.name.replace(/\.[^/.]+$/, outExt);
                     const compressedFile = new File([blob2], fileName, {
-                      type: 'image/jpeg',
+                      type: outMime,
                       lastModified: Date.now(),
                     });
 
@@ -75,17 +83,17 @@ export async function compressImage(
                   0.6 // Lower quality
                 );
               } else {
-                const fileName = file.name.replace(/\.[^/.]+$/, '.jpg');
+                const fileName = file.name.replace(/\.[^/.]+$/, outExt);
                 const compressedFile = new File([blob], fileName, {
-                  type: 'image/jpeg',
+                  type: outMime,
                   lastModified: Date.now(),
                 });
 
                 resolve(compressedFile);
               }
             },
-            'image/jpeg',
-            0.85 // Initial quality
+            outMime,
+            isPng ? undefined : 0.85 // PNG lossless — quality param ignorado
           );
         } catch (error) {
           reject(error);

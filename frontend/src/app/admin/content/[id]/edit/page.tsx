@@ -353,7 +353,8 @@ export default function AdminContentEditPage() {
   };
 
   // Igor (13/07): upload de logo PNG (fonte estilizada do filme).
-  // Preserva alpha do PNG — não comprime pra JPEG.
+  // PNG preserva alpha via branch em compressImage (image/png não é
+  // convertido pra JPEG).
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -525,6 +526,12 @@ export default function AdminContentEditPage() {
       backdropUrl !== (originalContent.backdrop_url || '') ||
       backdropPosition !== (originalContent.backdrop_position || '50% 50%') ||
       backdropPositionMobile !== (originalContent.backdrop_position_mobile || '50% 50%') ||
+      // Igor (13/07): fix — hasChanges tem que ver mudança de logo, senão
+      // botão Salvar fica disabled e PUT nunca sai (Igor viu preview local
+      // e achou que salvou, mas logo_url ficava NULL no banco).
+      logoUrl !== ((originalContent as any).logo_url || '') ||
+      logoPosition !== ((originalContent as any).logo_position || '50% 50%') ||
+      logoPositionMobile !== ((originalContent as any).logo_position_mobile || '50% 50%') ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
       totalSeasons !== ((originalContent as any).total_seasons ?? null) ||
