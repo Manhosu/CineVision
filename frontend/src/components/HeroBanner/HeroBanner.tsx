@@ -206,9 +206,26 @@ export function HeroBanner({
                 </div>
               );
             })()}
-            <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
-              {currentMovie.title}
-            </h1>
+            {/* Igor (13/07): logo PNG opcional. Fallback pro <h1> texto. */}
+            {(currentMovie as any).logo_url ? (
+              <>
+                <h1 className="sr-only">{currentMovie.title}</h1>
+                <div className="mb-2 max-w-xs md:max-w-md lg:max-w-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(currentMovie as any).logo_url}
+                    alt={currentMovie.title}
+                    className="w-full h-auto max-h-24 md:max-h-32 lg:max-h-40 object-contain"
+                    style={{ objectPosition: (currentMovie as any).logo_position || '50% 50%' }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              </>
+            ) : (
+              <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
+                {currentMovie.title}
+              </h1>
+            )}
 
             {/* Compact metadata row */}
             <div className="flex items-center gap-2 md:gap-3 mb-2 text-[11px] md:text-sm text-white/60">

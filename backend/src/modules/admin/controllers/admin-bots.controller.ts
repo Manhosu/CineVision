@@ -88,6 +88,26 @@ export class AdminBotsController {
     return this.adminBotsService.healthcheck(id);
   }
 
+  @Post(':id/healthcheck-deep')
+  @ApiOperation({ summary: 'Healthcheck real: getMe + getWebhookInfo comparando URL esperada' })
+  async healthcheckDeep(@Param('id') id: string) {
+    return this.adminBotsService.healthcheckDeep(id);
+  }
+
+  @Post('setup-webhooks-all')
+  @ApiOperation({ summary: 'Reconfigura webhook em massa em bots ativos (query ?promo=true|false pra filtrar)' })
+  async setupWebhooksAll(@Query('promo') promo?: string) {
+    const filter = promo === 'true' ? true : promo === 'false' ? false : undefined;
+    return this.adminBotsService.setupWebhookAll(filter);
+  }
+
+  @Post('healthcheck-all')
+  @ApiOperation({ summary: 'HealthcheckDeep em massa (query ?promo=true|false pra filtrar)' })
+  async healthcheckAll(@Query('promo') promo?: string) {
+    const filter = promo === 'true' ? true : promo === 'false' ? false : undefined;
+    return this.adminBotsService.healthcheckAll(filter);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Remove bot (não permite remover o default)' })
   async remove(@Param('id') id: string) {

@@ -58,6 +58,11 @@ export interface Movie {
   // Backdrop focal point position (e.g. "50% 30%")
   backdrop_position?: string;
   backdrop_position_mobile?: string;
+  // Igor (13/07): logo PNG oficial do filme (opcional). Se preenchido,
+  // hero renderiza <img> em vez de <h1>. Só filmes novos/importantes.
+  logo_url?: string | null;
+  logo_position?: string | null;
+  logo_position_mobile?: string | null;
   // Content type
   content_type?: string;
   type?: string;

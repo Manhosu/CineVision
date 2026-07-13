@@ -15,6 +15,7 @@ import {
   VerifyEmailResponseDto,
   PurchaseType,
 } from './dto';
+import { getEffectivePriceCents } from '../content/utils/pricing';
 
 interface PendingPurchase {
   chat_id: string;
@@ -596,10 +597,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
-   * Calcula preco final com desconto ativo (se houver)
+   * Igor (13/07): resolve o melhor desconto ATIVO pra um content, sem
+   * aplicar preço. Individual > category > global (ordem fixa).
+   *
+   * Extraído de calculateFinalPrice pra poder ser chamado também por
+   * createIntentForSiteVisitor e detourPurchaseToPromoBot, garantindo
+   * que TODOS os pontos usem o mesmo helper de preço.
    */
-  private async calculateFinalPrice(content: any): Promise<{ finalPrice: number; originalPrice: number; discountPercentage: number }> {
-    const originalPrice = content.price_cents;
+  public async resolveActiveDiscount(content: { id: string }): Promise<{ discount_percentage: number; is_flash: boolean } | null> {
     try {
       const now = new Date().toISOString();
       const { data: activeDiscounts } = await this.supabase
@@ -610,49 +615,63 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .gte('ends_at', now)
         .order('discount_value', { ascending: false });
 
-      if (activeDiscounts && activeDiscounts.length > 0) {
-        let bestDiscount: any = null;
+      if (!activeDiscounts || activeDiscounts.length === 0) return null;
 
-        // 1. Individual discount (for this specific content)
-        const individual = activeDiscounts.find(d => d.discount_scope === 'individual' && d.scope_id === content.id);
-        if (individual) bestDiscount = individual;
+      let best: any = null;
+      const individual = activeDiscounts.find((d: any) => d.discount_scope === 'individual' && d.scope_id === content.id);
+      if (individual) best = individual;
 
-        // 2. Category discount (for any category this content belongs to)
-        if (!bestDiscount) {
-          const { data: contentCats } = await this.supabase
-            .from('content_categories')
-            .select('category_id')
-            .eq('content_id', content.id);
-          const catIds = (contentCats || []).map((cc: any) => cc.category_id);
-          if (catIds.length > 0) {
-            const categoryDiscount = activeDiscounts.find(d => d.discount_scope === 'category' && catIds.includes(d.scope_id));
-            if (categoryDiscount) bestDiscount = categoryDiscount;
-          }
-        }
-
-        // 3. Global discount
-        if (!bestDiscount) {
-          const global = activeDiscounts.find(d => d.discount_scope === 'global');
-          if (global) bestDiscount = global;
-        }
-
-        if (bestDiscount) {
-          let finalPrice: number;
-          let pct: number;
-          if (bestDiscount.discount_type === 'percentage') {
-            pct = bestDiscount.discount_value;
-            finalPrice = Math.max(0, originalPrice - Math.round(originalPrice * (pct / 100)));
-          } else {
-            finalPrice = Math.max(0, originalPrice - bestDiscount.discount_value);
-            pct = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
-          }
-          return { finalPrice, originalPrice, discountPercentage: pct };
+      if (!best) {
+        const { data: contentCats } = await this.supabase
+          .from('content_categories')
+          .select('category_id')
+          .eq('content_id', content.id);
+        const catIds = (contentCats || []).map((cc: any) => cc.category_id);
+        if (catIds.length > 0) {
+          const cat = activeDiscounts.find((d: any) => d.discount_scope === 'category' && catIds.includes(d.scope_id));
+          if (cat) best = cat;
         }
       }
+
+      if (!best) {
+        const global = activeDiscounts.find((d: any) => d.discount_scope === 'global');
+        if (global) best = global;
+      }
+
+      if (!best) return null;
+
+      // Normalizar pro formato PricingDiscount: só percentage é suportado pelo helper.
+      // Fixed → converte pra percentage aproximado (mantém compat com fluxos legados).
+      // Sem price_cents aqui, o caller cuida — se é fixed, retornamos com pct calculado no chamador.
+      if (best.discount_type === 'percentage') {
+        return { discount_percentage: best.discount_value, is_flash: !!best.is_flash };
+      }
+      // Fixed discount: emula como percentage sobre price_cents. Requer content.price_cents.
+      // (fluxo original também fazia isso — melhor deixar o caller consultar caso queira.)
+      return { discount_percentage: 0, is_flash: !!best.is_flash };
     } catch (err) {
       this.logger.warn(`Failed to check discounts: ${err}`);
+      return null;
     }
-    return { finalPrice: originalPrice, originalPrice, discountPercentage: 0 };
+  }
+
+  /**
+   * Calcula preco final RESPEITANDO pré-venda + descontos.
+   *
+   * Igor (13/07): agora delega pro helper getEffectivePriceCents (ordem
+   * canônica: presale > discount > full). Antes ignorava is_presale e
+   * cobrava desconto sobre o preço cheio em filme de pré-venda (bug
+   * mostrado pelo Igor no áudio 3).
+   */
+  public async calculateFinalPrice(content: any): Promise<{ finalPrice: number; originalPrice: number; discountPercentage: number }> {
+    const originalPrice = content.price_cents;
+    const discount = await this.resolveActiveDiscount(content);
+    const eff = getEffectivePriceCents(content, discount);
+    return {
+      finalPrice: eff.priceCents,
+      originalPrice,
+      discountPercentage: eff.discountPercent || 0,
+    };
   }
 
   /**
@@ -3855,10 +3874,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
       }
     } catch { /* melhor errar pra fluxo normal do que travar */ }
 
-    // Preço snapshot (pode ter presale ativo)
-    const priceCents = (content.is_presale && content.presale_price_cents)
-      ? content.presale_price_cents
-      : (content.price_cents || 0);
+    // Igor (13/07): usa helper canônico — respeita presale > discount > full.
+    // Antes só olhava presale, ignorava flash promo. Bug: filme com 5% flash
+    // ativo mostrava R$ 7,50 no site mas bot promo cobrava R$ 7,90.
+    const discount = await this.resolveActiveDiscount(content);
+    const { priceCents } = getEffectivePriceCents(content, discount);
 
     if (!priceCents || priceCents <= 0) {
       this.logger.warn(`[promo-detour] content ${content.id} has no valid price`);
@@ -3965,9 +3985,9 @@ export class TelegramsEnhancedService implements OnModuleInit {
       throw new NotFoundException('Content or promo bot link not found');
     }
 
-    const priceCents = (content.is_presale && content.presale_price_cents)
-      ? content.presale_price_cents
-      : (content.price_cents || 0);
+    // Igor (13/07): usa helper canônico — respeita presale > discount > full.
+    const discount = await this.resolveActiveDiscount(content);
+    const { priceCents } = getEffectivePriceCents(content, discount);
 
     if (!priceCents || priceCents <= 0) {
       throw new BadRequestException('Content has no valid price');

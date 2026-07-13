@@ -73,6 +73,7 @@ export default function AdminContentEditPage() {
   const contentId = params?.id as string;
   const posterInputRef = useRef<HTMLInputElement>(null);
   const backdropInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [content, setContent] = useState<Content | null>(null);
   const [originalContent, setOriginalContent] = useState<Content | null>(null);
@@ -152,6 +153,11 @@ export default function AdminContentEditPage() {
   const [backdropPosition, setBackdropPosition] = useState('50% 50%');
   const [backdropPositionMobile, setBackdropPositionMobile] = useState('50% 50%');
   const [showBackdropEditor, setShowBackdropEditor] = useState(false);
+  // Igor (13/07): logo PNG oficial do filme (opcional)
+  const [logoUrl, setLogoUrl] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoPosition, setLogoPosition] = useState('50% 50%');
+  const [logoPositionMobile, setLogoPositionMobile] = useState('50% 50%');
 
   useEffect(() => {
     if (contentId) {
@@ -266,6 +272,10 @@ export default function AdminContentEditPage() {
         setBackdropUrl(data.backdrop_url || '');
         setBackdropPosition(data.backdrop_position || '50% 50%');
         setBackdropPositionMobile(data.backdrop_position_mobile || data.backdrop_position || '50% 50%');
+        // Igor (13/07): logo PNG oficial
+        setLogoUrl(data.logo_url || '');
+        setLogoPosition(data.logo_position || '50% 50%');
+        setLogoPositionMobile(data.logo_position_mobile || data.logo_position || '50% 50%');
         setQualityLabel(data.quality_label || '');
         setAudioType(data.audio_type || '');
 
@@ -342,6 +352,29 @@ export default function AdminContentEditPage() {
     }
   };
 
+  // Igor (13/07): upload de logo PNG (fonte estilizada do filme).
+  // Preserva alpha do PNG — não comprime pra JPEG.
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Apenas imagens (PNG recomendado pra alpha)');
+      return;
+    }
+    try {
+      setLogoUploading(true);
+      const result = await uploadImageToSupabase(file, 'cinevision-capas', 'logos');
+      if (result.error) throw new Error(result.error);
+      setLogoUrl(result.publicUrl);
+      toast.success('Logo enviado! Aparecerá no lugar do título no hero.');
+    } catch (error: any) {
+      console.error('Erro upload logo:', error);
+      toast.error(error.message || 'Erro no upload do logo');
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
   const toggleGenre = (genre: string) => {
     setSelectedGenres(prev =>
       prev.includes(genre) ? prev.filter(g => g !== genre) : [...prev, genre]
@@ -393,6 +426,10 @@ export default function AdminContentEditPage() {
         backdrop_url: backdropUrl,
         backdrop_position: backdropPosition,
         backdrop_position_mobile: backdropPositionMobile,
+        // Igor (13/07): logo PNG oficial (opcional)
+        logo_url: logoUrl || null,
+        logo_position: logoUrl ? logoPosition : null,
+        logo_position_mobile: logoUrl ? logoPositionMobile : null,
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
@@ -1055,6 +1092,59 @@ export default function AdminContentEditPage() {
                       <>
                         <ImageIcon className="w-5 h-5" />
                         {backdropUrl ? 'Trocar Backdrop' : 'Upload Backdrop'}
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Igor (13/07): Logo PNG oficial (opcional) — só filmes novos/importantes */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-2">
+                    Logo Oficial (PNG){' '}
+                    <span className="text-xs text-gray-400 font-normal">— opcional, substitui título texto no hero</span>
+                  </label>
+                  {logoUrl && (
+                    <div className="space-y-2 mb-3">
+                      <div className="relative rounded-lg overflow-hidden border border-white/10 bg-gradient-to-br from-black to-gray-800" style={{ aspectRatio: '4/1' }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={logoUrl}
+                          alt="Logo"
+                          className="w-full h-full object-contain p-4"
+                          style={{ objectPosition: logoPosition }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setLogoUrl('')}
+                          className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 rounded-full transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/webp,image/svg+xml"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { if (logoInputRef.current) { logoInputRef.current.value = ''; logoInputRef.current.click(); } }}
+                    disabled={logoUploading}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-dark-700 hover:bg-dark-600 border border-white/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {logoUploading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-5 h-5" />
+                        {logoUrl ? 'Trocar Logo' : 'Upload Logo PNG'}
                       </>
                     )}
                   </button>

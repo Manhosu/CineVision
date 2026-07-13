@@ -128,10 +128,13 @@ export default function ContentHero({
     };
   }, [content.id, isOwnedProp]);
 
-  const isFlashPromo = content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
   // Igor (04/06): pré-venda — declarado aqui em cima pra ficar acessível
   // pros handlers de compra (handleMainAction etc.).
   const presaleInfo = getPresaleInfo(content as any);
+  // Igor (13/07): guard — se filme em pré-venda, não mostra flash promo
+  // simultâneo (Áudio 3: "flash e pré-venda se sobrepondo").
+  // Pré-venda é exclusiva, não acumula com desconto flash.
+  const isFlashPromo = !presaleInfo.isPresale && content.is_flash_promo && content.promo_ends_at && content.discounted_price_cents;
   const effectivePriceCents = presaleInfo.isPresale
     ? presaleInfo.effectivePriceCents
     : (content.discounted_price_cents && content.discounted_price_cents < content.price_cents
@@ -412,10 +415,47 @@ export default function ContentHero({
             </div>
           )}
 
-          {/* Title */}
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tv:text-7xl font-black text-white leading-[1.05] tracking-tight mb-4 tv:mb-5">
-            {content.title}
-          </h1>
+          {/* Title — Igor (13/07): se content.logo_url preenchido, renderiza
+              PNG oficial no lugar do <h1> texto. Mantém <h1 sr-only> pro SEO.
+              Fallback pro texto se logo falhar carregar (onError). */}
+          {content.logo_url ? (
+            <>
+              <h1 className="sr-only">{content.title}</h1>
+              <div className="mb-4 tv:mb-5 max-w-md sm:max-w-lg lg:max-w-xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={content.logo_url}
+                  alt={content.title}
+                  className="hidden sm:block w-full h-auto max-h-40 object-contain"
+                  style={{ objectPosition: content.logo_position || '50% 50%' }}
+                  onError={(e) => {
+                    const parent = (e.currentTarget as HTMLImageElement).parentElement;
+                    if (parent) parent.style.display = 'none';
+                    const fb = document.getElementById(`hero-title-fallback-${content.id}`);
+                    if (fb) fb.style.display = 'block';
+                  }}
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={content.logo_url}
+                  alt=""
+                  className="block sm:hidden w-full h-auto max-h-24 object-contain"
+                  style={{ objectPosition: content.logo_position_mobile || content.logo_position || '50% 50%' }}
+                />
+              </div>
+              <h1
+                id={`hero-title-fallback-${content.id}`}
+                style={{ display: 'none' }}
+                className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tv:text-7xl font-black text-white leading-[1.05] tracking-tight mb-4 tv:mb-5"
+              >
+                {content.title}
+              </h1>
+            </>
+          ) : (
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tv:text-7xl font-black text-white leading-[1.05] tracking-tight mb-4 tv:mb-5">
+              {content.title}
+            </h1>
+          )}
 
           {/* Metadata line */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm sm:text-base tv:text-lg text-white/60 mb-4 tv:mb-5">

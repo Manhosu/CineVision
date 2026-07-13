@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
 import { SupabaseService } from '../../../config/supabase.service';
+import { AdminBotsService } from './admin-bots.service';
 
 /**
  * Igor (11/07): fix do bug de Cenário 3 — bot promocional caía como
@@ -22,7 +23,11 @@ import { SupabaseService } from '../../../config/supabase.service';
 export class PromotionalBotsPingService {
   private readonly logger = new Logger(PromotionalBotsPingService.name);
 
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    @Inject(forwardRef(() => AdminBotsService))
+    private readonly adminBots: AdminBotsService,
+  ) {}
 
   @Cron('*/2 * * * *') // every 2 minutes
   async pingPromoBots() {
@@ -70,6 +75,33 @@ export class PromotionalBotsPingService {
       }
     } catch (err: any) {
       this.logger.error(`pingPromoBots threw: ${err.message}`);
+    }
+  }
+
+  /**
+   * Igor (13/07): novo cron pros bots OFICIAIS.
+   *
+   * Ao contrário do promo (só getMe), este roda `healthcheckDeep` que
+   * também valida `getWebhookInfo`. Detecta o cenário dos 5 bots novos:
+   * token válido MAS webhook não configurado. Grava webhook_url_reported +
+   * last_webhook_check_at → alimenta indicador visual do painel.
+   *
+   * Rate limit-safe: 5min é conservador. Timeout 5s por bot,
+   * Promise.allSettled não trava um pelo outro. Bot API limit
+   * é 30 req/s no getMe, 1 setWebhook/segundo — nem chegamos perto.
+   */
+  @Cron('*/5 * * * *') // every 5 minutes
+  async pingOfficialBotsDeep() {
+    try {
+      const result = await this.adminBots.healthcheckAll(false);
+      const bad = (result.results || []).filter((r: any) => !r.ok);
+      if (bad.length) {
+        this.logger.warn(`[official-ping] ${bad.length} bot(s) com problema: ${JSON.stringify(bad.map((b: any) => ({ u: b.username, m: b.webhook_mismatch, e: b.error })))}`);
+      } else {
+        this.logger.debug?.(`[official-ping] ${result.results?.length ?? 0} bots ok`);
+      }
+    } catch (err: any) {
+      this.logger.error(`pingOfficialBotsDeep threw: ${err.message}`);
     }
   }
 }

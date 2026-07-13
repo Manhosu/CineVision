@@ -154,6 +154,17 @@ export class Content {
   @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
   backdrop_position_mobile?: string;
 
+  // Igor (13/07): logo PNG oficial do filme (opcional). Substitui <h1> texto
+  // no hero. Só filmes novos/importantes. Fallback pro texto se NULL/erro.
+  @Column({ nullable: true })
+  logo_url?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
+  logo_position?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
+  logo_position_mobile?: string;
+
   @Column({ nullable: true })
   storage_path?: string;
 

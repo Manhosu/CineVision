@@ -38,10 +38,12 @@ export class AdminBotsService {
   async listBots(type?: 'official' | 'promotional' | 'all') {
     // Igor (04/07): filtro por tipo pro painel novo separar aba
     // "Oficiais" x "Promocionais". Default = official (compat com UI antiga).
+    // Igor (13/07): adiciona webhook_configured_at, webhook_url_reported,
+    // last_webhook_check_at pra painel mostrar indicador visual de saúde.
     const effectiveType = type ?? 'official';
     let query = this.supabaseService.client
       .from('telegram_bots')
-      .select('id, username, display_name, custom_display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, created_at, is_promotional, promotional_content_id, promotional_target_url, promotional_start_count, notes')
+      .select('id, username, display_name, custom_display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, webhook_configured_at, webhook_url_reported, last_webhook_check_at, created_at, is_promotional, promotional_content_id, promotional_target_url, promotional_start_count, notes')
       .order('created_at', { ascending: true });
 
     if (effectiveType === 'official') query = query.eq('is_promotional', false);
@@ -129,7 +131,31 @@ export class AdminBotsService {
     }
 
     this.telegrams?.invalidateBotCache(data.id);
-    return data;
+
+    // Igor (13/07): setupWebhook automático. Antes dependia de confirm()
+    // do browser; se admin clicava Cancelar OU o popup era bloqueado,
+    // o bot ficava cadastrado sem webhook → não recebia updates →
+    // /start não respondia → contador zerado. Agora chamamos aqui
+    // dentro do createBot. Se falhar, gravamos aviso em notes mas
+    // NÃO derrubamos criação — admin pode reconfigurar depois.
+    let webhookOk = false;
+    let webhookError: string | null = null;
+    try {
+      await this.setupWebhook(data.id);
+      webhookOk = true;
+    } catch (err: any) {
+      webhookError = err?.message || 'unknown error';
+      this.logger.warn(`[createBot] setupWebhook failed for ${username}: ${webhookError}`);
+      // Grava aviso em notes sem sobrescrever o que já tinha
+      const notePrefix = `⚠️ webhook setup failed: ${webhookError}`;
+      const combinedNote = input.notes ? `${notePrefix}\n${input.notes}` : notePrefix;
+      await this.supabaseService.client
+        .from('telegram_bots')
+        .update({ notes: combinedNote })
+        .eq('id', data.id);
+    }
+
+    return { ...data, webhook_ok: webhookOk, webhook_error: webhookError };
   }
 
   async updateBot(id: string, patch: Partial<{
@@ -210,6 +236,11 @@ export class AdminBotsService {
       if (!resp.data?.ok) {
         throw new BadRequestException(`Telegram setWebhook erro: ${resp.data?.description}`);
       }
+      // Igor (13/07): grava webhook_configured_at pra rastreio no painel
+      await this.supabaseService.client
+        .from('telegram_bots')
+        .update({ webhook_configured_at: new Date().toISOString() })
+        .eq('id', bot.id);
       this.logger.log(`[admin-bots] webhook set for ${bot.username} → ${webhookUrl}`);
       return { ok: true, webhook_url: webhookUrl, bot_username: bot.username };
     } catch (err: any) {
@@ -240,6 +271,163 @@ export class AdminBotsService {
     } catch (err: any) {
       return { ok: false, error: err?.response?.data?.description || err.message };
     }
+  }
+
+  /**
+   * Igor (13/07): healthcheck REAL — valida getMe + getWebhookInfo.
+   *
+   * O healthcheck simples (só getMe) só verifica o token do bot, não
+   * detecta se o webhook está configurado apontando pra URL certa.
+   * Um bot pode ter getMe:ok e ainda estar "morto" no fluxo (foi o
+   * cenário dos 5 bots novos que Igor criou).
+   *
+   * Aqui:
+   *   1. getMe → valida token
+   *   2. getWebhookInfo → pega URL configurada no Telegram
+   *   3. Compara URL retornada com a esperada (${BACKEND}/api/v1/.../webhook/${id})
+   *   4. Grava last_webhook_check_at + webhook_url_reported no banco
+   *   5. Retorna { ok, getMe_ok, webhook_ok, webhook_mismatch, expected_url, reported_url }
+   *
+   * Se webhook_mismatch=true, indicador visual do painel vira vermelho.
+   * Igor pode clicar "🔗 Configurar TODOS" pra reconfigurar em massa.
+   */
+  async healthcheckDeep(id: string) {
+    const { data: bot } = await this.supabaseService.client
+      .from('telegram_bots')
+      .select('id, username, token')
+      .eq('id', id)
+      .single();
+    if (!bot) throw new NotFoundException(`Bot ${id} not found`);
+    if (!bot.token) return { ok: false, reason: 'no_token' };
+
+    const backendUrl = this.getBackendBaseUrl();
+    const expectedUrl = `${backendUrl}/api/v1/telegrams/webhook/${bot.id}`;
+    const nowIso = new Date().toISOString();
+    let getMeOk = false;
+    let webhookOk = false;
+    let webhookMismatch = false;
+    let reportedUrl: string | null = null;
+    let error: string | null = null;
+
+    // 1) getMe — valida token
+    try {
+      const meResp = await axios.get(`https://api.telegram.org/bot${bot.token}/getMe`, { timeout: 5000 });
+      getMeOk = !!meResp.data?.ok;
+      if (!getMeOk) error = meResp.data?.description || 'getMe returned not ok';
+    } catch (err: any) {
+      error = err?.response?.data?.description || err.message;
+    }
+
+    // 2) getWebhookInfo — valida URL configurada
+    if (getMeOk) {
+      try {
+        const whResp = await axios.get(`https://api.telegram.org/bot${bot.token}/getWebhookInfo`, { timeout: 5000 });
+        if (whResp.data?.ok) {
+          reportedUrl = whResp.data.result?.url || '';
+          if (reportedUrl && reportedUrl === expectedUrl) {
+            webhookOk = true;
+          } else if (reportedUrl) {
+            webhookMismatch = true;
+          } // reportedUrl vazio = webhook NUNCA foi setado; webhookOk=false, mismatch=false
+        }
+      } catch (err: any) {
+        error = err?.response?.data?.description || err.message;
+      }
+    }
+
+    // 3) Grava resultado no banco (fire-and-forget não bloqueia response)
+    const patch: any = { last_webhook_check_at: nowIso };
+    if (getMeOk) patch.last_seen_ok_at = nowIso;
+    if (reportedUrl !== null) patch.webhook_url_reported = reportedUrl;
+    await this.supabaseService.client
+      .from('telegram_bots')
+      .update(patch)
+      .eq('id', bot.id);
+
+    return {
+      ok: getMeOk && webhookOk,
+      getMe_ok: getMeOk,
+      webhook_ok: webhookOk,
+      webhook_mismatch: webhookMismatch,
+      expected_url: expectedUrl,
+      reported_url: reportedUrl,
+      error,
+    };
+  }
+
+  /**
+   * Igor (13/07): reconfigura webhook em MASSA (todos ou por tipo).
+   *
+   * Uso: Igor cria 10 bots no BotFather, cadastra todos pelo /admin/bots.
+   * Em vez de precisar clicar em cada 🔗 individualmente, chama este método.
+   * Idempotente pelo lado do Telegram — chamar 2x setWebhook não quebra.
+   *
+   * Filtro: se filterPromo passado, filtra por is_promotional. Default: todos.
+   * Retorna { ok: [{id, username}], failed: [{id, username, error}] }.
+   */
+  async setupWebhookAll(filterPromo?: boolean) {
+    let query = this.supabaseService.client
+      .from('telegram_bots')
+      .select('id, username')
+      .eq('status', 'active');
+    if (filterPromo !== undefined) query = query.eq('is_promotional', filterPromo);
+
+    const { data: bots, error } = await query;
+    if (error) throw new Error(`Failed to list bots: ${error.message}`);
+    if (!bots?.length) return { ok: [], failed: [] };
+
+    const results = await Promise.allSettled(
+      bots.map(async (b: any) => {
+        try {
+          await this.setupWebhook(b.id);
+          return { id: b.id, username: b.username };
+        } catch (err: any) {
+          throw { id: b.id, username: b.username, error: err?.message || 'unknown' };
+        }
+      }),
+    );
+
+    const ok: any[] = [];
+    const failed: any[] = [];
+    for (const r of results) {
+      if (r.status === 'fulfilled') ok.push(r.value);
+      else failed.push(r.reason);
+    }
+    this.logger.log(`[setupWebhookAll] ${ok.length} ok / ${failed.length} failed`);
+    return { ok, failed };
+  }
+
+  /**
+   * Igor (13/07): healthcheckDeep em massa. Usado pelo painel visual
+   * (botão "Testar TODOS") e pelo cron OfficialBotsPingService.
+   */
+  async healthcheckAll(filterPromo?: boolean) {
+    let query = this.supabaseService.client
+      .from('telegram_bots')
+      .select('id, username, is_promotional')
+      .eq('status', 'active');
+    if (filterPromo !== undefined) query = query.eq('is_promotional', filterPromo);
+
+    const { data: bots, error } = await query;
+    if (error) throw new Error(`Failed to list bots: ${error.message}`);
+    if (!bots?.length) return { results: [] };
+
+    const results = await Promise.allSettled(
+      bots.map(async (b: any) => {
+        try {
+          const r = await this.healthcheckDeep(b.id);
+          return { id: b.id, username: b.username, ...r };
+        } catch (err: any) {
+          return { id: b.id, username: b.username, ok: false, error: err?.message };
+        }
+      }),
+    );
+
+    return {
+      results: results.map((r) =>
+        r.status === 'fulfilled' ? r.value : { ok: false, error: 'promise rejected' },
+      ),
+    };
   }
 
   async getUserStats() {

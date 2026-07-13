@@ -18,12 +18,33 @@ interface Bot {
   attendance_weight: number;
   users_count: number;
   last_seen_ok_at: string | null;
+  // Igor (13/07): novos campos do healthcheck deep
+  webhook_configured_at?: string | null;
+  webhook_url_reported?: string | null;
+  last_webhook_check_at?: string | null;
   created_at: string;
   is_promotional?: boolean;
   promotional_content_id?: string | null;
   promotional_target_url?: string | null;
   promotional_start_count?: number;
   notes?: string | null;
+}
+
+// Igor (13/07): saúde derivada pra render do indicador visual verde/amarelo/vermelho.
+// green = webhook_configured_at existe E last_seen_ok_at < 15min E sem mismatch
+// yellow = last_seen_ok_at < 30min mas webhook nunca configurado ou mismatch
+// red = last_seen_ok_at > 30min OU mismatch confirmado
+function computeBotHealth(bot: Bot, expectedBase: string): { level: 'green' | 'yellow' | 'red' | 'unknown'; label: string } {
+  const lastOk = bot.last_seen_ok_at ? Date.now() - new Date(bot.last_seen_ok_at).getTime() : Infinity;
+  const expectedUrl = `${expectedBase}/api/v1/telegrams/webhook/${bot.id}`;
+  const webhookMismatch = bot.webhook_url_reported && bot.webhook_url_reported !== expectedUrl;
+  const webhookNeverConfigured = !bot.webhook_configured_at;
+
+  if (lastOk > 30 * 60_000) return { level: 'red', label: 'offline >30min' };
+  if (webhookMismatch) return { level: 'red', label: 'webhook errado' };
+  if (webhookNeverConfigured) return { level: 'yellow', label: 'webhook não configurado' };
+  if (lastOk > 15 * 60_000) return { level: 'yellow', label: 'ping antigo' };
+  return { level: 'green', label: 'OK' };
 }
 
 function getHeaders() {
@@ -326,8 +347,16 @@ export default function AdminBotsPage() {
       setNewCustomDisplayName('');
       setNewNotes('');
       await loadBots();
-      if (confirm(`Configurar webhook agora pro @${body.username}?`)) {
-        await handleSetupWebhook(body.id);
+      // Igor (13/07): removido confirm(). createBot já configura webhook
+      // automaticamente. Se falhar, backend grava warning em notes e
+      // retorna webhook_ok=false — mostra toast dedicado pra Igor saber.
+      if (body.webhook_ok === false) {
+        toast.error(
+          `⚠️ Webhook FALHOU: ${body.webhook_error || 'erro'}. Clique 🔗 no card.`,
+          { duration: 8000 },
+        );
+      } else if (body.webhook_ok === true) {
+        toast.success(`Webhook configurado automaticamente.`, { duration: 3000 });
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -353,18 +382,70 @@ export default function AdminBotsPage() {
   const handleHealthcheck = async (id: string) => {
     const t = toast.loading('Testando bot...');
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/bots/${id}/healthcheck`, {
+      // Igor (13/07): deep healthcheck — valida getMe + getWebhookInfo
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/${id}/healthcheck-deep`, {
         method: 'POST',
         headers: getHeaders(),
       });
       const body = await res.json();
       toast.dismiss(t);
       if (body.ok) {
-        toast.success(`OK — @${body.result?.username} respondeu.`);
-        await loadBots();
+        toast.success('OK — token + webhook batendo.');
+      } else if (body.webhook_mismatch) {
+        toast.error(`Webhook errado! Esperado ${body.expected_url}, encontrado ${body.reported_url}. Clique 🔗.`, { duration: 8000 });
+      } else if (!body.getMe_ok) {
+        toast.error(`Token inválido: ${body.error || 'não respondeu'}`);
       } else {
-        toast.error(`Bot não respondeu: ${body.description || body.error || body.reason}`);
+        toast.error('Webhook não configurado. Clique 🔗 pra corrigir.');
       }
+      await loadBots();
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e.message);
+    }
+  };
+
+  // Igor (13/07): botões massa — reconfigura webhook em todos os bots
+  // ativos de uma vez. Idempotente. Usa filtro `promo` conforme a aba.
+  const handleSetupWebhooksAll = async () => {
+    if (!confirm(`Reconfigurar webhook em TODOS os bots ${activeTab === 'promotional' ? 'promocionais' : 'oficiais'} ativos?`)) return;
+    const t = toast.loading('Reconfigurando webhooks...');
+    try {
+      const promoParam = activeTab === 'promotional' ? 'true' : 'false';
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/setup-webhooks-all?promo=${promoParam}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const body = await res.json();
+      toast.dismiss(t);
+      if (!res.ok) throw new Error(body?.message || 'Falha');
+      toast.success(`✅ ${body.ok?.length || 0} ok / ❌ ${body.failed?.length || 0} falhou`, { duration: 5000 });
+      if (body.failed?.length) {
+        console.warn('[setup-webhooks-all] failed:', body.failed);
+      }
+      await loadBots();
+    } catch (e: any) {
+      toast.dismiss(t);
+      toast.error(e.message);
+    }
+  };
+
+  const handleHealthcheckAll = async () => {
+    const t = toast.loading('Testando todos os bots...');
+    try {
+      const promoParam = activeTab === 'promotional' ? 'true' : 'false';
+      const res = await fetch(`${API_URL}/api/v1/admin/bots/healthcheck-all?promo=${promoParam}`, {
+        method: 'POST',
+        headers: getHeaders(),
+      });
+      const body = await res.json();
+      toast.dismiss(t);
+      const results = body.results || [];
+      const ok = results.filter((r: any) => r.ok).length;
+      const bad = results.length - ok;
+      if (bad === 0) toast.success(`Todos ${ok} bot(s) OK ✅`);
+      else toast.error(`${ok} OK / ${bad} com problema — veja indicador visual`, { duration: 6000 });
+      await loadBots();
     } catch (e: any) {
       toast.dismiss(t);
       toast.error(e.message);
@@ -453,12 +534,29 @@ export default function AdminBotsPage() {
               : 'Bots de captação/divulgação — nome de filme em alta, aproveita busca orgânica do Telegram.'}
           </p>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium"
-        >
-          + Adicionar bot {activeTab === 'promotional' ? 'promocional' : ''}
-        </button>
+        <div className="flex gap-2 items-center">
+          {/* Igor (13/07): botões massa pra reconfigurar/testar webhooks. */}
+          <button
+            onClick={handleHealthcheckAll}
+            className="px-3 py-2 text-sm bg-dark-700 hover:bg-dark-600 text-gray-200 border border-white/10 rounded-lg font-medium"
+            title="Testa getMe + getWebhookInfo de todos os bots"
+          >
+            🩺 Testar TODOS
+          </button>
+          <button
+            onClick={handleSetupWebhooksAll}
+            className="px-3 py-2 text-sm bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 rounded-lg font-medium"
+            title="Reconfigura webhook em massa"
+          >
+            🔗 Configurar TODOS
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg font-medium"
+          >
+            + Adicionar bot {activeTab === 'promotional' ? 'promocional' : ''}
+          </button>
+        </div>
       </div>
 
       {/* Igor (04/07): tabs Oficiais x Promocionais */}
@@ -723,8 +821,23 @@ export default function AdminBotsPage() {
                     className="w-16 px-2 py-1 bg-dark-900 border border-white/10 rounded text-white text-right"
                   />
                 </td>
-                <td className="px-4 py-3 text-right text-gray-300">{bot.users_count}</td>
-                <td className="px-4 py-3 text-xs text-gray-500">{formatRelativeBr(bot.last_seen_ok_at)}</td>
+                <td className="px-4 py-3 text-right text-gray-300">
+                  {/* Igor (13/07): usa RPC live via userStats em vez do cache stale */}
+                  {userStats?.bots?.find((b: any) => b.username === bot.username)?.users_count ?? bot.users_count}
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-500">
+                  {/* Igor (13/07): bolinha verde/amarela/vermelha derivada de webhook + last_seen */}
+                  {(() => {
+                    const h = computeBotHealth(bot, API_URL);
+                    const color = h.level === 'green' ? 'bg-emerald-400' : h.level === 'yellow' ? 'bg-yellow-400' : h.level === 'red' ? 'bg-red-500' : 'bg-gray-500';
+                    return (
+                      <span className="flex items-center gap-2" title={h.label}>
+                        <span className={`inline-block w-2 h-2 rounded-full ${color}`} />
+                        {formatRelativeBr(bot.last_seen_ok_at)}
+                      </span>
+                    );
+                  })()}
+                </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex gap-2 justify-end">
                     <button

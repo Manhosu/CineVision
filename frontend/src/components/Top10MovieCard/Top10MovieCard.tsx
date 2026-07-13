@@ -39,9 +39,10 @@ const Top10MovieCard = memo(function Top10MovieCard({
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [promoTimeLeft, setPromoTimeLeft] = useState('');
 
-  const isFlashPromo = movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
   // Igor (04/06): pré-venda
   const presale = getPresaleInfo(movie as any);
+  // Igor (13/07): guard — pré-venda vence flash promo (badges se sobrepondo).
+  const isFlashPromo = !presale.isPresale && movie.is_flash_promo && movie.promo_ends_at && movie.discounted_price_cents;
 
   useEffect(() => {
     if (!isFlashPromo || !movie.promo_ends_at) return;
