@@ -1406,11 +1406,21 @@ export class OrdersService {
    * cliente clicou 2x no link do intent).
    */
   async generateAndSendPixForOrder(orderId: string, chatId: number, telegramUserId?: number) {
+    // Igor (12/07): UX unificada. Carrega order com purchases + payment
+    // (mesmo shape que handleOrderDeepLink usa), gera PIX se ainda não
+    // existe, e delega envio pro helper sendOrderPixDeepLinkUX do
+    // TelegramsEnhancedService — mesma UX polida dos bots oficiais
+    // (título do filme, QR imagem, copia-cola, 3 botões de ação).
     const { data: order, error } = await this.supabase.client
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        order_token,
+        purchases:purchases(id, amount_cents, content:content_id(title, content_type, is_release)),
+        payment:payments!payments_order_id_fkey(provider_meta, status, amount_cents)
+      `)
       .eq('id', orderId)
-      .single();
+      .maybeSingle();
     if (error || !order) throw new Error(`Order ${orderId} not found`);
 
     if (order.status === OrderStatus.PAID) {
@@ -1424,35 +1434,30 @@ export class OrdersService {
       return;
     }
 
-    const pixResult = await this.generatePixForOrder(order, order.user_id, chatId.toString());
+    // Guard idempotente: se PIX já existe no payment, reusa (cliente
+    // pode ter clicado no link 2x rápido). Só gera novo se ainda não tem.
+    const existingPayment = Array.isArray(order.payment) ? order.payment[0] : order.payment;
+    if (!existingPayment?.provider_meta?.qr_code_base64) {
+      await this.generatePixForOrder(order, order.user_id, chatId.toString());
+      // Refetch pra pegar o payment recém-criado
+      const { data: refreshed } = await this.supabase.client
+        .from('orders')
+        .select(`
+          *,
+          order_token,
+          purchases:purchases(id, amount_cents, content:content_id(title, content_type, is_release)),
+          payment:payments!payments_order_id_fkey(provider_meta, status, amount_cents)
+        `)
+        .eq('id', orderId)
+        .single();
+      if (refreshed) Object.assign(order, refreshed);
+    }
 
-    // Envia QR pelo Telegram — sai pelo bot atual (ALS já resolveu qual)
-    if (this.telegramsService && pixResult) {
-      const amountBRL = (order.total_cents / 100)
-        .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-      const header =
-        `💳 *PIX gerado!*\n\n` +
-        `Valor: *${amountBRL}*\n` +
-        `Copie o código abaixo no app do seu banco.\n\n` +
-        `_O PIX expira em 30 minutos. Após o pagamento, você recebe o filme aqui mesmo._`;
+    // Normaliza payment (Supabase pode devolver array ou objeto)
+    (order as any).payment = Array.isArray(order.payment) ? order.payment[0] : order.payment;
 
-      try {
-        await this.telegramsService.sendMessage(chatId, header, { parse_mode: 'Markdown' });
-        if (pixResult.qrCode) {
-          // Copia-cola em bloco de código (formato monospace do Telegram)
-          await this.telegramsService.sendMessage(
-            chatId,
-            '📋 *Copia e Cola:*\n\n```\n' + pixResult.qrCode + '\n```',
-            { parse_mode: 'Markdown' },
-          );
-        }
-      } catch (err: any) {
-        this.logger.error(`Failed to send PIX message for order ${orderId}: ${err.message}`);
-        await this.telegramsService.sendMessage(
-          chatId,
-          `💳 PIX gerado! Valor: ${amountBRL}. Copia-cola:\n\n${pixResult.qrCode || 'erro ao gerar código'}`,
-        );
-      }
+    if (this.telegramsService) {
+      await (this.telegramsService as any).sendOrderPixDeepLinkUX(chatId, order);
     }
   }
 }

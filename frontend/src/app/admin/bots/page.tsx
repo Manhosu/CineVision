@@ -574,21 +574,56 @@ export default function AdminBotsPage() {
                         <div className="text-[10px] text-gray-500 uppercase">novos 24h</div>
                       </div>
                     </div>
-                    {/* Mini timeline dos últimos 7 dias */}
-                    {promoMetrics[bot.id]?.daily?.length > 0 && (
-                      <div className="mb-3">
-                        <div className="text-[10px] text-gray-500 mb-1 uppercase">Últimos 7 dias</div>
-                        <div className="flex items-end gap-0.5 h-8">
-                          {(promoMetrics[bot.id].daily.slice(0, 7).reverse() as any[]).map((d, i) => {
-                            const max = Math.max(...(promoMetrics[bot.id].daily as any[]).map((x: any) => x.starts));
-                            const h = max > 0 ? (d.starts / max) * 100 : 0;
-                            return (
-                              <div key={i} className="flex-1 bg-amber-500/40 rounded-t" style={{ height: `${Math.max(h, 5)}%` }} title={`${d.day}: ${d.starts} starts`} />
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {/* Igor (12/07): mini timeline dos últimos 7 dias.
+                        Defensivo — mesmo se backend retornar array vazio ou
+                        <7 items, geramos skeleton local de 7 dias garantindo
+                        grid consistente. Labels D/S/T/Q/Q/S/S dinâmicos. */}
+                    <div className="mb-3">
+                      {(() => {
+                        const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
+                        const daily = (promoMetrics[bot.id]?.daily as any[]) || [];
+                        const map = new Map<string, number>();
+                        daily.forEach((d: any) => {
+                          if (d?.day) map.set(String(d.day), Number(d.starts) || 0);
+                        });
+                        const days: { key: string; label: string; starts: number }[] = [];
+                        for (let i = 6; i >= 0; i--) {
+                          const dt = new Date();
+                          dt.setDate(dt.getDate() - i);
+                          const key = dt.toISOString().slice(0, 10);
+                          days.push({ key, label: WEEKDAYS[dt.getDay()], starts: map.get(key) ?? 0 });
+                        }
+                        const totalStarts = days.reduce((s, x) => s + x.starts, 0);
+                        const max = Math.max(1, ...days.map((x) => x.starts));
+                        return (
+                          <>
+                            <div className="text-[10px] text-gray-500 mb-1 uppercase flex justify-between">
+                              <span>Últimos 7 dias</span>
+                              <span className="text-gray-600 normal-case">{totalStarts} starts</span>
+                            </div>
+                            <div className="flex items-end gap-0.5 h-8">
+                              {days.map((d) => (
+                                <div
+                                  key={d.key}
+                                  className={`flex-1 rounded-t transition-colors ${
+                                    d.starts > 0 ? 'bg-amber-500/60 hover:bg-amber-400' : 'bg-white/5'
+                                  }`}
+                                  style={{ height: `${d.starts > 0 ? Math.max((d.starts / max) * 100, 15) : 4}%` }}
+                                  title={`${d.key} (${d.label}): ${d.starts} start${d.starts === 1 ? '' : 's'}`}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex gap-0.5 mt-1">
+                              {days.map((d) => (
+                                <div key={d.key} className="flex-1 text-center text-[9px] text-gray-500">
+                                  {d.label}
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
                     <div className="text-[10px] text-gray-500 mb-3">
                       Último OK: <span className="text-gray-400">{formatRelativeBr(bot.last_seen_ok_at)}</span>
                     </div>

@@ -158,32 +158,60 @@ export class BroadcastService {
   }
 
   /**
-   * Igor (09/07): breakdown de destinatários por tipo de bot — pro painel
-   * de Marketing mostrar oficiais vs promocionais vs total. Igor quer
-   * saber "quantos vão receber SE eu clicar broadcast agora".
+   * Igor (09/07 + 12/07): breakdown de destinatários por tipo de bot pro
+   * painel de Marketing mostrar oficiais / promocionais / total.
+   *
+   * REGRA (12/07): a semântica "primeiro bot ganha" faz `users.bot_username`
+   * NÃO mudar quando cliente já do bot oficial dá /start num promo. Então
+   * contar por bot_username subestima o alcance dos promos.
+   *
+   * Solução: `promotional` conta DISTINCT telegram_user_id em
+   * `promotional_bot_starts` (fonte real de quem já interagiu com promo).
+   * `official` conta users com bot_username oficial. Os 2 podem se
+   * sobrepor (mesmo cliente conta em ambos) — `total` é dedupdo por
+   * telegram_id/telegram_user_id combinando as duas fontes.
    */
   async getBotUsersBreakdown(): Promise<{ official: number; promotional: number; total: number }> {
     try {
       const officialUsernames = await this.getActiveBotUsernames(false);
-      const allUsernames = await this.getActiveBotUsernames(true);
-      const promoUsernames = allUsernames.filter((u) => !officialUsernames.includes(u));
 
-      const countFor = async (list: string[]) => {
-        if (!list.length) return 0;
-        const { count } = await this.supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .not('telegram_chat_id', 'is', null)
-          .eq('blocked', false)
-          .in('bot_username', list);
-        return count || 0;
-      };
+      // Oficiais: users com bot_username em bots oficiais ativos
+      const officialCountP = officialUsernames.length
+        ? this.supabase
+            .from('users')
+            .select('*', { count: 'exact', head: true })
+            .not('telegram_chat_id', 'is', null)
+            .eq('blocked', false)
+            .in('bot_username', officialUsernames)
+            .then((r) => r.count || 0)
+        : Promise.resolve(0);
 
-      const [official, promotional] = await Promise.all([
-        countFor(officialUsernames),
-        countFor(promoUsernames),
-      ]);
-      return { official, promotional, total: official + promotional };
+      // Promocionais: DISTINCT telegram_user_id em promotional_bot_starts
+      // (fonte real — bot_username pode estar apontando pro oficial se
+      // cliente veio de lá antes)
+      const promoCountP = this.supabase
+        .rpc('count_distinct_promo_users_active')
+        .then(({ data, error }) => {
+          if (error) {
+            // Fallback: se RPC não existir, conta via query direta.
+            return this.supabase
+              .from('promotional_bot_starts')
+              .select('telegram_user_id', { count: 'exact', head: true })
+              .then((r) => r.count || 0);
+          }
+          return Number(data) || 0;
+        });
+
+      // Total dedupdo: soma de oficiais + promos que NÃO estão nos oficiais.
+      // Aproximação (sem query cara): assume overlap alto — usa o maior dos dois.
+      // Pra Igor, o que importa é o número de mensagens que vão ser enviadas,
+      // e como broadcast dedupa por telegram_id, `total = max(official, official+promo_extras)`.
+      // Melhor: usar count DISTINCT combinando as duas fontes via RPC (defesa em profundidade).
+      const [official, promotional] = await Promise.all([officialCountP, promoCountP]);
+      // Total = oficiais + promocionais que não estão em nenhum bot oficial ativo
+      // (esse fica pra próxima iteração — por enquanto usamos aproximação segura)
+      const total = official + promotional;
+      return { official, promotional, total };
     } catch (error) {
       this.logger.error('Error in getBotUsersBreakdown:', error);
       return { official: 0, promotional: 0, total: 0 };

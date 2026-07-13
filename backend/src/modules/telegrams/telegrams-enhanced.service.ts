@@ -2823,71 +2823,89 @@ export class TelegramsEnhancedService implements OnModuleInit {
         return;
       }
 
-      const qr = order.payment?.provider_meta?.qr_code;
-      const qrB64 = order.payment?.provider_meta?.qr_code_base64;
-      const items = order.purchases || [];
-      const itemList = items
-        .map((p: any, i: number) => `${i + 1}. ${p.content?.title || 'Item'}`)
-        .join('\n');
-      const discountLine = order.discount_percent > 0
-        ? `\n🎁 Desconto aplicado: ${order.discount_percent}%`
-        : '';
-      const totalFmt = (order.total_cents / 100).toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-      });
-
-      const header =
-        `🛒 *Seu pedido*\n\n${itemList}${discountLine}\n\n💰 Total: *R$ ${totalFmt}*\n\n📱 Pague com PIX:`;
-
-      if (qrB64) {
-        try {
-          const axiosLib = (await import('axios')).default;
-          const FormData = require('form-data');
-          const form = new FormData();
-          form.append('chat_id', chatId.toString());
-          form.append('photo', Buffer.from(qrB64.startsWith('data:') ? qrB64.split(',')[1] : qrB64, 'base64'), {
-            filename: 'qrcode.png',
-            contentType: 'image/png',
-          });
-          form.append('caption', header);
-          form.append('parse_mode', 'Markdown');
-          const qrApiUrl = await this.apiUrlForCurrent();
-          await axiosLib.post(`${qrApiUrl}/sendPhoto`, form, {
-            headers: form.getHeaders(),
-          });
-        } catch (imgErr: any) {
-          const status = imgErr?.response?.status;
-          const body = imgErr?.response?.data;
-          this.logger.warn(
-            `[PIX QR carrinho] sendPhoto falhou (status=${status}, body=${JSON.stringify(body)?.slice(0, 200)}): ${imgErr.message}`,
-          );
-          await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
-        }
-      } else {
-        await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
-      }
-
-      if (qr) {
-        await this.sendMessage(chatId, `*Código copia-e-cola:*\n\`${qr}\``, { parse_mode: 'Markdown' });
-      }
-
-      await this.sendMessage(
-        chatId,
-        '⏳ Aguardando pagamento. Você receberá uma confirmação automática.\n\nDigite /start para iniciar o bot novamente.',
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '✅ Já paguei', callback_data: `order_check_${orderToken}` }],
-              [{ text: '⚠️ Não consegui pagar', callback_data: `manual_pix_o_${orderToken}` }],
-              [{ text: '❌ Cancelar', callback_data: `order_cancel_${orderToken}` }],
-            ],
-          },
-        },
-      );
+      // Igor (12/07): extraído pro helper sendOrderPixDeepLinkUX pra reuso
+      // pelo bot promo (Cenário 3). Comportamento idêntico ao anterior.
+      await this.sendOrderPixDeepLinkUX(chatId, order);
     } catch (err: any) {
       this.logger.error(`Order deep-link error: ${err.message}`);
       await this.sendMessage(chatId, '❌ Não foi possível carregar o pedido. Tente novamente.');
     }
+  }
+
+  /**
+   * Igor (12/07): UX PIX unificada — order-scoped, título+QR+copia-cola+3 botões.
+   * Reusado por:
+   *   - handleOrderDeepLink (bot oficial, /start order_<token>)
+   *   - OrdersService.generateAndSendPixForOrder (bot promo Cenário 3, /start pi_<token>)
+   *
+   * Padrão idêntico dos bots oficiais: título do filme, valor formatado, QR image
+   * quando possível, copia-cola em bloco de código, botões (Já paguei / Não
+   * consegui pagar / Cancelar). Callbacks são order-scoped — os handlers
+   * order_check_/manual_pix_o_/order_cancel_ já existem.
+   */
+  public async sendOrderPixDeepLinkUX(chatId: number, order: any) {
+    const orderToken = order.order_token;
+    const qr = order.payment?.provider_meta?.qr_code;
+    const qrB64 = order.payment?.provider_meta?.qr_code_base64;
+    const items = order.purchases || [];
+    const itemList = items
+      .map((p: any, i: number) => `${i + 1}. ${p.content?.title || 'Item'}`)
+      .join('\n');
+    const discountLine = order.discount_percent > 0
+      ? `\n🎁 Desconto aplicado: ${order.discount_percent}%`
+      : '';
+    const totalFmt = (order.total_cents / 100).toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+    });
+
+    const header =
+      `🛒 *Seu pedido*\n\n${itemList}${discountLine}\n\n💰 Total: *R$ ${totalFmt}*\n\n📱 Pague com PIX:`;
+
+    if (qrB64) {
+      try {
+        const axiosLib = (await import('axios')).default;
+        const FormData = require('form-data');
+        const form = new FormData();
+        form.append('chat_id', chatId.toString());
+        form.append('photo', Buffer.from(qrB64.startsWith('data:') ? qrB64.split(',')[1] : qrB64, 'base64'), {
+          filename: 'qrcode.png',
+          contentType: 'image/png',
+        });
+        form.append('caption', header);
+        form.append('parse_mode', 'Markdown');
+        const qrApiUrl = await this.apiUrlForCurrent();
+        await axiosLib.post(`${qrApiUrl}/sendPhoto`, form, {
+          headers: form.getHeaders(),
+        });
+      } catch (imgErr: any) {
+        const status = imgErr?.response?.status;
+        const body = imgErr?.response?.data;
+        this.logger.warn(
+          `[PIX QR] sendPhoto falhou (status=${status}, body=${JSON.stringify(body)?.slice(0, 200)}): ${imgErr.message}`,
+        );
+        await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+      }
+    } else {
+      await this.sendMessage(chatId, header, { parse_mode: 'Markdown' });
+    }
+
+    if (qr) {
+      await this.sendMessage(chatId, `*Código copia-e-cola:*\n\`${qr}\``, { parse_mode: 'Markdown' });
+    }
+
+    await this.sendMessage(
+      chatId,
+      '⏳ Aguardando pagamento. Você receberá uma confirmação automática.\n\nDigite /start para iniciar o bot novamente.',
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '✅ Já paguei', callback_data: `order_check_${orderToken}` }],
+            [{ text: '⚠️ Não consegui pagar', callback_data: `manual_pix_o_${orderToken}` }],
+            [{ text: '❌ Cancelar', callback_data: `order_cancel_${orderToken}` }],
+          ],
+        },
+      },
+    );
   }
 
   // Order callback handlers
@@ -4103,6 +4121,51 @@ export class TelegramsEnhancedService implements OnModuleInit {
   }
 
   /**
+   * Igor (12/07): stamp de user quando cliente dá /start num bot promocional.
+   *
+   * Antes: branch is_promotional em handleStartCommand só gravava em
+   * promotional_bot_starts (log) e pulava findOrCreateUserByTelegramId.
+   * Resultado: users promocionais não apareciam em `users` → broadcast
+   * mostrava promocional=0 no painel /admin/broadcast.
+   *
+   * Agora: garante que existe row em `users` pra esse telegram_id, e
+   * marca bot_username=<promo_username> se ainda não tinha bot cadastrado.
+   *
+   * Semântica "primeiro bot ganha": se cliente já deu /start num bot
+   * oficial antes, mantém o bot_username oficial. Broadcast oficial
+   * não perde ninguém. Só stamp se estava sem bot ou sem chat_id.
+   */
+  private async upsertPromoUser(telegramUserId: number, chatId: number, promoUsername: string) {
+    try {
+      const tgId = String(telegramUserId);
+      const { data: existing } = await this.supabase
+        .from('users')
+        .select('id, bot_username, telegram_chat_id')
+        .eq('telegram_id', tgId)
+        .maybeSingle();
+
+      if (!existing) {
+        await this.supabase.from('users').insert({
+          telegram_id: tgId,
+          telegram_chat_id: chatId.toString(),
+          bot_username: promoUsername,
+          blocked: false,
+        });
+        return;
+      }
+
+      const patch: Record<string, any> = {};
+      if (!existing.bot_username) patch.bot_username = promoUsername;
+      if (!existing.telegram_chat_id) patch.telegram_chat_id = chatId.toString();
+      if (Object.keys(patch).length) {
+        await this.supabase.from('users').update(patch).eq('id', existing.id);
+      }
+    } catch (err: any) {
+      this.logger.warn(`[promo] upsertPromoUser failed: ${err?.message || err}`);
+    }
+  }
+
+  /**
    * Busca usuário pelo Telegram ID ou cria um novo automaticamente
    */
   private async findOrCreateUserByTelegramId(telegramUserId: number, chatId: number): Promise<any> {
@@ -4495,6 +4558,11 @@ export class TelegramsEnhancedService implements OnModuleInit {
         .update({ last_seen_ok_at: new Date().toISOString() })
         .eq('id', currentBotId!)
         .then(noop, warn('last_seen_ok_at'));
+      // Igor (12/07): stampa user na tabela `users` pra broadcast enxergar.
+      // Semântica "primeiro bot ganha" — não sobrescreve bot_username já
+      // preenchido por bot oficial. Fire-and-forget.
+      this.upsertPromoUser(telegramUserId || chatId, chatId, currentBot.username)
+        .catch((err) => this.logger.warn(`[promo] upsertPromoUser fail: ${err?.message || err}`));
       // Igor (09/07): log de start pra analytics 24h/diário. Detecta se
       // é primeiro start desse user nesse bot (is_first_start=true) pra
       // contador de "novos usuários" separado.
