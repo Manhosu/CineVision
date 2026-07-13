@@ -183,7 +183,54 @@ export function HeroBanner({
       <div className="relative z-10 h-full flex items-end pb-10 md:pb-12 lg:pb-16">
         <div className="container mx-auto px-5 lg:px-8">
           <div className="max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl">
-            {/* Igor (04/06): badge Pré-venda no Hero Banner */}
+            {/* Igor (13/07): logo PNG opcional. Fallback pro <h1> texto.
+                Igor (14/07): posicionamento abs + scale + duplo <img>
+                (desktop e mobile) — bate 1:1 com o LogoEditor. */}
+            {(currentMovie as any).logo_url ? (
+              <>
+                <h1 className="sr-only">{currentMovie.title}</h1>
+                {/* Desktop */}
+                <div className="hidden sm:block relative w-full max-w-md lg:max-w-lg h-32 lg:h-40 mb-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(currentMovie as any).logo_url}
+                    alt={currentMovie.title}
+                    className="absolute h-auto object-contain drop-shadow-2xl"
+                    style={{
+                      left: `${parseInt(((currentMovie as any).logo_position || '50%').split('%')[0], 10) || 50}%`,
+                      top: `${parseInt(((currentMovie as any).logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
+                      width: `${(currentMovie as any).logo_scale ?? 100}%`,
+                      maxWidth: '95%',
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+                {/* Mobile */}
+                <div className="block sm:hidden relative w-full h-24 mb-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={(currentMovie as any).logo_url}
+                    alt=""
+                    className="absolute h-auto object-contain drop-shadow-2xl"
+                    style={{
+                      left: `${parseInt(((currentMovie as any).logo_position_mobile || (currentMovie as any).logo_position || '50%').split('%')[0], 10) || 50}%`,
+                      top: `${parseInt(((currentMovie as any).logo_position_mobile || (currentMovie as any).logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
+                      width: `${(currentMovie as any).logo_scale_mobile ?? (currentMovie as any).logo_scale ?? 100}%`,
+                      maxWidth: '95%',
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
+                {currentMovie.title}
+              </h1>
+            )}
+
+            {/* Igor (14/07): Badge Pré-venda movido pra DEPOIS do logo (antes
+                empurrava o logo pra baixo). Alinha com o ContentHero. */}
             {(() => {
               const presale = getPresaleInfo(currentMovie as any);
               if (!presale.isPresale) return null;
@@ -206,26 +253,6 @@ export function HeroBanner({
                 </div>
               );
             })()}
-            {/* Igor (13/07): logo PNG opcional. Fallback pro <h1> texto. */}
-            {(currentMovie as any).logo_url ? (
-              <>
-                <h1 className="sr-only">{currentMovie.title}</h1>
-                <div className="mb-2 max-w-xs md:max-w-md lg:max-w-lg">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={(currentMovie as any).logo_url}
-                    alt={currentMovie.title}
-                    className="w-full h-auto max-h-24 md:max-h-32 lg:max-h-40 object-contain"
-                    style={{ objectPosition: (currentMovie as any).logo_position || '50% 50%' }}
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              </>
-            ) : (
-              <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
-                {currentMovie.title}
-              </h1>
-            )}
 
             {/* Compact metadata row */}
             <div className="flex items-center gap-2 md:gap-3 mb-2 text-[11px] md:text-sm text-white/60">

@@ -165,6 +165,13 @@ export class Content {
   @Column({ type: 'varchar', length: 20, nullable: true, default: '50% 50%' })
   logo_position_mobile?: string;
 
+  // Igor (14/07): tamanho do logo no hero (%). NULL herda 100.
+  @Column({ type: 'smallint', nullable: true, default: 100 })
+  logo_scale?: number;
+
+  @Column({ type: 'smallint', nullable: true, default: 100 })
+  logo_scale_mobile?: number;
+
   @Column({ nullable: true })
   storage_path?: string;
 

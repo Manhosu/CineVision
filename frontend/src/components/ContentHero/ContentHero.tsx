@@ -417,17 +417,27 @@ export default function ContentHero({
 
           {/* Title — Igor (13/07): se content.logo_url preenchido, renderiza
               PNG oficial no lugar do <h1> texto. Mantém <h1 sr-only> pro SEO.
-              Fallback pro texto se logo falhar carregar (onError). */}
+              Fallback pro texto se logo falhar carregar (onError).
+              Igor (14/07): logo posicionado com position: absolute + left/top %
+              + width: scale% pra bater 1:1 com o LogoEditor. Container tem
+              altura fixa (h-40 desktop / h-24 mobile) pra dar área de movimentação. */}
           {content.logo_url ? (
             <>
               <h1 className="sr-only">{content.title}</h1>
-              <div className="mb-4 tv:mb-5 max-w-md sm:max-w-lg lg:max-w-xl">
+              {/* Desktop */}
+              <div className="hidden sm:block relative w-full max-w-md sm:max-w-lg lg:max-w-xl h-40 mb-4 tv:mb-5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={content.logo_url}
                   alt={content.title}
-                  className="hidden sm:block w-full h-auto max-h-40 object-contain"
-                  style={{ objectPosition: content.logo_position || '50% 50%' }}
+                  className="absolute h-auto object-contain drop-shadow-2xl"
+                  style={{
+                    left: `${parseInt((content.logo_position || '50%').split('%')[0], 10) || 50}%`,
+                    top: `${parseInt((content.logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
+                    width: `${content.logo_scale ?? 100}%`,
+                    maxWidth: '95%',
+                    transform: 'translate(-50%, -50%)',
+                  }}
                   onError={(e) => {
                     const parent = (e.currentTarget as HTMLImageElement).parentElement;
                     if (parent) parent.style.display = 'none';
@@ -435,12 +445,21 @@ export default function ContentHero({
                     if (fb) fb.style.display = 'block';
                   }}
                 />
+              </div>
+              {/* Mobile */}
+              <div className="block sm:hidden relative w-full h-24 mb-4">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={content.logo_url}
                   alt=""
-                  className="block sm:hidden w-full h-auto max-h-24 object-contain"
-                  style={{ objectPosition: content.logo_position_mobile || content.logo_position || '50% 50%' }}
+                  className="absolute h-auto object-contain drop-shadow-2xl"
+                  style={{
+                    left: `${parseInt((content.logo_position_mobile || content.logo_position || '50%').split('%')[0], 10) || 50}%`,
+                    top: `${parseInt((content.logo_position_mobile || content.logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
+                    width: `${content.logo_scale_mobile ?? content.logo_scale ?? 100}%`,
+                    maxWidth: '95%',
+                    transform: 'translate(-50%, -50%)',
+                  }}
                 />
               </div>
               <h1
@@ -455,6 +474,35 @@ export default function ContentHero({
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl tv:text-7xl font-black text-white leading-[1.05] tracking-tight mb-4 tv:mb-5">
               {content.title}
             </h1>
+          )}
+
+          {/* Igor (14/07): Badge PRÉ-VENDA + previsão movido pra IMEDIATAMENTE
+              depois do logo/h1. Antes ficava abaixo da sinopse — cliente lia
+              a sinopse toda antes de ver que era pré-venda. Agora a informação
+              de pré-venda ancora no filme (logo → pré-venda → metadata → resto). */}
+          {!isOwned && !checkingOwnership && presale.isPresale && (
+            <div className="mb-3 sm:mb-4 flex flex-col items-start gap-2">
+              <div className="inline-flex items-center gap-2 bg-amber-500 text-black text-sm sm:text-base font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-xl shadow-amber-500/30">
+                🎟 Pré-venda Exclusiva
+                {presale.discountPercent && (
+                  <span className="bg-black/20 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+                    -{presale.discountPercent}%
+                  </span>
+                )}
+              </div>
+              {presaleReleaseAbs ? (
+                <div className="inline-flex flex-col items-start gap-0.5 px-4 py-2 bg-amber-500/10 border border-amber-400/30 rounded-lg">
+                  <span className="text-amber-300/80 text-[10px] sm:text-xs uppercase tracking-wider font-semibold">
+                    📅 Previsão de lançamento
+                  </span>
+                  <span className="text-amber-200 text-sm sm:text-base font-bold">
+                    {presaleReleaseAbs}
+                  </span>
+                </div>
+              ) : presaleCountdown ? (
+                <span className="text-amber-300 text-xs sm:text-sm font-medium">⏱ Previsão: {presaleCountdown.toLowerCase()}</span>
+              ) : null}
+            </div>
           )}
 
           {/* Metadata line */}
@@ -535,36 +583,8 @@ export default function ContentHero({
               botões e perdia hierarquia visual. Só aparece quando
               o usuário ainda não comprou — quem já tem o filme só
               vê "Assistir". */}
-          {/* Igor (04/06): Badge grande de PRÉ-VENDA + countdown — chama atenção forte */}
-          {!isOwned && !checkingOwnership && presale.isPresale && (
-            <div className="mb-3 sm:mb-4 flex flex-col items-center text-center gap-2">
-              <div className="inline-flex items-center gap-2 bg-amber-500 text-black text-sm sm:text-base font-bold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-xl shadow-amber-500/30">
-                🎟 Pré-venda Exclusiva
-                {presale.discountPercent && (
-                  <span className="bg-black/20 text-black text-xs font-bold px-2 py-0.5 rounded-full">
-                    -{presale.discountPercent}%
-                  </span>
-                )}
-              </div>
-              {/* Igor (02/07): trocou countdown relativo ("Em 1 dia") por
-                  data absoluta em destaque — deixa claro que é PREVISÃO
-                  (pode antecipar/atrasar) e fixa uma data que o cliente
-                  marca na agenda. Fallback pro countdown se admin não
-                  cadastrou data. */}
-              {presaleReleaseAbs ? (
-                <div className="inline-flex flex-col items-center gap-0.5 px-4 py-2 bg-amber-500/10 border border-amber-400/30 rounded-lg">
-                  <span className="text-amber-300/80 text-[10px] sm:text-xs uppercase tracking-wider font-semibold">
-                    📅 Previsão de lançamento
-                  </span>
-                  <span className="text-amber-200 text-sm sm:text-base font-bold">
-                    {presaleReleaseAbs}
-                  </span>
-                </div>
-              ) : presaleCountdown ? (
-                <span className="text-amber-300 text-xs sm:text-sm font-medium">⏱ Previsão: {presaleCountdown.toLowerCase()}</span>
-              ) : null}
-            </div>
-          )}
+          {/* Igor (14/07): bloco antigo de badge Pré-venda foi movido pra
+              imediatamente após o logo/h1 (mais acima). Aqui só o preço. */}
 
           {!isOwned && !checkingOwnership && (
             <div className="mb-3 sm:mb-4 flex flex-col items-center text-center">

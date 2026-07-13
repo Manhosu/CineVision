@@ -63,6 +63,9 @@ export interface Movie {
   logo_url?: string | null;
   logo_position?: string | null;
   logo_position_mobile?: string | null;
+  // Igor (14/07): tamanho do logo no hero (%). NULL herda 100.
+  logo_scale?: number | null;
+  logo_scale_mobile?: number | null;
   // Content type
   content_type?: string;
   type?: string;

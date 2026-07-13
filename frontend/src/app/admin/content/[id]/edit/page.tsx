@@ -7,6 +7,7 @@ import { authenticatedFetch } from '@/lib/authTokens';
 import { uploadImageToSupabase } from '@/lib/supabaseStorage';
 import { Film, Save, X, Image as ImageIcon } from 'lucide-react';
 import BackdropEditor from '@/components/Admin/BackdropEditor';
+import LogoEditor from '@/components/Admin/LogoEditor';
 import PeopleTagInput from '@/components/Admin/PeopleTagInput';
 import { toLocalDatetimeInputValue, fromLocalDatetimeInput } from '@/lib/datetime';
 
@@ -158,6 +159,10 @@ export default function AdminContentEditPage() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoPosition, setLogoPosition] = useState('50% 50%');
   const [logoPositionMobile, setLogoPositionMobile] = useState('50% 50%');
+  // Igor (14/07): tamanho do logo (50-150 %). Default 100.
+  const [logoScale, setLogoScale] = useState<number>(100);
+  const [logoScaleMobile, setLogoScaleMobile] = useState<number>(100);
+  const [showLogoEditor, setShowLogoEditor] = useState(false);
 
   useEffect(() => {
     if (contentId) {
@@ -276,6 +281,9 @@ export default function AdminContentEditPage() {
         setLogoUrl(data.logo_url || '');
         setLogoPosition(data.logo_position || '50% 50%');
         setLogoPositionMobile(data.logo_position_mobile || data.logo_position || '50% 50%');
+        // Igor (14/07): tamanho do logo (%)
+        setLogoScale(data.logo_scale ?? 100);
+        setLogoScaleMobile(data.logo_scale_mobile ?? data.logo_scale ?? 100);
         setQualityLabel(data.quality_label || '');
         setAudioType(data.audio_type || '');
 
@@ -431,6 +439,9 @@ export default function AdminContentEditPage() {
         logo_url: logoUrl || null,
         logo_position: logoUrl ? logoPosition : null,
         logo_position_mobile: logoUrl ? logoPositionMobile : null,
+        // Igor (14/07): tamanho do logo (%). Só grava se tem logo.
+        logo_scale: logoUrl ? logoScale : null,
+        logo_scale_mobile: logoUrl ? logoScaleMobile : null,
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
@@ -532,6 +543,9 @@ export default function AdminContentEditPage() {
       logoUrl !== ((originalContent as any).logo_url || '') ||
       logoPosition !== ((originalContent as any).logo_position || '50% 50%') ||
       logoPositionMobile !== ((originalContent as any).logo_position_mobile || '50% 50%') ||
+      // Igor (14/07): tamanho do logo
+      logoScale !== ((originalContent as any).logo_scale ?? 100) ||
+      logoScaleMobile !== ((originalContent as any).logo_scale_mobile ?? 100) ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
       totalSeasons !== ((originalContent as any).total_seasons ?? null) ||
@@ -1128,6 +1142,16 @@ export default function AdminContentEditPage() {
                           <X className="w-4 h-4" />
                         </button>
                       </div>
+                      {/* Igor (14/07): botão que abre LogoEditor com controle
+                          de posição (drag) + tamanho (slider), desktop e mobile
+                          separados. Preview compõe backdrop + logo. */}
+                      <button
+                        type="button"
+                        onClick={() => setShowLogoEditor(true)}
+                        className="w-full px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/30 text-purple-400 rounded-lg text-sm font-medium transition-all"
+                      >
+                        Ajustar posição e tamanho (desktop + mobile)
+                      </button>
                     </div>
                   )}
                   <input
@@ -1353,6 +1377,39 @@ export default function AdminContentEditPage() {
           contentTitle={title || 'Título do Filme'}
         />
       )}
+      {/* Igor (14/07): Modal do LogoEditor — passa backdropUrl pra compor
+          preview igual ao runtime (backdrop + logo sobreposto).
+          Fix bug parseInt: usa Number.isFinite pra que "0% 0%" não vire "50% 50%". */}
+      {showLogoEditor && logoUrl && (() => {
+        const parseCoord = (s: string | undefined, idx: number, fallback: number) => {
+          if (!s) return fallback;
+          const parts = s.split(idx === 0 ? '%' : ' ');
+          const n = parseInt(idx === 0 ? parts[0] : parts[1], 10);
+          return Number.isFinite(n) ? n : fallback;
+        };
+        return (
+          <LogoEditor
+            logoUrl={logoUrl}
+            backdropUrl={backdropUrl || undefined}
+            initialDesktop={{
+              pos: { x: parseCoord(logoPosition, 0, 50), y: parseCoord(logoPosition, 1, 50) },
+              scale: logoScale,
+            }}
+            initialMobile={{
+              pos: { x: parseCoord(logoPositionMobile, 0, 50), y: parseCoord(logoPositionMobile, 1, 50) },
+              scale: logoScaleMobile,
+            }}
+            onSave={(desktop, mobile) => {
+              setLogoPosition(`${Math.round(desktop.pos.x)}% ${Math.round(desktop.pos.y)}%`);
+              setLogoPositionMobile(`${Math.round(mobile.pos.x)}% ${Math.round(mobile.pos.y)}%`);
+              setLogoScale(desktop.scale);
+              setLogoScaleMobile(mobile.scale);
+            }}
+            onClose={() => setShowLogoEditor(false)}
+            contentTitle={title || 'Título do Filme'}
+          />
+        );
+      })()}
     </div>
   );
 }
