@@ -652,7 +652,15 @@ export default function AdminBotsPage() {
                         🔗 Vinculado a: <strong>{content.title}</strong>
                       </p>
                     )}
-                    <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {/* Igor (15/07): 2 novos tiles pra "usuários únicos".
+                        O card antes mostrava só contagem bruta de /start (um
+                        user que dá /start 3x contava 3). Agora separa em duas
+                        linhas: totais gerais (starts vs pessoas distintas) e
+                        janela de 24h (starts 24h vs pessoas distintas 24h vs
+                        primeira-vez 24h). Backend (RPC promotional_bot_metrics)
+                        já retorna unique_users e unique_users_24h desde a
+                        migration 20260712200000 — só faltava consumir. */}
+                    <div className="grid grid-cols-2 gap-1.5 mb-1.5">
                       <div className="bg-dark-700 rounded p-2 text-center">
                         <div className="text-base font-bold text-amber-400">
                           {(promoMetrics[bot.id]?.total_starts ?? bot.promotional_start_count ?? 0).toLocaleString('pt-BR')}
@@ -660,10 +668,24 @@ export default function AdminBotsPage() {
                         <div className="text-[10px] text-gray-500 uppercase">total /start</div>
                       </div>
                       <div className="bg-dark-700 rounded p-2 text-center">
+                        <div className="text-base font-bold text-violet-400">
+                          {(promoMetrics[bot.id]?.unique_users ?? 0).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[10px] text-gray-500 uppercase">usuários únicos</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5 mb-2">
+                      <div className="bg-dark-700 rounded p-2 text-center">
                         <div className="text-base font-bold text-blue-400">
                           {(promoMetrics[bot.id]?.starts_24h ?? 0).toLocaleString('pt-BR')}
                         </div>
-                        <div className="text-[10px] text-gray-500 uppercase">últimas 24h</div>
+                        <div className="text-[10px] text-gray-500 uppercase">starts 24h</div>
+                      </div>
+                      <div className="bg-dark-700 rounded p-2 text-center">
+                        <div className="text-base font-bold text-indigo-400">
+                          {(promoMetrics[bot.id]?.unique_users_24h ?? 0).toLocaleString('pt-BR')}
+                        </div>
+                        <div className="text-[10px] text-gray-500 uppercase">únicos 24h</div>
                       </div>
                       <div className="bg-dark-700 rounded p-2 text-center">
                         <div className="text-base font-bold text-emerald-400">

@@ -1392,6 +1392,23 @@ export default function AdminContentEditPage() {
           <LogoEditor
             logoUrl={logoUrl}
             backdropUrl={backdropUrl || undefined}
+            content={{
+              title: title || 'Título do Filme',
+              description: description || null,
+              imdb_rating: imdbRating ? parseFloat(imdbRating) : null,
+              release_year: releaseYear ? parseInt(releaseYear, 10) : null,
+              age_rating: rating || null,
+              duration_minutes: durationMinutes || null,
+              quality_label: qualityLabel || null,
+              audio_type: audioType || null,
+              is_presale: isPresale,
+              presale_price_cents: presalePriceCents || null,
+              presale_release_at: presaleReleaseAt || null,
+              price_cents: Math.round(parseFloat(priceInput || '0') * 100) || 0,
+              backdrop_position: backdropPosition,
+              backdrop_position_mobile: backdropPositionMobile,
+              genres: selectedGenres,
+            }}
             initialDesktop={{
               pos: { x: parseCoord(logoPosition, 0, 50), y: parseCoord(logoPosition, 1, 50) },
               scale: logoScale,
@@ -1407,7 +1424,6 @@ export default function AdminContentEditPage() {
               setLogoScaleMobile(mobile.scale);
             }}
             onClose={() => setShowLogoEditor(false)}
-            contentTitle={title || 'Título do Filme'}
           />
         );
       })()}
