@@ -242,7 +242,7 @@ export class PixRecoveryService {
 
     const botUsername =
       this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
-    const recoveryDeepLink = `https://t.me/${botUsername}?start=order_${recovery.order.order_token}`;
+    const recoveryDeepLink = `https://telegram.me/${botUsername}?start=order_${recovery.order.order_token}`;
     const totalFmt = (recovery.order.total_cents / 100).toLocaleString('pt-BR', {
       minimumFractionDigits: 2,
     });

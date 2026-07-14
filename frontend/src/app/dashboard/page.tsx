@@ -481,7 +481,7 @@ export default function DashboardPage() {
                 Envie uma mensagem no nosso Telegram informando o nome do filme ou série que deseja!
               </p>
               <button
-                onClick={() => window.open('https://t.me/m/YAU1-zMrZDcx', '_blank')}
+                onClick={() => window.open('https://telegram.me/m/YAU1-zMrZDcx', '_blank')}
                 className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

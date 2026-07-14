@@ -40,7 +40,7 @@ export class TelegramAuthService {
     await this.telegramLinkTokenRepository.save(telegramLinkToken);
 
     const botUsername = process.env.TELEGRAM_BOT_USERNAME || 'CineVisionApp_rbot';
-    const deepLink = `https://t.me/${botUsername}?start=${token}`;
+    const deepLink = `https://telegram.me/${botUsername}?start=${token}`;
 
     return {
       token,

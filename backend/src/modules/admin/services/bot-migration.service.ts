@@ -128,7 +128,7 @@ export class BotMigrationService {
 
   /** Loop sequencial com throttle + circuit-breaker. */
   private async processRun(runId: string, fromBotUsername: string, targetBotUsername: string) {
-    const targetUrl = `https://t.me/${targetBotUsername}`;
+    const targetUrl = `https://telegram.me/${targetBotUsername}`;
     const targetHandle = `@${targetBotUsername}`;
 
     const { data: users, error: usersErr } = await this.sb

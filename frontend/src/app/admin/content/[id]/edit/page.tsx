@@ -805,7 +805,8 @@ export default function AdminContentEditPage() {
 
                 {/* Igor (07/05): Chat ID e link de convite separados.
                     Chat ID: opcional, gera invite single-use auto.
-                    Link de convite: fallback regular t.me/+. */}
+                    Link de convite: fallback regular telegram.me/+
+                    (host migrado de t.me em 13/07/2026 por serverHold). */}
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     Chat ID do grupo (opcional — invite automático)
@@ -889,7 +890,7 @@ export default function AdminContentEditPage() {
                         ? 'border-red-500/50'
                         : 'border-white/10'
                     }`}
-                    placeholder="https://t.me/+AbCdEfGhIjK"
+                    placeholder="https://telegram.me/+AbCdEfGhIjK"
                   />
                   <p className="mt-1 text-xs text-zinc-500">
                     Fallback regular usado quando Chat ID não foi preenchido OU bot não é admin.

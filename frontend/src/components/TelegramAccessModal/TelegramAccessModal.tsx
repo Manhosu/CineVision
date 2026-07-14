@@ -51,7 +51,7 @@ function toTgDeepLink(link: string): string | null {
  * pós-`await`), então abre de forma confiável, sem tela branca.
  */
 /**
- * Igor (14/07): normaliza o link do grupo pra sempre ter https://.
+ * Igor (14/07): normaliza o link do grupo pra sempre ter https:// e canonicaliza host t.me → telegram.me.
  *
  * Bug reportado: Igor cadastrou `telegram_group_link = "t.me/+QzRJMwb9tZM..."`
  * no admin sem o `https://`. O <a href="t.me/+xxx"> do modal era tratado
@@ -61,16 +61,22 @@ function toTgDeepLink(link: string): string | null {
  *
  * Sanitização defensiva: se falta protocolo, prefixa https://. Trim
  * remove whitespace/newline que podem ter vindo colados no admin.
+ *
+ * Igor (13/07/2026 noite): Telegram perdeu o domínio t.me (serverHold no
+ * registrador) e o host parou de resolver em vários ISPs. telegram.me
+ * continua ativo — canonicaliza qualquer '://t.me/' que ainda apareça
+ * (bot que gerou link antigo, cache de página, admin colando URL nova
+ * sem atualizar) pra '://telegram.me/' antes de renderizar o <a href>.
  */
 function normalizeTelegramLink(raw: string): string {
   const trimmed = (raw || '').trim();
   if (!trimmed) return '';
-  // Já tem protocolo válido
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  // tg:// (protocolo do app Telegram Desktop) — mantém
-  if (/^tg:\/\//i.test(trimmed)) return trimmed;
-  // Prefixa https:// pra qualquer outra coisa (t.me/+xxx, telegram.me/xxx, etc.)
-  return `https://${trimmed}`;
+  let normalized: string;
+  if (/^https?:\/\//i.test(trimmed)) normalized = trimmed;
+  else if (/^tg:\/\//i.test(trimmed)) normalized = trimmed;
+  else normalized = `https://${trimmed}`;
+  // Igor (13/07/2026 noite): t.me em serverHold — canonicaliza pra telegram.me.
+  return normalized.replace(/:\/\/t\.me\//i, '://telegram.me/');
 }
 
 export function TelegramAccessModal() {

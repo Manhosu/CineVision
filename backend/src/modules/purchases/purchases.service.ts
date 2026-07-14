@@ -52,7 +52,7 @@ export class PurchasesService {
 
     // Generate Telegram deep link
     const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME');
-    const telegram_deep_link = `https://t.me/${botUsername}?start=${purchase_token}`;
+    const telegram_deep_link = `https://telegram.me/${botUsername}?start=${purchase_token}`;
 
     return {
       id: savedPurchase.id,

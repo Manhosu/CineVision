@@ -135,7 +135,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
     { label: 'Categorias', href: '/categories', icon: Squares2X2Icon },
     ...(isTelegramUser ? [
       { label: 'Minhas Compras', href: '/dashboard', icon: ShoppingBagIcon },
-      { label: 'Fazer Pedido', onClick: () => window.open('https://t.me/m/YAU1-zMrZDcx', '_blank'), icon: FilmIcon }
+      { label: 'Fazer Pedido', onClick: () => window.open('https://telegram.me/m/YAU1-zMrZDcx', '_blank'), icon: FilmIcon }
     ] : [])
   ];
 
@@ -520,7 +520,7 @@ export function Header({ transparent = false, hasFlashBanner = false }: HeaderPr
               <div className="py-8 text-center">
                 <p className="text-gray-400 text-sm">Nenhum resultado encontrado</p>
                 <button
-                  onClick={() => { window.open('https://t.me/m/YAU1-zMrZDcx', '_blank'); }}
+                  onClick={() => { window.open('https://telegram.me/m/YAU1-zMrZDcx', '_blank'); }}
                   className="mt-3 text-red-400 text-sm hover:text-red-300"
                 >
                   Solicitar este conteudo

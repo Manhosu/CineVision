@@ -11,16 +11,26 @@ import { TelegramsEnhancedService } from '../../telegrams/telegrams-enhanced.ser
  * que comprou o filme "Todo Mundo em Pânico" não conseguia entrar no grupo.
  * Aqui garantimos que qualquer coisa que Igor colar no campo vai pro banco
  * já com protocolo. Vazio/null continua vazio/null (opcional).
+ *
+ * Igor (13/07/2026 noite): além do protocolo, canonicaliza o host t.me →
+ * telegram.me antes de gravar. t.me caiu em serverHold e alguns provedores
+ * bloqueiam a resolução; telegram.me é o host oficial alternativo que
+ * continua respondendo. Guarda o link já no host bom pra não precisar
+ * corrigir cadastro-a-cadastro depois.
  */
 function normalizeTelegramLink(raw: any): string | null {
   const trimmed = typeof raw === 'string' ? raw.trim() : '';
   if (!trimmed) return null;
+  let normalized: string;
   // Já tem protocolo válido
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) normalized = trimmed;
   // tg:// (protocolo do app Telegram Desktop) — mantém
-  if (/^tg:\/\//i.test(trimmed)) return trimmed;
+  else if (/^tg:\/\//i.test(trimmed)) normalized = trimmed;
   // Prefixa https:// pra qualquer outra coisa (t.me/+xxx, telegram.me/xxx, etc.)
-  return `https://${trimmed}`;
+  else normalized = `https://${trimmed}`;
+  // Igor (13/07/2026 noite): canonicaliza host t.me → telegram.me
+  // (t.me em serverHold — telegram.me é o host oficial que ainda funciona).
+  return normalized.replace(/:\/\/t\.me\//i, '://telegram.me/');
 }
 
 @Injectable()

@@ -248,7 +248,7 @@ export default function AdminContentCreatePage() {
 
     // Validar link do Telegram OU Chat ID (pelo menos um obrigatório).
     // Igor (07/05): Chat ID gera invite single-use auto se bot é admin;
-    // link de convite t.me/+ é fallback. Pelo menos um precisa estar
+    // link de convite telegram.me/+ é fallback. Pelo menos um precisa estar
     // setado pra cliente conseguir acessar o grupo.
     const hasGroupLink = !!formData.telegram_group_link?.trim();
     const hasChatId = !!formData.telegram_chat_id?.trim();
@@ -992,8 +992,9 @@ export default function AdminContentCreatePage() {
 
               {/* Igor (07/05): Chat ID e link de convite agora são 2 campos
                   separados. Chat ID é opcional (gera invite single-use auto se
-                  bot é admin). Link de convite é fallback regular t.me/+. Pelo
-                  menos um precisa ser preenchido. */}
+                  bot é admin). Link de convite é fallback regular telegram.me/+
+                  (era t.me/+ até 13/07/2026 quando t.me caiu em serverHold).
+                  Pelo menos um precisa ser preenchido. */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Chat ID do grupo (opcional — invite automático)
@@ -1072,7 +1073,7 @@ export default function AdminContentCreatePage() {
                   name="telegram_group_link"
                   value={formData.telegram_group_link}
                   onChange={handleChange}
-                  placeholder="https://t.me/+AbCdEfGhIjK"
+                  placeholder="https://telegram.me/+AbCdEfGhIjK"
                   className={`w-full px-4 py-3 bg-gray-900/50 border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 ${
                     !formData.telegram_chat_id.trim() && !formData.telegram_group_link.trim()
                       ? 'border-red-500/50'

@@ -15,7 +15,7 @@ const FALLBACK_USERNAME =
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionBrasil_bot';
 
 function fallbackDeeplink(startParam?: string): string {
-  const base = `https://t.me/${FALLBACK_USERNAME}`;
+  const base = `https://telegram.me/${FALLBACK_USERNAME}`;
   return startParam ? `${base}?start=${encodeURIComponent(startParam)}` : base;
 }
 

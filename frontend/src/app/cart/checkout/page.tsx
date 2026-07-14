@@ -149,7 +149,7 @@ function CheckoutContent() {
   const needsTelegramClaim = paid && !order.telegram_chat_id;
   // Igor (07/06): deeplink rotativo — backend escolhe qual bot ativo.
   const fallbackUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || 'CineVisionBrasil_bot';
-  const claimDeepLink = claimDeepLinkAsync ?? `https://t.me/${fallbackUsername}?start=order_${order.order_token}`;
+  const claimDeepLink = claimDeepLinkAsync ?? `https://telegram.me/${fallbackUsername}?start=order_${order.order_token}`;
   const hasWhatsappCaptured = !!order.customer_whatsapp || whatsappSaved;
 
   const saveWhatsapp = async () => {
@@ -426,7 +426,7 @@ function ManualPixModal({
     ? `https://wa.me/${config.whatsapp}?text=${waMessage}`
     : `https://wa.me/?text=${waMessage}`;
   const tgHref = config.telegram_username
-    ? `https://t.me/${config.telegram_username.replace(/^@/, '')}?text=${waMessage}`
+    ? `https://telegram.me/${config.telegram_username.replace(/^@/, '')}?text=${waMessage}`
     : null;
 
   return (

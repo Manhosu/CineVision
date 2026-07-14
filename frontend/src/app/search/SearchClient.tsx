@@ -70,7 +70,7 @@ function SearchResults() {
   };
 
   const handleRequestMovie = () => {
-    window.open('https://t.me/m/YAU1-zMrZDcx', '_blank');
+    window.open('https://telegram.me/m/YAU1-zMrZDcx', '_blank');
   };
 
   if (!query) {

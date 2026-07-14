@@ -1133,7 +1133,7 @@ Quando cliente pedir gênero em vez de título específico ("me indica um terror
         telegramChatId,
       });
       const botUsername = this.configService.get<string>('TELEGRAM_BOT_USERNAME') || 'CineVisionApp_rbot';
-      return `https://t.me/${botUsername}?start=order_${result.order.order_token}`;
+      return `https://telegram.me/${botUsername}?start=order_${result.order.order_token}`;
     } catch (err: any) {
       this.logger.warn(`Failed to create quick-buy link: ${err.message}`);
       return undefined;

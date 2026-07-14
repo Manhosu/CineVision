@@ -55,7 +55,7 @@ export class CreateContentDto {
   @IsUrl()
   trailer_url?: string;
 
-  @ApiPropertyOptional({ description: 'Telegram group invite link (e.g., https://t.me/+AbCdEfGhIjK). Used as fallback when bot is not admin of the chat.' })
+  @ApiPropertyOptional({ description: 'Telegram group invite link (e.g., https://telegram.me/+AbCdEfGhIjK). Used as fallback when bot is not admin of the chat.' })
   @IsOptional()
   @IsString()
   telegram_group_link?: string;

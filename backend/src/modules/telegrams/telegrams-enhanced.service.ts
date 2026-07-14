@@ -406,7 +406,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       chosen?.username ||
       this.configService.get<string>('TELEGRAM_BOT_USERNAME') ||
       'CineVisionApp_rbot';
-    const base = `https://t.me/${username}`;
+    const base = `https://telegram.me/${username}`;
     const url = startParam
       ? `${base}?start=${encodeURIComponent(startParam)}`
       : base;
@@ -454,7 +454,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       chosen?.username ||
       this.configService.get<string>('TELEGRAM_BOT_USERNAME') ||
       'CineVisionApp_rbot';
-    return { url: `https://t.me/${finalUsername}`, bot_username: finalUsername, bot_id: chosen?.id };
+    return { url: `https://telegram.me/${finalUsername}`, bot_username: finalUsername, bot_id: chosen?.id };
   }
 
   // ==================== NOVO FLUXO: VERIFICAÇÃO DE E-MAIL ====================
@@ -986,7 +986,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // claro pra Igor saber que precisa cadastrar um link de convite.
     if (chatIdToTry) {
       throw new BadRequestException(
-        'Não consegui gerar acesso ao grupo. Verifique se @CineVisionApp_rbot é admin do grupo, OU cadastre um link de convite (t.me/+...) no painel do conteúdo como fallback.',
+        'Não consegui gerar acesso ao grupo. Verifique se @CineVisionApp_rbot é admin do grupo, OU cadastre um link de convite (telegram.me/+...) no painel do conteúdo como fallback.',
       );
     }
     throw new BadRequestException('Conteúdo sem grupo do Telegram configurado.');
@@ -1292,8 +1292,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       if (response.data.ok) {
         const link = response.data.result.invite_link;
-        this.logger.log(`Created fixed request-to-join link for user ${userId}: ${link}`);
-        return link;
+        // Igor (13/07/2026): Telegram perdeu domínio t.me (serverHold). API
+        // ainda devolve invite_link com host t.me — normaliza pra telegram.me
+        // antes de expor ao cliente/persistir. Preserva o resto do path (+hash).
+        const canonicalLink = typeof link === 'string'
+          ? link.replace(/:\/\/t\.me\//i, '://telegram.me/')
+          : link;
+        this.logger.log(`Created fixed request-to-join link for user ${userId}: ${canonicalLink}`);
+        return canonicalLink;
       }
       this.logger.warn(`Failed to create fixed link: ${response.data.description}`);
       return null;
@@ -1351,7 +1357,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       if (response.data.ok) {
         const inviteLink = response.data.result.invite_link;
-        this.logger.log(`Created invite link for user ${userId}: ${inviteLink}`);
+        // Igor (13/07/2026): Telegram perdeu domínio t.me (serverHold). API
+        // ainda devolve invite_link com host t.me — normaliza pra telegram.me
+        // antes de expor ao cliente/persistir. Preserva o resto do path (+hash).
+        const canonicalLink = typeof inviteLink === 'string'
+          ? inviteLink.replace(/:\/\/t\.me\//i, '://telegram.me/')
+          : inviteLink;
+        this.logger.log(`Created invite link for user ${userId}: ${canonicalLink}`);
 
         await this.supabase.from('system_logs').insert({
           type: 'telegram_group',
@@ -1359,7 +1371,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           message: `Created single-use invite link for user ${userId} to chat ${chatId}`,
         });
 
-        return inviteLink;
+        return canonicalLink;
       } else {
         this.logger.error(`Failed to create invite link: ${response.data.description}`);
 
@@ -1593,12 +1605,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
       // e o teste dava erro. O "teste" de um link de convite é só abrir
       // o link cadastrado e o admin ver o grupo.
       const looksLikeTelegramLink =
-        /^https?:\/\/t\.me\//i.test(groupLink) ||
-        groupLink.includes('t.me/') ||
+        /^https?:\/\/(t|telegram)\.me\//i.test(groupLink) ||
+        (groupLink.includes('t.me/') || groupLink.includes('telegram.me/')) ||
         groupLink.startsWith('@');
       if (looksLikeTelegramLink) {
         const normalizedLink = groupLink.startsWith('@')
-          ? `https://t.me/${groupLink.slice(1)}`
+          ? `https://telegram.me/${groupLink.slice(1)}`
           : groupLink;
         return { success: true, inviteLink: normalizedLink };
       }
@@ -1642,7 +1654,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       let username: string | null = null;
 
       // Extract from URL
-      const urlMatch = groupLink.match(/https:\/\/t\.me\/([^\/\?+]+)/);
+      const urlMatch = groupLink.match(/https:\/\/(?:t|telegram)\.me\/([^\/\?+]+)/);
       if (urlMatch && !groupLink.includes('+') && !groupLink.includes('joinchat')) {
         username = urlMatch[1];
       }
@@ -3104,7 +3116,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
       const buttons: Array<Array<{ text: string; url?: string; callback_data?: string }>> = [];
       if (tgUsername) {
         const tgText = encodeURIComponent(refMsg);
-        buttons.push([{ text: '📨 Enviar comprovante (Telegram)', url: `https://t.me/${tgUsername}?text=${tgText}` }]);
+        buttons.push([{ text: '📨 Enviar comprovante (Telegram)', url: `https://telegram.me/${tgUsername}?text=${tgText}` }]);
       }
       if (waNumber) {
         const waText = encodeURIComponent(refMsg);
@@ -3772,7 +3784,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           reply_markup: {
             inline_keyboard: [
               [{ text: '🔄 Verificar Novamente', callback_data: `check_pix_${purchaseId}` }],
-              [{ text: '📞 Suporte', url: 'https://t.me/CineVisionOfc' }],
+              [{ text: '📞 Suporte', url: 'https://telegram.me/CineVisionOfc' }],
               [{ text: '🔙 Voltar', callback_data: 'catalog' }],
             ],
           },
@@ -3924,7 +3936,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
     // Envia mensagem no chat atual (bot oficial A) com botão pro bot promo
     const promoDisplay = promo.custom_display_name || promo.display_name || `@${promo.username}`;
-    const deeplink = `https://t.me/${promo.username}?start=pi_${token}`;
+    const deeplink = `https://telegram.me/${promo.username}?start=pi_${token}`;
     try {
       await this.sendMessage(
         chatId,
@@ -4030,7 +4042,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
     }
 
     return {
-      deeplink: `https://t.me/${check.username}?start=pi_${token}`,
+      deeplink: `https://telegram.me/${check.username}?start=pi_${token}`,
       token: intent.token,
       expires_at: intent.expires_at,
     };
@@ -4952,7 +4964,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
-              [{ text: '📩 Solicitar Conteúdo', url: 'https://t.me/m/YAU1-zMrZDcx' }],
+              [{ text: '📩 Solicitar Conteúdo', url: 'https://telegram.me/m/YAU1-zMrZDcx' }],
               [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
             ],
           },
@@ -5209,7 +5221,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
-            [{ text: '📩 Falar com Suporte', url: 'https://t.me/CineVisionOfc' }],
+            [{ text: '📩 Falar com Suporte', url: 'https://telegram.me/CineVisionOfc' }],
             [{ text: '🔙 Voltar ao Menu', callback_data: 'start' }],
           ],
         },
