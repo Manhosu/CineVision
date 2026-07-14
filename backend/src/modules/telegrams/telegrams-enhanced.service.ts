@@ -83,12 +83,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
   // chatId → { userId, contentId } da compra aguardando liberação.
   private pendingWhatsappGate = new Map<number, { userId: string; contentId: string }>();
 
-  // Igor (15/07): debounce de /start em bots promocionais. Cliente ansioso
-  // clicava /start 2-3x seguidos porque bot demorava 500ms-1s pra responder,
-  // resultando em welcome/PIX duplicados na tela. Chave é `${botId}:${chatId}`
-  // pra debounce ser POR BOT (mesmo user em bots diferentes não trava).
-  // TTL 3s: novo /start dentro desse janela é ignorado silenciosamente.
-  private promoStartDebounce = new Map<string, number>();
+  // Igor (15/07): debounce de /start em bots (oficiais E promocionais).
+  // Cliente ansioso clicava /start 2-3x seguidos porque bot demorava
+  // 500ms-1s pra responder, resultando em respostas duplicadas na tela
+  // (menu de compra empilhado no oficial, welcome/PIX no promo).
+  // Chave é `${botId}:${chatId}` pra debounce ser POR BOT (mesmo user
+  // em bots diferentes não trava). TTL 3s: novo /start dentro desse
+  // janela é ignorado silenciosamente.
+  private startDebounce = new Map<string, number>();
 
   // Polling state
   private pollingOffset = 0;
@@ -4597,32 +4599,36 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const currentBotId = await this.resolveCurrentBotId();
     const currentBot = currentBotId ? await this.getBotMeta(currentBotId) : null;
 
+    // Igor (15/07): typing indicator IMEDIATO + debounce anti-spam.
+    // Aplica pra AMBOS os tipos (oficial e promocional). Cliente ansioso
+    // clicando /start 2-3x seguidos recebia respostas duplicadas
+    // (menu de compra empilhado no oficial, welcome/PIX no promo).
+    //
+    // Typing action mostra "digitando..." em ~50ms — feedback visual
+    // reduz percepção de latência e desincentiva reclick.
+    //
+    // Debounce ignora silenciosamente qualquer /start recebido em <3s
+    // no mesmo bot pelo mesmo chat. Chave por bot (`${botId}:${chatId}`)
+    // pra não travar mesmo user em bots diferentes.
+    this.sendChatAction(chatId, 'typing').catch(() => undefined);
+    const debounceKey = `${currentBotId || 'default'}:${chatId}`;
+    const lastStart = this.startDebounce.get(debounceKey) || 0;
+    const now = Date.now();
+    if (now - lastStart < 3000) {
+      const kind = currentBot?.is_promotional ? 'promo' : 'official';
+      this.logger.log(`[${kind}] ignoring duplicate /start (${now - lastStart}ms ago) chatId=${chatId} bot=${currentBot?.username || 'default'}`);
+      return;
+    }
+    this.startDebounce.set(debounceKey, now);
+    // Cleanup oportunístico: limpa entradas com >5min pra não vazar memória.
+    if (this.startDebounce.size > 500) {
+      const cutoff = now - 5 * 60_000;
+      for (const [k, ts] of this.startDebounce.entries()) {
+        if (ts < cutoff) this.startDebounce.delete(k);
+      }
+    }
+
     if (currentBot?.is_promotional) {
-      // Igor (15/07): typing indicator IMEDIATO — cliente vê "digitando..."
-      // aparecer antes do sendMessage real. Reduz percepção de latência.
-      // Fire-and-forget: se falhar, /start continua normal.
-      this.sendChatAction(chatId, 'typing').catch(() => undefined);
-
-      // Igor (15/07): debounce anti-spam. Se o mesmo chat mandou /start
-      // no mesmo bot há menos de 3s, ignora silenciosamente. Antes, cliente
-      // ansioso clicando /start 2-3x recebia welcome/PIX duplicados
-      // empilhados na tela. Chave `${botId}:${chatId}` isola por bot.
-      const debounceKey = `${currentBotId}:${chatId}`;
-      const lastStart = this.promoStartDebounce.get(debounceKey) || 0;
-      const now = Date.now();
-      if (now - lastStart < 3000) {
-        this.logger.log(`[promo] ignoring duplicate /start (${now - lastStart}ms ago) chatId=${chatId} bot=${currentBot.username}`);
-        return;
-      }
-      this.promoStartDebounce.set(debounceKey, now);
-      // Cleanup oportunístico: limpa entradas com >5min pra não vazar memória.
-      if (this.promoStartDebounce.size > 500) {
-        const cutoff = now - 5 * 60_000;
-        for (const [k, ts] of this.promoStartDebounce.entries()) {
-          if (ts < cutoff) this.promoStartDebounce.delete(k);
-        }
-      }
-
       // Fire-and-forget: contador de /start + healthcheck (não bloqueia
       // o handler). PromiseLike do Supabase não tem .catch; usa 2 args do .then.
       const noop = () => {};
