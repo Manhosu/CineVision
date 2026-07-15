@@ -1118,7 +1118,7 @@ export class TelegramsEnhancedService implements OnModuleInit {
           .from('orders')
           .update({
             telegram_chat_id: String(chatId),
-            updated_at: new Date().toISOString(),
+            // orders não tem updated_at (schema tem só created_at/paid_at/expires_at).
           })
           .in('id', orderIds)
           .is('telegram_chat_id', null)
