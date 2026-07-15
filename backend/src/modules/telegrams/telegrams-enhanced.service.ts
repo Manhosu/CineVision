@@ -1077,6 +1077,67 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * O `link` volta nos DOIS casos: o frontend abre o modal `TelegramAccessModal`
    * com um botão direto pro grupo (Igor 17/05 — o leigo não percebia só o toast).
    */
+  /**
+   * Igor (15/07): fecha o loop da aba "Órfãs" do admin. Toda vez que
+   * qualquer rota ENTREGA o conteúdo pelo bot (Dashboard→Assistir, gate
+   * de WhatsApp, contato compartilhado, watch_ deep link etc.), precisa
+   * também atualizar `orders.telegram_chat_id` + `purchases.delivery_sent`
+   * — senão a compra fica órfã pra sempre no painel mesmo tendo sido
+   * resgatada. Fix do caso "Será Isso Amor": cliente pagou como guest
+   * (order.telegram_chat_id=null), depois logou no dashboard e clicou
+   * Assistir. Bot entregou, cliente assistiu, MAS a order ficou como
+   * órfã no painel — Igor ia queimar mensagem de recuperação.
+   *
+   * Fire-and-forget de segurança: falha aqui NÃO derruba a entrega.
+   * No pior caso a compra volta pra órfã até a próxima entrega.
+   */
+  private async markOrderClaimedByDelivery(
+    userId: string,
+    contentId: string,
+    chatId: number,
+  ): Promise<void> {
+    try {
+      const { data: purchases } = await this.supabase
+        .from('purchases')
+        .select('id, order_id, delivery_sent')
+        .eq('user_id', userId)
+        .eq('content_id', contentId)
+        .eq('status', 'paid');
+
+      if (!purchases?.length) return;
+
+      const orderIds = Array.from(
+        new Set(purchases.map((p: any) => p.order_id).filter(Boolean)),
+      );
+      const unsentIds = purchases
+        .filter((p: any) => !p.delivery_sent)
+        .map((p: any) => p.id);
+
+      if (orderIds.length) {
+        await this.supabase
+          .from('orders')
+          .update({
+            telegram_chat_id: String(chatId),
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', orderIds)
+          .is('telegram_chat_id', null)
+          .eq('status', 'paid');
+      }
+
+      if (unsentIds.length) {
+        await this.supabase
+          .from('purchases')
+          .update({ delivery_sent: true })
+          .in('id', unsentIds);
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `markOrderClaimedByDelivery failed (user=${userId}, content=${contentId}): ${err.message}`,
+      );
+    }
+  }
+
   async sendAccessToUser(
     userId: string,
     contentId: string,
@@ -1101,6 +1162,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
     // 3. Cliente com Telegram → o bot manda os links no DM dele.
     if (chatIdRaw && !Number.isNaN(chatId)) {
       await this.sendGroupAccessLinks(chatId, userId, contentId);
+      // Igor (15/07): marca a order como resgatada pra sumir da aba Órfãs.
+      await this.markOrderClaimedByDelivery(userId, contentId, chatId);
       return { sent: true, link: access.link };
     }
 
@@ -1133,9 +1196,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
 
       const hasWhatsapp = !!(user?.whatsapp && String(user.whatsapp).trim());
 
+
       if (hasWhatsapp) {
         // Já temos o WhatsApp — fluxo normal.
         await this.sendGroupAccessLinks(chatId, userId, contentId);
+        // Igor (15/07): marca order como resgatada — sai da aba Órfãs.
+        await this.markOrderClaimedByDelivery(userId, contentId, chatId);
         return;
       }
 
@@ -1164,6 +1230,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
       // Fallback de segurança: em caso de erro inesperado, não deixar o
       // cliente que pagou sem acesso — entrega direto.
       await this.sendGroupAccessLinks(chatId, userId, contentId);
+      // Igor (15/07): marca order como resgatada — sai da aba Órfãs.
+      await this.markOrderClaimedByDelivery(userId, contentId, chatId);
     }
   }
 
@@ -1239,6 +1307,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
       if (pending) {
         this.pendingWhatsappGate.delete(chatId);
         await this.sendGroupAccessLinks(chatId, pending.userId, pending.contentId);
+        // Igor (15/07): marca order como resgatada — sai da aba Órfãs.
+        await this.markOrderClaimedByDelivery(pending.userId, pending.contentId, chatId);
         return;
       }
 
@@ -1263,6 +1333,8 @@ export class TelegramsEnhancedService implements OnModuleInit {
           : lastPurchase?.content;
         if (lastPurchase?.content_id && lpContent?.telegram_group_link) {
           await this.sendGroupAccessLinks(chatId, lastPurchase.user_id, lastPurchase.content_id);
+          // Igor (15/07): marca order como resgatada — sai da aba Órfãs.
+          await this.markOrderClaimedByDelivery(lastPurchase.user_id, lastPurchase.content_id, chatId);
         }
       }
     } catch (err: any) {
@@ -5819,7 +5891,33 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       // apaga o webhook nem troca pra polling — um deploy anterior já
       // registrou a mesma URL, que continua válida. Polling só roda no dev
       // local (quando não há backendUrl).
-      const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook`;
+      //
+      // Igor (15/07): usa formato PER-BOT (com /:botId) pra bater com o
+      // que AdminBotsService.setupWebhook grava. ANTES este boot escrevia
+      // /webhook (legado, sem botId) e sobrescrevia o webhook do
+      // CineVisionBrasil a cada cold start do Render — o healthcheckDeep
+      // comparava com /webhook/${botId} esperado e marcava mismatch,
+      // ficando VERMELHO no painel. Cliente clicava "Configurar TODOS"
+      // → verde. Horas depois novo deploy → vermelho de novo, loop
+      // infinito. Agora consulta o UUID do bot pelo token e monta
+      // /webhook/${botId} — mesmo formato, sem mais briga.
+      const tokenPrincipal = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
+      let botIdPath = '';
+      try {
+        if (tokenPrincipal) {
+          const { data: botRow } = await this.supabase
+            .from('telegram_bots')
+            .select('id')
+            .eq('token', tokenPrincipal)
+            .maybeSingle();
+          if (botRow?.id) botIdPath = `/${botRow.id}`;
+        }
+      } catch (err: any) {
+        this.logger.warn(
+          `onModuleInit: lookup do bot principal falhou (${err.message}) — usando URL legada como fallback`,
+        );
+      }
+      const webhookUrl = `${backendUrl}/api/v1/telegrams/webhook${botIdPath}`;
       const maxAttempts = 3;
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
