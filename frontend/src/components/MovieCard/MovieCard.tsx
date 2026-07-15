@@ -157,20 +157,14 @@ const MovieCard = memo(function MovieCard({
           )}
 
           <LazyImage
-            src={(() => {
-              // Igor (26/06): otimiza pôster via Supabase Storage transform.
-              // Pôsteres são SEMPRE 2:3 (padrão). Passa width+height com
-              // resize=cover pra forçar essa proporção e bater com o
-              // aspect-[2/3] do card. Sem height, Supabase mantém altura
-              // original e gera 400xN (distorce). Sem resize=cover, faz
-              // letterbox (deixa faixa preta).
-              const u = movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg';
-              if (!u.includes('supabase.co/storage/v1/object/public/')) return u;
-              return u.replace(
-                '/storage/v1/object/public/',
-                '/storage/v1/render/image/public/',
-              ) + '?width=400&height=600&resize=cover&quality=75';
-            })()}
+            // Eduardo (15/07): removido Supabase Storage transform.
+            // Advisor: uso de image transformations em 1030% da quota
+            // gratuita (100/mês). Cada card na home fazia uma nova
+            // transformação por breakpoint. next/image (dentro do
+            // LazyImage) já otimiza via /_next/image cacheado pelo
+            // Vercel — sizes="..." abaixo indica width apropriado.
+            // Mesmo padrão de Top10MovieCard, MovieGrid, HeroBanner.
+            src={movie.poster_url || movie.thumbnail_url || '/images/placeholder-poster.svg'}
             alt={movie.title}
             fill
             priority={priority}

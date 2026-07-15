@@ -105,14 +105,9 @@ const nextConfig = {
         hostname: 'szghyvnbmjlquznxhqum.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
-      {
-        // Igor (26/06): endpoint de transform/resize do Supabase Storage
-        // (gera versões otimizadas sob demanda). Sem esse pattern, Next.js
-        // bloqueia as URLs com /render/image/ e cards mostram placeholder.
-        protocol: 'https',
-        hostname: 'szghyvnbmjlquznxhqum.supabase.co',
-        pathname: '/storage/v1/render/image/public/**',
-      },
+      // Eduardo (15/07): removido remotePattern do /render/image/ do Supabase.
+      // Advisor: transformations em 1030% da quota gratuita. next/image
+      // (via LazyImage) já otimiza + cacheia sem tocar o endpoint pago.
       {
         protocol: 'http',
         hostname: 'localhost',

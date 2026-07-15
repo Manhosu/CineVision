@@ -197,29 +197,49 @@ export function initializeAnalytics(): void {
   });
 
   // Track page views on navigation
+  // Eduardo (15/07): antes tinha setInterval de 1s pra detectar mudança de
+  // rota + heartbeat de 30s. Ambos batendo em user_sessions/activity_events
+  // consumiam Disk IO da instância Supabase (Advisor: "Disk IO budget is
+  // being consumed"). Mudanças:
+  //   - Path change: escuta history.pushState/replaceState/popstate direto
+  //     (evento nativo, ~0 CPU vs setInterval a cada 1s) → dispara track
+  //     imediato ao invés de esperar até 1s.
+  //   - Heartbeat: 30s → 120s (2min). Corta 75% dos UPSERTs em
+  //     user_sessions sem afetar UX (sessão fica "online" por 5min
+  //     desde o último ping — 2min é folgado).
   let lastPath = window.location.pathname;
-  const checkPathChange = () => {
-    if (window.location.pathname !== lastPath) {
-      lastPath = window.location.pathname;
-      trackSession({
-        current_page: window.location.pathname,
-        is_watching: false,
-      });
-      trackActivity({
-        event_type: 'page_view',
-      });
-    }
+  const onPathChange = () => {
+    if (window.location.pathname === lastPath) return;
+    lastPath = window.location.pathname;
+    trackSession({
+      current_page: window.location.pathname,
+      is_watching: false,
+    });
+    trackActivity({
+      event_type: 'page_view',
+    });
   };
 
-  // Check for path changes every 1 second (for client-side navigation)
-  setInterval(checkPathChange, 1000);
+  // Intercepta pushState/replaceState pra emitir evento — Next Router
+  // dispara esses ao navegar client-side. Fallback popstate pra voltar.
+  const origPushState = history.pushState;
+  const origReplaceState = history.replaceState;
+  history.pushState = function (...args) {
+    origPushState.apply(this, args as any);
+    onPathChange();
+  };
+  history.replaceState = function (...args) {
+    origReplaceState.apply(this, args as any);
+    onPathChange();
+  };
+  window.addEventListener('popstate', onPathChange);
 
-  // Send heartbeat every 30 seconds to keep session alive
+  // Heartbeat a cada 2min (era 30s — cortamos 75% do tráfego).
   setInterval(() => {
     trackSession({
       current_page: window.location.pathname,
     });
-  }, 30000);
+  }, 120000);
 
   // Track session end on page unload
   window.addEventListener('beforeunload', () => {
