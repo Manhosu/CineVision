@@ -387,10 +387,16 @@ export class AdminContentSimpleService {
       logo_url: data.logo_url || null,
       logo_position: data.logo_position || null,
       logo_position_mobile: data.logo_position_mobile || null,
-      // Igor (14/07): tamanho do logo (50-150 %). Default 100 quando não informado
+      // Igor (14/07): tamanho do logo (25-150 %). Default 100 quando não informado
       // pra não sobrescrever o DEFAULT da coluna com NULL explícito.
       logo_scale: data.logo_scale ?? 100,
       logo_scale_mobile: data.logo_scale_mobile ?? 100,
+      // Igor (15/07): 4 slots. Hero (_hero, +_mobile) é NULLable — se
+      // NULL, runtime do HeroBanner faz fallback pra colunas details.
+      logo_position_hero: data.logo_position_hero ?? null,
+      logo_position_hero_mobile: data.logo_position_hero_mobile ?? null,
+      logo_scale_hero: data.logo_scale_hero ?? null,
+      logo_scale_hero_mobile: data.logo_scale_hero_mobile ?? null,
       trailer_url: data.trailer_url || null,
       content_type: data.content_type || data.type || 'movie', // Mapeia para coluna content_type
       status: initialStatus,
@@ -816,8 +822,11 @@ export class AdminContentSimpleService {
       'backdrop_position', 'backdrop_position_mobile',
       // Igor (13/07): logo PNG opcional
       'logo_url', 'logo_position', 'logo_position_mobile',
-      // Igor (14/07): tamanho do logo (50-150 %)
+      // Igor (14/07): tamanho do logo (25-150 %)
       'logo_scale', 'logo_scale_mobile',
+      // Igor (15/07): slots hero (carrossel home). NULL herda details.
+      'logo_position_hero', 'logo_position_hero_mobile',
+      'logo_scale_hero', 'logo_scale_hero_mobile',
       'trailer_url', 'telegram_group_link', 'telegram_chat_id', 'delivery_bot_id', 'title_en', 'release_year',
       'duration_minutes', 'imdb_rating', 'age_rating', 'director', 'cast',
       'genres', 'price_cents', 'is_featured', 'is_release', 'is_new_season', 'total_seasons', 'total_episodes',

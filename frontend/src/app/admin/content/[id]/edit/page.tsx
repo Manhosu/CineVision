@@ -159,9 +159,17 @@ export default function AdminContentEditPage() {
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoPosition, setLogoPosition] = useState('50% 50%');
   const [logoPositionMobile, setLogoPositionMobile] = useState('50% 50%');
-  // Igor (14/07): tamanho do logo (50-150 %). Default 100.
+  // Igor (14/07): tamanho do logo (25-150 %). Default 100.
   const [logoScale, setLogoScale] = useState<number>(100);
   const [logoScaleMobile, setLogoScaleMobile] = useState<number>(100);
+  // Igor (15/07): 4 slots — hero (carrossel da home) + details (página filme),
+  // × desktop + mobile. Colunas *_hero* são nullable no banco. Quando NULL,
+  // guardamos o mesmo valor de details no state pra o editor poder editar
+  // (o PATCH cuida de mandar null se hero == details e o admin nunca tocou).
+  const [logoPositionHero, setLogoPositionHero] = useState<string | null>(null);
+  const [logoPositionHeroMobile, setLogoPositionHeroMobile] = useState<string | null>(null);
+  const [logoScaleHero, setLogoScaleHero] = useState<number | null>(null);
+  const [logoScaleHeroMobile, setLogoScaleHeroMobile] = useState<number | null>(null);
   const [showLogoEditor, setShowLogoEditor] = useState(false);
 
   useEffect(() => {
@@ -284,6 +292,13 @@ export default function AdminContentEditPage() {
         // Igor (14/07): tamanho do logo (%)
         setLogoScale(data.logo_scale ?? 100);
         setLogoScaleMobile(data.logo_scale_mobile ?? data.logo_scale ?? 100);
+        // Igor (15/07): slots hero. NULL no banco = "usa o de details".
+        // Guardamos o valor bruto (pode ser null) pra hasChanges/PATCH
+        // conseguirem detectar mudança e mandar null↔valor corretamente.
+        setLogoPositionHero(data.logo_position_hero ?? null);
+        setLogoPositionHeroMobile(data.logo_position_hero_mobile ?? null);
+        setLogoScaleHero(data.logo_scale_hero ?? null);
+        setLogoScaleHeroMobile(data.logo_scale_hero_mobile ?? null);
         setQualityLabel(data.quality_label || '');
         setAudioType(data.audio_type || '');
 
@@ -442,6 +457,12 @@ export default function AdminContentEditPage() {
         // Igor (14/07): tamanho do logo (%). Só grava se tem logo.
         logo_scale: logoUrl ? logoScale : null,
         logo_scale_mobile: logoUrl ? logoScaleMobile : null,
+        // Igor (15/07): slots hero. Se logo removido → tudo null. Senão
+        // manda o valor mesmo se null (permite "resetar" pro fallback).
+        logo_position_hero: logoUrl ? logoPositionHero : null,
+        logo_position_hero_mobile: logoUrl ? logoPositionHeroMobile : null,
+        logo_scale_hero: logoUrl ? logoScaleHero : null,
+        logo_scale_hero_mobile: logoUrl ? logoScaleHeroMobile : null,
         // is_featured removido — agora controlado pelo seletor de carrosséis (Igor 12/05)
         is_release: isRelease,
         is_new_season: isNewSeason,
@@ -546,6 +567,11 @@ export default function AdminContentEditPage() {
       // Igor (14/07): tamanho do logo
       logoScale !== ((originalContent as any).logo_scale ?? 100) ||
       logoScaleMobile !== ((originalContent as any).logo_scale_mobile ?? 100) ||
+      // Igor (15/07): slots hero — comparação bruta (null == null passa).
+      logoPositionHero !== ((originalContent as any).logo_position_hero ?? null) ||
+      logoPositionHeroMobile !== ((originalContent as any).logo_position_hero_mobile ?? null) ||
+      logoScaleHero !== ((originalContent as any).logo_scale_hero ?? null) ||
+      logoScaleHeroMobile !== ((originalContent as any).logo_scale_hero_mobile ?? null) ||
       isRelease !== (originalContent.is_release || false) ||
       isNewSeason !== ((originalContent as any).is_new_season || false) ||
       totalSeasons !== ((originalContent as any).total_seasons ?? null) ||
@@ -1380,13 +1406,40 @@ export default function AdminContentEditPage() {
       )}
       {/* Igor (14/07): Modal do LogoEditor — passa backdropUrl pra compor
           preview igual ao runtime (backdrop + logo sobreposto).
-          Fix bug parseInt: usa Number.isFinite pra que "0% 0%" não vire "50% 50%". */}
+          Fix bug parseInt: usa Number.isFinite pra que "0% 0%" não vire "50% 50%".
+          Igor (15/07): agora com 4 slots (hero × details) × (desktop × mobile).
+          Hero herda de details quando null. */}
       {showLogoEditor && logoUrl && (() => {
-        const parseCoord = (s: string | undefined, idx: number, fallback: number) => {
+        const parseCoord = (s: string | null | undefined, idx: number, fallback: number) => {
           if (!s) return fallback;
           const parts = s.split(idx === 0 ? '%' : ' ');
           const n = parseInt(idx === 0 ? parts[0] : parts[1], 10);
           return Number.isFinite(n) ? n : fallback;
+        };
+        // Details snapshots (sempre têm valor — colunas com default)
+        const detailsDesktop = {
+          pos: { x: parseCoord(logoPosition, 0, 50), y: parseCoord(logoPosition, 1, 50) },
+          scale: logoScale,
+        };
+        const detailsMobile = {
+          pos: { x: parseCoord(logoPositionMobile, 0, 50), y: parseCoord(logoPositionMobile, 1, 50) },
+          scale: logoScaleMobile,
+        };
+        // Hero snapshots — se null, HERDA de details (mesmo comportamento
+        // do runtime fallback).
+        const heroDesktop = {
+          pos: {
+            x: parseCoord(logoPositionHero, 0, detailsDesktop.pos.x),
+            y: parseCoord(logoPositionHero, 1, detailsDesktop.pos.y),
+          },
+          scale: logoScaleHero ?? detailsDesktop.scale,
+        };
+        const heroMobile = {
+          pos: {
+            x: parseCoord(logoPositionHeroMobile, 0, detailsMobile.pos.x),
+            y: parseCoord(logoPositionHeroMobile, 1, detailsMobile.pos.y),
+          },
+          scale: logoScaleHeroMobile ?? detailsMobile.scale,
         };
         return (
           <LogoEditor
@@ -1409,19 +1462,33 @@ export default function AdminContentEditPage() {
               backdrop_position_mobile: backdropPositionMobile,
               genres: selectedGenres,
             }}
-            initialDesktop={{
-              pos: { x: parseCoord(logoPosition, 0, 50), y: parseCoord(logoPosition, 1, 50) },
-              scale: logoScale,
+            initialSlots={{
+              details_desktop: detailsDesktop,
+              details_mobile: detailsMobile,
+              hero_desktop: heroDesktop,
+              hero_mobile: heroMobile,
             }}
-            initialMobile={{
-              pos: { x: parseCoord(logoPositionMobile, 0, 50), y: parseCoord(logoPositionMobile, 1, 50) },
-              scale: logoScaleMobile,
-            }}
-            onSave={(desktop, mobile) => {
-              setLogoPosition(`${Math.round(desktop.pos.x)}% ${Math.round(desktop.pos.y)}%`);
-              setLogoPositionMobile(`${Math.round(mobile.pos.x)}% ${Math.round(mobile.pos.y)}%`);
-              setLogoScale(desktop.scale);
-              setLogoScaleMobile(mobile.scale);
+            onSave={(slots) => {
+              // Details vira as colunas base (nunca null se tem logo).
+              setLogoPosition(
+                `${Math.round(slots.details_desktop.pos.x)}% ${Math.round(slots.details_desktop.pos.y)}%`,
+              );
+              setLogoPositionMobile(
+                `${Math.round(slots.details_mobile.pos.x)}% ${Math.round(slots.details_mobile.pos.y)}%`,
+              );
+              setLogoScale(slots.details_desktop.scale);
+              setLogoScaleMobile(slots.details_mobile.scale);
+              // Hero sempre grava valor explícito (usuário passou pelo editor).
+              // Se quisesse "herdar" ele deixaria igual a details — o valor
+              // ainda fica salvo mas coincide.
+              setLogoPositionHero(
+                `${Math.round(slots.hero_desktop.pos.x)}% ${Math.round(slots.hero_desktop.pos.y)}%`,
+              );
+              setLogoPositionHeroMobile(
+                `${Math.round(slots.hero_mobile.pos.x)}% ${Math.round(slots.hero_mobile.pos.y)}%`,
+              );
+              setLogoScaleHero(slots.hero_desktop.scale);
+              setLogoScaleHeroMobile(slots.hero_mobile.scale);
             }}
             onClose={() => setShowLogoEditor(false)}
           />

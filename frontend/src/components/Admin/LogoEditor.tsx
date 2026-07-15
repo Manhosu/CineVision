@@ -5,18 +5,28 @@
  *
  * Clone estrutural do BackdropEditor com 3 diferenças:
  * 1. Preview compõe backdrop (fundo) + logo (foreground absoluto)
- * 2. Slider de SCALE (50-150%) além da posição X/Y
+ * 2. Slider de SCALE (25-150%) além da posição X/Y
  * 3. Modelo de posicionamento IDÊNTICO ao runtime: `position: absolute`
  *    com `left/top: X% Y%` + `transform: translate(-50%, -50%)` + `width: N%`.
  *    Assim o drag no editor corresponde 1:1 ao que aparece no site.
  *    (Diferente do backdrop que usa object-position em img cover.)
  *
- * Igor (15/07): refactor pra preview FIEL do runtime — não é mais um
- * "mock genérico" com "2026 · 14 · 2h 15min · Comprar". Agora renderiza
- * uma cópia estrutural do ContentHero (backdrop com objectPosition +
- * gradientes reais + rating + logo + presale + metadata + sinopse +
- * preço com regra igual + CTA com texto real). Igor arrasta e vê
- * exatamente onde vai aparecer.
+ * Igor (15/07): 4 slots (hero carrossel × página do filme) × (desktop × mobile).
+ * Cada slot é um snapshot próprio de posição+scale. Runtime:
+ *   - HeroBanner usa logo_position_hero + logo_scale_hero (+_mobile).
+ *   - ContentHero usa logo_position + logo_scale (+_mobile).
+ *   - Fallback: quando slot hero é NULL, herda do slot details.
+ *
+ * Preview FIEL: o <img> agora vive dentro de um wrapper com LARGURA
+ * proporcional ao container real do runtime (details desktop ≈ 30% do
+ * viewport, hero desktop ≈ 27%, mobile 100%). Antes o scale=100% no
+ * editor virava ~30% no site (o container real é bem menor que o preview
+ * inteiro) — Igor arrastava um logo gigante e via um logo pequeno.
+ *
+ * Slider min 25% (antes 50%). Logos quadrados/altos a 50% em ContentHero
+ * desktop ficam ~80px de altura de conteúdo dentro de container h-40=160px,
+ * mas o WIDTH da imagem sobe pra ~288px — extravasa max-w-xl=576px pela
+ * altura efetiva. 25% dá margem confortável.
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
@@ -44,17 +54,89 @@ export interface LogoEditorContent {
   genres?: string[];
 }
 
+// Igor (15/07): 4 combinações (section × device). Snapshot completo cada.
+export interface FourSlots {
+  hero_desktop: Snapshot;
+  hero_mobile: Snapshot;
+  details_desktop: Snapshot;
+  details_mobile: Snapshot;
+}
+
 interface LogoEditorProps {
   logoUrl: string;
   backdropUrl?: string;
   content: LogoEditorContent;
-  initialDesktop?: Snapshot;
-  initialMobile?: Snapshot;
-  onSave: (desktop: Snapshot, mobile: Snapshot) => void;
+  initialSlots?: FourSlots;
+  onSave: (slots: FourSlots) => void;
   onClose: () => void;
 }
 
-type ActiveTab = 'desktop' | 'mobile';
+type Section = 'hero' | 'details';
+type Device = 'desktop' | 'mobile';
+type SlotKey = 'hero_desktop' | 'hero_mobile' | 'details_desktop' | 'details_mobile';
+
+const DEFAULT_SNAPSHOT: Snapshot = { pos: { x: 50, y: 50 }, scale: 100 };
+const DEFAULT_SLOTS: FourSlots = {
+  hero_desktop: DEFAULT_SNAPSHOT,
+  hero_mobile: DEFAULT_SNAPSHOT,
+  details_desktop: DEFAULT_SNAPSHOT,
+  details_mobile: DEFAULT_SNAPSHOT,
+};
+
+// Igor (15/07): dimensões do container REAL do logo em cada slot.
+//   containerWidthPct = fração da largura do preview onde o container mora
+//     (equivale à fração da viewport onde o container mora no runtime).
+//   containerAspect   = width/height do container no runtime.
+//   previewAspect     = aspect do "quadro" do preview (mock do site).
+const SLOT_LAYOUT: Record<SlotKey, {
+  containerWidthPct: string;
+  containerAspect: string;
+  previewAspect: string;
+  previewWidth?: string;
+  label: string;
+  section: Section;
+  device: Device;
+}> = {
+  hero_desktop: {
+    // max-w-lg 512px / viewport ~1920px = 27%
+    containerWidthPct: '27%',
+    containerAspect: '3.2/1', // 512 / 160 (max-w-lg / h-40)
+    previewAspect: '16/9',
+    label: 'Hero carrossel · Desktop',
+    section: 'hero',
+    device: 'desktop',
+  },
+  hero_mobile: {
+    containerWidthPct: '100%',
+    containerAspect: '3/1', // ~350px / 96px (viewport / h-24)
+    previewAspect: '9/16',
+    previewWidth: '300px',
+    label: 'Hero carrossel · Mobile',
+    section: 'hero',
+    device: 'mobile',
+  },
+  details_desktop: {
+    // max-w-xl 576px / viewport ~1920px = 30%
+    containerWidthPct: '30%',
+    containerAspect: '3.6/1', // 576 / 160 (max-w-xl / h-40)
+    previewAspect: '16/9',
+    label: 'Página do filme · Desktop',
+    section: 'details',
+    device: 'desktop',
+  },
+  details_mobile: {
+    containerWidthPct: '100%',
+    containerAspect: '3/1',
+    previewAspect: '9/16',
+    previewWidth: '300px',
+    label: 'Página do filme · Mobile',
+    section: 'details',
+    device: 'mobile',
+  },
+};
+
+const SCALE_MIN = 25;
+const SCALE_MAX = 150;
 
 // ---------- Helpers de formatação ----------
 
@@ -83,10 +165,7 @@ function DraggableLogoPreview({
   position,
   scale,
   onChange,
-  aspectRatio,
-  width,
-  label,
-  isMobile,
+  slotKey,
 }: {
   logoUrl: string;
   backdropUrl?: string;
@@ -94,17 +173,19 @@ function DraggableLogoPreview({
   position: Position;
   scale: number;
   onChange: (pos: Position) => void;
-  aspectRatio: string;
-  width?: string;
-  label: string;
-  isMobile?: boolean;
+  slotKey: SlotKey;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const layout = SLOT_LAYOUT[slotKey];
+  const isMobile = layout.device === 'mobile';
+  // Igor (15/07): dragRef agora aponta pro WRAPPER (container do runtime),
+  // não pro preview inteiro. Assim position.x/y é % do container real,
+  // que é o que fica salvo no banco (bate 1:1 com runtime).
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
 
   const move = useCallback((clientX: number, clientY: number) => {
-    if (!dragging || !ref.current) return;
-    const rect = ref.current.getBoundingClientRect();
+    if (!dragging || !wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
     onChange({ x, y });
@@ -145,14 +226,11 @@ function DraggableLogoPreview({
   const genres = content.genres || [];
 
   // Escalas de fonte compactas — a área do preview é bem menor que a real.
-  // Desktop (aspect 16/7 dentro do modal max-w-5xl): fator ~0.46 vs 1920px.
-  // Mobile (300×533): fator ~0.79 vs viewport real 375-390px.
   const T = isMobile
     ? {
         backLabel: 'text-[8px]',
         rating: 'text-[9px]',
         ratingIcon: 'w-2 h-2',
-        logoHeight: 'h-16',
         titleFallback: 'text-2xl',
         presaleBadge: 'text-[10px] px-2 py-0.5',
         presaleSubBadge: 'text-[8px] px-1 py-0',
@@ -182,7 +260,6 @@ function DraggableLogoPreview({
         backLabel: 'text-[9px]',
         rating: 'text-[10px]',
         ratingIcon: 'w-2.5 h-2.5',
-        logoHeight: 'h-20',
         titleFallback: 'text-2xl',
         presaleBadge: 'text-[10px] px-2.5 py-1',
         presaleSubBadge: 'text-[8px] px-1 py-0',
@@ -209,7 +286,7 @@ function DraggableLogoPreview({
         maxContent: 'max-w-2xl',
       };
 
-  // CTA text — mesma regra do runtime, sem ownership/checkingOwnership/flash.
+  // CTA text — mesma regra do runtime.
   const ctaText = presale.isPresale
     ? `🎟 Garantir Pré-Venda · ${formatPrice(presale.effectivePriceCents)}`
     : 'Comprar';
@@ -218,19 +295,27 @@ function DraggableLogoPreview({
     : 'bg-primary-600 text-white';
 
   return (
-    <div style={{ width: width || '100%' }}>
+    <div style={{ width: layout.previewWidth || '100%' }}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-white/40 uppercase tracking-wider">{label}</span>
+        <span className="text-xs text-white/40 uppercase tracking-wider">{layout.label}</span>
         <span className="text-xs text-white/30 font-mono">
           {Math.round(position.x)}% {Math.round(position.y)}% · {scale}%
         </span>
       </div>
       <div
-        ref={ref}
         className="relative rounded-xl overflow-hidden cursor-crosshair select-none border-2 border-white/10 hover:border-white/20 transition-colors bg-dark-950"
-        style={{ aspectRatio }}
-        onMouseDown={(e) => { e.preventDefault(); setDragging(true); }}
-        onTouchStart={() => setDragging(true)}
+        style={{ aspectRatio: layout.previewAspect }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setDragging(true);
+          // Move imediato pra suporte a click-to-place (útil quando
+          // usuário clica dentro do wrapper sem arrastar).
+          move(e.clientX, e.clientY);
+        }}
+        onTouchStart={(e) => {
+          setDragging(true);
+          if (e.touches[0]) move(e.touches[0].clientX, e.touches[0].clientY);
+        }}
       >
         {/* Backdrop layer — usa objectPosition igual runtime */}
         {backdropUrl ? (
@@ -259,33 +344,10 @@ function DraggableLogoPreview({
           <span>Voltar</span>
         </div>
 
-        {/* Content anchored bottom-left — flex column mt-auto */}
+        {/* Content anchored bottom-left — mock UI simulada (fica ATRÁS do wrapper do logo) */}
         <div className={`absolute inset-0 flex flex-col pointer-events-none`}>
           <div className={`mt-auto ${T.contentPad} ${T.maxContent}`}>
-            {/* Rating badge */}
-            {content.imdb_rating != null && (
-              <div className="inline-flex items-center gap-1 mb-1.5">
-                <div className="flex items-center gap-0.5 bg-yellow-500/20 backdrop-blur-sm px-1.5 py-0.5 rounded">
-                  <svg className={`${T.ratingIcon} fill-yellow-400`} viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                  <span className={`text-yellow-400 ${T.rating} font-semibold`}>
-                    {content.imdb_rating}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Logo container — altura fixa igual runtime (h-40 desktop / h-24 mobile
-                escalados pro preview → h-20 / h-16). O logo é position:absolute
-                DENTRO desse container, mas o drag é sobre o preview inteiro
-                (mais intuitivo pro Igor). */}
-            <div className={`relative w-full ${T.logoHeight} mb-1.5`}>
-              {/* Placeholder pra visualizar a área do container */}
-              <div className="absolute inset-0 pointer-events-none" />
-            </div>
-
-            {/* Presale badge — MESMO estilo do ContentHero, escalado */}
+            {/* Presale badge */}
             {presale.isPresale && (
               <div className="mb-1.5 flex flex-col items-start gap-1">
                 <div className={`inline-flex items-center gap-1 bg-amber-500 text-black ${T.presaleBadge} font-bold uppercase tracking-wider rounded-full`}>
@@ -313,8 +375,17 @@ function DraggableLogoPreview({
               </div>
             )}
 
-            {/* Metadata line */}
+            {/* Metadata line — Igor (15/07): IMDb badge agora VIVE aqui dentro,
+                como primeiro span, em vez de flutuar acima do logo. */}
             <div className={`flex flex-wrap items-center ${T.metadata} text-white/60 mb-1.5`}>
+              {content.imdb_rating != null && (
+                <span className="inline-flex items-center gap-0.5 bg-yellow-500/20 backdrop-blur-sm px-1.5 py-0.5 rounded">
+                  <svg className={`${T.ratingIcon} fill-yellow-400`} viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span className={`text-yellow-400 ${T.rating} font-semibold`}>{content.imdb_rating}</span>
+                </span>
+              )}
               {content.release_year && <span>{content.release_year}</span>}
               {content.age_rating && (
                 <span className={`border border-white/30 text-white/80 ${T.metaBadge} rounded font-medium`}>
@@ -354,7 +425,7 @@ function DraggableLogoPreview({
               </p>
             )}
 
-            {/* Preço — mesma lógica presale > desconto > cheio */}
+            {/* Preço */}
             <div className="mb-2 flex flex-col items-center text-center">
               {presale.isPresale && presale.originalPriceCents ? (
                 <div className="flex items-baseline justify-center gap-1.5">
@@ -404,37 +475,50 @@ function DraggableLogoPreview({
           </div>
         </div>
 
-        {/* Logo layer — modelo idêntico ao runtime:
-            absolute + left/top % + translate(-50%,-50%) + width: scale%.
-            Renderizado POR CIMA da UI simulada pra ficar sempre visível
-            enquanto o Igor arrasta. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={logoUrl}
-          alt=""
-          className="absolute h-auto object-contain pointer-events-none drop-shadow-2xl"
-          style={{
-            left: `${position.x}%`,
-            top: `${position.y}%`,
-            width: `${scale}%`,
-            maxWidth: '95%',
-            transform: 'translate(-50%, -50%)',
-          }}
-          draggable={false}
-        />
-
-        {/* Crosshair no centro do logo */}
+        {/* Igor (15/07): WRAPPER com dimensões do container REAL do runtime.
+            Centralizado no preview. Logo mora aqui dentro; scale% agora é
+            % do container real (bate 1:1 com o site).
+            Borda dashed pra Igor visualizar "aqui é onde o logo cabe". */}
         <div
-          className="absolute w-6 h-6 border-2 border-white rounded-full pointer-events-none"
+          ref={wrapperRef}
+          className="absolute border border-dashed border-primary-500/60 rounded"
           style={{
-            left: `${position.x}%`,
-            top: `${position.y}%`,
+            left: '50%',
+            top: '50%',
             transform: 'translate(-50%, -50%)',
-            boxShadow: '0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(255,255,255,0.3)',
+            width: layout.containerWidthPct,
+            aspectRatio: layout.containerAspect,
           }}
         >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-1 h-1 bg-white rounded-full" />
+          {/* Logo — mesmo modelo do runtime */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={logoUrl}
+            alt=""
+            className="absolute h-auto object-contain pointer-events-none drop-shadow-2xl"
+            style={{
+              left: `${position.x}%`,
+              top: `${position.y}%`,
+              width: `${scale}%`,
+              maxWidth: '95%',
+              transform: 'translate(-50%, -50%)',
+            }}
+            draggable={false}
+          />
+
+          {/* Crosshair no centro do logo — coordenadas no wrapper */}
+          <div
+            className="absolute w-6 h-6 border-2 border-white rounded-full pointer-events-none"
+            style={{
+              left: `${position.x}%`,
+              top: `${position.y}%`,
+              transform: 'translate(-50%, -50%)',
+              boxShadow: '0 0 0 2px rgba(0,0,0,0.6), 0 0 12px rgba(255,255,255,0.3)',
+            }}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-1 h-1 bg-white rounded-full" />
+            </div>
           </div>
         </div>
       </div>
@@ -451,27 +535,30 @@ const PRESETS: { label: string; x: number; y: number }[] = [
   { label: 'Inf-Dir', x: 80, y: 70 },
 ];
 
-const SCALE_MIN = 50;
-const SCALE_MAX = 150;
-
 export default function LogoEditor({
   logoUrl,
   backdropUrl,
   content,
-  initialDesktop = { pos: { x: 50, y: 50 }, scale: 100 },
-  initialMobile,
+  initialSlots,
   onSave,
   onClose,
 }: LogoEditorProps) {
-  const [desktop, setDesktop] = useState<Snapshot>(initialDesktop);
-  const [mobile, setMobile] = useState<Snapshot>(initialMobile || initialDesktop);
-  const [tab, setTab] = useState<ActiveTab>('desktop');
+  const [slots, setSlots] = useState<FourSlots>(initialSlots || DEFAULT_SLOTS);
+  const [section, setSection] = useState<Section>('details');
+  const [device, setDevice] = useState<Device>('desktop');
 
-  const active = tab === 'desktop' ? desktop : mobile;
-  const setActive = tab === 'desktop' ? setDesktop : setMobile;
+  const activeKey: SlotKey = `${section}_${device}` as SlotKey;
+  const active = slots[activeKey];
 
-  const setPos = (pos: Position) => setActive({ ...active, pos });
-  const setScale = (scale: number) => setActive({ ...active, scale });
+  const patchActive = (patch: Partial<Snapshot>) => {
+    setSlots((prev) => ({
+      ...prev,
+      [activeKey]: { ...prev[activeKey], ...patch },
+    }));
+  };
+
+  const setPos = (pos: Position) => patchActive({ pos });
+  const setScale = (scale: number) => patchActive({ scale });
 
   // ESC pra fechar
   useEffect(() => {
@@ -479,6 +566,8 @@ export default function LogoEditor({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  const layout = SLOT_LAYOUT[activeKey];
 
   return (
     <div
@@ -490,68 +579,87 @@ export default function LogoEditor({
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
           <div>
             <h3 className="text-base font-bold text-white">Ajustar Logo — {content.title}</h3>
-            <p className="text-xs text-white/40">Arraste pra posicionar · use o slider pro tamanho · desktop e celular separados</p>
+            <p className="text-xs text-white/40">
+              4 slots independentes · arraste dentro do quadro pontilhado · slider pra tamanho
+            </p>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white text-xl leading-none px-2">&times;</button>
         </div>
 
-        {/* Tabs */}
+        {/* Igor (15/07): Toggle SECTION (Hero carrossel × Detalhes página) */}
         <div className="flex border-b border-white/10">
           <button
-            onClick={() => setTab('desktop')}
+            onClick={() => setSection('hero')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all relative ${
-              tab === 'desktop' ? 'text-white' : 'text-white/40 hover:text-white/70'
+              section === 'hero' ? 'text-white' : 'text-white/40 hover:text-white/70'
             }`}
           >
             <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" strokeWidth="2"/><path d="M8 21h8M12 17v4" strokeWidth="2"/></svg>
-              Desktop
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="12" rx="2" strokeWidth="2"/>
+                <path d="M8 20h8M12 16v4" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+              Hero (carrossel da home)
             </span>
-            {tab === 'desktop' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
+            {section === 'hero' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
           </button>
           <button
-            onClick={() => setTab('mobile')}
+            onClick={() => setSection('details')}
             className={`flex-1 px-4 py-2.5 text-sm font-medium transition-all relative ${
-              tab === 'mobile' ? 'text-white' : 'text-white/40 hover:text-white/70'
+              section === 'details' ? 'text-white' : 'text-white/40 hover:text-white/70'
             }`}
           >
             <span className="flex items-center justify-center gap-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" strokeWidth="2"/><path d="M12 18h.01" strokeWidth="2" strokeLinecap="round"/></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Detalhes (página do filme)
+            </span>
+            {section === 'details' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500" />}
+          </button>
+        </div>
+
+        {/* Toggle DEVICE (Desktop × Mobile) — secundário */}
+        <div className="flex border-b border-white/10 bg-dark-950/40">
+          <button
+            onClick={() => setDevice('desktop')}
+            className={`flex-1 px-4 py-2 text-xs font-medium transition-all relative ${
+              device === 'desktop' ? 'text-white' : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" strokeWidth="2"/><path d="M8 21h8M12 17v4" strokeWidth="2"/></svg>
+              Desktop
+            </span>
+            {device === 'desktop' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-400" />}
+          </button>
+          <button
+            onClick={() => setDevice('mobile')}
+            className={`flex-1 px-4 py-2 text-xs font-medium transition-all relative ${
+              device === 'mobile' ? 'text-white' : 'text-white/40 hover:text-white/70'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" strokeWidth="2"/><path d="M12 18h.01" strokeWidth="2" strokeLinecap="round"/></svg>
               Mobile
             </span>
-            {tab === 'mobile' && <div className="absolute bottom-0 left-0 h-0.5 bg-primary-500 right-0" />}
+            {device === 'mobile' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-400" />}
           </button>
         </div>
 
         {/* Preview area */}
         <div className="flex-1 overflow-auto p-5">
-          {tab === 'desktop' ? (
+          <div className={layout.device === 'mobile' ? 'flex justify-center' : ''}>
             <DraggableLogoPreview
               logoUrl={logoUrl}
               backdropUrl={backdropUrl}
               content={content}
-              position={desktop.pos}
-              scale={desktop.scale}
+              position={active.pos}
+              scale={active.scale}
               onChange={setPos}
-              aspectRatio="16/9"
-              label="Como aparece no desktop / tablet"
+              slotKey={activeKey}
             />
-          ) : (
-            <div className="flex justify-center">
-              <DraggableLogoPreview
-                logoUrl={logoUrl}
-                backdropUrl={backdropUrl}
-                content={content}
-                position={mobile.pos}
-                scale={mobile.scale}
-                onChange={setPos}
-                aspectRatio="9/16"
-                width="300px"
-                label="Como aparece no celular"
-                isMobile
-              />
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Controls */}
@@ -609,7 +717,7 @@ export default function LogoEditor({
               Cancelar
             </button>
             <button
-              onClick={() => { onSave(desktop, mobile); onClose(); }}
+              onClick={() => { onSave(slots); onClose(); }}
               className="px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-semibold transition-all"
             >
               Aplicar

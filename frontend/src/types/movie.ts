@@ -66,6 +66,12 @@ export interface Movie {
   // Igor (14/07): tamanho do logo no hero (%). NULL herda 100.
   logo_scale?: number | null;
   logo_scale_mobile?: number | null;
+  // Igor (15/07): slots separados pro HeroBanner (carrossel da home).
+  // NULL nas colunas hero → runtime faz fallback pras colunas details.
+  logo_position_hero?: string | null;
+  logo_position_hero_mobile?: string | null;
+  logo_scale_hero?: number | null;
+  logo_scale_hero_mobile?: number | null;
   // Content type
   content_type?: string;
   type?: string;

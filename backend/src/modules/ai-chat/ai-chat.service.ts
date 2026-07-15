@@ -1074,6 +1074,7 @@ Quando cliente pedir gênero em vez de título específico ("me indica um terror
 
     try {
       await this.telegramsService.sendMessage(parseInt(adminChatId, 10), text, {
+        admin_notify: true, // Igor (15/07): força bot master, ignora ALS do webhook
         parse_mode: 'Markdown',
       });
       this.logger.log(
@@ -1593,6 +1594,7 @@ Quando cliente pedir gênero em vez de título específico ("me indica um terror
 
     try {
       await this.telegramsService.sendMessage(parseInt(targetChatId, 10), text, {
+        admin_notify: true, // Igor (15/07): força bot master, ignora ALS do webhook
         parse_mode: 'MarkdownV2',
       });
       this.logger.log(

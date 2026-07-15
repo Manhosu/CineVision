@@ -2208,7 +2208,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
           await this.sendMessage(
             parseInt(adminChatId, 10),
             `📷 *${reasonLabel} recebido*\n\nCliente \`${chatId}\` enviou ${mediaLabel}${captionLine}.\n\n👉 [Abrir painel de IA](https://www.cinevisionapp.com.br/admin/ai-chat)`,
-            { parse_mode: 'Markdown' },
+            {
+              admin_notify: true, // Igor (15/07): força bot master, ignora ALS do webhook
+              parse_mode: 'Markdown',
+            },
           );
           this.logger.log(
             `Admin notified about ${pauseReason}: client=${chatId} → admin=${adminChatId}`,
@@ -5400,8 +5403,14 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
       //   1) options.bot_id explícito (caller passou)
       //   2) AsyncLocalStorage do webhook em andamento (cliente falou no bot 2 → responde do bot 2)
       //   3) default bot do env (this.botApiUrl)
+      //
+      // Igor (15/07): admin_notify força uso do bot MASTER (TELEGRAM_BOT_TOKEN),
+      // ignora ALS. Antes, notify admin dentro de webhook handler herdava o bot
+      // que recebeu o webhook (Moana, CineVisionApp11, etc.) — Igor via as
+      // notificações administrativas vazando pra bots secundários.
+      const forceMaster = options?.admin_notify === true;
       const explicitBotId: string | null = options?.bot_id || null;
-      const ctxBotId = this.currentBotId();
+      const ctxBotId = forceMaster ? null : this.currentBotId();
       const resolvedBotId = explicitBotId || ctxBotId;
       const baseUrl = resolvedBotId ? await this.apiUrlForBot(resolvedBotId) : this.botApiUrl;
       const url = `${baseUrl}/sendMessage`;
@@ -5410,8 +5419,9 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
         text,
         ...(options || {}),
       };
-      // bot_id é só direcionador, não vai pro Telegram.
+      // bot_id e admin_notify são só direcionadores, não vão pro Telegram.
       if (payload.bot_id !== undefined) delete payload.bot_id;
+      if (payload.admin_notify !== undefined) delete payload.admin_notify;
 
       this.logger.log(`Sending message to chat ${chatId}:`, JSON.stringify(payload, null, 2));
 
@@ -6371,6 +6381,7 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       // Send message to admin
       await this.sendMessage(parseInt(adminChatId), formattedMessage, {
+        admin_notify: true, // Igor (15/07): força bot master, ignora ALS do webhook
         parse_mode: 'Markdown',
       });
 

@@ -403,17 +403,9 @@ export default function ContentHero({
       {/* Content - anchored to bottom */}
       <div className="relative z-10 mt-auto px-4 sm:px-6 lg:px-10 tv:px-16 pb-10 sm:pb-14 lg:pb-16 tv:pb-20">
         <div className="max-w-4xl">
-          {/* Rating badge */}
-          {content.imdb_rating && (
-            <div className="inline-flex items-center gap-1.5 mb-3 tv:mb-4">
-              <div className="flex items-center gap-1 bg-yellow-500/20 backdrop-blur-sm px-2.5 py-1 rounded-md">
-                <svg className="w-3.5 h-3.5 fill-yellow-400" viewBox="0 0 20 20">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                </svg>
-                <span className="text-yellow-400 text-sm font-semibold">{content.imdb_rating}</span>
-              </div>
-            </div>
-          )}
+          {/* Igor (15/07): badge IMDb foi movido pra DENTRO da metadata row
+              (primeiro span). Antes flutuava acima do logo e brigava por
+              espaço vertical — cliente reportou. */}
 
           {/* Title — Igor (13/07): se content.logo_url preenchido, renderiza
               PNG oficial no lugar do <h1> texto. Mantém <h1 sr-only> pro SEO.
@@ -507,6 +499,15 @@ export default function ContentHero({
 
           {/* Metadata line */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm sm:text-base tv:text-lg text-white/60 mb-4 tv:mb-5">
+            {/* Igor (15/07): IMDb inline com o resto da metadata */}
+            {content.imdb_rating != null && (
+              <span className="inline-flex items-center gap-1 bg-yellow-500/20 backdrop-blur-sm px-2 py-0.5 rounded-md">
+                <svg className="w-3 h-3 fill-yellow-400" viewBox="0 0 20 20">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span className="text-yellow-400 text-xs sm:text-sm font-semibold">{content.imdb_rating}</span>
+              </span>
+            )}
             {content.release_year && (
               <span>{content.release_year}</span>
             )}

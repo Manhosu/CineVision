@@ -185,21 +185,32 @@ export function HeroBanner({
           <div className="max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl">
             {/* Igor (13/07): logo PNG opcional. Fallback pro <h1> texto.
                 Igor (14/07): posicionamento abs + scale + duplo <img>
-                (desktop e mobile) — bate 1:1 com o LogoEditor. */}
-            {(currentMovie as any).logo_url ? (
+                (desktop e mobile) — bate 1:1 com o LogoEditor.
+                Igor (15/07): agora prioriza *_hero (slots do carrossel) e
+                cai pra *_details (usado em ContentHero) quando NULL. Isso
+                dá slots visualmente independentes sem quebrar filmes antigos. */}
+            {(currentMovie as any).logo_url ? (() => {
+              const cm = currentMovie as any;
+              // Fallback chain (plan): hero > details > default. Mantém
+              // filmes antigos (sem *_hero) funcionando com valores de details.
+              const posDesk = cm.logo_position_hero ?? cm.logo_position ?? '50% 50%';
+              const posMob = cm.logo_position_hero_mobile ?? cm.logo_position_mobile ?? cm.logo_position ?? '50% 50%';
+              const scaleDesk = cm.logo_scale_hero ?? cm.logo_scale ?? 100;
+              const scaleMob = cm.logo_scale_hero_mobile ?? cm.logo_scale_mobile ?? cm.logo_scale ?? 100;
+              return (
               <>
                 <h1 className="sr-only">{currentMovie.title}</h1>
                 {/* Desktop */}
                 <div className="hidden sm:block relative w-full max-w-md lg:max-w-lg h-32 lg:h-40 mb-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={(currentMovie as any).logo_url}
+                    src={cm.logo_url}
                     alt={currentMovie.title}
                     className="absolute h-auto object-contain drop-shadow-2xl"
                     style={{
-                      left: `${parseInt(((currentMovie as any).logo_position || '50%').split('%')[0], 10) || 50}%`,
-                      top: `${parseInt(((currentMovie as any).logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
-                      width: `${(currentMovie as any).logo_scale ?? 100}%`,
+                      left: `${parseInt(String(posDesk).split('%')[0], 10) || 50}%`,
+                      top: `${parseInt(String(posDesk).split(' ')[1], 10) || 50}%`,
+                      width: `${scaleDesk}%`,
                       maxWidth: '95%',
                       transform: 'translate(-50%, -50%)',
                     }}
@@ -210,20 +221,21 @@ export function HeroBanner({
                 <div className="block sm:hidden relative w-full h-24 mb-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={(currentMovie as any).logo_url}
+                    src={cm.logo_url}
                     alt=""
                     className="absolute h-auto object-contain drop-shadow-2xl"
                     style={{
-                      left: `${parseInt(((currentMovie as any).logo_position_mobile || (currentMovie as any).logo_position || '50%').split('%')[0], 10) || 50}%`,
-                      top: `${parseInt(((currentMovie as any).logo_position_mobile || (currentMovie as any).logo_position || '50% 50%').split(' ')[1], 10) || 50}%`,
-                      width: `${(currentMovie as any).logo_scale_mobile ?? (currentMovie as any).logo_scale ?? 100}%`,
+                      left: `${parseInt(String(posMob).split('%')[0], 10) || 50}%`,
+                      top: `${parseInt(String(posMob).split(' ')[1], 10) || 50}%`,
+                      width: `${scaleMob}%`,
                       maxWidth: '95%',
                       transform: 'translate(-50%, -50%)',
                     }}
                   />
                 </div>
               </>
-            ) : (
+              );
+            })() : (
               <h1 className="text-2xl md:text-3xl lg:text-5xl xl:text-6xl font-extrabold text-white mb-2 leading-tight tracking-tight line-clamp-2">
                 {currentMovie.title}
               </h1>

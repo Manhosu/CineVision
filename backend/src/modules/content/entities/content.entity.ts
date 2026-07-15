@@ -172,6 +172,20 @@ export class Content {
   @Column({ type: 'smallint', nullable: true, default: 100 })
   logo_scale_mobile?: number;
 
+  // Igor (15/07): slots separados pro HeroBanner (carrossel da home).
+  // NULL herda das colunas details (logo_position / logo_scale).
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  logo_position_hero?: string;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  logo_position_hero_mobile?: string;
+
+  @Column({ type: 'smallint', nullable: true })
+  logo_scale_hero?: number;
+
+  @Column({ type: 'smallint', nullable: true })
+  logo_scale_hero_mobile?: number;
+
   @Column({ nullable: true })
   storage_path?: string;
 
