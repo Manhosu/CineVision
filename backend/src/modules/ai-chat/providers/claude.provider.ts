@@ -187,16 +187,32 @@ export class ClaudeProvider {
       `[CLAUDE_DEBUG] API key OK (len=${apiKey.length}, PID=${process.pid})`,
     );
 
-    const primaryModel =
+    const HAIKU_DEFAULT = 'claude-haiku-4-5-20251001';
+    const HAIKU_ALIAS = 'claude-haiku-4-5';
+
+    let primaryModel =
       options.model ||
       this.configService.get<string>('AI_MODEL') ||
-      'claude-haiku-4-5-20251001';
+      HAIKU_DEFAULT;
+
+    // Eduardo (15/07): guard anti-Opus. Bot atende dúvidas simples
+    // (catálogo, PIX, suporte) — Opus é ~5x mais caro no preço unitário
+    // e no volume real gera fatura absurda ($6 durando 24h em vez de
+    // semanas). Se Opus for necessário algum dia pra query específica,
+    // remover este guard conscientemente. Enquanto isso, se env AI_MODEL
+    // ou caller tentar Opus, força Haiku e loga.
+    if (/opus/i.test(primaryModel)) {
+      this.logger.warn(
+        `[CLAUDE_GUARD] Modelo "${primaryModel}" bloqueado (Opus). Forçando ${HAIKU_DEFAULT} — remova este guard se Opus for realmente necessário.`,
+      );
+      primaryModel = HAIKU_DEFAULT;
+    }
 
     // N9 — fallback de modelo. Se o principal (com timestamp específico)
     // não estiver disponível por motivo de versão deprecated, tenta
     // o alias sem timestamp. Igor reportou IA caindo mesmo com saldo —
     // alguns desses casos são modelo deprecated; com fallback evitamos.
-    const fallbackModel = 'claude-haiku-4-5';
+    const fallbackModel = HAIKU_ALIAS;
     const modelsToTry = primaryModel === fallbackModel
       ? [primaryModel]
       : [primaryModel, fallbackModel];

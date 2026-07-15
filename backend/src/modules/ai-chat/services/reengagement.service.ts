@@ -103,7 +103,9 @@ export class ReengagementService {
       'manual',
     ]);
     const TAKEOVER_REASONS = new Set(['owner_takeover', 'admin_takeover']);
-    const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1 hora
+    const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1h
+    const LEGACY_TIMEOUT_MS = 60 * 60 * 1000; // 1h — bucket fail-open
+                                              // (reason NULL / claude_* / custom)
 
     let sent = 0;
     let reactivated = 0;
@@ -111,20 +113,29 @@ export class ReengagementService {
       const chatId = parseInt(conv.external_chat_id, 10);
       if (Number.isNaN(chatId)) continue;
       try {
-        // Reativa IA se a pausa atual for soft OU se for takeover (owner
-        // ou admin) com mais de 1 hora de inatividade.
-        const isSoftPause =
-          !conv.ai_enabled &&
-          conv.paused_reason &&
-          SOFT_PAUSE_REASONS.has(conv.paused_reason);
-        const isTakeoverExpired =
-          !conv.ai_enabled &&
-          conv.paused_reason &&
-          TAKEOVER_REASONS.has(conv.paused_reason) &&
-          conv.paused_at &&
-          Date.now() - new Date(conv.paused_at).getTime() >= TAKEOVER_TIMEOUT_MS;
+        // Eduardo (15/07): mesmo fix do ai-chat.service.ts — cobre
+        // reasons NULL/claude_*/custom via bucket legacy. ANTES rows
+        // com reason fora da whitelist ficavam presas eternas mesmo
+        // no cron. Agora reativa se pausa expirou no bucket.
+        const reason = conv.paused_reason || '';
+        const pausedFor = conv.paused_at
+          ? Date.now() - new Date(conv.paused_at).getTime()
+          : Number.POSITIVE_INFINITY;
 
-        if (isSoftPause || isTakeoverExpired) {
+        let shouldReactivate = false;
+        if (!conv.ai_enabled) {
+          if (SOFT_PAUSE_REASONS.has(reason)) {
+            // Cron só olha conversas idle (>30min), então soft já expirou.
+            shouldReactivate = true;
+          } else if (TAKEOVER_REASONS.has(reason)) {
+            shouldReactivate = pausedFor >= TAKEOVER_TIMEOUT_MS;
+          } else {
+            // Reason NULL, claude_*, ou custom desconhecido — bucket legacy.
+            shouldReactivate = pausedFor >= LEGACY_TIMEOUT_MS;
+          }
+        }
+
+        if (shouldReactivate) {
           await this.supabase.client
             .from('ai_conversations')
             .update({

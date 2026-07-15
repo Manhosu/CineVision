@@ -319,13 +319,24 @@ export class AiChatService {
     }
 
     if (!conversation.ai_enabled) {
-      // Igor (02/06): reativa IA AQUI também — não só pelo cron de
-      // reengagement. Cenário real: conversa pausada (admin/owner
-      // takeover) ficou parada dias, cliente volta a falar; o cron
-      // pega só conversas idle (last_message_at < cutoff) e o cliente
-      // falando agora joga ela pra fora dessa janela. Resultado: bot
-      // respondia "chamei a equipe" mesmo a pausa sendo de 3 dias atrás.
-      // Mesma whitelist do reengagement.service.ts pra consistência.
+      // Igor (02/06 + 15/07): reativa IA aqui, in-line, quando cliente
+      // volta a falar. ANTES o if `isTakeoverExpired || isSoftExpired`
+      // exigia reason numa das duas whitelists — se reason fosse NULL
+      // (rows de 2024), `claude_*` (falha transiente antiga), ou kind
+      // custom fora das listas (film_not_found, manager_request,
+      // unknown), NENHUM check batia → caía no else → paused: true
+      // pra sempre. Cliente que voltava a mandar "oi" recebia
+      // "Recebi sua mensagem, chamei a equipe" em vez do fluxo normal.
+      //
+      // Igor viu isso: conversa parada desde 2024 recebeu "oi" hoje,
+      // bot ignorou o oi e mandou o boilerplate de takeover.
+      //
+      // Fix: buckets com TTL. Se pausa >= TTL do bucket, reativa.
+      // - TAKEOVER (owner/admin assumiu): 60min de posse.
+      // - SOFT (kind conhecido do <<PAUSE:>>): 30min de espera.
+      // - LEGACY/UNKNOWN (reason NULL, claude_*, kind custom): 1h.
+      //   Cobre rows antigas + falhas transientes + kinds desconhecidos.
+      // Fail-open — nunca aprisiona cliente que voltou a falar.
       const TAKEOVER_REASONS = new Set(['owner_takeover', 'admin_takeover']);
       const SOFT_PAUSE_REASONS = new Set([
         'content_not_found',
@@ -337,21 +348,31 @@ export class AiChatService {
       ]);
       const TAKEOVER_TIMEOUT_MS = 60 * 60 * 1000; // 1h
       const SOFT_TIMEOUT_MS = 30 * 60 * 1000; // 30min
+      const LEGACY_TIMEOUT_MS = 60 * 60 * 1000; // 1h — bucket fail-open
 
-      // paused_at null = conversa antiga pausada antes do campo existir.
-      // Tratar como "pausa infinita" para garantir reativação imediata.
       const pausedFor = conversation.paused_at
         ? Date.now() - new Date(conversation.paused_at).getTime()
-        : Infinity;
-      const isTakeoverExpired =
-        TAKEOVER_REASONS.has(conversation.paused_reason || '') &&
-        pausedFor >= TAKEOVER_TIMEOUT_MS;
-      const isSoftExpired =
-        SOFT_PAUSE_REASONS.has(conversation.paused_reason || '') &&
-        pausedFor >= SOFT_TIMEOUT_MS;
+        : Number.POSITIVE_INFINITY;
+      const reason = conversation.paused_reason || '';
 
-      if (isTakeoverExpired || isSoftExpired) {
-        const oldReason = conversation.paused_reason;
+      let ttlMs: number;
+      let bucket: 'takeover' | 'soft' | 'legacy';
+      if (TAKEOVER_REASONS.has(reason)) {
+        ttlMs = TAKEOVER_TIMEOUT_MS;
+        bucket = 'takeover';
+      } else if (SOFT_PAUSE_REASONS.has(reason)) {
+        ttlMs = SOFT_TIMEOUT_MS;
+        bucket = 'soft';
+      } else {
+        // Reason NULL, claude_*, ou qualquer kind desconhecido.
+        ttlMs = LEGACY_TIMEOUT_MS;
+        bucket = 'legacy';
+      }
+
+      const expired = pausedFor >= ttlMs;
+
+      if (expired) {
+        const oldReason = reason || '(null)';
         await this.supabase.client
           .from('ai_conversations')
           .update({
@@ -364,14 +385,13 @@ export class AiChatService {
         conversation.paused_reason = null;
         conversation.paused_at = null;
         this.logger.log(
-          `Conversation ${conversation.id} auto-reactivated on customer return (was ${oldReason} for ${Math.round(pausedFor / 60000)}min)`,
+          `Conversation ${conversation.id} auto-reactivated on customer return (bucket=${bucket}, was "${oldReason}" for ${Math.round(pausedFor / 60000)}min, ttl=${Math.round(ttlMs / 60000)}min)`,
         );
         // Deixa o flow continuar normal — a IA vai responder essa mensagem.
       } else {
-        // Pausa ainda ativa — Igor está no atendimento recente. Mensagem
-        // do cliente já foi salva acima e vai aparecer no painel.
+        // Pausa ainda dentro do TTL do bucket — Igor no atendimento recente.
         this.logger.log(
-          `Conversation ${conversation.id} paused (reason: ${conversation.paused_reason || 'unknown'}, paused for ${Math.round(pausedFor / 60000)}min) — message persisted but no AI reply.`,
+          `Conversation ${conversation.id} still paused (bucket=${bucket}, reason="${reason || 'null'}", paused_at=${conversation.paused_at || 'null'}, for ${Math.round(pausedFor / 60000)}min, ttl=${Math.round(ttlMs / 60000)}min) — message persisted but no AI reply.`,
         );
         return { text: '', paused: true };
       }
