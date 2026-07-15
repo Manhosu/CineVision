@@ -31,7 +31,7 @@ const conditionalControllers = isTypeOrmEnabled() ? [AuthController, WebhooksCon
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') || 'cine-vision-secret-key',
+        secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
           // Igor (14/05): 15m era curto demais — uploads de filme levam
           // 30-60min e funcionário fica 8h+ trabalhando. JWT expirando no

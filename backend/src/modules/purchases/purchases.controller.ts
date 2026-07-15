@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -133,12 +134,27 @@ export class PurchasesController {
     );
   }
 
+  // Eduardo (15/07): ADICIONADO ownership check nas 3 rotas /user/:userId*.
+  // ANTES qualquer authed user chamava com userId de outro cliente e
+  // recebia lista + access_token de streaming (JWT 24h). IDOR clássico
+  // + vazamento de credencial que dava acesso ao vídeo alheio.
+  // Agora: se userId != user.sub e user não é admin/employee → 403.
+  private assertUserOwnership(userId: string, user: any): void {
+    if (!user?.sub) throw new ForbiddenException();
+    if (userId === user.sub) return;
+    const role = String(user.role || '').toLowerCase();
+    if (role === 'admin' || role === 'master' || role === 'employee') return;
+    throw new ForbiddenException('Cannot access another user purchases');
+  }
+
   @Get('user/:userId/content')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user purchased content list' })
   @ApiResponse({ status: 200, description: 'User content list retrieved successfully' })
-  async getUserContent(@Param('userId') userId: string) {
+  @ApiResponse({ status: 403, description: 'Cannot access another user purchases' })
+  async getUserContent(@Param('userId') userId: string, @GetUser() user: any) {
+    this.assertUserOwnership(userId, user);
     return this.purchasesService.findUserContentList(userId);
   }
 
@@ -147,7 +163,9 @@ export class PurchasesController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get user purchase history' })
   @ApiResponse({ status: 200, description: 'User purchases retrieved successfully' })
-  async getUserPurchaseHistory(@Param('userId') userId: string) {
+  @ApiResponse({ status: 403, description: 'Cannot access another user purchases' })
+  async getUserPurchaseHistory(@Param('userId') userId: string, @GetUser() user: any) {
+    this.assertUserOwnership(userId, user);
     return this.purchasesService.findByUserId(userId);
   }
 
@@ -156,7 +174,9 @@ export class PurchasesController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get purchase history grouped by order' })
   @ApiResponse({ status: 200, description: 'Grouped purchase history retrieved successfully' })
-  async getUserPurchaseHistoryGrouped(@Param('userId') userId: string) {
+  @ApiResponse({ status: 403, description: 'Cannot access another user purchases' })
+  async getUserPurchaseHistoryGrouped(@Param('userId') userId: string, @GetUser() user: any) {
+    this.assertUserOwnership(userId, user);
     return this.purchasesService.findGroupedByOrder(userId);
   }
 
@@ -176,23 +196,45 @@ export class PurchasesController {
     return { isOwned };
   }
 
+  // Eduardo (15/07): ADICIONADO JwtAuthGuard + ownership check.
+  // ANTES completamente público — telegramId é numérico e enumerável
+  // (9-10 dígitos). Attacker fazia curl /purchases/telegram/<qualquer>
+  // e recebia purchases + access_token (JWT streaming 24h) do dono.
+  // Agora: exige auth E o telegram_id do JWT bate com o param
+  // (ou role admin/employee).
   @Get('telegram/:telegramId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({
-    summary: 'Get purchases by Telegram ID',
-    description: 'Retrieve all purchases made by a specific Telegram user. For bot use.',
+    summary: 'Get purchases by Telegram ID (owner-only)',
+    description: 'Retrieve all purchases made by a specific Telegram user. Requires auth + ownership match.',
   })
   @ApiResponse({ status: 200, description: 'User purchases retrieved successfully' })
-  async getPurchasesByTelegramId(@Param('telegramId') telegramId: string) {
+  @ApiResponse({ status: 403, description: 'Cannot access another Telegram user purchases' })
+  async getPurchasesByTelegramId(@Param('telegramId') telegramId: string, @GetUser() user: any) {
+    const role = String(user?.role || '').toLowerCase();
+    const isAdmin = role === 'admin' || role === 'master' || role === 'employee';
+    if (!isAdmin && String(user?.telegram_id || '') !== String(telegramId)) {
+      throw new ForbiddenException('Cannot access another Telegram user purchases');
+    }
     return this.purchasesService.findByTelegramId(telegramId);
   }
 
+  // Eduardo (15/07): busca a purchase primeiro pra checar ownership.
+  // ANTES qualquer authed user acessava purchase pelo id (UUID) — devolvia
+  // dados sensíveis (access_token) de compra alheia.
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get purchase by ID' })
+  @ApiOperation({ summary: 'Get purchase by ID (owner-only)' })
   @ApiResponse({ status: 200, description: 'Purchase retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Not your purchase' })
   @ApiResponse({ status: 404, description: 'Purchase not found' })
-  async getPurchase(@Param('id') id: string) {
-    return this.purchasesService.findById(id);
+  async getPurchase(@Param('id') id: string, @GetUser() user: any) {
+    const purchase = await this.purchasesService.findById(id);
+    if (purchase && (purchase as any).user_id) {
+      this.assertUserOwnership((purchase as any).user_id, user);
+    }
+    return purchase;
   }
 }

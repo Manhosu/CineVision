@@ -184,10 +184,20 @@ export class OasyfyService implements PixProvider {
   }
 
   /**
-   * Verify webhook token directly
+   * Verify webhook token directly.
+   * Eduardo (15/07): usa timingSafeEqual pra evitar timing attack + rejeita
+   * token vazio explicitamente (antes `'' === ''` retornava true se a env
+   * OASYFY_WEBHOOK_TOKEN não estivesse setada). Latente hoje (env está setada
+   * em prod) mas defesa em profundidade pra staging/preview.
    */
   verifyWebhookToken(token: string): boolean {
-    return token === this.webhookToken;
+    if (!token || typeof token !== 'string') return false;
+    if (!this.webhookToken) return false;
+    const a = Buffer.from(token);
+    const b = Buffer.from(this.webhookToken);
+    if (a.length !== b.length) return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('crypto').timingSafeEqual(a, b);
   }
 
   /**

@@ -175,27 +175,12 @@ export class ContentController {
     return this.contentService.findSeriesEpisodes(seriesId, season ? Number(season) : undefined);
   }
 
-  @Delete('movies/all')
-  @ApiOperation({
-    summary: 'Delete all movies',
-    description: 'Removes all movies from the database (admin only)'
-  })
-  @ApiResponse({ status: 200, description: 'All movies deleted successfully' })
-  @ApiResponse({ status: 500, description: 'Error deleting movies' })
-  async deleteAllMovies() {
-    return this.contentService.deleteAllMovies();
-  }
-
-  @Delete('all')
-  @ApiOperation({
-    summary: 'Delete all content',
-    description: 'Removes all content (movies, series, etc.) from the database (admin only)'
-  })
-  @ApiResponse({ status: 200, description: 'All content deleted successfully' })
-  @ApiResponse({ status: 500, description: 'Error deleting content' })
-  async deleteAllContent() {
-    return this.contentService.deleteAllContent();
-  }
+  // Eduardo (15/07): REMOVIDOS os endpoints DELETE /movies/all e /all.
+  // Estavam sem @UseGuards nem @Roles — 1 curl anônimo zerava o catálogo
+  // inteiro (`.from('content').delete()` em massa). Se algum dia precisar
+  // de reset admin, criar em AdminController com JwtAuthGuard + RolesGuard(ADMIN)
+  // + confirmação por senha. Métodos deleteAllMovies/deleteAllContent no
+  // service continuam existindo mas não têm mais caller.
 
   @Get('people/:id')
   @ApiOperation({ summary: 'Get person (actor/director) with their content' })

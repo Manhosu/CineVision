@@ -7,7 +7,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   private readonly logger = new Logger(JwtStrategy.name);
 
   constructor() {
-    const secret = process.env.JWT_SECRET || 'cine-vision-secret-key';
+    const secret = process.env.JWT_SECRET;
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,

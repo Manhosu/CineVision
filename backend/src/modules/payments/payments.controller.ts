@@ -9,9 +9,14 @@ import {
   HttpStatus,
   Headers,
   RawBody,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { PaymentsService } from './payments.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '../users/entities/user.entity';
 import {
   CreatePaymentDto,
   CreatePaymentResponseDto,
@@ -125,13 +130,22 @@ export class PaymentsController {
     return { message: 'Legacy card payment endpoint. Use POST /payments/create instead.' };
   }
 
+  // Eduardo (15/07): adicionado JwtAuthGuard + RolesGuard(ADMIN). ANTES
+  // estava público — attacker que enumerava provider_payment_id (cs_xxx /
+  // pi_xxx) executava refund arbitrário via Stripe + revogava acesso do
+  // cliente (access_expires_at=now). Só admin pode disparar refund agora.
   @Post('refund/:provider_payment_id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Refund payment',
-    description: 'Processes a refund for a completed payment'
+    summary: 'Refund payment (admin only)',
+    description: 'Processes a refund for a completed payment. Requires admin role.'
   })
   @ApiResponse({ status: 200, description: 'Refund processed successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden — admin role required' })
   @ApiResponse({ status: 404, description: 'Payment not found' })
   @ApiResponse({ status: 400, description: 'Payment cannot be refunded' })
   async refundPayment(

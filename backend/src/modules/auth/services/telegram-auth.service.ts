@@ -211,7 +211,7 @@ export class TelegramAuthService {
     const access_token = this.jwtService.sign(payload);
 
     const refresh_token = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'cine-vision-refresh-secret-key',
+      secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
 

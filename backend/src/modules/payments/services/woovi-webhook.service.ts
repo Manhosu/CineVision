@@ -342,10 +342,14 @@ export class WooviWebhookService {
   verifyWebhook(signature: string | undefined, payload: string): boolean {
     const webhookSecret = this.configService.get('WOOVI_WEBHOOK_SECRET');
 
-    // If no secret configured, skip verification (dev mode)
+    // Eduardo (15/07): fail-secure. ANTES retornava `true` (bypass) quando
+    // secret ausente — attacker forjava POST /webhooks/woovi com correlationID
+    // legítimo e marcava purchase como paga sem transferir 1 centavo.
+    // Agora rejeita explicitamente. Se prod passa a usar Woovi (PIX_PROVIDER=woovi),
+    // setar WOOVI_WEBHOOK_SECRET no Render antes de deployar essa linha.
     if (!webhookSecret) {
-      this.logger.log('Webhook secret not configured, skipping signature verification');
-      return true;
+      this.logger.error('WOOVI_WEBHOOK_SECRET not configured — REJECTING all webhooks (fail-secure)');
+      return false;
     }
 
     if (!signature) {

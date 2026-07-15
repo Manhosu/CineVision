@@ -356,13 +356,17 @@ export class PurchasesSupabaseService {
       return [];
     }
 
+    // Eduardo (15/07): REMOVIDO access_token do map de listagem.
+    // Antes o token JWT de streaming (24h) vazava em qualquer listagem
+    // — combinado com o antigo /purchases/telegram/:id público, dava
+    // acesso ao filme alheio. Access_token só deve ser gerado sob
+    // demanda em rota dedicada com ownership check.
     return (data || []).map(purchase => ({
       id: purchase.id,
       amount_cents: purchase.amount_cents,
       currency: purchase.currency,
       status: purchase.status,
       created_at: purchase.created_at,
-      access_token: purchase.access_token,
       access_expires_at: purchase.access_expires_at,
       content: {
         id: purchase.content.id,

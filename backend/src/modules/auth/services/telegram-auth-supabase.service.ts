@@ -232,14 +232,14 @@ export class TelegramAuthSupabaseService {
     };
 
     const access_token = this.jwtService.sign(payload, {
-      secret: process.env.JWT_SECRET || 'cine-vision-secret-key',
+      secret: process.env.JWT_SECRET,
       // Igor (14/05): consistente com auth.module — 24h pra evitar
       // perda de sessão em uploads longos.
       expiresIn: process.env.JWT_EXPIRES_IN || '24h',
     });
 
     const refresh_token = this.jwtService.sign(payload, {
-      secret: process.env.JWT_REFRESH_SECRET || 'cine-vision-refresh-secret-key',
+      secret: process.env.JWT_REFRESH_SECRET,
       expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
     });
 
