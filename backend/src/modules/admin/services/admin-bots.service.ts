@@ -317,7 +317,7 @@ export class AdminBotsService {
   async healthcheckDeep(id: string) {
     const { data: bot } = await this.supabaseService.client
       .from('telegram_bots')
-      .select('id, username, token, consecutive_getme_failures, auto_quarantined_at, roles, is_promotional')
+      .select('id, username, token, consecutive_getme_failures, auto_quarantined_at, roles, is_promotional, users_count, last_update_received_at')
       .eq('id', id)
       .single();
     if (!bot) throw new NotFoundException(`Bot ${id} not found`);
@@ -332,8 +332,12 @@ export class AdminBotsService {
     let webhookMismatch = false;
     let reportedUrl: string | null = null;
     let error: string | null = null;
-    // Eduardo (16/07): sinais adicionais do getWebhookInfo que denunciam
-    // bot morto mesmo com getMe:ok (Telegram acumula updates sem entregar).
+    // Eduardo (16/07): distinguir TIMEOUT/network (intermitente, NÃO conta
+    // como bot morto — só reduz confiabilidade da medição) de resposta
+    // HTTP definitiva do Telegram (401/403 = bot banido/token revogado).
+    // ANTES qualquer catch marcava getMe como falha → 3 blips seguidos
+    // quarantinou o CineVisionVip mesmo saudável. Bug corrigido.
+    let getMeNetworkError = false;
     let webhookInfo: {
       pending_update_count?: number;
       last_error_date?: number;
@@ -346,7 +350,14 @@ export class AdminBotsService {
       getMeOk = !!meResp.data?.ok;
       if (!getMeOk) error = meResp.data?.description || 'getMe returned not ok';
     } catch (err: any) {
-      error = err?.response?.data?.description || err.message;
+      // Se veio response do Telegram (4xx/5xx), é sinal definitivo de bot morto.
+      // Se não veio (timeout, ECONNRESET, ENOTFOUND, etc), é rede — não punir.
+      if (err?.response?.data) {
+        error = err.response.data.description || `HTTP ${err.response.status}`;
+      } else {
+        error = err.message;
+        getMeNetworkError = true;
+      }
     }
 
     // 2) getWebhookInfo — valida URL configurada + coleta sinais de saúde
@@ -372,25 +383,37 @@ export class AdminBotsService {
       }
     }
 
-    // Eduardo (16/07): detecta "morto de verdade" via os 4 sinais.
-    // Não é só getMe — Telegram valida token globalmente, então bot bloqueado
-    // no BR retorna getMe:ok. O que realmente denuncia é o webhook falhando
-    // ou acumulando updates.
+    // Eduardo (16/07): detecta "morto de verdade" — 5 sinais.
+    // NÃO conta timeout/network error como morto (intermitência).
+    // Novo sinal (Eduardo 16/07 revisão): last_update_received_at velho
+    // em bot com histórico de tráfego (users_count > 50) = shadow block.
+    // Foi o cenário CineVisionTV_bot: 1320 users grudados, getMe:ok,
+    // webhook URL correta, ZERO updates recebidos.
     const errorDateAgeSec = webhookInfo?.last_error_date
       ? nowSec - webhookInfo.last_error_date
       : Number.POSITIVE_INFINITY;
+    const hoursSinceLastUpdate = bot.last_update_received_at
+      ? (Date.now() - new Date(bot.last_update_received_at).getTime()) / (60 * 60 * 1000)
+      : Number.POSITIVE_INFINITY;
+    // Só considera "silencioso" se bot já teve tempo pra registrar tráfego
+    // desde que a coluna foi introduzida (48h) E tem base grande de users.
+    const silenciosoLong = (bot.users_count || 0) > 50 && hoursSinceLastUpdate > 48;
+
     const isTrulyDead =
-      !getMeOk ||
+      // Resposta definitiva do Telegram (não é network error)
+      (!getMeOk && !getMeNetworkError) ||
       webhookMismatch ||
       (errorDateAgeSec < 600) || // erro no webhook < 10min
-      ((webhookInfo?.pending_update_count ?? 0) > 100);
+      ((webhookInfo?.pending_update_count ?? 0) > 100) ||
+      silenciosoLong;
 
     let failureReason: string | null = null;
     if (isTrulyDead) {
-      if (!getMeOk) failureReason = `getMe fail: ${error || 'unknown'}`;
+      if (!getMeOk && !getMeNetworkError) failureReason = `getMe respondeu: ${error || 'unknown'}`;
       else if (webhookMismatch) failureReason = `webhook URL mismatch (reported: ${reportedUrl})`;
       else if (errorDateAgeSec < 600) failureReason = `webhook error ${Math.round(errorDateAgeSec / 60)}min ago: ${webhookInfo?.last_error_message || 'unknown'}`;
       else if ((webhookInfo?.pending_update_count ?? 0) > 100) failureReason = `${webhookInfo?.pending_update_count} pending updates (Telegram não conseguiu entregar)`;
+      else if (silenciosoLong) failureReason = `${bot.users_count} users grudados mas ZERO updates há ${Math.round(hoursSinceLastUpdate)}h (shadow block regional)`;
     }
 
     // 3) Grava resultado no banco
@@ -425,9 +448,28 @@ export class AdminBotsService {
         patch.auto_quarantined_at = nowIso;
         shouldNotify = true;
       }
-    } else if ((bot.consecutive_getme_failures || 0) > 0) {
-      // Reset em qualquer success — bot se recuperou.
+    } else if (getMeNetworkError) {
+      // Blip de rede — não incrementa contador, não reseta. Mantém como estava.
+      this.logger.debug?.(`[healthcheck] ${bot.username} network blip ignored`);
+    } else if ((bot.consecutive_getme_failures || 0) > 0 || bot.auto_quarantined_at) {
+      // Eduardo (16/07): AUTO-RECOVERY. Bot voltou a responder saudável.
+      // Reseta contador de falhas E se estava quarantined, restaura peso
+      // + role attendance (assume default weight=1). Anti-flapping: só
+      // sai da quarantine se ficou pelo menos 15min quarantined
+      // (evita loop de quarantine/recover em bot borderline).
       patch.consecutive_getme_failures = 0;
+      if (bot.auto_quarantined_at) {
+        const quarAgeMs = Date.now() - new Date(bot.auto_quarantined_at).getTime();
+        if (quarAgeMs > 15 * 60 * 1000) {
+          patch.auto_quarantined_at = null;
+          patch.attendance_weight = 1; // default; admin ajusta se quiser mais
+          const currentRoles = Array.isArray(bot.roles) ? bot.roles : [];
+          if (!currentRoles.includes('attendance')) {
+            patch.roles = [...currentRoles, 'attendance'];
+          }
+          this.logger.log(`[auto-recovery] ${bot.username} saiu da quarentena (${Math.round(quarAgeMs / 60000)}min quarantined)`);
+        }
+      }
     }
 
     await this.supabaseService.client
