@@ -391,12 +391,16 @@ export class AdminContentSimpleService {
       // pra não sobrescrever o DEFAULT da coluna com NULL explícito.
       logo_scale: data.logo_scale ?? 100,
       logo_scale_mobile: data.logo_scale_mobile ?? 100,
-      // Igor (15/07): 4 slots. Hero (_hero, +_mobile) é NULLable — se
-      // NULL, runtime do HeroBanner faz fallback pra colunas details.
-      logo_position_hero: data.logo_position_hero ?? null,
-      logo_position_hero_mobile: data.logo_position_hero_mobile ?? null,
-      logo_scale_hero: data.logo_scale_hero ?? null,
-      logo_scale_hero_mobile: data.logo_scale_hero_mobile ?? null,
+      // Eduardo (15/07 hotfix): spread condicional dos 4 slots hero.
+      // Se a migration 20260715100000_logo_hero_slots.sql ainda não rodou
+      // em prod, o INSERT falha com "column does not exist" quando a chave
+      // é enviada (mesmo como null). Só envia se admin passou explicitamente
+      // (ex: edit page com valores ajustados no LogoEditor). Create padrão
+      // não passa esses campos, então INSERT funciona sem a migration.
+      ...(data.logo_position_hero !== undefined && { logo_position_hero: data.logo_position_hero }),
+      ...(data.logo_position_hero_mobile !== undefined && { logo_position_hero_mobile: data.logo_position_hero_mobile }),
+      ...(data.logo_scale_hero !== undefined && { logo_scale_hero: data.logo_scale_hero }),
+      ...(data.logo_scale_hero_mobile !== undefined && { logo_scale_hero_mobile: data.logo_scale_hero_mobile }),
       trailer_url: data.trailer_url || null,
       content_type: data.content_type || data.type || 'movie', // Mapeia para coluna content_type
       status: initialStatus,
@@ -837,8 +841,30 @@ export class AdminContentSimpleService {
       'promotional_bot_id',
     ];
 
+    // Eduardo (15/07 hotfix): colunas hero_* podem não existir no banco
+    // ainda (migration 20260715100000_logo_hero_slots.sql não rodada).
+    // Frontend edit page envia os 4 campos incondicionalmente no PATCH body.
+    // Se coluna não existe, UPDATE quebra com "column does not exist" → 500.
+    // Filtra esses 4 campos do updateData ANTES do loop até a migration
+    // rodar (checagem barata: se coluna existe, o SET aceita null; se não,
+    // o cliente vê "Internal server error" ao editar QUALQUER campo).
+    // TODO: remover essa proteção depois que migration estiver aplicada.
+    const HERO_LOGO_FIELDS = new Set([
+      'logo_position_hero',
+      'logo_position_hero_mobile',
+      'logo_scale_hero',
+      'logo_scale_hero_mobile',
+    ]);
+
     for (const field of allowedFields) {
       if (updateData[field] !== undefined) {
+        // Skip hero fields se valor é null E veio pelo edit page (que
+        // sempre envia null quando admin não editou o LogoEditor).
+        // Se admin passar valor real, deixa passar — aí quebra se migration
+        // ainda não rodou, mas admin sabe que ajustou o LogoEditor.
+        if (HERO_LOGO_FIELDS.has(field) && updateData[field] === null) {
+          continue;
+        }
         updatePayload[field] = updateData[field];
       }
     }
