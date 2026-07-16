@@ -392,12 +392,19 @@ export class AdminBotsService {
     const errorDateAgeSec = webhookInfo?.last_error_date
       ? nowSec - webhookInfo.last_error_date
       : Number.POSITIVE_INFINITY;
+    // Eduardo (16/07 v3): se last_update_received_at é NULL, NÃO sabemos.
+    // A coluna foi criada agora — bots antigos têm NULL até serem stampados
+    // pelo próximo update recebido. Falha do v2 foi tratar NULL como Infinity
+    // → marcava TUDO como "shadow block" no primeiro cron pós-deploy.
+    // Regra correta: só considera silenciosoLong se a stamp EXISTE E é velha.
+    // Bots realmente mortos ficam sem stamp mesmo depois de horas — pega
+    // eles via consecutive failures + pending_count + webhook error.
     const hoursSinceLastUpdate = bot.last_update_received_at
       ? (Date.now() - new Date(bot.last_update_received_at).getTime()) / (60 * 60 * 1000)
-      : Number.POSITIVE_INFINITY;
-    // Só considera "silencioso" se bot já teve tempo pra registrar tráfego
-    // desde que a coluna foi introduzida (48h) E tem base grande de users.
-    const silenciosoLong = (bot.users_count || 0) > 50 && hoursSinceLastUpdate > 48;
+      : null;
+    const silenciosoLong = (bot.users_count || 0) > 50
+      && hoursSinceLastUpdate !== null
+      && hoursSinceLastUpdate > 48;
 
     const isTrulyDead =
       // Resposta definitiva do Telegram (não é network error)
@@ -413,7 +420,7 @@ export class AdminBotsService {
       else if (webhookMismatch) failureReason = `webhook URL mismatch (reported: ${reportedUrl})`;
       else if (errorDateAgeSec < 600) failureReason = `webhook error ${Math.round(errorDateAgeSec / 60)}min ago: ${webhookInfo?.last_error_message || 'unknown'}`;
       else if ((webhookInfo?.pending_update_count ?? 0) > 100) failureReason = `${webhookInfo?.pending_update_count} pending updates (Telegram não conseguiu entregar)`;
-      else if (silenciosoLong) failureReason = `${bot.users_count} users grudados mas ZERO updates há ${Math.round(hoursSinceLastUpdate)}h (shadow block regional)`;
+      else if (silenciosoLong) failureReason = `${bot.users_count} users grudados mas ZERO updates há ${Math.round(hoursSinceLastUpdate!)}h (shadow block regional)`;
     }
 
     // 3) Grava resultado no banco
