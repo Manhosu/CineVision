@@ -459,23 +459,35 @@ export class AdminBotsService {
       // Blip de rede — não incrementa contador, não reseta. Mantém como estava.
       this.logger.debug?.(`[healthcheck] ${bot.username} network blip ignored`);
     } else if ((bot.consecutive_getme_failures || 0) > 0 || bot.auto_quarantined_at) {
-      // Eduardo (16/07): AUTO-RECOVERY. Bot voltou a responder saudável.
-      // Reseta contador de falhas E se estava quarantined, restaura peso
-      // + role attendance (assume default weight=1). Anti-flapping: só
-      // sai da quarantine se ficou pelo menos 15min quarantined
-      // (evita loop de quarantine/recover em bot borderline).
-      patch.consecutive_getme_failures = 0;
-      if (bot.auto_quarantined_at) {
-        const quarAgeMs = Date.now() - new Date(bot.auto_quarantined_at).getTime();
-        if (quarAgeMs > 15 * 60 * 1000) {
-          patch.auto_quarantined_at = null;
-          patch.attendance_weight = 1; // default; admin ajusta se quiser mais
-          const currentRoles = Array.isArray(bot.roles) ? bot.roles : [];
-          if (!currentRoles.includes('attendance')) {
-            patch.roles = [...currentRoles, 'attendance'];
+      // Eduardo (16/07 v4): AUTO-RECOVERY MAIS ESTRITO. Antes bastava
+      // getMe responder ok pra sair da quarantine. Bug real: bot com
+      // shadow block regional (@CineVisionTV_bot com 1320 users grudados
+      // e ZERO tráfego) SEMPRE respondia getMe:ok — auto-recovery
+      // restaurava peso e cliente caía nele. Agora só reseta se TODOS
+      // os sinais estão saudáveis (não silenciosoLong, sem pending
+      // significativo, sem erro webhook recente). Se sinal ainda tá
+      // ruim, mantém quarantined mesmo sem incrementar contador.
+      const otherSignalsBad =
+        silenciosoLong ||
+        ((webhookInfo?.pending_update_count ?? 0) > 50) ||
+        (errorDateAgeSec < 30 * 60); // erro webhook <30min ainda é suspeito
+
+      if (!otherSignalsBad) {
+        patch.consecutive_getme_failures = 0;
+        if (bot.auto_quarantined_at) {
+          const quarAgeMs = Date.now() - new Date(bot.auto_quarantined_at).getTime();
+          if (quarAgeMs > 15 * 60 * 1000) {
+            patch.auto_quarantined_at = null;
+            patch.attendance_weight = 1;
+            const currentRoles = Array.isArray(bot.roles) ? bot.roles : [];
+            if (!currentRoles.includes('attendance')) {
+              patch.roles = [...currentRoles, 'attendance'];
+            }
+            this.logger.log(`[auto-recovery] ${bot.username} saiu da quarentena (${Math.round(quarAgeMs / 60000)}min quarantined)`);
           }
-          this.logger.log(`[auto-recovery] ${bot.username} saiu da quarentena (${Math.round(quarAgeMs / 60000)}min quarantined)`);
         }
+      } else {
+        this.logger.log(`[auto-recovery-blocked] ${bot.username} getMe ok MAS outros sinais ruins (silencioso=${silenciosoLong}, pending=${webhookInfo?.pending_update_count ?? 0}, err_ago_sec=${Math.round(errorDateAgeSec)}) — mantém quarantined`);
       }
     }
 
