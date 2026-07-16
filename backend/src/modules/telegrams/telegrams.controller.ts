@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TelegramsService } from './telegrams.service';
 import { TelegramsEnhancedService } from './telegrams-enhanced.service';
+import { SupabaseService } from '../../config/supabase.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import {
@@ -17,9 +18,15 @@ import {
 export class TelegramsController {
   private readonly logger = new Logger(TelegramsController.name);
 
+  // Eduardo (16/07): throttle in-memory (60s por bot) pra last_update_received_at.
+  // Bot quente recebe update a cada poucos segundos; stampar toda vez sobrecarrega
+  // a tabela sem ganho (a resolução de 1min é o que precisamos pro healthcheck).
+  private lastUpdateStamp = new Map<string, number>();
+
   constructor(
     private readonly telegramsService: TelegramsService,
     private readonly telegramsEnhancedService: TelegramsEnhancedService,
+    private readonly supabase: SupabaseService,
   ) {
     this.logger.log('TelegramsController initialized');
   }
@@ -106,6 +113,24 @@ export class TelegramsController {
     @Body() webhookData: any,
     @Headers('x-telegram-bot-api-secret-token') signature?: string,
   ) {
+    // Eduardo (16/07): fire-and-forget stamp de last_update_received_at.
+    // Prova viva de que o Telegram tá entregando updates pra esse bot.
+    // Throttle 60s por bot pra não sobrecarregar a tabela (bot quente
+    // recebe update a cada 1-2s). Se erro na stamp, ignora — não pode
+    // atrasar a resposta ao Telegram (que exige <=10s).
+    const now = Date.now();
+    const last = this.lastUpdateStamp.get(botId) || 0;
+    if (now - last > 60_000) {
+      this.lastUpdateStamp.set(botId, now);
+      this.supabase.client
+        .from('telegram_bots')
+        .update({ last_update_received_at: new Date().toISOString() })
+        .eq('id', botId)
+        .then(
+          () => undefined,
+          (err) => this.logger.warn(`stamp last_update failed for bot ${botId}: ${err?.message || err}`),
+        );
+    }
     return this.telegramsEnhancedService.handleWebhook(webhookData, signature, botId);
   }
 

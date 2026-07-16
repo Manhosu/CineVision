@@ -386,14 +386,17 @@ export class TelegramsEnhancedService implements OnModuleInit {
     try {
       const { data: bots } = await this.supabase
         .from('telegram_bots')
-        .select('username, attendance_weight')
+        .select('username, attendance_weight, consecutive_getme_failures')
         .contains('roles', ['attendance'])
         .eq('status', 'active')
         // Igor (04/07): defesa em profundidade — bots promocionais nunca
         // entram na rotação de atendimento. Constraint SQL já garante isso
         // (bot promo não pode ter role attendance), mas filtro explícito
         // aqui torna a intenção do código evidente.
-        .eq('is_promotional', false);
+        .eq('is_promotional', false)
+        // Eduardo (16/07): exclui bots auto-quarantined (3+ falhas de
+        // healthcheck em sequência). Cliente que clica não cai em bot morto.
+        .lt('consecutive_getme_failures', 3);
       const pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
       if (pool.length) {
         // Sorteio ponderado: soma dos pesos → escolhe ponto aleatório.
@@ -437,11 +440,13 @@ export class TelegramsEnhancedService implements OnModuleInit {
     try {
       const { data: bots } = await this.supabase
         .from('telegram_bots')
-        .select('id, username, attendance_weight')
+        .select('id, username, attendance_weight, consecutive_getme_failures')
         .contains('roles', ['attendance'])
         .eq('status', 'active')
         // Igor (04/07): promos fora da rotação (defesa em profundidade).
         .eq('is_promotional', false)
+        // Eduardo (16/07): exclui bots auto-quarantined (3+ falhas seguidas).
+        .lt('consecutive_getme_failures', 3)
         .order('id', { ascending: true });
       let pool = (bots || []).filter((b) => (b.attendance_weight ?? 0) > 0);
       // Cenário 3: excluir bots específicos (ex: bot promo que já

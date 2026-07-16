@@ -43,7 +43,7 @@ export class AdminBotsService {
     const effectiveType = type ?? 'official';
     let query = this.supabaseService.client
       .from('telegram_bots')
-      .select('id, username, display_name, custom_display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, webhook_configured_at, webhook_url_reported, last_webhook_check_at, created_at, is_promotional, promotional_content_id, promotional_target_url, promotional_start_count, notes')
+      .select('id, username, display_name, custom_display_name, roles, status, is_default_attendance, attendance_weight, users_count, last_seen_ok_at, webhook_configured_at, webhook_url_reported, last_webhook_check_at, created_at, is_promotional, promotional_content_id, promotional_target_url, promotional_start_count, notes, consecutive_getme_failures, last_failure_at, last_failure_reason, webhook_pending_count, webhook_last_error_date, webhook_last_error_message, last_update_received_at, auto_quarantined_at')
       .order('created_at', { ascending: true });
 
     if (effectiveType === 'official') query = query.eq('is_promotional', false);
@@ -195,9 +195,32 @@ export class AdminBotsService {
         );
       }
     }
+    // Eduardo (16/07): quando admin muda status pra banned_br/disabled,
+    // aplicar cleanup (zerar peso + tirar role attendance + tirar default).
+    // Antes o bot ficava com attendance_weight>0 mesmo desativado — a
+    // query de rotação filtra por status='active' então funciona, mas
+    // esses valores stale causavam falsos-positivos em outros lugares
+    // (ex: computeBotHealth). Sanitize aqui centraliza o estado.
+    const finalPatch: any = { ...patch, updated_at: new Date().toISOString() };
+    if (patch.status && ['banned_br', 'disabled'].includes(patch.status)) {
+      finalPatch.attendance_weight = 0;
+      finalPatch.is_default_attendance = false;
+      // Preserva roles não-attendance
+      if (!patch.roles) {
+        const { data: current } = await this.supabaseService.client
+          .from('telegram_bots')
+          .select('roles')
+          .eq('id', id)
+          .maybeSingle();
+        finalPatch.roles = Array.isArray(current?.roles)
+          ? current.roles.filter((r: string) => r !== 'attendance')
+          : [];
+      }
+    }
+
     const { data, error } = await this.supabaseService.client
       .from('telegram_bots')
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update(finalPatch)
       .eq('id', id)
       .select()
       .single();
@@ -294,7 +317,7 @@ export class AdminBotsService {
   async healthcheckDeep(id: string) {
     const { data: bot } = await this.supabaseService.client
       .from('telegram_bots')
-      .select('id, username, token')
+      .select('id, username, token, consecutive_getme_failures, auto_quarantined_at, roles, is_promotional')
       .eq('id', id)
       .single();
     if (!bot) throw new NotFoundException(`Bot ${id} not found`);
@@ -303,11 +326,19 @@ export class AdminBotsService {
     const backendUrl = this.getBackendBaseUrl();
     const expectedUrl = `${backendUrl}/api/v1/telegrams/webhook/${bot.id}`;
     const nowIso = new Date().toISOString();
+    const nowSec = Math.floor(Date.now() / 1000);
     let getMeOk = false;
     let webhookOk = false;
     let webhookMismatch = false;
     let reportedUrl: string | null = null;
     let error: string | null = null;
+    // Eduardo (16/07): sinais adicionais do getWebhookInfo que denunciam
+    // bot morto mesmo com getMe:ok (Telegram acumula updates sem entregar).
+    let webhookInfo: {
+      pending_update_count?: number;
+      last_error_date?: number;
+      last_error_message?: string;
+    } | null = null;
 
     // 1) getMe — valida token
     try {
@@ -318,12 +349,18 @@ export class AdminBotsService {
       error = err?.response?.data?.description || err.message;
     }
 
-    // 2) getWebhookInfo — valida URL configurada
+    // 2) getWebhookInfo — valida URL configurada + coleta sinais de saúde
     if (getMeOk) {
       try {
         const whResp = await axios.get(`https://api.telegram.org/bot${bot.token}/getWebhookInfo`, { timeout: 5000 });
         if (whResp.data?.ok) {
-          reportedUrl = whResp.data.result?.url || '';
+          const result = whResp.data.result || {};
+          reportedUrl = result.url || '';
+          webhookInfo = {
+            pending_update_count: result.pending_update_count,
+            last_error_date: result.last_error_date,
+            last_error_message: result.last_error_message,
+          };
           if (reportedUrl && reportedUrl === expectedUrl) {
             webhookOk = true;
           } else if (reportedUrl) {
@@ -335,24 +372,139 @@ export class AdminBotsService {
       }
     }
 
-    // 3) Grava resultado no banco (fire-and-forget não bloqueia response)
+    // Eduardo (16/07): detecta "morto de verdade" via os 4 sinais.
+    // Não é só getMe — Telegram valida token globalmente, então bot bloqueado
+    // no BR retorna getMe:ok. O que realmente denuncia é o webhook falhando
+    // ou acumulando updates.
+    const errorDateAgeSec = webhookInfo?.last_error_date
+      ? nowSec - webhookInfo.last_error_date
+      : Number.POSITIVE_INFINITY;
+    const isTrulyDead =
+      !getMeOk ||
+      webhookMismatch ||
+      (errorDateAgeSec < 600) || // erro no webhook < 10min
+      ((webhookInfo?.pending_update_count ?? 0) > 100);
+
+    let failureReason: string | null = null;
+    if (isTrulyDead) {
+      if (!getMeOk) failureReason = `getMe fail: ${error || 'unknown'}`;
+      else if (webhookMismatch) failureReason = `webhook URL mismatch (reported: ${reportedUrl})`;
+      else if (errorDateAgeSec < 600) failureReason = `webhook error ${Math.round(errorDateAgeSec / 60)}min ago: ${webhookInfo?.last_error_message || 'unknown'}`;
+      else if ((webhookInfo?.pending_update_count ?? 0) > 100) failureReason = `${webhookInfo?.pending_update_count} pending updates (Telegram não conseguiu entregar)`;
+    }
+
+    // 3) Grava resultado no banco
     const patch: any = { last_webhook_check_at: nowIso };
     if (getMeOk) patch.last_seen_ok_at = nowIso;
     if (reportedUrl !== null) patch.webhook_url_reported = reportedUrl;
+    if (webhookInfo) {
+      patch.webhook_pending_count = webhookInfo.pending_update_count ?? null;
+      patch.webhook_last_error_date = webhookInfo.last_error_date
+        ? new Date(webhookInfo.last_error_date * 1000).toISOString()
+        : null;
+      patch.webhook_last_error_message = webhookInfo.last_error_message ?? null;
+    }
+
+    let shouldNotify = false;
+    if (isTrulyDead) {
+      const failures = (bot.consecutive_getme_failures || 0) + 1;
+      patch.consecutive_getme_failures = failures;
+      patch.last_failure_at = nowIso;
+      patch.last_failure_reason = failureReason;
+
+      // Auto-quarantine em 3 falhas seguidas — zera peso da rotação
+      // e tira role de atendimento. NÃO muda status pra banned_br
+      // automaticamente (deixa admin ver o rastro no painel + decidir
+      // migração WhatsApp). Só é idempotente via auto_quarantined_at.
+      if (failures >= 3 && !bot.auto_quarantined_at) {
+        patch.attendance_weight = 0;
+        patch.is_default_attendance = false;
+        patch.roles = Array.isArray(bot.roles)
+          ? bot.roles.filter((r: string) => r !== 'attendance')
+          : [];
+        patch.auto_quarantined_at = nowIso;
+        shouldNotify = true;
+      }
+    } else if ((bot.consecutive_getme_failures || 0) > 0) {
+      // Reset em qualquer success — bot se recuperou.
+      patch.consecutive_getme_failures = 0;
+    }
+
     await this.supabaseService.client
       .from('telegram_bots')
       .update(patch)
       .eq('id', bot.id);
 
     return {
-      ok: getMeOk && webhookOk,
+      ok: getMeOk && webhookOk && !isTrulyDead,
       getMe_ok: getMeOk,
       webhook_ok: webhookOk,
       webhook_mismatch: webhookMismatch,
+      is_truly_dead: isTrulyDead,
+      failure_reason: failureReason,
+      pending_update_count: webhookInfo?.pending_update_count ?? null,
+      webhook_last_error_message: webhookInfo?.last_error_message ?? null,
+      consecutive_failures: patch.consecutive_getme_failures ?? bot.consecutive_getme_failures ?? 0,
+      should_notify: shouldNotify,
+      bot_username: bot.username,
       expected_url: expectedUrl,
       reported_url: reportedUrl,
       error,
     };
+  }
+
+  /**
+   * Eduardo (16/07): notifica o admin via bot MASTER quando bot cai.
+   * Anti-spam: só envia se `dead_alert_sent_at` > 6h atrás.
+   * Chamado pelo cron pingOfficialBotsDeep quando healthcheckDeep marca
+   * shouldNotify=true (auto-quarantine acabou de rodar).
+   */
+  async notifyBotDead(botId: string, reason: string): Promise<void> {
+    if (!this.telegrams) return;
+    const { data: bot } = await this.supabaseService.client
+      .from('telegram_bots')
+      .select('id, username, custom_display_name, dead_alert_sent_at, webhook_pending_count, webhook_last_error_message, users_count')
+      .eq('id', botId)
+      .single();
+    if (!bot) return;
+
+    // Anti-spam: 6h desde último alerta
+    if (bot.dead_alert_sent_at) {
+      const ageMs = Date.now() - new Date(bot.dead_alert_sent_at).getTime();
+      if (ageMs < 6 * 60 * 60 * 1000) return;
+    }
+
+    const adminChatId = this.configService.get<string>('ADMIN_TELEGRAM_CHAT_ID');
+    if (!adminChatId) {
+      this.logger.warn(`[notifyBotDead] ADMIN_TELEGRAM_CHAT_ID not set — skipping notify for ${bot.username}`);
+      return;
+    }
+
+    const display = bot.custom_display_name || `@${bot.username}`;
+    const pending = bot.webhook_pending_count != null ? `\n📥 ${bot.webhook_pending_count} mensagens acumuladas` : '';
+    const lastErr = bot.webhook_last_error_message ? `\n⚠️ Último erro: ${bot.webhook_last_error_message}` : '';
+    const users = bot.users_count ? `\n👥 ${bot.users_count} usuários grudados nele` : '';
+
+    const text =
+      `🚨 *Bot offline detectado*\n\n` +
+      `${display}\n` +
+      `📛 ${reason}${pending}${lastErr}${users}\n\n` +
+      `✅ Já tirei ele da rotação de atendimento automaticamente.\n` +
+      `👉 Abra /admin/bots e clique 🚨 no card dele pra disparar migração WhatsApp dos usuários que estavam nele.`;
+
+    try {
+      await this.telegrams.sendMessage(parseInt(adminChatId, 10), text, {
+        admin_notify: true, // força bot master (não usa ALS)
+        parse_mode: 'Markdown',
+      });
+      await this.supabaseService.client
+        .from('telegram_bots')
+        .update({ dead_alert_sent_at: new Date().toISOString() })
+        .eq('id', botId);
+      this.logger.log(`[notifyBotDead] alerta enviado pro admin sobre ${bot.username}: ${reason}`);
+    } catch (err: any) {
+      this.logger.warn(`[notifyBotDead] falhou pra ${bot.username}: ${err.message}`);
+    }
   }
 
   /**

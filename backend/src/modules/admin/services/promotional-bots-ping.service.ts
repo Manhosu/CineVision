@@ -94,11 +94,24 @@ export class PromotionalBotsPingService {
   async pingOfficialBotsDeep() {
     try {
       const result = await this.adminBots.healthcheckAll(false);
-      const bad = (result.results || []).filter((r: any) => !r.ok);
+      const results: any[] = result.results || [];
+      const bad = results.filter((r: any) => !r.ok);
       if (bad.length) {
-        this.logger.warn(`[official-ping] ${bad.length} bot(s) com problema: ${JSON.stringify(bad.map((b: any) => ({ u: b.username, m: b.webhook_mismatch, e: b.error })))}`);
+        this.logger.warn(`[official-ping] ${bad.length} bot(s) com problema: ${JSON.stringify(bad.map((b: any) => ({ u: b.username, m: b.webhook_mismatch, dead: b.is_truly_dead, reason: b.failure_reason, pending: b.pending_update_count })))}`);
       } else {
-        this.logger.debug?.(`[official-ping] ${result.results?.length ?? 0} bots ok`);
+        this.logger.debug?.(`[official-ping] ${results.length} bots ok`);
+      }
+
+      // Eduardo (16/07): dispara alerta pro admin quando healthcheckDeep
+      // acabou de rodar auto-quarantine (should_notify=true). Anti-spam
+      // (6h) tá dentro do notifyBotDead.
+      const toNotify = results.filter((r: any) => r.should_notify);
+      for (const r of toNotify) {
+        try {
+          await this.adminBots.notifyBotDead(r.id, r.failure_reason || 'bot offline');
+        } catch (err: any) {
+          this.logger.warn(`notifyBotDead failed for ${r.bot_username}: ${err.message}`);
+        }
       }
     } catch (err: any) {
       this.logger.error(`pingOfficialBotsDeep threw: ${err.message}`);

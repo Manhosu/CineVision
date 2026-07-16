@@ -22,6 +22,15 @@ interface Bot {
   webhook_configured_at?: string | null;
   webhook_url_reported?: string | null;
   last_webhook_check_at?: string | null;
+  // Eduardo (16/07): sinais reais de saúde vindos do Telegram
+  consecutive_getme_failures?: number;
+  last_failure_at?: string | null;
+  last_failure_reason?: string | null;
+  webhook_pending_count?: number | null;
+  webhook_last_error_date?: string | null;
+  webhook_last_error_message?: string | null;
+  last_update_received_at?: string | null;
+  auto_quarantined_at?: string | null;
   created_at: string;
   is_promotional?: boolean;
   promotional_content_id?: string | null;
@@ -30,20 +39,35 @@ interface Bot {
   notes?: string | null;
 }
 
-// Igor (13/07): saúde derivada pra render do indicador visual verde/amarelo/vermelho.
-// green = webhook_configured_at existe E last_seen_ok_at < 15min E sem mismatch
-// yellow = last_seen_ok_at < 30min mas webhook nunca configurado ou mismatch
-// red = last_seen_ok_at > 30min OU mismatch confirmado
+// Eduardo (16/07): computeBotHealth agora usa sinais REAIS que o Telegram
+// dá via getWebhookInfo (pending_update_count, last_error_date, last_error_message)
+// + consecutive_getme_failures + auto_quarantined_at. Antes só olhava
+// last_seen_ok_at e mismatch — bot bloqueado só no BR (getMe global retorna ok)
+// ficava verde eternamente. Agora vira vermelho na hora que Telegram acumula
+// updates sem entregar.
 function computeBotHealth(bot: Bot, expectedBase: string): { level: 'green' | 'yellow' | 'red' | 'unknown'; label: string } {
-  const lastOk = bot.last_seen_ok_at ? Date.now() - new Date(bot.last_seen_ok_at).getTime() : Infinity;
+  const now = Date.now();
+  const lastOk = bot.last_seen_ok_at ? now - new Date(bot.last_seen_ok_at).getTime() : Infinity;
+  const errDateAgo = bot.webhook_last_error_date ? now - new Date(bot.webhook_last_error_date).getTime() : Infinity;
   const expectedUrl = `${expectedBase}/api/v1/telegrams/webhook/${bot.id}`;
   const webhookMismatch = bot.webhook_url_reported && bot.webhook_url_reported !== expectedUrl;
-  const webhookNeverConfigured = !bot.webhook_configured_at;
+  const failures = bot.consecutive_getme_failures ?? 0;
+  const pending = bot.webhook_pending_count ?? 0;
 
-  if (lastOk > 30 * 60_000) return { level: 'red', label: 'offline >30min' };
-  if (webhookMismatch) return { level: 'red', label: 'webhook errado' };
-  if (webhookNeverConfigured) return { level: 'yellow', label: 'webhook não configurado' };
-  if (lastOk > 15 * 60_000) return { level: 'yellow', label: 'ping antigo' };
+  // RED — sinais fortes de morto
+  if (failures >= 3) return { level: 'red', label: `auto-quarantine (${failures} falhas)` };
+  if (bot.auto_quarantined_at) return { level: 'red', label: 'em quarentena automática' };
+  if (webhookMismatch) return { level: 'red', label: 'webhook URL errada' };
+  if (pending > 100) return { level: 'red', label: `${pending} mensagens acumuladas` };
+  if (lastOk > 15 * 60_000) return { level: 'red', label: `offline >${Math.round(lastOk / 60_000)}min` };
+
+  // YELLOW — deteriorando (ver o erro recente antes de virar vermelho)
+  if (failures > 0) return { level: 'yellow', label: `${failures} falha(s) recente(s)` };
+  if (pending > 50) return { level: 'yellow', label: `${pending} mensagens pendentes` };
+  if (errDateAgo < 30 * 60_000) return { level: 'yellow', label: `erro webhook há ${Math.round(errDateAgo / 60_000)}min` };
+  if (!bot.webhook_configured_at) return { level: 'yellow', label: 'webhook não configurado' };
+  if (lastOk > 10 * 60_000) return { level: 'yellow', label: 'ping antigo' };
+
   return { level: 'green', label: 'OK' };
 }
 
