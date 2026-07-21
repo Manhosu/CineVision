@@ -497,19 +497,31 @@ export default function BroadcastPage() {
               <span className="text-xs text-gray-500">Cada cliente recebe UMA mensagem, mesmo estando em vários bots</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white/[0.03] rounded-lg p-3 border border-white/5">
+              <div
+                className="bg-white/[0.03] rounded-lg p-3 border border-white/5"
+                title="Users com bot oficial ativo, chat_id válido, não bloqueados. Alcance real do broadcast oficial."
+              >
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">Bots Oficiais</p>
                 <p className="text-xl font-bold text-blue-400 mt-1">{breakdown.official.toLocaleString('pt-BR')}</p>
               </div>
-              <div className="bg-amber-500/5 rounded-lg p-3 border border-amber-500/20">
+              <div
+                className="bg-amber-500/5 rounded-lg p-3 border border-amber-500/20"
+                title="Pessoas distintas que deram /start em qualquer bot promocional (fonte real, não bot_username)."
+              >
                 <p className="text-[10px] text-amber-400 uppercase tracking-wide">🎟 Promocionais</p>
                 <p className="text-xl font-bold text-amber-400 mt-1">{breakdown.promotional.toLocaleString('pt-BR')}</p>
               </div>
-              <div className="bg-green-500/5 rounded-lg p-3 border border-green-500/20">
+              <div
+                className="bg-green-500/5 rounded-lg p-3 border border-green-500/20"
+                title="Users que compartilharam WhatsApp durante compra — alcance separado (não sobrepõe Telegram)."
+              >
                 <p className="text-[10px] text-green-400 uppercase tracking-wide">WhatsApp</p>
                 <p className="text-xl font-bold text-green-400 mt-1">{breakdown.whatsapp.toLocaleString('pt-BR')}</p>
               </div>
-              <div className="bg-primary-500/10 rounded-lg p-3 border border-primary-500/30">
+              <div
+                className="bg-primary-500/10 rounded-lg p-3 border border-primary-500/30"
+                title="Soma dos 3 canais. Cada telegram_id é único, então não há dupla-mensagem no Telegram; WhatsApp é canal separado."
+              >
                 <p className="text-[10px] text-primary-400 uppercase tracking-wide">Total único</p>
                 <p className="text-xl font-bold text-white mt-1">{breakdown.total.toLocaleString('pt-BR')}</p>
               </div>

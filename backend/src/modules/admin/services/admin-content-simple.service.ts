@@ -189,6 +189,86 @@ export class AdminContentSimpleService {
     };
   }
 
+  // Igor (21/07): dashboard dedicado de pré-venda. Lista filmes em
+  // is_presale=true com métricas por filme (paid, pending, faturamento
+  // estimado, dias até liberação). Igor pediu porque no /admin/content/manage
+  // não conseguia visualizar quantas vendas cada pré-venda teve.
+  async getPresaleDashboard() {
+    const nowIso = new Date().toISOString();
+    const { data: presaleContents } = await this.supabaseService.client
+      .from('content')
+      .select(
+        'id, title, poster_url, backdrop_url, ' +
+        'price_cents, presale_price_cents, presale_release_at, ' +
+        'presale_purchases_count, created_at',
+      )
+      .eq('is_presale', true)
+      .order('presale_release_at', { ascending: true, nullsFirst: false });
+
+    if (!presaleContents?.length) {
+      return { items: [], totals: { titles: 0, paid: 0, pending: 0, revenueCents: 0 } };
+    }
+
+    const ids = presaleContents.map((c: any) => c.id);
+    // Um único round-trip pra pegar breakdown de todas as pré-vendas ativas.
+    const { data: allPurchases } = await this.supabaseService.client
+      .from('purchases')
+      .select('content_id, status, is_presale_purchase, presale_released_at, amount_cents')
+      .in('content_id', ids)
+      .is('presale_released_at', null);
+
+    const stats = new Map<string, { paid: number; pending: number; revenueCents: number }>();
+    for (const p of allPurchases || []) {
+      if (!p.is_presale_purchase) continue;
+      const s = stats.get(p.content_id) || { paid: 0, pending: 0, revenueCents: 0 };
+      const st = String(p.status || '').toLowerCase();
+      if (st === 'paid') {
+        s.paid += 1;
+        s.revenueCents += p.amount_cents || 0;
+      } else if (st === 'pending') {
+        s.pending += 1;
+      }
+      stats.set(p.content_id, s);
+    }
+
+    const items = presaleContents.map((c: any) => {
+      const s = stats.get(c.id) || { paid: 0, pending: 0, revenueCents: 0 };
+      const daysUntilRelease = c.presale_release_at
+        ? Math.ceil((new Date(c.presale_release_at).getTime() - Date.now()) / 86400000)
+        : null;
+      const conversionPct = (s.paid + s.pending) > 0
+        ? Math.round((s.paid / (s.paid + s.pending)) * 100)
+        : 0;
+      return {
+        id: c.id,
+        title: c.title,
+        poster_url: c.poster_url,
+        backdrop_url: c.backdrop_url,
+        price_cents: c.price_cents,
+        presale_price_cents: c.presale_price_cents,
+        presale_release_at: c.presale_release_at,
+        days_until_release: daysUntilRelease,
+        paid_count: s.paid,
+        pending_count: s.pending,
+        revenue_cents: s.revenueCents,
+        conversion_pct: conversionPct,
+        cached_count: c.presale_purchases_count || 0,
+      };
+    });
+
+    const totals = items.reduce(
+      (acc, it) => ({
+        titles: acc.titles + 1,
+        paid: acc.paid + it.paid_count,
+        pending: acc.pending + it.pending_count,
+        revenueCents: acc.revenueCents + it.revenue_cents,
+      }),
+      { titles: 0, paid: 0, pending: 0, revenueCents: 0 },
+    );
+
+    return { items, totals, generatedAt: nowIso };
+  }
+
   // Igor (04/06): libera uma pré-venda — vira filme normal e notifica via
   // Telegram TODOS que pré-compraram. Idempotente: purchases já liberadas
   // (presale_released_at preenchido) não são notificadas de novo.
@@ -214,11 +294,17 @@ export class AdminContentSimpleService {
     }
 
     // Busca pré-compras pendentes ANTES de mudar o flag (pra usar o índice).
+    // Igor (21/07): antes o filtro era só is_presale_purchase + released IS NULL
+    // — pegava pending que nunca pagou junto (ex: Homem-Aranha tinha 23 pending
+    // + 8 paid). Isso inflava o "31 elegíveis" e enviava tentativa de delivery
+    // pra chatId de quem só clicou "Comprar" e sumiu, gerando falso `failed`.
+    // Agora só notifica quem REALMENTE pagou.
     const { data: pendingPurchases } = await this.supabaseService.client
       .from('purchases')
-      .select('id, user_id, content_id, order_id, provider_meta, amount_cents')
+      .select('id, user_id, content_id, order_id, provider_meta, amount_cents, status')
       .eq('content_id', contentId)
       .eq('is_presale_purchase', true)
+      .in('status', ['paid', 'PAID'])
       .is('presale_released_at', null);
 
     // 1) Marca content como liberado (sai do modo pré-venda).

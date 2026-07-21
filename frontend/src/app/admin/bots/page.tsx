@@ -951,18 +951,36 @@ export default function AdminBotsPage() {
                 </div>
               </div>
             ))}
-            <div className="bg-dark-700 rounded-lg p-3 text-center border border-white/10">
+            <div
+              className="bg-dark-700 rounded-lg p-3 text-center border border-white/10"
+              title="Soma bruta dos usuários por bot ativo. Se a mesma pessoa deu /start em 3 bots, conta 3."
+            >
               <div className="text-xl font-bold text-blue-400">{userStats.total_all.toLocaleString('pt-BR')}</div>
               <div className="text-xs text-gray-400 mt-0.5">Total (c/ duplicatas)</div>
             </div>
-            <div className="bg-dark-700 rounded-lg p-3 text-center border border-emerald-500/20">
+            <div
+              className="bg-dark-700 rounded-lg p-3 text-center border border-emerald-500/20"
+              title="Pessoas distintas em bots oficiais saudáveis (sem contar duplicatas entre bots)."
+            >
               <div className="text-xl font-bold text-emerald-400">{userStats.total_unique.toLocaleString('pt-BR')}</div>
               <div className="text-xs text-gray-400 mt-0.5">Usuários únicos</div>
             </div>
           </div>
-          <p className="text-xs text-gray-500">
-            "Usuários únicos" = pessoas distintas em todos os bots (sem contar quem está em 2+ bots mais de uma vez).
-          </p>
+          {/* Igor (21/07): Os 3 números que aparecem em telas diferentes
+              (esse painel, Broadcast/Marketing, dashboard principal) medem
+              coisas diferentes e a divergência confundiu ele — explicação
+              rápida abaixo evita re-pergunta futura. */}
+          <div className="text-xs text-gray-500 space-y-1.5">
+            <p>
+              <strong className="text-emerald-400">Usuários únicos</strong> = pessoas distintas em bots oficiais saudáveis (é esse número que Broadcast vai atingir + os que estão só em promocionais).
+            </p>
+            <p>
+              <strong className="text-blue-400">Total (c/ duplicatas)</strong> = soma bruta dos usuários por bot; se uma pessoa está em 3 bots, conta 3 vezes.
+            </p>
+            <p className="text-gray-600">
+              Em <em>Marketing / Broadcast</em> o número é menor porque exclui bloqueados, chat_id inválido e conta o promocional dedupdo à parte.
+            </p>
+          </div>
         </div>
       )}
 

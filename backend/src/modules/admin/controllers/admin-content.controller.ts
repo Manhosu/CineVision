@@ -405,6 +405,22 @@ export class AdminContentController {
     return this.adminContentService.restoreContent(contentId);
   }
 
+  // Igor (21/07): dashboard dedicado de pré-venda. Antes ele só via os
+  // filmes em pré-venda misturados em /admin/content/manage e não tinha
+  // visibilidade das métricas por filme (quantos pagaram vs pending,
+  // faturamento estimado). Endpoint agrega tudo num shot só.
+  @Get('presale/dashboard')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Presale dashboard metrics' })
+  @HttpCode(HttpStatus.OK)
+  async presaleDashboard(@GetUser() user: any) {
+    const role = user?.role;
+    if (role !== UserRole.ADMIN && role !== UserRole.MODERATOR) {
+      throw new ForbiddenException('Apenas administradores podem ver o dashboard de pré-venda.');
+    }
+    return this.adminContentService.getPresaleDashboard();
+  }
+
   // Igor (04/06): libera a pré-venda — vira filme normal e dispara
   // notificação Telegram pra todos que pré-compraram. Idempotente.
   @Post(':id/release-presale')

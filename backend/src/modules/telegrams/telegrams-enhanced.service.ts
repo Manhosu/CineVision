@@ -4694,7 +4694,14 @@ export class TelegramsEnhancedService implements OnModuleInit {
     const debounceKey = `${currentBotId || 'default'}:${chatId}`;
     const lastStart = this.startDebounce.get(debounceKey) || 0;
     const now = Date.now();
-    if (now - lastStart < 3000) {
+    // Igor (21/07): antes 3000ms — Igor reportou /start intermitente ("bot
+    // não responde na 1ª, responde na 2ª/3ª"). Cliente ansioso clica /start
+    // rapidamente 2-3x em bot novo; se o 1º falhou por rede/timeout mas
+    // debounce ainda bloqueava o 2º/3º dentro da janela de 3s, o cliente
+    // ficava sem NENHUMA resposta até desistir e voltar segundos depois.
+    // 1200ms cobre spam humano (~2 clicks rápidos) sem bloquear a retry
+    // legítima quando o primeiro não foi entregue.
+    if (now - lastStart < 1200) {
       const kind = currentBot?.is_promotional ? 'promo' : 'official';
       this.logger.log(`[${kind}] ignoring duplicate /start (${now - lastStart}ms ago) chatId=${chatId} bot=${currentBot?.username || 'default'}`);
       return;
@@ -5430,7 +5437,12 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
 
       this.logger.log(`Sending message to chat ${chatId}:`, JSON.stringify(payload, null, 2));
 
-      const response = await axios.post(url, payload);
+      // Igor (21/07): timeout 10s. Sem timeout, se Telegram API travar
+      // (raro mas acontece), o handler do webhook fica pendurado por
+      // minutos. Telegram considera webhook timeout em ~10s e reenvia,
+      // gerando duplicação. Melhor falhar rápido e deixar o cliente
+      // retentar o /start (que passa pelo debounce curto de 1.2s).
+      const response = await axios.post(url, payload, { timeout: 10000 });
       return response.data;
     } catch (error) {
       this.logger.error('Error sending message:', error);

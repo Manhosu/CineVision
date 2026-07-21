@@ -363,6 +363,18 @@ export default function AdminDashboard() {
       shadow: 'shadow-orange-500/50'
     },
     {
+      title: 'Pré-vendas',
+      description: 'Dashboard com métricas e liberação por filme',
+      href: '/admin/presale',
+      icon: (
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v.01M15 10v.01M15 15v.01M4 4h11l5 5v11a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z" />
+        </svg>
+      ),
+      gradient: 'from-amber-500 to-yellow-700',
+      shadow: 'shadow-amber-500/50',
+    },
+    {
       title: 'Descontos',
       description: 'Gerenciar descontos e promoções relâmpago',
       href: '/admin/discounts',
