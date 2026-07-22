@@ -2305,8 +2305,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
         /* silent */
       }
 
-      // B7 (Igor pediu) — humaniza com "digitando..." + delay 5-8s
-      // pra parecer humano. Mesmo padrão do dispatchAiChatBusiness.
+      // Igor (22/07): delay humanizado reduzido de 5-8s pra 1.5-2.5s. Antes
+      // servia pra IA parecer atendente humano; agora o cliente sabe que é
+      // bot e a lentidão só irrita. Mantém typing pra feedback visual mas
+      // resposta chega rápido. Business flow segue mesmo valor.
       this.sendChatAction(chatId, 'typing').catch(() => undefined);
 
       const aiPromise = axios.post(
@@ -2320,16 +2322,10 @@ export class TelegramsEnhancedService implements OnModuleInit {
         { timeout: 30000 },
       );
 
-      const delayMs = 5000 + Math.floor(Math.random() * 3000);
+      const delayMs = 1500 + Math.floor(Math.random() * 1000);
       const delayPromise = new Promise((r) => setTimeout(r, delayMs));
 
-      // Re-arma typing a cada 4s pra não sumir (Telegram drops após ~5s).
-      const typingInterval = setInterval(() => {
-        this.sendChatAction(chatId, 'typing').catch(() => undefined);
-      }, 4000);
-
       const [response] = await Promise.all([aiPromise, delayPromise]);
-      clearInterval(typingInterval);
 
       const reply = response.data;
 
@@ -2636,20 +2632,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
         { timeout: 30000 },
       );
 
-      // Delay aleatório 5-8s. Igor pediu pra parecer humano sem ficar
-      // arrastado. Roda em paralelo com a chamada da IA.
-      const delayMs = 5000 + Math.floor(Math.random() * 3000);
+      // Igor (22/07): delay reduzido de 5-8s pra 1.5-2.5s (ver comentário
+      // em dispatchAiChat). Business flow segue mesmo valor pra consistência.
+      const delayMs = 1500 + Math.floor(Math.random() * 1000);
       const delayPromise = new Promise((r) => setTimeout(r, delayMs));
 
-      // Re-arma typing a cada 4s pra não sumir (Telegram drops após ~5s).
-      const typingInterval = setInterval(() => {
-        this.sendChatAction(chatId, 'typing', businessConnectionId).catch(
-          () => undefined,
-        );
-      }, 4000);
-
       const [response] = await Promise.all([aiPromise, delayPromise]);
-      clearInterval(typingInterval);
 
       const reply = response.data;
 
