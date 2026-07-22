@@ -785,7 +785,7 @@ export default function AdminDashboard() {
                 <span className="text-lg">🤖</span>
                 Usuários por Bot
                 <span className="ml-1 rounded-full bg-sky-500/20 px-2 py-0.5 text-xs font-semibold text-sky-300">
-                  {botUserStats.bots.filter(b => b.status !== 'disabled').length} ativos
+                  {botUserStats.bots.filter(b => b.status === 'active').length} ativos
                 </span>
               </h2>
               <a href="/admin/bots" className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
@@ -793,24 +793,19 @@ export default function AdminDashboard() {
               </a>
             </div>
 
-            {/* Grid de bots */}
+            {/* Grid de bots — Igor (22/07): esconde banidos/desabilitados
+                da página principal (visualizar só o que interessa pra
+                marketing). Detalhe completo continua em /admin/bots. */}
             <div className="flex flex-wrap gap-2 mb-3">
-              {botUserStats.bots.map(bot => (
+              {botUserStats.bots
+                .filter(bot => bot.status === 'active')
+                .map(bot => (
                 <div
                   key={bot.id}
-                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs ${
-                    bot.status === 'banned_br'
-                      ? 'border-red-500/20 bg-red-900/15 text-red-300'
-                      : bot.status === 'disabled'
-                      ? 'border-gray-600/20 bg-gray-800/30 text-gray-500'
-                      : 'border-emerald-500/20 bg-emerald-900/15 text-emerald-300'
-                  }`}
+                  className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs border-emerald-500/20 bg-emerald-900/15 text-emerald-300"
                 >
                   <span className="font-mono font-semibold">@{bot.username}</span>
-                  <span className={`font-bold ${
-                    bot.status === 'banned_br' ? 'text-red-200' :
-                    bot.status === 'disabled' ? 'text-gray-400' : 'text-white'
-                  }`}>
+                  <span className="font-bold text-white">
                     {(bot.users_count ?? 0).toLocaleString('pt-BR')}
                   </span>
                   {bot.status === 'banned_br' && (
