@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -42,8 +41,12 @@ function fmtBRL(cents: number) {
 }
 
 export default function PresaleDashboardPage() {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
+  // Igor (22/07 fix): antes checava user.role !== 'ADMIN'/'MODERATOR' maiúsculo,
+  // mas o useAuth do projeto retorna role em minúsculo ('admin', 'moderator').
+  // Isso derrubava até o admin master pra /login. Padrão das outras páginas
+  // admin (bots, broadcast) é confiar no Bearer token: só usa isLoading pra
+  // esperar a hidratação e deixa o backend validar via token nos requests.
+  const { isLoading: authLoading } = useAuth();
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [releasingId, setReleasingId] = useState<string | null>(null);
@@ -69,16 +72,8 @@ export default function PresaleDashboardPage() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    if (user.role !== 'ADMIN' && user.role !== 'MODERATOR') {
-      router.push('/');
-      return;
-    }
     fetchDashboard();
-  }, [user, authLoading, router, fetchDashboard]);
+  }, [authLoading, fetchDashboard]);
 
   const handleRelease = async (item: PresaleItem) => {
     if (!confirm(
