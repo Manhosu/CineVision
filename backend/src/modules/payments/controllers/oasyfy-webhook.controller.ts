@@ -99,11 +99,16 @@ export class OasyfyWebhookController {
       return;
     }
 
-    // Update purchase status
+    // Eduardo (27/07 madrugada): case bug crítico. Antes gravava 'PAID'
+    // literal, mas o enum PurchaseStatus.PAID = 'paid' e todos os handlers
+    // de delivery comparam status === 'paid' (minúsculo). Resultado: 3.737
+    // clientes pagaram nos últimos 3 dias e ficaram sem receber conteúdo.
+    // Bug ficou latente porque cart/orders normal grava minúsculo — só o
+    // fluxo legacy single-purchase do oasyfy caía nesse buraco.
     await this.supabaseService.client
       .from('purchases')
       .update({
-        status: 'PAID',
+        status: 'paid',
         payment_confirmed_at: new Date().toISOString(),
       })
       .eq('id', payment.purchase_id);
@@ -131,14 +136,14 @@ export class OasyfyWebhookController {
       }
     }
 
-    this.logger.log(`Payment ${payment.id} and purchase ${payment.purchase_id} marked as PAID`);
+    this.logger.log(`Payment ${payment.id} and purchase ${payment.purchase_id} marked as paid`);
 
     // Notify bot of payment
     try {
       const apiUrl = process.env.API_URL || 'https://cinevisionn.onrender.com';
       const axios = require('axios');
       await axios.post(`${apiUrl}/api/v1/purchases/${payment.purchase_id}/notify-bot`, {
-        status: 'PAID',
+        status: 'paid',
       }).catch(() => {});
     } catch (e) {
       // Bot notification is best-effort

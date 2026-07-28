@@ -922,9 +922,17 @@ export class BroadcastService {
       const statusCode = error.response?.status;
       const errorCode = error.response?.data?.error_code;
 
-      // 403 = bot blocked by user, 400 = chat not found / user deactivated
-      if (statusCode === 403 || errorCode === 403 || statusCode === 400 || errorCode === 400) {
-        this.logger.warn(`User ${telegramId} (chat: ${chatId}) appears to have blocked the bot or deactivated. Marking as inactive.`);
+      // Eduardo (27/07): antes marcava blocked em 403 OU 400. Mas 400 é
+      // ambíguo — pode ser rate-limit temporário, chat_id inválido de UM
+      // bot específico (mas user tá vivo em outros), erro de Markdown.
+      // Marcar blocked global tira o cliente de TODAS as entregas futuras
+      // (pré-venda, compras, notificações). Igor achou 2.405 users
+      // bloqueados falsamente após broadcasts recentes. Agora só 403.
+      const description = String(error.response?.data?.description || '').toLowerCase();
+      const isRealBlock = statusCode === 403 || errorCode === 403 ||
+        /bot was blocked|user is deactivated/i.test(description);
+      if (isRealBlock) {
+        this.logger.warn(`User ${telegramId} (chat: ${chatId}) blocked the bot. Marking as inactive.`);
 
         try {
           const { error: updateError } = await this.supabase
@@ -940,6 +948,8 @@ export class BroadcastService {
         } catch (dbError) {
           this.logger.error(`Error updating user ${telegramId} inactive status:`, dbError.message);
         }
+      } else if (statusCode === 400 || errorCode === 400) {
+        this.logger.warn(`User ${telegramId} (chat: ${chatId}) got 400 but NOT marking blocked (ambiguous): ${description}`);
       }
     }
   }

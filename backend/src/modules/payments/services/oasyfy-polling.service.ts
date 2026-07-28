@@ -129,10 +129,12 @@ export class OasyfyPollingService {
       return;
     }
 
+    // Eduardo (27/07): case bug — ver comentário em oasyfy-webhook.controller.
+    // Handlers de delivery esperam status='paid' minúsculo.
     await this.supabaseService.client
       .from('purchases')
       .update({
-        status: 'PAID',
+        status: 'paid',
         payment_confirmed_at: new Date().toISOString(),
       })
       .eq('id', payment.purchase_id);
@@ -164,7 +166,7 @@ export class OasyfyPollingService {
       const axios = require('axios');
       await axios
         .post(`${apiUrl}/api/v1/purchases/${payment.purchase_id}/notify-bot`, {
-          status: 'PAID',
+          status: 'paid',
           source: 'polling-reconciliation',
         })
         .catch(() => {});
