@@ -145,6 +145,28 @@ const nextConfig = {
   //   return [];
   // },
 
+  // Eduardo (30/07): redirect apex/www → app pra consolidar tráfego no
+  // subdomínio novo. Quem consegue chegar no apex/www (cache DNS limpo)
+  // vai automaticamente pra app.* — cliente com cache negativo do apex
+  // continua bloqueado ao apex mas o bot já manda link app.* nativo, então
+  // o redirect é só uma rede de segurança pra links antigos compartilhados.
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'cinevisionapp.com.br' }],
+        destination: 'https://app.cinevisionapp.com.br/:path*',
+        permanent: true,
+      },
+      {
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.cinevisionapp.com.br' }],
+        destination: 'https://app.cinevisionapp.com.br/:path*',
+        permanent: true,
+      },
+    ];
+  },
+
   // PWA and offline support
   swcMinify: true,
   poweredByHeader: false,

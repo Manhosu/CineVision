@@ -8,7 +8,7 @@ const supabase = createClient(
 );
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://app.cinevisionapp.com.br';
 
 async function notificarClientes() {
   console.log('📱 Notificando clientes sobre vídeos disponíveis...\n');

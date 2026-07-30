@@ -79,7 +79,7 @@ async function verificarSerieFinal() {
     console.log('   ✓ Episódios: ' + (episodes?.length || 0) + ' encontrados');
     console.log('\n🎉 A série está CORRETAMENTE configurada no banco!');
     console.log('\n🔗 URL para testar:');
-    console.log('   https://www.cinevisionapp.com.br/series/' + SERIES_ID);
+    console.log('   https://app.cinevisionapp.com.br/series/' + SERIES_ID);
   } else {
     console.log('   ❌ Ainda há problemas na configuração');
   }

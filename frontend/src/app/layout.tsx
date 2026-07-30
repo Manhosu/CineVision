@@ -19,7 +19,9 @@ const outfit = Outfit({
 // WhatsApp/Facebook) agora é editável pelo admin em /admin/homepage.
 // Buscamos o banner salvo no backend; sem banner, cai no logo padrão.
 // O `ogImageUrl` força JPEG (WhatsApp não renderiza WebP).
-const SITE_ORIGIN = 'https://www.cinevisionapp.com.br';
+// Eduardo (30/07): migrado pra subdomínio `app.` — apex/www estavam
+// cacheados como NXDOMAIN nos resolvers ISPs BR pós-migração DNS.
+const SITE_ORIGIN = 'https://app.cinevisionapp.com.br';
 // Fallback: logo passada pelo proxy para garantir JPEG (WhatsApp não renderiza PNG transparente)
 const OG_FALLBACK = `${SITE_ORIGIN}/api/og-image?url=${encodeURIComponent(`${SITE_ORIGIN}/CINEVT.png`)}`;
 
@@ -43,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     // metadataBase resolve URLs relativas (og:image) pra absolutas.
-    metadataBase: new URL('https://www.cinevisionapp.com.br'),
+    metadataBase: new URL('https://app.cinevisionapp.com.br'),
     title: 'Cine Vision - Filmes Online',
     description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
     keywords: ['filmes', 'streaming', 'cinema', 'online', 'telegram'],
@@ -64,7 +66,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: 'website',
       locale: 'pt_BR',
-      url: 'https://www.cinevisionapp.com.br',
+      url: 'https://app.cinevisionapp.com.br',
       title: 'Cine Vision - Filmes Online',
       description: 'Plataforma de streaming com filmes em alta qualidade. Assista online ou baixe pelo Telegram.',
       siteName: 'Cine Vision',

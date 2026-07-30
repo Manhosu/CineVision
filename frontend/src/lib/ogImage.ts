@@ -19,7 +19,9 @@
  * @returns URL JPEG pronta pra og:image, ou undefined se não houver imagem.
  */
 
-const FRONTEND_ORIGIN = 'https://www.cinevisionapp.com.br';
+// Eduardo (30/07): migrado pra `app.` — apex/www cacheados como NXDOMAIN
+// em resolvers ISPs BR pós-migração DNS Vercel → Cloudflare.
+const FRONTEND_ORIGIN = 'https://app.cinevisionapp.com.br';
 
 export function ogImageUrl(rawUrl?: string | null): string | undefined {
   const url = (rawUrl || '').trim();

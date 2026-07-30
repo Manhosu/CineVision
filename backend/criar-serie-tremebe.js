@@ -152,7 +152,7 @@ async function criarSerieECorrigirType() {
   console.log('🎉 TUDO CORRIGIDO! A série agora deve funcionar corretamente!');
   console.log('');
   console.log('🔗 Tente acessar novamente:');
-  console.log('   https://www.cinevisionapp.com.br/series/33c1ce60-dec5-4ce5-b326-33814c0d470a');
+  console.log('   https://app.cinevisionapp.com.br/series/33c1ce60-dec5-4ce5-b326-33814c0d470a');
 }
 
 criarSerieECorrigirType().catch(console.error);

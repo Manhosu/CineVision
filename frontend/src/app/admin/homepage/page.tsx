@@ -375,7 +375,7 @@ export default function AdminHomepagePage() {
             Banner de Compartilhamento (link principal)
           </h2>
           <p className="text-xs text-gray-500 mb-4">
-            Imagem que aparece ao compartilhar <strong>cinevisionapp.com.br</strong> no WhatsApp,
+            Imagem que aparece ao compartilhar <strong>app.cinevisionapp.com.br</strong> no WhatsApp,
             Facebook, etc. Tamanho ideal: 1200×630. Sem banner, usa o logo padrão.
           </p>
 
