@@ -211,7 +211,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
    * obsoleta sem precisar redeploy.
    */
   private getFrontendUrl(): string {
-    const OFFICIAL = 'https://www.cinevisionapp.com.br';
+    // Eduardo (30/07): OFFICIAL migrou pra subdomínio `app.` — o domínio raiz
+    // e `www.` estavam cacheados como NXDOMAIN nos resolvers de ISPs
+    // brasileiros (cache negativo de 24-72h a partir da migração DNS
+    // Vercel → Cloudflare). Subdomínio novo tem zero cache em qualquer
+    // resolver do mundo, resolve pra 100% dos clientes na hora.
+    const OFFICIAL = 'https://app.cinevisionapp.com.br';
     const configured = this.configService.get<string>('FRONTEND_URL');
     if (!configured) return OFFICIAL;
     if (/vercel\.app/i.test(configured)) {

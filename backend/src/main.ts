@@ -73,6 +73,10 @@ async function bootstrap() {
       }
 
       // Check if origin is allowed or matches allowed patterns
+      // Eduardo (30/07): `endsWith('cinevisionapp.com.br')` já cobre
+      // apex + www + subdomínios (incluindo `app.cinevisionapp.com.br`).
+      // Nada a mudar aqui — o novo subdomínio `app.` passa pelo mesmo
+      // filtro que os demais.
       const isAllowed =
         allowedOrigins.includes(origin) ||
         origin.endsWith('.vercel.app') ||

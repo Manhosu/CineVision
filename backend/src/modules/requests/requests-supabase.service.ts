@@ -79,7 +79,7 @@ export class RequestsSupabaseService {
         try {
           if (request.telegram_chat_id) {
             // Enviar notificação via Telegram
-            const message = `🎬 Boa notícia!\n\nO conteúdo "${contentTitle}" que você solicitou já foi adicionado ao nosso site!\n\n✨ Assista agora: ${process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br'}/watch/${contentId}\n\n🎉 Aproveite!`;
+            const message = `🎬 Boa notícia!\n\nO conteúdo "${contentTitle}" que você solicitou já foi adicionado ao nosso site!\n\n✨ Assista agora: ${process.env.FRONTEND_URL || 'https://app.cinevisionapp.com.br'}/watch/${contentId}\n\n🎉 Aproveite!`;
 
             await fetch(`${process.env.API_URL || 'http://localhost:3001'}/api/v1/telegrams/send-notification`, {
               method: 'POST',

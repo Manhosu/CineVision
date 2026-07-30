@@ -165,7 +165,7 @@ Seu conteúdo está pronto! Escolha como deseja assistir:`;
   }
 
   private async buildPurchaseKeyboard(content: Content, purchase: Purchase): Promise<any> {
-    const frontendUrl = process.env.FRONTEND_URL || 'https://www.cinevisionapp.com.br';
+    const frontendUrl = process.env.FRONTEND_URL || 'https://app.cinevisionapp.com.br';
     const dashboardUrl = `${frontendUrl}/dashboard`;
 
     return {

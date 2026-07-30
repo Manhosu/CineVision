@@ -813,13 +813,15 @@ Quando cliente pedir gênero em vez de título específico ("me indica um terror
     if (/<<LIST_REDIRECT>>/i.test(rawText)) {
       cleanText = cleanText.replace(/<<LIST_REDIRECT>>/gi, '').trim();
       // Se Claude já compôs texto, mantém; senão usa template padrão.
+      // Eduardo (30/07): apex/www estavam com cache negativo em resolvers
+      // BR — subdomínio novo `app.` bypassa. Ver comentário em getFrontendUrl().
       if (!cleanText) {
         cleanText =
           'Nossa lista completa tá direto no aplicativo! 🎬 Dá uma olhada aqui:\n\n' +
-          'https://cinevisionapp.com.br/\n\n' +
+          'https://app.cinevisionapp.com.br/\n\n' +
           'Qualquer filme que rolar interesse, é só me chamar 💕';
       } else if (!cleanText.includes('cinevisionapp.com.br')) {
-        cleanText += '\n\nhttps://cinevisionapp.com.br/';
+        cleanText += '\n\nhttps://app.cinevisionapp.com.br/';
       }
     }
 
@@ -1002,7 +1004,7 @@ Quando cliente pedir gênero em vez de título específico ("me indica um terror
 
     const baseUrl =
       this.configService.get('PUBLIC_FRONTEND_URL') ||
-      'https://cinevisionapp.com.br';
+      'https://app.cinevisionapp.com.br';
     const params: string[] = [];
     if (businessConnectionId) {
       params.push(`via=business`);
