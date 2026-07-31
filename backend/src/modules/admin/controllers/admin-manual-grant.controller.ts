@@ -185,8 +185,11 @@ export class AdminManualGrantController {
             }
           }
 
+          // Eduardo (30/07): normaliza t.me → telegram.me no fallback
+          // (rawLink vem do content.telegram_group_link do banco; rows
+          // antigas estão em t.me/ e o domínio ficou instável desde 13/07).
           if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
-            buttonUrl = rawLink;
+            buttonUrl = rawLink.replace(/:\/\/t\.me\//i, '://telegram.me/');
           }
 
           const header =

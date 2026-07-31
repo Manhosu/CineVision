@@ -1666,9 +1666,16 @@ export class TelegramsEnhancedService implements OnModuleInit {
           name: `Admin Test - ${content.id.substring(0, 8)}`,
         });
         if (res.data.ok) {
+          // Eduardo (30/07): normaliza t.me → telegram.me pra bater com o
+          // padrão dos outros createChatInviteLink desde 13/07 (t.me em
+          // serverHold; alguns ISPs BR não resolvem).
+          const raw = res.data.result.invite_link;
+          const canonical = typeof raw === 'string'
+            ? raw.replace(/:\/\/t\.me\//i, '://telegram.me/')
+            : raw;
           return {
             success: true,
-            inviteLink: res.data.result.invite_link,
+            inviteLink: canonical,
             chatTitle: validation.chat_title,
           };
         }
@@ -2833,7 +2840,12 @@ export class TelegramsEnhancedService implements OnModuleInit {
           );
         }
       }
-      if (!buttonUrl && rawLink && rawLink !== chatIdToTry) buttonUrl = rawLink;
+      // Eduardo (30/07): quando Bot API falha, cai no rawLink literal do banco.
+      // Rows cadastrados antes de 13/07/2026 estão como https://t.me/... — força
+      // normalizar aqui também senão cliente recebe link do domínio quebrado.
+      if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
+        buttonUrl = rawLink.replace(/:\/\/t\.me\//i, '://telegram.me/');
+      }
 
       if (!buttonUrl) {
         await this.sendMessage(
@@ -5594,8 +5606,10 @@ O sistema identifica você automaticamente pelo Telegram, sem necessidade de sen
           );
         }
       }
+      // Eduardo (30/07): normaliza t.me → telegram.me também no fallback do
+      // release de pré-venda. Ver comentário equivalente no bloco de /watch.
       if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
-        buttonUrl = rawLink;
+        buttonUrl = rawLink.replace(/:\/\/t\.me\//i, '://telegram.me/');
       }
 
       const header = `🎬 *${title} chegou!*\n\nComo prometido na sua pré-venda, aqui está seu acesso:`;
