@@ -75,8 +75,11 @@ function normalizeTelegramLink(raw: string): string {
   if (/^https?:\/\//i.test(trimmed)) normalized = trimmed;
   else if (/^tg:\/\//i.test(trimmed)) normalized = trimmed;
   else normalized = `https://${trimmed}`;
-  // Igor (13/07/2026 noite): t.me em serverHold — canonicaliza pra telegram.me.
-  return normalized.replace(/:\/\/t\.me\//i, '://telegram.me/');
+  // Eduardo (30/07/2026): REVERTIDO. Em 13/07 t.me estava em serverHold e a
+  // gente forçava telegram.me. Agora t.me voltou / telegram.me quebrou
+  // (DNS_PROBE_FINISHED_NXDOMAIN nos ISPs BR). Volta a canonicalizar tudo
+  // pro t.me original.
+  return normalized.replace(/:\/\/telegram\.me\//i, '://t.me/');
 }
 
 export function TelegramAccessModal() {

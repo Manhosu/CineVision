@@ -185,11 +185,11 @@ export class AdminManualGrantController {
             }
           }
 
-          // Eduardo (30/07): normaliza t.me → telegram.me no fallback
-          // (rawLink vem do content.telegram_group_link do banco; rows
-          // antigas estão em t.me/ e o domínio ficou instável desde 13/07).
+          // Eduardo (30/07 noite): REVERTIDO — telegram.me → t.me. Host
+          // telegram.me passou a dar NXDOMAIN nos ISPs BR; t.me voltou
+          // ao ar normalmente pelo Telegram.
           if (!buttonUrl && rawLink && rawLink !== chatIdToTry) {
-            buttonUrl = rawLink.replace(/:\/\/t\.me\//i, '://telegram.me/');
+            buttonUrl = rawLink.replace(/:\/\/telegram\.me\//i, '://t.me/');
           }
 
           const header =

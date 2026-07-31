@@ -28,9 +28,11 @@ function normalizeTelegramLink(raw: any): string | null {
   else if (/^tg:\/\//i.test(trimmed)) normalized = trimmed;
   // Prefixa https:// pra qualquer outra coisa (t.me/+xxx, telegram.me/xxx, etc.)
   else normalized = `https://${trimmed}`;
-  // Igor (13/07/2026 noite): canonicaliza host t.me → telegram.me
-  // (t.me em serverHold — telegram.me é o host oficial que ainda funciona).
-  return normalized.replace(/:\/\/t\.me\//i, '://telegram.me/');
+  // Eduardo (30/07/2026): REVERTIDO. Em 13/07 t.me estava em serverHold e a
+  // gente forçou telegram.me. Agora t.me voltou a resolver normalmente e é
+  // telegram.me que parou (DNS_PROBE_FINISHED_NXDOMAIN nos ISPs BR). Voltamos
+  // a canonicalizar tudo pro t.me original que é o host oficial primário.
+  return normalized.replace(/:\/\/telegram\.me\//i, '://t.me/');
 }
 
 @Injectable()

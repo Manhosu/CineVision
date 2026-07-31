@@ -93,7 +93,7 @@ const isTelegramRef = (v: any): boolean => {
 const telegramHref = (v: string): string => {
   const s = v.trim();
   if (/^https?:\/\//i.test(s)) return s;
-  if (s.startsWith('@')) return `https://telegram.me/${s.slice(1)}`;
+  if (s.startsWith('@')) return `https://t.me/${s.slice(1)}`;
   if (/^-?\d+$/.test(s)) {
     // Chat ID puro não dá pra abrir direto pelo browser; abre busca
     // generic do app web do Telegram pra Igor copiar/conferir.

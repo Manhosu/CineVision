@@ -67,7 +67,7 @@ export const TelegramContentSection: React.FC<TelegramContentSectionProps> = ({ 
   }, [userId]);
 
   const handleOpenTelegram = () => {
-    const telegramLink = `https://telegram.me/${botUsername}`;
+    const telegramLink = `https://t.me/${botUsername}`;
     window.open(telegramLink, '_blank');
   };
 

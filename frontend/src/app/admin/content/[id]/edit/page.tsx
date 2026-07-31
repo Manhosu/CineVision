@@ -916,7 +916,7 @@ export default function AdminContentEditPage() {
                         ? 'border-red-500/50'
                         : 'border-white/10'
                     }`}
-                    placeholder="https://telegram.me/+AbCdEfGhIjK"
+                    placeholder="https://t.me/+AbCdEfGhIjK"
                   />
                   <p className="mt-1 text-xs text-zinc-500">
                     Fallback regular usado quando Chat ID não foi preenchido OU bot não é admin.

@@ -532,7 +532,7 @@ export class EmployeesService {
   // Telegram link preview (best-effort OG scraper)
   // ---------------------------------------------------------------------------
   async previewTelegramLink(url: string) {
-    if (!url || (!url.startsWith('https://t.me/') && !url.startsWith('https://telegram.me/'))) {
+    if (!url || (!url.startsWith('https://t.me/') && !url.startsWith('https://t.me/'))) {
       return { title: url, image: null, description: null, url };
     }
 
